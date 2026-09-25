@@ -1782,7 +1782,6 @@ class _PLVideoPlayerState extends State<PLVideoPlayer>
             plPlayerController,
             maxWidth,
             maxHeight,
-            () => mounted,
           ),
 
         if (isFullScreen || plPlayerController.isDesktopPip) ...[
