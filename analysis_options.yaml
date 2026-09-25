@@ -14,11 +14,7 @@ analyzer:
     - lib/grpc/bilibili/**
     - lib/**/*.g.dart
     - android/**
-    - ios/**
-    - linux/**
-    - macos/**
     - windows/**
-    - web/**
     - build/**
     # - lib/common/widgets/flutter/**
 

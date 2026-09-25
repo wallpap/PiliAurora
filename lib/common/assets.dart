@@ -4,7 +4,6 @@ abstract final class Assets {
   static const logo = 'assets/images/logo/logo.png';
   static const logo2 = 'assets/images/logo/logo_2.png';
   static const logoIco = 'assets/images/logo/ico/app_icon.ico';
-  static const logoLarge = 'assets/images/logo/desktop/logo_large.png';
 
   static const vipIcon = 'assets/images/big-vip.svg';
   static const avatarPlaceHolder = 'assets/images/noface.jpeg';

@@ -12,10 +12,6 @@ $NewOverScrollIndicator = "362b1de29974ffc1ed6faa826e1df870d7bec75f";
 # set `gestureSettings`
 $BottomSheetAndroidPatch = "lib/scripts/bottom_sheet_android.patch"
 
-# https://github.com/bggRGjQaUbCoE/PiliPlus/issues/1906
-$BottomSheetIOSFlutterPatch = "lib/scripts/bottom_sheet_ios_flutter.patch"
-$BottomSheetIOSPiliPlusPatch = "lib/scripts/bottom_sheet_ios_piliplus.patch"
-
 # https://github.com/bggRGjQaUbCoE/PiliPlus/issues/1662
 # handle bottom scroll event
 $ScrollViewPatch = "lib/scripts/scroll_view.patch"
@@ -99,23 +95,6 @@ $ModalBarrierPatch = "lib/scripts/modal_barrier.patch"
 # https://github.com/flutter/flutter/issues/182466
 $MouseCursorPatch = "lib/scripts/mouse_cursor.patch"
 
-$GeetestIOSPatch = "lib/scripts/geetest_ios.patch"
-
-if ($platform.ToLower() -eq "ios") {
-    git apply $BottomSheetIOSPiliPlusPatch
-    if ($LASTEXITCODE -eq 0) {
-        Write-Host "$BottomSheetIOSPiliPlusPatch applied"
-    } else {
-        throw "$LASTEXITCODE"
-    }
-    git apply $GeetestIOSPatch
-    if ($LASTEXITCODE -eq 0) {
-        Write-Host "$GeetestIOSPatch applied"
-    } else {
-        throw "$LASTEXITCODE"
-    }
-}
-
 Set-Location $env:FLUTTER_ROOT
 
 $picks   = @()
@@ -135,16 +114,6 @@ switch ($platform.ToLower()) {
         $patches += $NavigatorPatch
 
         git reset --hard HEAD
-    }
-    "ios" {
-        $patches += $ScrollViewPatch
-        $patches += $BottomSheetIOSFlutterPatch
-        $patches += $NavigatorPatch
-    }
-    "linux" {
-        git reset --hard HEAD
-    }
-    "macos" {
     }
     "windows" {
     }
@@ -188,8 +157,6 @@ Set-Location $env:GITHUB_WORKSPACE
 
 $BottomSheetAndroidPatchMaterial = "lib/scripts/material/bottom_sheet_android.patch"
 
-$BottomSheetIOSFlutterMaterialPatchMaterial = "lib/scripts/material/bottom_sheet_ios_flutter_material.patch"
-
 $ModalBarrierPatchMaterial = "lib/scripts/material/modal_barrier_material.patch"
 
 $NavigationDrawerPatchMaterial = "lib/scripts/material/navigation_drawer.patch"
@@ -215,13 +182,6 @@ $PubCacheDir = "~/.pub-cache"
 switch ($platform.ToLower()) {
     "android" {
         $patches_material += $BottomSheetAndroidPatchMaterial
-    }
-    "ios" {
-        $patches_material += $BottomSheetIOSFlutterMaterialPatchMaterial
-    }
-    "linux" {
-    }
-    "macos" {
     }
     "windows" {
         $PubCacheDir = "$env:LOCALAPPDATA/Pub/Cache"
@@ -268,19 +228,10 @@ foreach ($patch in $patches_material) {
     }
 }
 
-$BottomSheetIOSFlutterPatchCupertino = "lib/scripts/cupertino/bottom_sheet_ios_flutter.patch"
-
 $patches_cupertino = @()
 
 switch ($platform.ToLower()) {
     "android" {
-    }
-    "ios" {
-        $patches_cupertino += $BottomSheetIOSFlutterPatchCupertino
-    }
-    "linux" {
-    }
-    "macos" {
     }
     "windows" {
     }

@@ -99,10 +99,6 @@ abstract final class Update {
                 if (Platform.isWindows) ...[
                   downloadBtn('zip', ext: 'zip'),
                   downloadBtn('exe', ext: 'exe'),
-                ] else if (Platform.isLinux) ...[
-                  downloadBtn('rpm', ext: 'rpm'),
-                  downloadBtn('deb', ext: 'deb'),
-                  downloadBtn('targz', ext: 'tar.gz'),
                 ] else
                   downloadBtn('Github'),
               ],

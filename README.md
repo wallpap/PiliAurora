@@ -28,12 +28,7 @@
 ## 适配平台
 
 - [x] Android
-- [x] iOS
-- [x] Pad
 - [x] Windows
-- [x] Linux
-
-[![Packaging status](https://repology.org/badge/vertical-allrepos/piliplus.svg)](https://repology.org/project/piliplus/versions)
 
 ## refactor
 
@@ -50,7 +45,7 @@
 - [x] 播放音频
 - [x] 跳过番剧片头/片尾
 - [x] 安卓端 `loudnorm` 适配 by [@My-Responsitories](https://github.com/My-Responsitories)
-- [x] Win/Mac 支持极验、短信登录 by [@My-Responsitories](https://github.com/My-Responsitories)
+- [x] Android/Windows 支持极验、短信登录 by [@My-Responsitories](https://github.com/My-Responsitories)
 - [x] 视频截取动图 by [@My-Responsitories](https://github.com/My-Responsitories)
 - [x] AI 原声翻译
 - [x] SuperChat

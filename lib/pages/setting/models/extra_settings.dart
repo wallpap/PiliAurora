@@ -423,7 +423,7 @@ List<SettingsModel> get extraSettings => [
     title: '侧滑关闭二级页面',
     leading: const Icon(CustomIcons.touch_app_rotate_270),
     setKey: SettingBoxKey.slideDismissReplyPage,
-    defaultVal: Platform.isIOS,
+    defaultVal: false,
     onChanged: (value) => CommonSlideMixin.slideDismissReplyPage = value,
   ),
   const SwitchModel(
