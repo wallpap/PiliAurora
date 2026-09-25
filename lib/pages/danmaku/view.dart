@@ -172,19 +172,30 @@ class _PlDanmakuState extends State<PlDanmaku> {
       speed: playerController.playbackSpeed,
     );
     return Obx(
-      () => AnimatedOpacity(
-        opacity: playerController.enableShowDanmaku.value
+      () {
+        final opacity = playerController.enableShowDanmaku.value
             ? playerController.danmakuOpacity.value
-            : 0,
-        duration: const Duration(milliseconds: 100),
-        child: DanmakuScreen<DanmakuExtra>(
+            : 0.0;
+        final child = DanmakuScreen<DanmakuExtra>(
           createdController: (e) {
             playerController.danmakuController = _controller = e;
           },
           option: option,
           size: widget.size,
-        ),
-      ),
+        );
+        if (opacity == 0) {
+          // 关闭时不绘制弹幕，也暂停其 ticker；状态仍保留以便快速恢复。
+          return TickerMode(
+            enabled: false,
+            child: Offstage(child: child),
+          );
+        }
+        return AnimatedOpacity(
+          opacity: opacity,
+          duration: const Duration(milliseconds: 100),
+          child: child,
+        );
+      },
     );
   }
 }

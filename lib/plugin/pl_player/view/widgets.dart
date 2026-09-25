@@ -55,7 +55,6 @@ Widget buildSeekPreviewWidget(
   PlPlayerController plPlayerController,
   double maxWidth,
   double maxHeight,
-  ValueGetter<bool> isMounted,
 ) {
   return Obx(
     () {
@@ -78,7 +77,6 @@ Widget buildSeekPreviewWidget(
         }
 
         final int imgXLen = data.imgXLen;
-        final int imgYLen = data.imgYLen;
         final int totalPerImage = data.totalPerImage;
         double imgXSize = data.imgXSize;
         double imgYSize = data.imgYSize;
@@ -94,7 +92,7 @@ Widget buildSeekPreviewWidget(
               );
               int align = index % totalPerImage;
               int x = align % imgXLen;
-              int y = align ~/ imgYLen;
+              int y = align ~/ imgXLen;
               final url = data.image[pageIndex];
 
               return ClipRRect(
@@ -110,7 +108,6 @@ Widget buildSeekPreviewWidget(
                   onSetSize: (xSize, ySize) => data
                     ..imgXSize = imgXSize = xSize
                     ..imgYSize = imgYSize = ySize,
-                  isMounted: isMounted,
                 ),
               );
             },
@@ -135,10 +132,9 @@ class VideoShotImage extends StatefulWidget {
     required this.imgYSize,
     required this.height,
     required this.onSetSize,
-    required this.isMounted,
   });
 
-  final Map<String, ui.Image?> imageCache;
+  final PreviewImageCache imageCache;
   final String url;
   final int x;
   final int y;
@@ -146,7 +142,6 @@ class VideoShotImage extends StatefulWidget {
   final double imgYSize;
   final double height;
   final Function(double imgXSize, double imgYSize) onSetSize;
-  final ValueGetter<bool> isMounted;
 
   @override
   State<VideoShotImage> createState() => _VideoShotImageState();
@@ -181,18 +176,14 @@ class _VideoShotImageState extends State<VideoShotImage> {
   late Rect _dstRect;
   late RRect _rrect;
   ui.Image? _image;
+  int _loadGeneration = 0;
+  final _retiredImages = <ui.Image>[];
 
   @override
   void initState() {
     super.initState();
     _initSize();
     _loadImg();
-  }
-
-  void _initSizeIfNeeded() {
-    if (_size.width.isNaN) {
-      _initSize();
-    }
   }
 
   void _initSize() {
@@ -232,25 +223,45 @@ class _VideoShotImageState extends State<VideoShotImage> {
     );
   }
 
+  void _replaceImage(ui.Image? image) {
+    final previous = _image;
+    _image = image;
+    if (previous != null) {
+      _retiredImages.add(previous);
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (_retiredImages.remove(previous)) {
+          previous.dispose();
+        }
+      });
+    }
+  }
+
   void _loadImg() {
     final url = widget.url;
-    _image = widget.imageCache[url];
+    final loadGeneration = ++_loadGeneration;
+    _replaceImage(widget.imageCache.acquire(url));
     if (_image != null) {
-      _initSizeIfNeeded();
-    } else if (!widget.imageCache.containsKey(url)) {
-      widget.imageCache[url] = null;
+      _initSize();
+    } else {
+      final cacheGeneration = widget.imageCache.generation;
       _getImg(url).then((image) {
-        if (image != null) {
-          if (widget.isMounted()) {
-            widget.imageCache[url] = image;
-          }
-          if (mounted) {
-            _image = image;
-            _initSizeIfNeeded();
-            setState(() {});
-          }
-        } else {
-          widget.imageCache.remove(url);
+        if (widget.imageCache.generation != cacheGeneration) {
+          image?.dispose();
+          return;
+        }
+        if (image == null) {
+          return;
+        }
+        widget.imageCache.put(url, image);
+        if (!mounted ||
+            loadGeneration != _loadGeneration ||
+            widget.url != url) {
+          return;
+        }
+        _replaceImage(widget.imageCache.acquire(url));
+        if (_image != null) {
+          _initSize();
+          setState(() {});
         }
       });
     }
@@ -261,9 +272,12 @@ class _VideoShotImageState extends State<VideoShotImage> {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.url != widget.url) {
       _loadImg();
-    }
-    if (oldWidget.x != widget.x || oldWidget.y != widget.y) {
-      _setSrcRect(widget.imgXSize, widget.imgYSize);
+    } else if (oldWidget.x != widget.x ||
+        oldWidget.y != widget.y ||
+        oldWidget.imgXSize != widget.imgXSize ||
+        oldWidget.imgYSize != widget.imgYSize ||
+        oldWidget.height != widget.height) {
+      _initSize();
     }
   }
 
@@ -287,6 +301,18 @@ class _VideoShotImageState extends State<VideoShotImage> {
       );
     }
     return const SizedBox.shrink();
+  }
+
+  @override
+  void dispose() {
+    _loadGeneration++;
+    _image?.dispose();
+    _image = null;
+    for (final image in _retiredImages) {
+      image.dispose();
+    }
+    _retiredImages.clear();
+    super.dispose();
   }
 }
 
@@ -414,21 +440,25 @@ class _RenderVideoTime extends RenderBox {
     final paragraph = _buildParagraph(const Color(0xFFD0D0D0), _duration);
     if (paragraph.maxIntrinsicWidth != _cache?.maxIntrinsicWidth) {
       markNeedsLayout();
-    } else {
-      markNeedsSemanticsUpdate();
     }
     _cache?.dispose();
     _cache = paragraph;
+    markNeedsPaint();
+    markNeedsSemanticsUpdate();
   }
 
   String _position;
   set position(String value) {
+    if (_position == value) return;
     _position = value;
+    _positionCache?.dispose();
+    _positionCache = null;
     markNeedsPaint();
     markNeedsSemanticsUpdate();
   }
 
   ui.Paragraph? _cache;
+  ui.Paragraph? _positionCache;
 
   static ui.Paragraph _buildParagraph(Color color, String time) {
     final builder =
@@ -477,7 +507,7 @@ class _RenderVideoTime extends RenderBox {
 
   @override
   void paint(PaintingContext context, ui.Offset offset) {
-    final para = _buildParagraph(Colors.white, _position);
+    final para = _positionCache ??= _buildParagraph(Colors.white, _position);
     context.canvas
       ..drawParagraph(
         para,
@@ -487,13 +517,14 @@ class _RenderVideoTime extends RenderBox {
         ),
       )
       ..drawParagraph(_cache!, Offset(offset.dx, offset.dy + para.height));
-    para.dispose();
   }
 
   @override
   void dispose() {
     _cache?.dispose();
     _cache = null;
+    _positionCache?.dispose();
+    _positionCache = null;
     super.dispose();
   }
 

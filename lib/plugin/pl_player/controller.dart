@@ -66,6 +66,44 @@ import 'package:window_manager/window_manager.dart';
 
 typedef PlayCallback = Future<void>? Function();
 
+class PreviewImageCache {
+  static const _maxEntries = 3;
+  final _cache = <String, ui.Image?>{};
+  int _generation = 0;
+
+  int get generation => _generation;
+
+  ui.Image? acquire(String key) {
+    final image = _cache[key];
+    if (image == null) return null;
+    _cache
+      ..remove(key)
+      ..[key] = image;
+    return image.clone();
+  }
+
+  void put(String key, ui.Image image) {
+    final previous = _cache.remove(key);
+    if (previous != null && !identical(previous, image)) {
+      previous.dispose();
+    }
+    _cache[key] = image;
+    while (_cache.length > _maxEntries) {
+      final oldestKey = _cache.keys.first;
+      final oldest = _cache.remove(oldestKey);
+      oldest?.dispose();
+    }
+  }
+
+  void clear() {
+    _generation++;
+    for (final image in _cache.values) {
+      image?.dispose();
+    }
+    _cache.clear();
+  }
+}
+
 class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
   Player? _videoPlayerController;
   VideoController? _videoController;
@@ -625,6 +663,9 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
 
       if (showSeekPreview) {
         _clearPreview();
+      } else {
+        // 使未显示的旧预览请求也不能写回新视频。
+        _previewGeneration++;
       }
       cancelLongPressTimer();
       if (_videoPlayerController != null &&
@@ -1612,11 +1653,12 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
     }
   }
 
-  late final Map<String, ui.Image?> previewCache = {};
+  late final previewCache = PreviewImageCache();
   LoadingState<VideoShotData>? videoShot;
   late final RxBool showPreview = false.obs;
   late final showSeekPreview = Pref.showSeekPreview;
   late final previewIndex = RxnInt();
+  int _previewGeneration = 0;
 
   void updatePreviewIndex(int seconds) {
     if (videoShot == null) {
@@ -1625,26 +1667,48 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
       return;
     }
     if (videoShot case Success(:final response)) {
-      showPreview.value = true;
-      previewIndex.value = max(
-        0,
-        (response.index.where((item) => item <= seconds).length - 2),
-      );
+      if (!showPreview.value) {
+        showPreview.value = true;
+      }
+      final index = response.index;
+      var low = 0;
+      var high = index.length;
+      while (low < high) {
+        final middle = (low + high) ~/ 2;
+        if (index[middle] <= seconds) {
+          low = middle + 1;
+        } else {
+          high = middle;
+        }
+      }
+      final nextIndex = max(0, low - 2);
+      if (previewIndex.value != nextIndex) {
+        previewIndex.value = nextIndex;
+      }
     }
   }
 
   void _clearPreview() {
+    _previewGeneration++;
     showPreview.value = false;
     previewIndex.value = null;
     videoShot = null;
-    for (final i in previewCache.values) {
-      i?.dispose();
-    }
     previewCache.clear();
   }
 
   Future<void> getVideoShot() async {
-    videoShot = await VideoHttp.videoshot(bvid: bvid, cid: cid!);
+    final generation = _previewGeneration;
+    final requestBvid = bvid;
+    final requestCid = cid!;
+    final result = await VideoHttp.videoshot(
+      bvid: requestBvid,
+      cid: requestCid,
+    );
+    if (generation == _previewGeneration &&
+        requestBvid == _bvid &&
+        requestCid == cid) {
+      videoShot = result;
+    }
   }
 
   Future<void> takeScreenshot() async {

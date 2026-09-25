@@ -52,6 +52,7 @@ import 'package:material_ui/material_ui.dart';
 const int _kMaxChatCount = 500;
 const int _kTrimCount = _kMaxChatCount + 50;
 const int _kSafeTrimIndex = 200;
+const int _kCompactionThreshold = 2000;
 
 class LiveRoomController extends GetxController {
   LiveRoomController(this.heroTag);
@@ -111,6 +112,7 @@ class LiveRoomController extends GetxController {
   List<RichTextItem>? savedDanmaku;
   int builtLength = 0;
   final messages = <dynamic>[].obs;
+  Timer? _messageRefreshTimer;
   bool get shouldRefresh => builtLength != messages.length;
   late final fsSC = Rxn<SuperChatItem>();
   late final RxList<SuperChatItem> superChatMsg = <SuperChatItem>[].obs;
@@ -172,6 +174,32 @@ class LiveRoomController extends GetxController {
         messages.fillRangeOnly(_trimDmIndex, endIndex);
         _trimDmIndex = endIndex;
       }
+    }
+    if (_trimDmIndex >= _kCompactionThreshold &&
+        autoScroll &&
+        !disableAutoScroll.value) {
+      messages.removeRangeOnly(0, _trimDmIndex);
+      chatSimpleIndex = (chatSimpleIndex - _trimDmIndex).clamp(
+        0,
+        messages.length,
+      );
+      _trimDmIndex = 0;
+    }
+  }
+
+  void _scheduleMessageRefresh() {
+    if (_messageRefreshTimer != null) return;
+    _messageRefreshTimer = Timer(const Duration(milliseconds: 100), () {
+      _messageRefreshTimer = null;
+      messages.refresh();
+    });
+  }
+
+  void _flushMessageRefresh() {
+    _messageRefreshTimer?.cancel();
+    _messageRefreshTimer = null;
+    if (builtLength != messages.length) {
+      messages.refresh();
     }
   }
 
@@ -397,8 +425,9 @@ class LiveRoomController extends GetxController {
 
   void handleJumpToBottom() {
     disableAutoScroll.value = false;
-    if (shouldRefresh) {
-      messages.refresh();
+    final hadPendingMessages = shouldRefresh;
+    _flushMessageRefresh();
+    if (hadPendingMessages || shouldRefresh) {
       WidgetsBinding.instance.addPostFrameCallback(_jumpToBottom);
     } else {
       _jumpToBottom();
@@ -462,7 +491,7 @@ class LiveRoomController extends GetxController {
   }
 
   bool isBlocked(String text, Object uid) {
-    return _keywordList.any(text.contains) || _shieldUids.contains(uid);
+    return _shieldUids.contains(uid) || _keywordList.any(text.contains);
   }
 
   void startLiveMsg() {
@@ -501,8 +530,9 @@ class LiveRoomController extends GetxController {
 
   void refreshMsgIfNeeded() {
     if (shouldRefresh) {
+      _flushMessageRefresh();
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        messages.refresh();
+        if (shouldRefresh) messages.refresh();
       });
     }
   }
@@ -513,6 +543,8 @@ class LiveRoomController extends GetxController {
     closeLiveMsg();
     cancelLikeTimer();
     cancelLiveTimer();
+    _messageRefreshTimer?.cancel();
+    _messageRefreshTimer = null;
     savedDanmaku?.clear();
     savedDanmaku = null;
     messages.clear();
@@ -564,7 +596,8 @@ class LiveRoomController extends GetxController {
         danmakuController?.addDanmaku(item);
       }
       if (autoScroll && !disableAutoScroll.value) {
-        messages.add(msg);
+        messages.addOnly(msg);
+        _scheduleMessageRefresh();
         scrollToBottom();
         return;
       }

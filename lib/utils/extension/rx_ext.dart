@@ -7,4 +7,8 @@ extension RxListExt<E> on RxList<E> {
       rawValue[i] = value;
     }
   }
+
+  void removeRangeOnly(int start, int end) {
+    rawValue.removeRange(start, end);
+  }
 }
