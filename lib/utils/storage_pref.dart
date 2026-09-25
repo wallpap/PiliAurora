@@ -531,7 +531,7 @@ abstract final class Pref {
 
   static bool get slideDismissReplyPage => _setting.get(
     SettingBoxKey.slideDismissReplyPage,
-    defaultValue: Platform.isIOS,
+    defaultValue: false,
   );
 
   static bool get showFSActionItem =>
@@ -732,7 +732,6 @@ abstract final class Pref {
       _setting.get(SettingBoxKey.customColor, defaultValue: 0);
 
   static bool get dynamicColor =>
-      !Platform.isIOS &&
       _setting.get(SettingBoxKey.dynamicColor, defaultValue: true);
 
   static bool get enableSystemProxy =>

@@ -1,9 +1,5 @@
-import 'dart:convert' show jsonDecode;
-import 'dart:io' show Platform;
-
 import 'package:PiliPlus/http/browser_ua.dart';
 import 'package:PiliPlus/main.dart';
-import 'package:PiliPlus/plugin/linux_webview.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:get/get.dart';
 import 'package:material_ui/material_ui.dart';
@@ -46,7 +42,7 @@ class _GeetestWebviewDialogState extends State<GeetestWebviewDialog> {
         '<style>#E{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;color:red}</style>'
         '<body><div id="E"></div>'
         '<script>'
-        '${Platform.isLinux ? "R=(n,o)=>window.webkit.messageHandlers.msgToNative.postMessage(n+':'+JSON.stringify(o))" : "R=(n,o)=>window.flutter_inappwebview?.callHandler(n,o)"};$js'
+        'R=(n,o)=>window.flutter_inappwebview?.callHandler(n,o);$js'
         '</script>'
         '<script src="$_geetestJsUri" onload="G()" onerror="E()"></script>'
         '<script src="$_geetestConfigUri?gt=$gt&callback=geetest_$ts" onerror="E()"></script>'
@@ -56,37 +52,6 @@ class _GeetestWebviewDialogState extends State<GeetestWebviewDialog> {
   @override
   Widget build(BuildContext context) {
     final html = _buildHtml(widget.gt, widget.challenge);
-
-    if (Platform.isLinux) {
-      return AlertDialog(
-        title: const Text('验证码'),
-        content: SizedBox(
-          width: 300,
-          height: 400,
-          child: LinuxWebview(
-            initialHtml: html,
-            userAgent: BrowserUa.mob,
-            incognito: true,
-            onWebMessageReceived: (msg) {
-              final msgStr = msg.toString();
-              if (msgStr.startsWith("success:")) {
-                final dataStr = msgStr.substring("success:".length);
-                try {
-                  final data = jsonDecode(dataStr);
-                  Get.back(result: data);
-                } catch (e) {
-                  debugPrint('geetest decode error: $e');
-                }
-              } else if (msgStr.startsWith("error:")) {
-                debugPrint('geetest error: $msgStr');
-              } else if (msgStr.startsWith('close:')) {
-                Get.back();
-              }
-            },
-          ),
-        ),
-      );
-    }
 
     return Stack(
       children: [
@@ -122,7 +87,7 @@ class _GeetestWebviewDialogState extends State<GeetestWebviewDialog> {
             verticalScrollBarEnabled: false,
             overScrollMode: .NEVER,
 
-            pageZoom: Platform.isIOS ? 3 : 1,
+            pageZoom: 1,
           ),
           initialData: InAppWebViewInitialData(data: html),
           onWebViewCreated: (ctr) {

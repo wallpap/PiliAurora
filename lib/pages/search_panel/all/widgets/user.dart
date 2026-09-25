@@ -1,5 +1,3 @@
-import 'dart:io' show Platform;
-
 import 'package:PiliPlus/common/style.dart';
 import 'package:PiliPlus/common/widgets/image/image_save.dart';
 import 'package:PiliPlus/common/widgets/image/network_img_layer.dart';
@@ -158,9 +156,7 @@ Widget _buildVideoItem(
         onTap: () => pushVideoH(video),
         onLongPress: PlatformUtils.isMobile
             ? () {
-                Platform.isIOS
-                    ? HapticFeedback.heavyImpact()
-                    : HapticFeedback.vibrate();
+                HapticFeedback.vibrate();
                 onLongPress();
               }
             : null,

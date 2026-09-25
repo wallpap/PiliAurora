@@ -502,14 +502,6 @@ class _EditProfilePageState extends State<EditProfilePage> {
                 cropStyle: CropStyle.circle,
                 initAspectRatio: const CropAspectRatioPresetCustom(),
               ),
-              IOSUiSettings(
-                title: '裁剪',
-                aspectRatioPresets: const [CropAspectRatioPresetCustom()],
-                cropStyle: CropStyle.circle,
-                aspectRatioLockEnabled: true,
-                resetAspectRatioEnabled: false,
-                aspectRatioPickerButtonHidden: true,
-              ),
             ],
           );
           File(imagePath).tryDel();

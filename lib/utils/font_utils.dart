@@ -4,14 +4,13 @@ import 'dart:typed_data';
 import 'dart:ui' show loadFontFromList;
 
 import 'package:PiliPlus/utils/android/bindings.g.dart';
-import 'package:PiliPlus/utils/fontconfig.g.dart';
 import 'package:PiliPlus/utils/path_utils.dart';
 import 'package:PiliPlus/utils/storage.dart';
 import 'package:PiliPlus/utils/storage_key.dart';
 import 'package:ffi/ffi.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart'
-    show kDebugMode, defaultTargetPlatform, debugPrint;
+    show kDebugMode, defaultTargetPlatform;
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:jni/jni.dart';
 import 'package:path/path.dart' as path;
@@ -118,10 +117,8 @@ abstract final class FontUtils {
     if (!switch (defaultTargetPlatform) {
       .android => _initAndroid(),
       .windows => _initWindows(),
-      .linux => _initLinux(),
       _ => true,
     }) {
-      // TODO: ios/macos CTFontManagerCopyAvailableFontFamilyNames
       SmartDialog.showToast('加载系统字体失败');
     }
     return _fonts;
@@ -161,56 +158,6 @@ abstract final class FontUtils {
       calloc.free(logfont);
       ReleaseDC(null, hdc);
     }
-  }
-
-  @pragma('vm:prefer-inline')
-  static bool _initLinux() {
-    final FontConfig fc;
-    try {
-      fc = FontConfig(DynamicLibrary.open('libfontconfig.so.1'));
-    } catch (e) {
-      if (kDebugMode) debugPrint('无法加载 Fontconfig 库: $e');
-      return false;
-    }
-
-    final config = fc.FcInitLoadConfigAndFonts();
-    if (config == nullptr) {
-      if (kDebugMode) debugPrint('Fontconfig 初始化失败');
-      return false;
-    }
-
-    final fontSet = fc.FcConfigGetFonts(config, FcSetName.FcSetSystem);
-    if (fontSet == nullptr) {
-      if (kDebugMode) debugPrint('无法获取系统字体集');
-      fc.FcConfigDestroy(config);
-      return false;
-    }
-
-    final nfont = fontSet.ref.nfont;
-    final family = FC_FAMILY.toNativeUtf8().cast<Char>();
-    for (int i = 0; i < nfont; i++) {
-      final pattern = fontSet.ref.fonts[i];
-      if (pattern == nullptr) continue;
-
-      final outPtr = calloc<Pointer<UnsignedChar>>();
-
-      try {
-        final result = fc.FcPatternGetString(pattern, family, 0, outPtr);
-
-        if (result == 0) {
-          final strPtr = outPtr.value;
-          if (strPtr != nullptr) {
-            _fonts.add(strPtr.cast<Utf8>().toDartString());
-          }
-        }
-      } finally {
-        calloc.free(outPtr);
-      }
-    }
-    calloc.free(family);
-    fc.FcConfigDestroy(config);
-
-    return true;
   }
 
   @pragma('vm:prefer-inline')

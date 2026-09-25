@@ -8,9 +8,6 @@ import 'dart:async' show Completer;
 
 import 'package:PiliPlus/common/widgets/refresh_layout.dart';
 import 'package:PiliPlus/common/widgets/scroll_behavior.dart';
-import 'package:PiliPlus/common/widgets/scroll_physics.dart'
-    show BouncingScrollPhysicsExt;
-import 'package:PiliPlus/utils/platform_utils.dart';
 import 'package:PiliPlus/utils/storage_pref.dart';
 import 'package:extended_nested_scroll_view/refresh.dart';
 import 'package:flutter/foundation.dart' show clampDouble;
@@ -32,7 +29,6 @@ set displacement(double value) {
   _displacement = value;
   _refreshDragExtent = (value + kIndicatorSize) * _kDragSizeFactorLimit;
 }
-
 // The over-scroll distance that moves the indicator to its maximum
 // displacement, as a percentage of the scrollable's container extent.
 double _refreshDragExtent =
@@ -70,7 +66,6 @@ enum RefreshIndicatorStatus {
   /// Animating the indicator's fade-out after not arming.
   canceled,
 }
-
 /// A widget that supports the Material "swipe to refresh" idiom.
 ///
 /// {@youtube 560 315 https://www.youtube.com/watch?v=ORApMlzwMdM}
@@ -534,20 +529,6 @@ class RefreshIndicatorState extends State<RefreshIndicator>
             ),
     );
 
-    if (PlatformUtils.isDarwin) {
-      if (widget.isClampingScrollPhysics) {
-        return ScrollConfiguration(
-          behavior: RefreshScrollBehavior(
-            scrollPhysics: RefreshScrollPhysicsIOS(
-              parent: const RangeMaintainingScrollPhysics(),
-              onDrag: _onDrag,
-            ),
-          ),
-          child: child,
-        );
-      }
-      return child;
-    }
     return ScrollConfiguration(
       behavior: RefreshScrollBehavior(
         scrollPhysics: RefreshScrollPhysics(
@@ -623,7 +604,6 @@ class RefreshScrollBehavior extends CustomScrollBehavior {
     return scrollPhysics;
   }
 }
-
 class RefreshScrollPhysics extends ClampingScrollPhysics
     with RefreshScrollPhysicsMixin {
   const RefreshScrollPhysics({
@@ -637,21 +617,5 @@ class RefreshScrollPhysics extends ClampingScrollPhysics
   @override
   RefreshScrollPhysics applyTo(ScrollPhysics? ancestor) {
     return RefreshScrollPhysics(parent: buildParent(ancestor), onDrag: onDrag);
-  }
-}
-
-class RefreshScrollPhysicsIOS extends BouncingScrollPhysicsExt
-    with RefreshScrollPhysicsMixin {
-  const RefreshScrollPhysicsIOS({super.parent, required this.onDrag});
-
-  @override
-  final OnDrag onDrag;
-
-  @override
-  RefreshScrollPhysicsIOS applyTo(ScrollPhysics? ancestor) {
-    return RefreshScrollPhysicsIOS(
-      parent: buildParent(ancestor),
-      onDrag: onDrag,
-    );
   }
 }

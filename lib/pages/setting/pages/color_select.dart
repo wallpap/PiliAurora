@@ -1,5 +1,3 @@
-import 'dart:io' show Platform;
-
 import 'package:PiliPlus/common/widgets/animated_height.dart';
 import 'package:PiliPlus/common/widgets/color_palette.dart';
 import 'package:PiliPlus/common/widgets/scaffold/simple_scaffold.dart';
@@ -134,9 +132,8 @@ class _ColorSelectPageState extends State<ColorSelectPage> {
               },
             ),
           ),
-          if (!Platform.isIOS)
-            Obx(
-              () => ListTile(
+          Obx(
+            () => ListTile(
                 title: const Text('动态取色'),
                 leading: ExcludeFocus(
                   child: Checkbox(
@@ -147,8 +144,8 @@ class _ColorSelectPageState extends State<ColorSelectPage> {
                   ),
                 ),
                 onTap: _onChanged,
-              ),
             ),
+          ),
           Padding(
             padding: padding + const .all(12),
             child: Obx(_buildColorPanel),

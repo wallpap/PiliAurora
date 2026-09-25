@@ -179,11 +179,7 @@ class _FontSettingPageState extends State<FontSettingPage> {
                   'abcdefghijklmnopqrstuvwxyz\n'
                   'ABCDEFGHIJKLMNOPQRSTUVWXYZ\n'
                   '1234567890.:,;\'"(!?)+-*/=\n'
-                  '${Platform.isWindows
-                      ? "中国智造，惠及全球"
-                      : Platform.isMacOS || Platform.isIOS
-                      ? "汉体书写信息技术标准相容"
-                      : "我能吞下玻璃而不伤身体"}\n\n'
+                  '${Platform.isWindows ? "中国智造，惠及全球" : "我能吞下玻璃而不伤身体"}\n\n'
                   '注：部分字体可能无法应用',
                   style: TextStyle(
                     fontFamily: _selectedFont ?? '',

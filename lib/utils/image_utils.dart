@@ -18,7 +18,6 @@ import 'package:PiliPlus/utils/storage_pref.dart';
 import 'package:PiliPlus/utils/utils.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
-import 'package:live_photo_maker/live_photo_maker.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:path/path.dart' as path;
 import 'package:saver_gallery/saver_gallery.dart';
@@ -106,33 +105,13 @@ abstract final class ImageUtils {
       final res = await Request().downloadFile(liveUrl.http2https, videoPath);
       if (res.statusCode != 200) throw '${res.statusCode}';
 
-      if (Platform.isIOS) {
-        final imageFile = await CacheManager.manager.getSingleFile(
-          url.http2https,
-        );
-        if (!silentDownImg) SmartDialog.showLoading(msg: '正在保存');
-        bool success = await LivePhotoMaker.create(
-          coverImage: imageFile.path,
-          imagePath: null,
-          voicePath: videoPath,
-          width: width,
-          height: height,
-        ).whenComplete(File(videoPath).tryDel);
-        if (success) {
-          SmartDialog.showToast(' 已保存 ');
-        } else {
-          SmartDialog.showToast('保存失败');
-          return false;
-        }
-      } else {
-        if (!silentDownImg) SmartDialog.showLoading(msg: '正在保存');
-        await saveFileImg(
-          filePath: videoPath,
-          fileName: videoName,
-          type: FileType.video,
-          needToast: true,
-        );
-      }
+      if (!silentDownImg) SmartDialog.showLoading(msg: '正在保存');
+      await saveFileImg(
+        filePath: videoPath,
+        fileName: videoName,
+        type: FileType.video,
+        needToast: true,
+      );
       return true;
     } catch (err) {
       SmartDialog.showToast(err.toString());
