@@ -18,6 +18,24 @@ import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:get/get.dart';
 import 'package:material_ui/material_ui.dart';
 
+const _maxEmotRegExpCache = 32;
+final _emotRegExpCache = <String, RegExp>{};
+
+RegExp _getEmotRegExp(Iterable<String> keys) {
+  final cacheKey = keys.join('\u0000');
+  final cached = _emotRegExpCache.remove(cacheKey);
+  if (cached != null) {
+    _emotRegExpCache[cacheKey] = cached;
+    return cached;
+  }
+  final regExp = RegExp(keys.map(RegExp.escape).join('|'));
+  _emotRegExpCache[cacheKey] = regExp;
+  while (_emotRegExpCache.length > _maxEmotRegExpCache) {
+    _emotRegExpCache.remove(_emotRegExpCache.keys.first);
+  }
+  return regExp;
+}
+
 class LiveRoomChatPanel extends StatelessWidget {
   const LiveRoomChatPanel({
     super.key,
@@ -255,7 +273,7 @@ class LiveRoomChatPanel extends StatelessWidget {
     }
     final emots = obj.emots;
     if (emots != null) {
-      RegExp regExp = RegExp(emots.keys.map(RegExp.escape).join('|'));
+      final regExp = _getEmotRegExp(emots.keys);
       final List<InlineSpan> spanChildren = <InlineSpan>[];
       obj.text.splitMapJoin(
         regExp,
