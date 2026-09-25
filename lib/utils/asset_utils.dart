@@ -7,28 +7,10 @@ import 'package:path/path.dart' as path;
 abstract final class AssetUtils {
   /// from media-kit AssetLoader
   static String? tryGetPath(String key) {
-    if (Platform.isWindows || Platform.isLinux) {
+    if (Platform.isWindows) {
       return path.join(
         path.dirname(Platform.resolvedExecutable),
         'data',
-        'flutter_assets',
-        key,
-      );
-    } else if (Platform.isMacOS) {
-      return path.join(
-        path.dirname(Platform.resolvedExecutable),
-        '..',
-        'Frameworks',
-        'App.framework',
-        'Resources',
-        'flutter_assets',
-        key,
-      );
-    } else if (Platform.isIOS) {
-      return path.join(
-        path.dirname(Platform.resolvedExecutable),
-        'Frameworks',
-        'App.framework',
         'flutter_assets',
         key,
       );

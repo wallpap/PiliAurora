@@ -55,9 +55,6 @@ class _MainAppState extends PopScopeState<MainApp>
   void initState() {
     super.initState();
     addObserverMobile(this);
-    if (Platform.isMacOS) {
-      HardwareKeyboard.instance.addHandler(_handleKeyEvent);
-    }
     if (PlatformUtils.isDesktop) {
       windowManager
         ..addListener(this)
@@ -67,9 +64,7 @@ class _MainAppState extends PopScopeState<MainApp>
         _handleTray();
       }
     }
-    if (!Platform.isMacOS) {
-      PiliScheme.init();
-    }
+    PiliScheme.init();
   }
 
   @override
@@ -119,9 +114,6 @@ class _MainAppState extends PopScopeState<MainApp>
 
   @override
   void dispose() {
-    if (Platform.isMacOS) {
-      HardwareKeyboard.instance.removeHandler(_handleKeyEvent);
-    }
     if (PlatformUtils.isDesktop) {
       trayManager.removeListener(this);
       windowManager.removeListener(this);
@@ -130,13 +122,6 @@ class _MainAppState extends PopScopeState<MainApp>
     PiliScheme.listener?.cancel();
     GStorage.close();
     super.dispose();
-  }
-
-  bool _handleKeyEvent(KeyEvent event) {
-    return event is KeyDownEvent &&
-        event.logicalKey == LogicalKeyboardKey.keyR &&
-        HardwareKeyboard.instance.isMetaPressed &&
-        _mainController.refreshRecommendations();
   }
 
   @override
@@ -276,14 +261,8 @@ class _MainAppState extends PopScopeState<MainApp>
   }
 
   Future<void> _handleTray() async {
-    if (Platform.isWindows) {
-      await trayManager.setIcon(Assets.logoIco);
-    } else {
-      await trayManager.setIcon(Assets.logoLarge);
-    }
-    if (!Platform.isLinux) {
-      await trayManager.setToolTip(Constants.appName);
-    }
+    await trayManager.setIcon(Assets.logoIco);
+    await trayManager.setToolTip(Constants.appName);
 
     Menu trayMenu = Menu(
       items: [

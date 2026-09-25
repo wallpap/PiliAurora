@@ -177,19 +177,6 @@ class _PLVideoPlayerState extends State<PLVideoPlayer>
   void _onVolumeChanged(double value) {
     if (mounted && !plPlayerController.volumeInterceptEventStream) {
       plPlayerController.volume.value = value;
-      if (Platform.isIOS && !FlutterVolumeController.showSystemUI) {
-        plPlayerController
-          ..volumeIndicator.value = true
-          ..volumeTimer?.cancel()
-          ..volumeTimer = Timer(
-            const Duration(milliseconds: 800),
-            () {
-              if (mounted) {
-                plPlayerController.volumeIndicator.value = false;
-              }
-            },
-          );
-      }
     }
   }
 
@@ -281,7 +268,7 @@ class _PLVideoPlayerState extends State<PLVideoPlayer>
         } catch (_) {}
 
         try {
-          if (Platform.isIOS || plPlayerController.setSystemBrightness) {
+          if (plPlayerController.setSystemBrightness) {
             _getSystemBrightness();
             _brightnessListener = ScreenBrightnessPlatform
                 .instance
@@ -351,7 +338,7 @@ class _PLVideoPlayerState extends State<PLVideoPlayer>
   Future<void> setBrightness(double value) async {
     _brightnessValue.value = value;
     try {
-      if (Platform.isIOS || plPlayerController.setSystemBrightness) {
+      if (plPlayerController.setSystemBrightness) {
         await ScreenBrightnessPlatform.instance.setSystemScreenBrightness(
           value,
         );

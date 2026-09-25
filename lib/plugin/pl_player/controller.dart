@@ -493,7 +493,6 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
 
   void _onOrientationChanged(OrientationParams param) {
     _orientation = param.orientation;
-    if (Platform.isIOS && !visible) return;
     final orientation = param.orientation;
     final isFullScreen = this.isFullScreen.value;
     if (checkIsAutoRotate &&

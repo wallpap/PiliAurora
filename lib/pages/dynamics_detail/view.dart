@@ -45,9 +45,7 @@ import 'package:get/get.dart';
 import 'package:material_ui/material_ui.dart';
 
 const Set<TargetPlatform> _kDesktopPlatforms = <TargetPlatform>{
-  TargetPlatform.macOS,
   TargetPlatform.windows,
-  TargetPlatform.linux,
 };
 
 class DynamicDetailPage extends StatefulWidget {
