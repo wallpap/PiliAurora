@@ -10,6 +10,13 @@ set(BINARY_NAME "piliplus")
 # versions of CMake.
 cmake_policy(VERSION 3.14...3.25)
 
+# flutter_inappwebview_windows still uses DEPENDS with the TARGET form of
+# add_custom_command(), which is accepted by CMake's legacy policy behavior.
+if(POLICY CMP0175)
+  cmake_policy(SET CMP0175 OLD)
+  set(CMAKE_POLICY_DEFAULT_CMP0175 OLD)
+endif()
+
 # Define build configuration option.
 get_property(IS_MULTICONFIG GLOBAL PROPERTY GENERATOR_IS_MULTI_CONFIG)
 if(IS_MULTICONFIG)
@@ -58,6 +65,15 @@ add_subdirectory("runner")
 # Generated plugin build rules, which manage building the plugins and adding
 # them to the application.
 include(flutter/generated_plugins.cmake)
+
+# The plugin is an external dependency. Keep its MSVC warnings scoped to the
+# plugin target instead of disabling them for the whole application.
+if(MSVC AND TARGET flutter_inappwebview_windows_plugin)
+  target_compile_options(flutter_inappwebview_windows_plugin PRIVATE
+    /wd4244
+    /wd4458
+  )
+endif()
 
 
 # === Installation ===
