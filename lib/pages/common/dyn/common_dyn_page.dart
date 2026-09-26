@@ -241,6 +241,7 @@ mixin CommonDynPageMixin<T extends StatefulWidget>
             replyType: controller.replyType,
             firstFloor: replyItem,
             upMid: controller.upMid,
+            onUpdate: controller.loadingState.refresh,
           ),
         );
         if (showBackBtn) {
