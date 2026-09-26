@@ -12,3 +12,11 @@ Regenerate the JNI bindings with:
 ```powershell
 fvm dart run tool/jnigen.dart
 ```
+
+Trace a running Windows debug build during a danmaku stress test:
+
+```powershell
+pwsh -File tool/trace-windows.ps1 -ProcessId 12345 -DurationSeconds 180
+```
+
+The script prints peak process memory and writes a CSV with CPU and GPU process memory samples to the Windows temporary directory. GPU fields stay empty when Windows does not provide those counters.

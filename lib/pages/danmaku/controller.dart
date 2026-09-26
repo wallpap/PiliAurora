@@ -4,6 +4,7 @@ import 'dart:io' show File;
 import 'package:PiliPlus/grpc/bilibili/community/service/dm/v1.pb.dart';
 import 'package:PiliPlus/grpc/dm.dart';
 import 'package:PiliPlus/http/loading_state.dart';
+import 'package:PiliPlus/pages/danmaku/cache.dart';
 import 'package:PiliPlus/plugin/pl_player/controller.dart';
 import 'package:PiliPlus/plugin/pl_player/models/data_source.dart';
 import 'package:PiliPlus/utils/accounts.dart';
@@ -26,76 +27,71 @@ class PlDanmakuController {
 
   late final _isLogin = Accounts.main.isLogin;
 
-  // 100 毫秒分桶便于播放，但长视频不能一直保留所有分桶。
-  static const _maxCachedBuckets = 6000;
-  static const _maxCachedElements = 30000;
-  final Map<int, List<DanmakuElem>> _dmSegMap = {};
-  final Map<int, int> _segmentBucketCounts = HashMap();
-  int _cachedElementCount = 0;
-  int? _lastAccessedBucket;
-  // 已请求的段落标记
-  late final Set<int> _requestedSeg = HashSet();
+  final _cache = DanmakuCache();
+  // 请求中的分段单独记录；成功加载后由缓存记录，淘汰后允许重新请求。
+  final Set<int> _requestedSeg = HashSet();
+  bool _disposed = false;
 
   void dispose() {
-    _dmSegMap.clear();
-    _segmentBucketCounts.clear();
-    _cachedElementCount = 0;
-    _lastAccessedBucket = null;
+    _disposed = true;
+    _cache.clear();
     _requestedSeg.clear();
   }
 
-  void _trimCache() {
-    // 本地弹幕没有网络回源能力，保留完整数据以支持回退播放。
-    if (_isFileSource) return;
-
-    while (_dmSegMap.length > _maxCachedBuckets ||
-        _cachedElementCount > _maxCachedElements) {
-      final bucket = _dmSegMap.keys.first;
-      final elements = _dmSegMap.remove(bucket);
-      _cachedElementCount -= elements?.length ?? 0;
-
-      final segment = DmUtils.calcSegment(bucket * 100);
-      final count = _segmentBucketCounts[segment];
-      if (count == null || count <= 1) {
-        _segmentBucketCounts.remove(segment);
-        // 淘汰后允许回退播放时重新请求该分段。
-        _requestedSeg.remove(segment);
-      } else {
-        _segmentBucketCounts[segment] = count - 1;
-      }
-    }
-  }
-
   Future<void> queryDanmaku(int segmentIndex) async {
-    if (_isFileSource) {
+    if (_isFileSource || _disposed) {
       return;
     }
-    if (_requestedSeg.contains(segmentIndex)) {
+    if (_requestedSeg.contains(segmentIndex) ||
+        _cache.containsSegment(segmentIndex)) {
       return;
     }
     _requestedSeg.add(segmentIndex);
-    final res = await DmGrpc.dmSegMobile(
-      cid: _cid,
-      segmentIndex: segmentIndex + 1,
-    );
+    late final LoadingState<DmSegMobileReply> res;
+    try {
+      res = await DmGrpc.dmSegMobile(
+        cid: _cid,
+        segmentIndex: segmentIndex + 1,
+      );
+    } finally {
+      _requestedSeg.remove(segmentIndex);
+    }
+    if (_disposed) return;
 
     if (res case Success(:final response)) {
       if (response.state == 1) {
         _plPlayerController.dmState.add(_cid);
       }
-      handleDanmaku(response.elems);
-    } else {
-      _requestedSeg.remove(segmentIndex);
+      handleDanmaku(response.elems, segmentIndex: segmentIndex);
     }
   }
 
-  void handleDanmaku(List<DanmakuElem> elems) {
-    if (elems.isEmpty) return;
+  void handleDanmaku(List<DanmakuElem> elems, {int? segmentIndex}) {
+    if (_disposed) return;
     final uniques = HashMap<String, DanmakuElem>();
+    final retained = _isFileSource ? <DanmakuElem>[] : null;
+    final segmentBuckets = segmentIndex == null
+        ? null
+        : <int, List<DanmakuElem>>{};
+    final maxElementsPerBucket = _cache.maxElementsPerBucket;
 
     final filters = _plPlayerController.filters;
     final shouldFilter = filters.count != 0;
     for (final element in elems) {
+      final bucketIndex = element.progress ~/ 100;
+      if (!_isFileSource &&
+          (segmentIndex == null ||
+              DmUtils.calcSegment(element.progress) != segmentIndex)) {
+        continue;
+      }
+      if (!_isFileSource &&
+          (segmentBuckets![bucketIndex]?.length ?? 0) >= maxElementsPerBucket) {
+        if (_mergeDanmaku) {
+          uniques[element.content]?.count++;
+        }
+        continue;
+      }
+
       if (_isLogin) {
         element.isSelf = element.midHash == _plPlayerController.midHash;
       }
@@ -116,19 +112,18 @@ class PlDanmakuController {
         }
       }
 
-      final int pos = element.progress ~/ 100; //每0.1秒存储一次
-      final bucket = _dmSegMap[pos];
-      if (bucket == null) {
-        _dmSegMap[pos] = [element];
-        final segment = DmUtils.calcSegment(pos * 100);
-        _segmentBucketCounts[segment] =
-            (_segmentBucketCounts[segment] ?? 0) + 1;
+      if (_isFileSource) {
+        retained!.add(element);
       } else {
-        bucket.add(element);
+        (segmentBuckets![bucketIndex] ??= <DanmakuElem>[]).add(element);
       }
-      _cachedElementCount++;
     }
-    _trimCache();
+    if (_isFileSource) {
+      // 本地文件无法回源，保留完整弹幕。
+      _cache.addFileElements(retained!);
+    } else if (segmentIndex != null) {
+      _cache.addSegmentBuckets(segmentIndex, segmentBuckets!);
+    }
   }
 
   List<DanmakuElem>? getCurrentDanmaku(int progress) {
@@ -136,21 +131,13 @@ class PlDanmakuController {
       initFileDmIfNeeded();
     } else {
       final int segmentIndex = DmUtils.calcSegment(progress);
-      if (!_requestedSeg.contains(segmentIndex)) {
+      if (!_requestedSeg.contains(segmentIndex) &&
+          !_cache.containsSegment(segmentIndex)) {
         queryDanmaku(segmentIndex);
         return null;
       }
     }
-    final bucket = progress ~/ 100;
-    final result = _dmSegMap[bucket];
-    if (result != null && bucket != _lastAccessedBucket) {
-      // 保留最近显示的分桶，回退播放时优先命中缓存。
-      _dmSegMap
-        ..remove(bucket)
-        ..[bucket] = result;
-      _lastAccessedBucket = bucket;
-    }
-    return result;
+    return _cache.getAt(progress);
   }
 
   bool _fileDmLoaded = false;
