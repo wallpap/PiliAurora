@@ -20,3 +20,15 @@ pwsh -File tool/trace-windows.ps1 -ProcessId 12345 -DurationSeconds 180
 ```
 
 The script prints peak process memory and writes a CSV with CPU and GPU process memory samples to the Windows temporary directory. GPU fields stay empty when Windows does not provide those counters.
+
+## Hardware decoder fallback
+
+Windows and Android hardware decoding uses an ordered candidate list. Automatic
+settings first let mpv select a decoder, then try platform-specific decoders in
+efficiency order. Explicit decoder settings keep their configured order.
+
+When an AV1 hardware decoder reports an initialization failure, the player
+records that backend as unavailable for the current process, reopens the media
+at the current position, and tries the next candidate. Software decoding
+(`hwdec=no`) is the final fallback. A normal AV1 packet or sequence-header
+error does not trigger this path by itself.
