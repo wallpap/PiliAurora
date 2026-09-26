@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:PiliPlus/grpc/bilibili/community/service/dm/v1.pb.dart';
 import 'package:PiliPlus/pages/danmaku/controller.dart';
 import 'package:PiliPlus/pages/danmaku/danmaku_model.dart';
+import 'package:PiliPlus/pages/danmaku/render_guard.dart';
 import 'package:PiliPlus/plugin/pl_player/controller.dart';
 import 'package:PiliPlus/plugin/pl_player/models/play_status.dart';
 import 'package:PiliPlus/plugin/pl_player/utils/danmaku_options.dart';
@@ -37,6 +38,11 @@ class PlDanmaku extends StatefulWidget {
 }
 
 class _PlDanmakuState extends State<PlDanmaku> {
+  static const _maxDanmakuPerTick = 120;
+  static const _maxActiveDanmaku = 600;
+  static const _maxSpecialPerTick = 4;
+  static const _maxActiveSpecialDanmaku = 32;
+
   PlPlayerController get playerController => widget.playerController;
 
   late final PlDanmakuController _plDanmakuController;
@@ -89,7 +95,7 @@ class _PlDanmakuState extends State<PlDanmaku> {
 
   @pragma('vm:notify-debugger-on-exception')
   void videoPositionListen(Duration position) {
-    if (_controller == null || !playerController.enableShowDanmaku.value) {
+    if (!playerController.enableShowDanmaku.value) {
       return;
     }
 
@@ -98,6 +104,15 @@ class _PlDanmakuState extends State<PlDanmaku> {
     }
 
     if (!playerController.playerStatus.isPlaying) {
+      return;
+    }
+
+    final controller = _controller;
+    if (controller == null) return;
+    final trackCount = controller.trackCount;
+    if (trackCount <= 0) {
+      // canvas_danmaku 在零轨道时仍可能访问第一个轨道；海量模式
+      // 还会执行 nextInt(0)。尺寸切换时跳过本次批次。
       return;
     }
 
@@ -113,25 +128,56 @@ class _PlDanmakuState extends State<PlDanmaku> {
     if (currentDanmakuList != null) {
       final blockColorful = DanmakuOptions.blockColorful;
       final danmakuWeight = DanmakuOptions.danmakuWeight;
-      for (DanmakuElem e in currentDanmakuList) {
-        if (e.weight < danmakuWeight) return;
+      var remaining = _maxDanmakuPerTick.clamp(
+        0,
+        _maxActiveDanmaku - _activeDanmakuCount(controller),
+      );
+      var remainingSpecial = _maxSpecialPerTick.clamp(
+        0,
+        _maxActiveSpecialDanmaku - controller.specialDanmaku.length,
+      );
+      if (remaining <= 0) return;
+      final accepted = currentDanmakuList.length > remaining
+          ? currentDanmakuList.where((e) => e.weight >= danmakuWeight).toList()
+          : currentDanmakuList;
+      final sampled = accepted.length > remaining
+          ? List<DanmakuElem>.generate(
+              remaining,
+              (index) => accepted[index * accepted.length ~/ remaining],
+              growable: false,
+            )
+          : accepted;
+      for (final e in sampled) {
+        if (e.weight < danmakuWeight) continue;
+        if (remaining <= 0) break;
+        bool added;
         if (e.mode == 7) {
+          if (remainingSpecial <= 0) continue;
           try {
-            _controller!.addDanmaku(
-              SpecialDanmakuContentItem.fromList(
-                DmUtils.decimalToColor(e.color),
-                e.fontsize.toDouble(),
-                jsonDecode(e.content.replaceAll('\n', '\\n')),
-                extra: VideoDanmaku(
-                  id: e.id.toInt(),
-                  mid: e.midHash,
-                  like: e.likeCount.toInt(),
-                ),
+            final content = SpecialDanmakuContentItem.fromList(
+              DmUtils.decimalToColor(e.color),
+              e.fontsize.toDouble(),
+              jsonDecode(e.content.replaceAll('\n', '\\n')),
+              extra: VideoDanmaku(
+                id: e.id.toInt(),
+                mid: e.midHash,
+                like: e.likeCount.toInt(),
               ),
             );
-          } catch (_) {}
+            if (!DanmakuRenderGuard.canRasterizeSpecial(
+              content,
+              MediaQuery.devicePixelRatioOf(context),
+              controller.option.strokeWidth,
+              controller.option.fontWeight,
+            )) {
+              continue;
+            }
+            added = controller.addDanmaku(content);
+          } catch (_) {
+            added = false;
+          }
         } else {
-          _controller!.addDanmaku(
+          added = controller.addDanmaku(
             DanmakuContentItem(
               e.content,
               color: blockColorful
@@ -151,8 +197,21 @@ class _PlDanmakuState extends State<PlDanmaku> {
             ),
           );
         }
+        if (added) {
+          remaining--;
+          if (e.mode == 7) remainingSpecial--;
+        }
       }
     }
+  }
+
+  int _activeDanmakuCount(DanmakuController<DanmakuExtra> controller) {
+    var count = controller.specialDanmaku.length;
+    count += controller.staticDanmaku.nonNulls.length;
+    for (final track in controller.scrollDanmaku) {
+      count += track.length;
+    }
+    return count;
   }
 
   @override
