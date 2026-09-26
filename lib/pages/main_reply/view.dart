@@ -234,6 +234,7 @@ class _MainReplyPageState extends State<MainReplyPage>
               replyType: _controller.replyType,
               firstFloor: replyItem,
               upMid: _controller.upMid,
+              onUpdate: _controller.loadingState.refresh,
             ),
           ).constraintWidth(),
         ),

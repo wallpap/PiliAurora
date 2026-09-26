@@ -40,6 +40,7 @@ class VideoReplyReplyPanel extends CommonSlidePage {
     required this.replyType,
     this.isNested = false,
     this.upMid,
+    this.onUpdate,
   });
   final int? id;
   final int oid;
@@ -50,6 +51,7 @@ class VideoReplyReplyPanel extends CommonSlidePage {
   final int replyType;
   final bool isNested;
   final Int64? upMid;
+  final VoidCallback? onUpdate;
 
   @override
   State<VideoReplyReplyPanel> createState() => _VideoReplyReplyPanelState();
@@ -230,6 +232,7 @@ class _VideoReplyReplyPanelState extends State<VideoReplyReplyPanel>
             onReply: (replyItem) => _controller.onReply(replyItem, index: -1),
             upMid: widget.upMid ?? _controller.upMid,
             onCheckReply: _controller.onCheckReply,
+            onUpdate: widget.onUpdate,
           ),
         ),
         SliverToBoxAdapter(

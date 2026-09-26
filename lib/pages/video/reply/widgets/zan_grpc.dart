@@ -12,9 +12,11 @@ class ZanButtonGrpc extends StatelessWidget {
   const ZanButtonGrpc({
     super.key,
     required this.replyItem,
+    this.onUpdate,
   });
 
   final ReplyInfo replyItem;
+  final VoidCallback? onUpdate;
 
   Future<void> onHateReply(
     BuildContext context,
@@ -50,6 +52,7 @@ class ZanButtonGrpc extends StatelessWidget {
       if (context.mounted) {
         (context as Element?)?.markNeedsBuild();
       }
+      onUpdate?.call();
     } else {
       res.toast();
     }
@@ -93,6 +96,7 @@ class ZanButtonGrpc extends StatelessWidget {
       if (context.mounted) {
         (context as Element?)?.markNeedsBuild();
       }
+      onUpdate?.call();
     } else {
       res.toast();
     }

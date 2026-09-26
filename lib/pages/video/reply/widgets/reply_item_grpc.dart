@@ -77,6 +77,7 @@ class ReplyItemGrpc extends StatelessWidget {
     this.onCheckReply,
     this.onToggleTop,
     this.jumpToDialogue,
+    this.onUpdate,
   });
   final ReplyInfo replyItem;
   final int replyLevel;
@@ -91,6 +92,7 @@ class ReplyItemGrpc extends StatelessWidget {
   final ValueChanged<ReplyInfo>? onCheckReply;
   final ValueChanged<ReplyInfo>? onToggleTop;
   final VoidCallback? jumpToDialogue;
+  final VoidCallback? onUpdate;
 
   static final _voteRegExp = RegExp(r"^\{vote:\d+?\}$");
   static final _timeRegExp = RegExp(r'^(?:\d+[:：])?\d+[:：]\d+$');
@@ -555,7 +557,7 @@ class ReplyItemGrpc extends StatelessWidget {
         ],
         ?dialogBtn,
         const Spacer(),
-        ZanButtonGrpc(replyItem: replyItem),
+        ZanButtonGrpc(replyItem: replyItem, onUpdate: onUpdate),
         const SizedBox(width: 5),
       ],
     );
