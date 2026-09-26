@@ -209,6 +209,7 @@ class _MatchInfoPageState extends CommonDynPageState<MatchInfoPage> {
               isVideoDetail: false,
               replyType: controller.replyType,
               firstFloor: replyItem,
+              onUpdate: controller.loadingState.refresh,
             ),
           ).constraintWidth(),
         ),
