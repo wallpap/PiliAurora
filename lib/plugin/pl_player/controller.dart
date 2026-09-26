@@ -1,4 +1,4 @@
-import 'dart:async' show StreamSubscription, Timer;
+import 'dart:async' show StreamSubscription, Timer, unawaited;
 import 'dart:convert' show ascii, utf8;
 import 'dart:io' show Platform;
 import 'dart:math' show max, min;
@@ -24,10 +24,12 @@ import 'package:PiliPlus/plugin/pl_player/models/double_tap_type.dart';
 import 'package:PiliPlus/plugin/pl_player/models/duration.dart';
 import 'package:PiliPlus/plugin/pl_player/models/fullscreen_mode.dart';
 import 'package:PiliPlus/plugin/pl_player/models/heart_beat_type.dart';
+import 'package:PiliPlus/plugin/pl_player/models/hwdec_type.dart';
 import 'package:PiliPlus/plugin/pl_player/models/play_repeat.dart';
 import 'package:PiliPlus/plugin/pl_player/models/play_status.dart';
 import 'package:PiliPlus/plugin/pl_player/models/video_fit_type.dart';
 import 'package:PiliPlus/plugin/pl_player/utils/fullscreen.dart';
+import 'package:PiliPlus/plugin/pl_player/utils/decode_fallback.dart';
 import 'package:PiliPlus/services/service_locator.dart';
 import 'package:PiliPlus/utils/accounts.dart';
 import 'package:PiliPlus/utils/android/android_helper.dart';
@@ -404,6 +406,12 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
   late int cacheAudioQa = Pref.defaultAudioQa;
   bool enableHeart = true;
   late final String? hwdec = Pref.enableHA ? Pref.hardwareDecoding : null;
+  late final List<String> _hwdecCandidates = HwDecType.orderedCandidates(hwdec);
+  int _hwdecIndex = 0;
+  bool _hardwareDecodeRetryInProgress = false;
+  bool _hardwareDecodeRetryPending = false;
+  bool _av1DecodeErrorObserved = false;
+  static final _unsupportedHardwareDecoders = <String>{};
 
   late final progressType = Pref.btmProgressBehavior;
   late final enableQuickDouble = Pref.enableQuickDouble;
@@ -649,6 +657,10 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
       this.width = width;
       this.height = height;
       this.dataSource = dataSource;
+      _hwdecIndex = 0;
+      _hardwareDecodeRetryInProgress = false;
+      _hardwareDecodeRetryPending = false;
+      _av1DecodeErrorObserved = false;
       _autoPlay = autoplay;
       // 初始化数据加载状态
       dataStatus.value = DataStatus.loading;
@@ -789,7 +801,7 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
       configuration: VideoControllerConfiguration(
         enableHardwareAcceleration: hwdec != null,
         androidAttachSurfaceAfterVideoParameters: false,
-        hwdec: hwdec,
+        hwdec: hwdec == null ? null : _hwdecCandidates.first,
       ),
     );
 
@@ -878,6 +890,73 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
       return ctr.open(media, play: true);
     }
     return null;
+  }
+
+  Future<void> _tryNextHardwareDecoder(Player player) async {
+    if (hwdec == null) {
+      return;
+    }
+    if (_hardwareDecodeRetryInProgress) {
+      _hardwareDecodeRetryPending = true;
+      return;
+    }
+    _hardwareDecodeRetryInProgress = true;
+    _hardwareDecodeRetryPending = false;
+
+    try {
+      final active = player.getProperty('hwdec-current').trim();
+      final activeIndex = _hwdecCandidates.indexWhere(
+        (candidate) =>
+            active == candidate || active.startsWith('${candidate}_'),
+      );
+
+      // `auto` may report the concrete backend that failed. Keep the global
+      // efficiency order so earlier alternatives still get a chance.
+      final failedIndex = active != HwDecType.no.hwdec && activeIndex >= 0
+          ? activeIndex
+          : _hwdecIndex;
+      final failed = _hwdecCandidates[failedIndex];
+      if (failed != HwDecType.no.hwdec) {
+        _unsupportedHardwareDecoders.add('av1|$failed');
+      }
+
+      var nextIndex = _hwdecIndex + 1;
+      while (nextIndex < _hwdecCandidates.length &&
+          _unsupportedHardwareDecoders.contains(
+            'av1|${_hwdecCandidates[nextIndex]}',
+          )) {
+        nextIndex++;
+      }
+      if (nextIndex >= _hwdecCandidates.length) return;
+
+      final current = player.current;
+      if (current.isEmpty) return;
+      _hwdecIndex = nextIndex;
+      final next = _hwdecCandidates[nextIndex];
+      final wasPlaying = player.state.playing;
+      var media = current.last;
+      if (!isLive) {
+        media = media.copyWith(start: player.state.position);
+      }
+
+      // 当前硬解后端失败时，重开媒体并尝试下一个候选项。
+      player.setProperty('hwdec', next);
+      await player.open(media, play: wasPlaying);
+      SmartDialog.showToast(
+        next == HwDecType.no.hwdec ? 'AV1 硬解不可用，已切换软解' : 'AV1 硬解失败，尝试 $next',
+      );
+    } catch (error, stackTrace) {
+      if (kDebugMode) {
+        debugPrint('AV1 hardware decode fallback failed: $error');
+        debugPrint(stackTrace.toString());
+      }
+    } finally {
+      _hardwareDecodeRetryInProgress = false;
+      if (_hardwareDecodeRetryPending) {
+        _hardwareDecodeRetryPending = false;
+        unawaited(_tryNextHardwareDecoder(player));
+      }
+    }
   }
 
   // 开始播放
@@ -1026,6 +1105,13 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
       stream.error.listen((String event) {
         if (dataSource is FileSource &&
             event.startsWith("Failed to open file")) {
+          return;
+        }
+        if (event.toLowerCase().contains('av1')) {
+          _av1DecodeErrorObserved = true;
+        }
+        if (_av1DecodeErrorObserved && isHardwareDecodeFailure(event)) {
+          unawaited(_tryNextHardwareDecoder(player));
           return;
         }
         if (isLive) {

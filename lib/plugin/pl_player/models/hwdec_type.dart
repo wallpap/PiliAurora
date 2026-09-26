@@ -39,4 +39,69 @@ enum HwDecType {
             ? autoSafe.hwdec
             : [mediacodec.hwdec, autoSafe.hwdec].join(',')
       : auto.hwdec;
+
+  /// 按硬件解码效率排列候选项。`auto` 先交给 mpv 选择，失败后再逐个探测。
+  static List<String> orderedCandidates(String? configured) {
+    if (configured == null || configured.trim().isEmpty) {
+      return const ['no'];
+    }
+
+    final result = <String>[];
+    void add(String value) {
+      if (value.isEmpty || result.contains(value)) return;
+      result.add(value);
+    }
+
+    final requested = configured
+        .split(',')
+        .map((value) => value.trim())
+        .where((value) => value.isNotEmpty);
+    for (final value in requested) {
+      add(value);
+    }
+
+    if (result.any(_isAutomaticMode)) {
+      for (final value in _platformFallbacks) {
+        add(value);
+      }
+    }
+
+    add(no.hwdec);
+    return result;
+  }
+
+  static bool _isAutomaticMode(String value) =>
+      value == auto.hwdec || value == autoSafe.hwdec || value == autoCopy.hwdec;
+
+  static List<String> get _platformFallbacks {
+    if (Platform.isAndroid) {
+      return const [
+        'mediacodec',
+        'mediacodec-copy',
+        'auto-safe',
+        'auto-copy',
+        'auto',
+      ];
+    }
+    if (Platform.isWindows) {
+      return const [
+        // 直通路径优先，copy 路径作为兼容性退路。
+        'd3d12va',
+        'd3d12va-copy',
+        'd3d11va',
+        'd3d11va-copy',
+        'dxva2',
+        'dxva2-copy',
+        'nvdec',
+        'nvdec-copy',
+        'qsv',
+        'qsv-copy',
+        'amf',
+        'amf-copy',
+        'vulkan',
+        'vulkan-copy',
+      ];
+    }
+    return const ['auto-safe', 'auto-copy', 'auto'];
+  }
 }
