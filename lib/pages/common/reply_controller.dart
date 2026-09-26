@@ -74,8 +74,19 @@ abstract class ReplyController<R> extends CommonListController<R, ReplyInfo> {
         sortType.value = .select;
       }
     }
+    _deduplicateReplies(data, isRefresh: isRefresh);
     isEnd = data.cursor.isEnd;
     return false;
+  }
+
+  void _deduplicateReplies(MainListReply data, {required bool isRefresh}) {
+    final seen = <Int64>{};
+    if (!isRefresh) {
+      seen.addAll(
+        loadingState.value.dataOrNull?.map((reply) => reply.id) ?? [],
+      );
+    }
+    data.replies.removeWhere((reply) => !seen.add(reply.id));
   }
 
   @override
