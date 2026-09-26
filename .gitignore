@@ -104,3 +104,8 @@ pili_release.json
 dist
 
 test*
+!test/
+!test/pages/
+!test/pages/danmaku/
+!test/pages/danmaku/cache_test.dart
+!test/pages/danmaku/render_guard_test.dart
