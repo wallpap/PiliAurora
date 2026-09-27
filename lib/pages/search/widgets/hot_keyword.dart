@@ -1,8 +1,8 @@
 import 'package:pili_aurora/common/assets.dart';
+import 'package:pili_aurora/common/widgets/image/cached_image.dart';
 import 'package:pili_aurora/models_new/search/search_trending/list.dart';
 import 'package:pili_aurora/utils/extension/string_ext.dart';
 import 'package:pili_aurora/utils/image_utils.dart';
-import 'package:cached_network_image_ce/cached_network_image.dart';
 import 'package:flutter/rendering.dart'
     show
         ContainerRenderObjectMixin,
@@ -63,7 +63,7 @@ class SliverHotKeyword extends StatelessWidget {
                           if (!i.icon.isNullOrEmpty)
                             Padding(
                               padding: const .only(left: 4),
-                              child: CachedNetworkImage(
+                              child: CachedImage(
                                 height: 15,
                                 memCacheHeight: cacheHeight,
                                 imageUrl: ImageUtils.thumbnailUrl(i.icon!),

@@ -9,6 +9,7 @@ import 'package:pili_aurora/common/widgets/dialog/dialog.dart';
 import 'package:pili_aurora/common/widgets/dialog/report.dart';
 import 'package:pili_aurora/common/widgets/emote_tooltip.dart';
 import 'package:pili_aurora/common/widgets/gesture/tap_gesture_recognizer.dart';
+import 'package:pili_aurora/common/widgets/image/cached_image.dart';
 import 'package:pili_aurora/common/widgets/image/network_img_layer.dart';
 import 'package:pili_aurora/common/widgets/image_grid/image_grid_view.dart';
 import 'package:pili_aurora/common/widgets/pendant_avatar.dart';
@@ -50,7 +51,6 @@ import 'package:pili_aurora/utils/storage_pref.dart';
 import 'package:pili_aurora/utils/theme_utils.dart';
 import 'package:pili_aurora/utils/url_utils.dart';
 import 'package:pili_aurora/utils/utils.dart';
-import 'package:cached_network_image_ce/cached_network_image.dart';
 import 'package:collection/collection.dart' show IterableExtension;
 import 'package:fixnum/fixnum.dart';
 import 'package:flutter/foundation.dart' show kDebugMode;
@@ -261,7 +261,7 @@ class ReplyItemGrpc extends StatelessWidget {
               top: 0,
               right: 0,
               height: height,
-              child: CachedNetworkImage(
+              child: CachedImage(
                 height: height,
                 memCacheHeight: height.cacheSize(context),
                 imageUrl: ImageUtils.safeThumbnailUrl(garb.cardImage),
@@ -760,7 +760,7 @@ class ReplyItemGrpc extends StatelessWidget {
       final children = [
         if (!isCv && url.hasPrefixIcon())
           WidgetSpan(
-            child: CachedNetworkImage(
+            child: CachedImage(
               height: 19,
               memCacheHeight: 19.cacheSize(context),
               color: colorScheme.primary,

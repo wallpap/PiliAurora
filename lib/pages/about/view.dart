@@ -11,6 +11,8 @@ import 'package:pili_aurora/common/widgets/dialog/simple_dialog_option.dart';
 import 'package:pili_aurora/common/widgets/flutter/list_tile.dart';
 import 'package:pili_aurora/common/widgets/scaffold/simple_scaffold.dart';
 import 'package:pili_aurora/pages/mine/controller.dart';
+import 'package:pili_aurora/pages/about/diagnostics_page.dart';
+import 'package:pili_aurora/services/diagnostics/diagnostics.dart';
 import 'package:pili_aurora/services/logger.dart';
 import 'package:pili_aurora/utils/accounts.dart';
 import 'package:pili_aurora/utils/accounts/account.dart';
@@ -202,6 +204,38 @@ Commit Hash: ${BuildConfig.commitHash}''',
             title: const Text('错误日志'),
             subtitle: Text('长按清除日志', style: subTitleStyle),
             trailing: Icon(Icons.arrow_forward, size: 16, color: outline),
+          ),
+          AnimatedBuilder(
+            animation: Diagnostics.instance,
+            builder: (context, _) => ListTile(
+              leading: const Icon(Icons.monitor_heart_outlined),
+              title: const Text('性能跟踪'),
+              subtitle: Text(
+                Diagnostics.instance.tracing
+                    ? '正在记录 · 查看指标与导出诊断包'
+                    : '记录运行性能、查看运行日志与导出诊断包',
+                style: subTitleStyle,
+              ),
+              trailing: Icon(Icons.arrow_forward, size: 16, color: outline),
+              onTap: () => Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  settings: const RouteSettings(name: '/diagnostics'),
+                  builder: (_) => const DiagnosticsPage(),
+                ),
+              ),
+            ),
+          ),
+          AnimatedBuilder(
+            animation: Diagnostics.instance,
+            builder: (context, _) => ListTile(
+              leading: const Icon(Icons.tune),
+              title: const Text('日志等级'),
+              subtitle: Text(
+                '${Diagnostics.instance.level.label} · 即时生效',
+                style: subTitleStyle,
+              ),
+              onTap: () => showDiagnosticLogLevelDialog(context),
+            ),
           ),
           ListTile(
             onTap: () {

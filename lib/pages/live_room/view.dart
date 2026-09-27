@@ -9,6 +9,7 @@ import 'package:pili_aurora/common/widgets/custom_icon.dart';
 import 'package:pili_aurora/common/widgets/extra_hittest_stack.dart';
 import 'package:pili_aurora/common/widgets/flutter/pop_scope.dart';
 import 'package:pili_aurora/common/widgets/gesture/horizontal_drag_gesture_recognizer.dart';
+import 'package:pili_aurora/common/widgets/image/cached_image.dart';
 import 'package:pili_aurora/common/widgets/image/network_img_layer.dart';
 import 'package:pili_aurora/common/widgets/keep_alive_wrapper.dart';
 import 'package:pili_aurora/common/widgets/route_aware_mixin.dart';
@@ -49,7 +50,6 @@ import 'package:pili_aurora/utils/storage_key.dart';
 import 'package:pili_aurora/utils/storage_pref.dart';
 import 'package:pili_aurora/utils/theme_utils.dart';
 import 'package:pili_aurora/utils/utils.dart';
-import 'package:cached_network_image_ce/cached_network_image.dart';
 import 'package:canvas_danmaku/danmaku_screen.dart';
 import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
@@ -391,7 +391,7 @@ class _LiveRoomPageState extends State<LiveRoomPage>
                     ?.appBackground;
                 Widget child;
                 if (appBackground != null && appBackground.isNotEmpty) {
-                  child = CachedNetworkImage(
+                  child = CachedImage(
                     fit: BoxFit.cover,
                     width: maxWidth,
                     height: maxHeight,

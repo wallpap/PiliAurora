@@ -165,9 +165,11 @@ Future<ui.Image?> _loadImg(String path) async {
   final codec = await ui.instantiateImageCodecFromBuffer(
     await ImmutableBuffer.fromFilePath(path),
   );
-  final frame = await codec.getNextFrame();
-  codec.dispose();
-  return frame.image;
+  try {
+    return (await codec.getNextFrame()).image;
+  } finally {
+    codec.dispose();
+  }
 }
 
 class _VideoShotImageState extends State<VideoShotImage> {
@@ -245,20 +247,19 @@ class _VideoShotImageState extends State<VideoShotImage> {
     } else {
       final cacheGeneration = widget.imageCache.generation;
       _getImg(url).then((image) {
-        if (widget.imageCache.generation != cacheGeneration) {
+        if (!mounted ||
+            widget.imageCache.generation != cacheGeneration ||
+            loadGeneration != _loadGeneration ||
+            widget.url != url) {
           image?.dispose();
           return;
         }
         if (image == null) {
           return;
         }
+        // 超出缓存上限的预览仍可显示，由当前组件独占，关闭时释放。
+        _replaceImage(image.clone());
         widget.imageCache.put(url, image);
-        if (!mounted ||
-            loadGeneration != _loadGeneration ||
-            widget.url != url) {
-          return;
-        }
-        _replaceImage(widget.imageCache.acquire(url));
         if (_image != null) {
           _initSize();
           setState(() {});

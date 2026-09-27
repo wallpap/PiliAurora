@@ -1,5 +1,6 @@
 import 'dart:async' show Timer;
 
+import 'package:pili_aurora/common/widgets/image/cached_image.dart';
 import 'package:pili_aurora/common/widgets/image/network_img_layer.dart';
 import 'package:pili_aurora/common/widgets/selection_text.dart';
 import 'package:pili_aurora/models_new/live/live_superchat/item.dart';
@@ -14,7 +15,6 @@ import 'package:pili_aurora/utils/page_utils.dart';
 import 'package:pili_aurora/utils/platform_utils.dart';
 import 'package:pili_aurora/utils/screenshot.dart';
 import 'package:pili_aurora/utils/utils.dart';
-import 'package:cached_network_image_ce/cached_network_image.dart';
 import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:get/get.dart';
 import 'package:material_ui/material_ui.dart';
@@ -227,7 +227,7 @@ Widget _build({
           ? null
           : DecorationImage(
               alignment: .topRight,
-              image: CachedNetworkImageProvider(
+              image: CachedImageProvider(
                 ImageUtils.safeThumbnailUrl(item.backgroundImage),
               ),
             ),

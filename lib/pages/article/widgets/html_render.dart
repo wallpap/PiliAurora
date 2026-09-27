@@ -1,10 +1,10 @@
 import 'package:pili_aurora/common/assets.dart';
+import 'package:pili_aurora/common/widgets/image/cached_image.dart';
 import 'package:pili_aurora/common/widgets/image_viewer/hero.dart';
 import 'package:pili_aurora/models/common/image_preview_type.dart';
 import 'package:pili_aurora/utils/extension/num_ext.dart';
 import 'package:pili_aurora/utils/image_utils.dart';
 import 'package:pili_aurora/utils/page_utils.dart';
-import 'package:cached_network_image_ce/cached_network_image.dart';
 import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter_html/flutter_html.dart';
 import 'package:html/dom.dart' as dom;
@@ -41,7 +41,7 @@ Widget htmlRender({
             r'max-height:(\d+)px',
           ).firstMatch('${attributes['style']}')?.group(1);
           if (clazz?.contains('cut-off') == true || height != null) {
-            return CachedNetworkImage(
+            return CachedImage(
               width: maxWidth,
               memCacheWidth: maxWidth.cacheSize(context),
               height: height != null ? double.parse(height) : null,
@@ -58,7 +58,7 @@ Widget htmlRender({
             ),
             child: fromHero(
               tag: imgUrl,
-              child: CachedNetworkImage(
+              child: CachedImage(
                 width: width,
                 height: isEmote ? 22.0 : null,
                 memCacheWidth: width.cacheSize(context),

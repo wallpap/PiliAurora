@@ -3,6 +3,7 @@ import 'dart:math';
 import 'package:pili_aurora/common/assets.dart';
 import 'package:pili_aurora/common/widgets/flutter/list_tile.dart';
 import 'package:pili_aurora/common/widgets/flutter/refresh_indicator.dart';
+import 'package:pili_aurora/common/widgets/image/cached_image.dart';
 import 'package:pili_aurora/common/widgets/loading_widget/http_error.dart';
 import 'package:pili_aurora/common/widgets/loading_widget/loading_widget.dart';
 import 'package:pili_aurora/common/widgets/sliver/trending_header.dart';
@@ -15,7 +16,6 @@ import 'package:pili_aurora/utils/extension/get_ext.dart';
 import 'package:pili_aurora/utils/extension/num_ext.dart';
 import 'package:pili_aurora/utils/extension/size_ext.dart';
 import 'package:pili_aurora/utils/image_utils.dart';
-import 'package:cached_network_image_ce/cached_network_image.dart';
 import 'package:flutter/services.dart' show SystemUiOverlayStyle;
 import 'package:get/get.dart';
 import 'package:material_ui/material_ui.dart' hide ListTile;
@@ -180,7 +180,7 @@ class _SearchTrendingPageState extends State<SearchTrendingPage> {
                     ),
                     if (item.icon?.isNotEmpty == true) ...[
                       const SizedBox(width: 4),
-                      CachedNetworkImage(
+                      CachedImage(
                         height: 16,
                         memCacheHeight: 16.cacheSize(context),
                         imageUrl: ImageUtils.thumbnailUrl(item.icon!),

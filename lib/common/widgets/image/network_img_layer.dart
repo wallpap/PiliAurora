@@ -1,10 +1,10 @@
 import 'package:pili_aurora/common/assets.dart';
 import 'package:pili_aurora/common/style.dart';
+import 'package:pili_aurora/common/widgets/image/cached_image.dart';
 import 'package:pili_aurora/models/common/image_type.dart';
 import 'package:pili_aurora/utils/extension/num_ext.dart';
 import 'package:pili_aurora/utils/image_utils.dart';
 import 'package:pili_aurora/utils/storage_pref.dart';
-import 'package:cached_network_image_ce/cached_network_image.dart';
 import 'package:material_ui/material_ui.dart';
 
 class NetworkImgLayer extends StatelessWidget {
@@ -70,12 +70,14 @@ class NetworkImgLayer extends StatelessWidget {
     } else {
       memCacheHeight = height.cacheSize(context);
     }
-    return CachedNetworkImage(
+    return CachedImage(
       imageUrl: ImageUtils.thumbnailUrl(src, quality),
       width: width,
       height: height,
       memCacheWidth: memCacheWidth,
       memCacheHeight: memCacheHeight,
+      // 限制列表长图的解码面积；原图查看器单独按原始分辨率加载。
+      maxDecodePixels: 1 << 20,
       fit: fit,
       alignment: alignment,
       fadeOutDuration: fadeOutDuration,

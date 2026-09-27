@@ -5,6 +5,7 @@ import 'package:pili_aurora/grpc/bilibili/rpc.pb.dart';
 import 'package:pili_aurora/http/constants.dart';
 import 'package:pili_aurora/http/init.dart';
 import 'package:pili_aurora/http/loading_state.dart';
+import 'package:pili_aurora/services/diagnostics/diagnostics.dart';
 import 'package:archive/archive.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart' show kDebugMode, compute;
@@ -71,9 +72,24 @@ abstract final class GrpcReq {
     if (response.headers.value('Grpc-Status') == '0') {
       final data = response.data;
       if (data is Uint8List) {
-        return isolate && data.length > _isolateSize
-            ? compute(_parse, (data, grpcParser))
-            : _parse((data, grpcParser));
+        final background = isolate && data.length > _isolateSize;
+        final operation = Diagnostics.instance.begin(
+          'grpcDecode',
+          '解析 gRPC 响应',
+          details: {'bytes': data.length, 'background': background},
+        );
+        try {
+          final LoadingState<T> result = background
+              ? await compute(_parse<T>, (data, grpcParser))
+              : _parse<T>((data, grpcParser));
+          operation?.finish(error: result is Error ? result.errMsg : null);
+          return result;
+        } catch (error) {
+          operation?.finish(error: error);
+          rethrow;
+        } finally {
+          operation?.finish();
+        }
       } else {
         return Error('grpc: ${data.runtimeType} is not Uint8List');
       }

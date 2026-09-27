@@ -21,6 +21,15 @@ pwsh -File tool/trace-windows.ps1 -ProcessId 12345 -DurationSeconds 180
 
 The script prints peak process memory and writes a CSV with CPU and GPU process memory samples to the Windows temporary directory. GPU fields stay empty when Windows does not provide those counters.
 
+For short memory spikes, use `-IntervalMilliseconds 250 -SkipGpuCounters`.
+`ProcessPeakWorkingMiB` records the Windows working-set peak since process startup,
+including spikes between samples. See [memory validation](MEMORY_VALIDATION.md)
+for cache budgets, regression tests, and a repeatable browsing/playback sequence.
+
+For built-in release diagnostics, open **About → Performance tracing**.
+See [内置性能与诊断](DIAGNOSTICS.md) for metrics, log levels, storage limits,
+and ZIP export instructions.
+
 ## Hardware decoder fallback
 
 Windows and Android hardware decoding uses an ordered candidate list. Automatic

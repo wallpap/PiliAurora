@@ -21,6 +21,7 @@ import 'dart:io' show File, Platform;
 import 'package:pili_aurora/common/widgets/colored_box_transition.dart';
 import 'package:pili_aurora/common/widgets/dialog/simple_dialog_option.dart';
 import 'package:pili_aurora/common/widgets/gesture/image_horizontal_drag_gesture_recognizer.dart';
+import 'package:pili_aurora/common/widgets/image/cached_image.dart';
 import 'package:pili_aurora/common/widgets/image_viewer/image.dart';
 import 'package:pili_aurora/common/widgets/image_viewer/loading_indicator.dart';
 import 'package:pili_aurora/common/widgets/image_viewer/viewer.dart';
@@ -38,7 +39,6 @@ import 'package:pili_aurora/utils/page_utils.dart';
 import 'package:pili_aurora/utils/platform_utils.dart';
 import 'package:pili_aurora/utils/storage_pref.dart';
 import 'package:pili_aurora/utils/utils.dart';
-import 'package:cached_network_image_ce/cached_network_image.dart';
 import 'package:easy_debounce/easy_throttle.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/services.dart' show HapticFeedback;
@@ -299,7 +299,7 @@ class _GalleryViewerState extends State<GalleryViewer>
     if (widget.quality != _quality) {
       for (final item in widget.sources) {
         if (item.sourceType == SourceType.networkImage) {
-          CachedNetworkImageProvider(_getActualUrl(item.url)).evict();
+          CachedImageProvider(_getActualUrl(item.url)).evict();
         }
       }
     }
@@ -440,7 +440,7 @@ class _GalleryViewerState extends State<GalleryViewer>
         final isLongPic = item.isLongPic;
         child = Image(
           key: _key,
-          image: CachedNetworkImageProvider(_getActualUrl(item.url)),
+          image: CachedImageProvider(_getActualUrl(item.url)),
           minScale: widget.minScale,
           maxScale: widget.maxScale,
           containerSize: _containerSize,
@@ -459,7 +459,7 @@ class _GalleryViewerState extends State<GalleryViewer>
                   image: ResizeImage.resizeIfNeeded(
                     _containerSize.width.cacheSize(context),
                     null,
-                    CachedNetworkImageProvider(
+                    CachedImageProvider(
                       ImageUtils.thumbnailUrl(item.url, widget.quality),
                     ),
                   ),
@@ -475,7 +475,7 @@ class _GalleryViewerState extends State<GalleryViewer>
                   onChangePage: _onChangePage,
                 );
                 // final isLongPic = item.isLongPic;
-                // return CachedNetworkImage(
+                // return CachedImage(
                 //   fadeInDuration: Duration.zero,
                 //   fadeOutDuration: Duration.zero,
                 //   // fit: isLongPic ? .fitWidth : null,

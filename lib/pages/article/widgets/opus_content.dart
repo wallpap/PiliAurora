@@ -4,6 +4,7 @@ import 'package:pili_aurora/common/assets.dart';
 import 'package:pili_aurora/common/widgets/dialog/simple_dialog_option.dart';
 import 'package:pili_aurora/common/widgets/emote_tooltip.dart';
 import 'package:pili_aurora/common/widgets/gesture/tap_gesture_recognizer.dart';
+import 'package:pili_aurora/common/widgets/image/cached_image.dart';
 import 'package:pili_aurora/common/widgets/image/cached_network_svg_image.dart';
 import 'package:pili_aurora/common/widgets/image/network_img_layer.dart';
 import 'package:pili_aurora/common/widgets/image_grid/image_grid_view.dart';
@@ -19,7 +20,6 @@ import 'package:pili_aurora/utils/extension/num_ext.dart';
 import 'package:pili_aurora/utils/extension/theme_ext.dart';
 import 'package:pili_aurora/utils/image_utils.dart';
 import 'package:pili_aurora/utils/page_utils.dart';
-import 'package:cached_network_image_ce/cached_network_image.dart';
 import 'package:collection/collection.dart';
 import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:get/get_core/src/get_main.dart';
@@ -258,7 +258,7 @@ class OpusContent extends StatelessWidget {
                     ? null
                     : width * pic.height! / pic.width!;
                 width ??= maxWidth;
-                Widget child = CachedNetworkImage(
+                Widget child = CachedImage(
                   width: width,
                   height: height,
                   memCacheWidth: width.cacheSize(context),
@@ -299,7 +299,7 @@ class OpusContent extends StatelessWidget {
             case 3:
               if (element.line?.pic case final pic?) {
                 final height = pic.height?.toDouble();
-                return CachedNetworkImage(
+                return CachedImage(
                   fit: .contain,
                   height: height,
                   width: maxWidth,
@@ -783,7 +783,7 @@ Widget moduleBlockedItem(
             image: DecorationImage(
               fit: .fill,
               image: ResizeImage(
-                CachedNetworkImageProvider(
+                CachedImageProvider(
                   ImageUtils.thumbnailUrl(
                     isDarkMode
                         ? moduleBlocked.bgImg!.imgDark
@@ -797,7 +797,7 @@ Widget moduleBlockedItem(
   }
 
   Widget icon(double width) {
-    return CachedNetworkImage(
+    return CachedImage(
       width: width,
       memCacheWidth: width.cacheSize(context),
       fit: BoxFit.contain,
@@ -832,7 +832,7 @@ Widget moduleBlockedItem(
         mainAxisSize: .min,
         children: [
           if (moduleBlocked.button!.icon?.isNotEmpty == true)
-            CachedNetworkImage(
+            CachedImage(
               height: 16,
               color: Colors.white,
               memCacheHeight: 16.cacheSize(context),
