@@ -1,5 +1,5 @@
-import 'package:PiliPlus/utils/platform_utils.dart';
-import 'package:PiliPlus/utils/utils.dart';
+import 'package:pili_aurora/utils/platform_utils.dart';
+import 'package:pili_aurora/utils/utils.dart';
 import 'package:flutter/rendering.dart' show Rect;
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:share_plus/share_plus.dart';

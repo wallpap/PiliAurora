@@ -1,4 +1,4 @@
-import 'package:PiliPlus/models_new/fav/fav_article/item.dart';
+import 'package:pili_aurora/models_new/fav/fav_article/item.dart';
 
 class FavArticleData {
   List<FavArticleItemModel>? items;

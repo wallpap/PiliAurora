@@ -1,5 +1,5 @@
-import 'package:PiliPlus/plugin/pl_player/models/hwdec_type.dart';
-import 'package:PiliPlus/plugin/pl_player/utils/decode_fallback.dart';
+import 'package:pili_aurora/plugin/pl_player/models/hwdec_type.dart';
+import 'package:pili_aurora/plugin/pl_player/utils/decode_fallback.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {

@@ -1,4 +1,4 @@
-import 'package:PiliPlus/utils/bili_colors.dart';
+import 'package:pili_aurora/utils/bili_colors.dart';
 import 'package:material_ui/material_ui.dart';
 
 enum BadgeType {

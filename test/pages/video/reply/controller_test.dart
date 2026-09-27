@@ -1,9 +1,9 @@
 import 'dart:collection';
 
-import 'package:PiliPlus/grpc/bilibili/main/community/reply/v1.pb.dart';
-import 'package:PiliPlus/http/loading_state.dart';
-import 'package:PiliPlus/models/common/video/video_type.dart';
-import 'package:PiliPlus/pages/video/reply/controller.dart';
+import 'package:pili_aurora/grpc/bilibili/main/community/reply/v1.pb.dart';
+import 'package:pili_aurora/http/loading_state.dart';
+import 'package:pili_aurora/models/common/video/video_type.dart';
+import 'package:pili_aurora/pages/video/reply/controller.dart';
 import 'package:fixnum/fixnum.dart';
 import 'package:flutter_test/flutter_test.dart';
 

@@ -1,6 +1,6 @@
-import 'package:PiliPlus/common/widgets/custom_icon.dart';
-import 'package:PiliPlus/models_new/dynamic/dyn_topic_top/topic_item.dart';
-import 'package:PiliPlus/utils/num_utils.dart';
+import 'package:pili_aurora/common/widgets/custom_icon.dart';
+import 'package:pili_aurora/models_new/dynamic/dyn_topic_top/topic_item.dart';
+import 'package:pili_aurora/utils/num_utils.dart';
 import 'package:material_ui/material_ui.dart';
 
 class DynTopicItem extends StatelessWidget {

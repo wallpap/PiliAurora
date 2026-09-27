@@ -1,15 +1,15 @@
 import 'dart:async' show StreamSubscription;
 
-import 'package:PiliPlus/http/loading_state.dart';
-import 'package:PiliPlus/http/search.dart';
-import 'package:PiliPlus/models/common/search/article_search_type.dart';
-import 'package:PiliPlus/models/common/search/search_type.dart';
-import 'package:PiliPlus/models/common/search/user_search_type.dart';
-import 'package:PiliPlus/models/common/search/video_search_type.dart';
-import 'package:PiliPlus/models/search/result.dart';
-import 'package:PiliPlus/pages/common/common_list_controller.dart';
-import 'package:PiliPlus/pages/search_result/controller.dart';
-import 'package:PiliPlus/utils/extension/scroll_controller_ext.dart';
+import 'package:pili_aurora/http/loading_state.dart';
+import 'package:pili_aurora/http/search.dart';
+import 'package:pili_aurora/models/common/search/article_search_type.dart';
+import 'package:pili_aurora/models/common/search/search_type.dart';
+import 'package:pili_aurora/models/common/search/user_search_type.dart';
+import 'package:pili_aurora/models/common/search/video_search_type.dart';
+import 'package:pili_aurora/models/search/result.dart';
+import 'package:pili_aurora/pages/common/common_list_controller.dart';
+import 'package:pili_aurora/pages/search_result/controller.dart';
+import 'package:pili_aurora/utils/extension/scroll_controller_ext.dart';
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:get/get.dart';
 

@@ -1,4 +1,4 @@
-import 'package:PiliPlus/common/widgets/custom_arc.dart';
+import 'package:pili_aurora/common/widgets/custom_arc.dart';
 import 'package:get/get.dart';
 import 'package:material_ui/material_ui.dart';
 

@@ -1,4 +1,4 @@
-import 'package:PiliPlus/common/widgets/text_ellipsis/paragraph_ellipsis.dart';
+import 'package:pili_aurora/common/widgets/text_ellipsis/paragraph_ellipsis.dart';
 import 'package:material_ui/material_ui.dart';
 
 class RichTextEllipsis extends RichText {

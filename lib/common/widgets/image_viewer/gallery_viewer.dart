@@ -18,26 +18,26 @@
 import 'dart:async';
 import 'dart:io' show File, Platform;
 
-import 'package:PiliPlus/common/widgets/colored_box_transition.dart';
-import 'package:PiliPlus/common/widgets/dialog/simple_dialog_option.dart';
-import 'package:PiliPlus/common/widgets/gesture/image_horizontal_drag_gesture_recognizer.dart';
-import 'package:PiliPlus/common/widgets/image_viewer/image.dart';
-import 'package:PiliPlus/common/widgets/image_viewer/loading_indicator.dart';
-import 'package:PiliPlus/common/widgets/image_viewer/viewer.dart';
-import 'package:PiliPlus/common/widgets/scroll_physics.dart'
+import 'package:pili_aurora/common/widgets/colored_box_transition.dart';
+import 'package:pili_aurora/common/widgets/dialog/simple_dialog_option.dart';
+import 'package:pili_aurora/common/widgets/gesture/image_horizontal_drag_gesture_recognizer.dart';
+import 'package:pili_aurora/common/widgets/image_viewer/image.dart';
+import 'package:pili_aurora/common/widgets/image_viewer/loading_indicator.dart';
+import 'package:pili_aurora/common/widgets/image_viewer/viewer.dart';
+import 'package:pili_aurora/common/widgets/scroll_physics.dart'
     show tabBarScrollPhysics;
-import 'package:PiliPlus/main.dart' show tmpPadding;
-import 'package:PiliPlus/models/common/image_preview_type.dart';
-import 'package:PiliPlus/plugin/pl_player/utils/fullscreen.dart';
-import 'package:PiliPlus/utils/device_utils.dart';
-import 'package:PiliPlus/utils/extension/num_ext.dart';
-import 'package:PiliPlus/utils/extension/string_ext.dart';
-import 'package:PiliPlus/utils/image_utils.dart';
-import 'package:PiliPlus/utils/max_screen_size.dart';
-import 'package:PiliPlus/utils/page_utils.dart';
-import 'package:PiliPlus/utils/platform_utils.dart';
-import 'package:PiliPlus/utils/storage_pref.dart';
-import 'package:PiliPlus/utils/utils.dart';
+import 'package:pili_aurora/main.dart' show tmpPadding;
+import 'package:pili_aurora/models/common/image_preview_type.dart';
+import 'package:pili_aurora/plugin/pl_player/utils/fullscreen.dart';
+import 'package:pili_aurora/utils/device_utils.dart';
+import 'package:pili_aurora/utils/extension/num_ext.dart';
+import 'package:pili_aurora/utils/extension/string_ext.dart';
+import 'package:pili_aurora/utils/image_utils.dart';
+import 'package:pili_aurora/utils/max_screen_size.dart';
+import 'package:pili_aurora/utils/page_utils.dart';
+import 'package:pili_aurora/utils/platform_utils.dart';
+import 'package:pili_aurora/utils/storage_pref.dart';
+import 'package:pili_aurora/utils/utils.dart';
 import 'package:cached_network_image_ce/cached_network_image.dart';
 import 'package:easy_debounce/easy_throttle.dart';
 import 'package:flutter/gestures.dart';

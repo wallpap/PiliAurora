@@ -1,7 +1,7 @@
-import 'package:PiliPlus/models/common/reply/reply_search_type.dart';
-import 'package:PiliPlus/pages/video/reply_search_item/child/controller.dart';
-import 'package:PiliPlus/utils/extension/scroll_controller_ext.dart';
-import 'package:PiliPlus/utils/utils.dart';
+import 'package:pili_aurora/models/common/reply/reply_search_type.dart';
+import 'package:pili_aurora/pages/video/reply_search_item/child/controller.dart';
+import 'package:pili_aurora/utils/extension/scroll_controller_ext.dart';
+import 'package:pili_aurora/utils/utils.dart';
 import 'package:get/get.dart';
 import 'package:material_ui/material_ui.dart';
 

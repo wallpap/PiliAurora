@@ -1,5 +1,5 @@
-import 'package:PiliPlus/common/skeleton/skeleton.dart';
-import 'package:PiliPlus/common/style.dart';
+import 'package:pili_aurora/common/skeleton/skeleton.dart';
+import 'package:pili_aurora/common/style.dart';
 import 'package:material_ui/material_ui.dart';
 
 class MediaPgcSkeleton extends StatefulWidget {

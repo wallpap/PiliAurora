@@ -1,4 +1,4 @@
-import 'package:PiliPlus/models_new/search/search_trending/list.dart';
+import 'package:pili_aurora/models_new/search/search_trending/list.dart';
 
 class SearchRcmdData {
   List<SearchTrendingItemModel>? list;

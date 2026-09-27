@@ -1,5 +1,5 @@
-import 'package:PiliPlus/common/widgets/flutter/text/text.dart';
-import 'package:PiliPlus/common/widgets/text_more/rich_text_more.dart';
+import 'package:pili_aurora/common/widgets/flutter/text/text.dart';
+import 'package:pili_aurora/common/widgets/text_more/rich_text_more.dart';
 import 'package:material_ui/material_ui.dart';
 
 class TextMore extends BaseText {

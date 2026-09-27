@@ -1,22 +1,22 @@
 import 'dart:convert';
 
-import 'package:PiliPlus/http/api.dart';
-import 'package:PiliPlus/http/constants.dart';
-import 'package:PiliPlus/http/init.dart';
-import 'package:PiliPlus/http/loading_state.dart';
-import 'package:PiliPlus/models_new/msg/im_user_infos/datum.dart';
-import 'package:PiliPlus/models_new/msg/msg_at/data.dart';
-import 'package:PiliPlus/models_new/msg/msg_dnd/uid_setting.dart';
-import 'package:PiliPlus/models_new/msg/msg_like/data.dart';
-import 'package:PiliPlus/models_new/msg/msg_like_detail/data.dart';
-import 'package:PiliPlus/models_new/msg/msg_reply/data.dart';
-import 'package:PiliPlus/models_new/msg/msg_sys/data.dart';
-import 'package:PiliPlus/models_new/msg/session_ss/data.dart';
-import 'package:PiliPlus/models_new/msgfeed_unread/data.dart';
-import 'package:PiliPlus/models_new/single_unread/data.dart';
-import 'package:PiliPlus/models_new/upload_bfs/data.dart';
-import 'package:PiliPlus/utils/accounts.dart';
-import 'package:PiliPlus/utils/wbi_sign.dart';
+import 'package:pili_aurora/http/api.dart';
+import 'package:pili_aurora/http/constants.dart';
+import 'package:pili_aurora/http/init.dart';
+import 'package:pili_aurora/http/loading_state.dart';
+import 'package:pili_aurora/models_new/msg/im_user_infos/datum.dart';
+import 'package:pili_aurora/models_new/msg/msg_at/data.dart';
+import 'package:pili_aurora/models_new/msg/msg_dnd/uid_setting.dart';
+import 'package:pili_aurora/models_new/msg/msg_like/data.dart';
+import 'package:pili_aurora/models_new/msg/msg_like_detail/data.dart';
+import 'package:pili_aurora/models_new/msg/msg_reply/data.dart';
+import 'package:pili_aurora/models_new/msg/msg_sys/data.dart';
+import 'package:pili_aurora/models_new/msg/session_ss/data.dart';
+import 'package:pili_aurora/models_new/msgfeed_unread/data.dart';
+import 'package:pili_aurora/models_new/single_unread/data.dart';
+import 'package:pili_aurora/models_new/upload_bfs/data.dart';
+import 'package:pili_aurora/utils/accounts.dart';
+import 'package:pili_aurora/utils/wbi_sign.dart';
 import 'package:dio/dio.dart';
 
 abstract final class MsgHttp {

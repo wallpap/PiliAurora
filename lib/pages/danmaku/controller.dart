@@ -1,16 +1,16 @@
 import 'dart:collection';
 import 'dart:io' show File;
 
-import 'package:PiliPlus/grpc/bilibili/community/service/dm/v1.pb.dart';
-import 'package:PiliPlus/grpc/dm.dart';
-import 'package:PiliPlus/http/loading_state.dart';
-import 'package:PiliPlus/pages/danmaku/cache.dart';
-import 'package:PiliPlus/plugin/pl_player/controller.dart';
-import 'package:PiliPlus/plugin/pl_player/models/data_source.dart';
-import 'package:PiliPlus/utils/accounts.dart';
-import 'package:PiliPlus/utils/danmaku_utils.dart';
-import 'package:PiliPlus/utils/path_utils.dart';
-import 'package:PiliPlus/utils/utils.dart';
+import 'package:pili_aurora/grpc/bilibili/community/service/dm/v1.pb.dart';
+import 'package:pili_aurora/grpc/dm.dart';
+import 'package:pili_aurora/http/loading_state.dart';
+import 'package:pili_aurora/pages/danmaku/cache.dart';
+import 'package:pili_aurora/plugin/pl_player/controller.dart';
+import 'package:pili_aurora/plugin/pl_player/models/data_source.dart';
+import 'package:pili_aurora/utils/accounts.dart';
+import 'package:pili_aurora/utils/danmaku_utils.dart';
+import 'package:pili_aurora/utils/path_utils.dart';
+import 'package:pili_aurora/utils/utils.dart';
 import 'package:path/path.dart' as path;
 
 class PlDanmakuController {

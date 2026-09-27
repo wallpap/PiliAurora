@@ -1,4 +1,4 @@
-import 'package:PiliPlus/utils/page_utils.dart';
+import 'package:pili_aurora/utils/page_utils.dart';
 import 'package:flutter/gestures.dart'
     show
         TapGestureRecognizer,

@@ -1,5 +1,5 @@
-import 'package:PiliPlus/common/widgets/image/network_img_layer.dart';
-import 'package:PiliPlus/models/model_owner.dart';
+import 'package:pili_aurora/common/widgets/image/network_img_layer.dart';
+import 'package:pili_aurora/models/model_owner.dart';
 import 'package:collection/collection.dart';
 import 'package:material_ui/material_ui.dart';
 

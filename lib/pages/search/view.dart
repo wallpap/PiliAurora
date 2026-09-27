@@ -1,21 +1,21 @@
 import 'dart:convert';
 
-import 'package:PiliPlus/common/widgets/dialog/export_import.dart';
-import 'package:PiliPlus/common/widgets/disabled_icon.dart';
-import 'package:PiliPlus/common/widgets/loading_widget/http_error.dart';
-import 'package:PiliPlus/common/widgets/scaffold/simple_scaffold.dart';
-import 'package:PiliPlus/common/widgets/sliver_wrap.dart';
-import 'package:PiliPlus/common/widgets/view_insets_safe_area.dart';
-import 'package:PiliPlus/http/loading_state.dart';
-import 'package:PiliPlus/models_new/search/search_rcmd/data.dart';
-import 'package:PiliPlus/pages/search/controller.dart';
-import 'package:PiliPlus/pages/search/widgets/hot_keyword.dart';
-import 'package:PiliPlus/pages/search/widgets/search_text.dart';
-import 'package:PiliPlus/utils/em.dart' show Em;
-import 'package:PiliPlus/utils/extension/size_ext.dart';
-import 'package:PiliPlus/utils/storage.dart';
-import 'package:PiliPlus/utils/storage_key.dart';
-import 'package:PiliPlus/utils/utils.dart';
+import 'package:pili_aurora/common/widgets/dialog/export_import.dart';
+import 'package:pili_aurora/common/widgets/disabled_icon.dart';
+import 'package:pili_aurora/common/widgets/loading_widget/http_error.dart';
+import 'package:pili_aurora/common/widgets/scaffold/simple_scaffold.dart';
+import 'package:pili_aurora/common/widgets/sliver_wrap.dart';
+import 'package:pili_aurora/common/widgets/view_insets_safe_area.dart';
+import 'package:pili_aurora/http/loading_state.dart';
+import 'package:pili_aurora/models_new/search/search_rcmd/data.dart';
+import 'package:pili_aurora/pages/search/controller.dart';
+import 'package:pili_aurora/pages/search/widgets/hot_keyword.dart';
+import 'package:pili_aurora/pages/search/widgets/search_text.dart';
+import 'package:pili_aurora/utils/em.dart' show Em;
+import 'package:pili_aurora/utils/extension/size_ext.dart';
+import 'package:pili_aurora/utils/storage.dart';
+import 'package:pili_aurora/utils/storage_key.dart';
+import 'package:pili_aurora/utils/utils.dart';
 import 'package:get/get.dart';
 import 'package:material_ui/material_ui.dart';
 

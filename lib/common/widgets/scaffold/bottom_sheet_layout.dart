@@ -1,4 +1,4 @@
-import 'package:PiliPlus/common/widgets/slotted_layout_helper.dart';
+import 'package:pili_aurora/common/widgets/slotted_layout_helper.dart';
 import 'package:flutter/rendering.dart' show RenderBox, ChildLayoutHelper;
 import 'package:material_ui/material_ui.dart';
 

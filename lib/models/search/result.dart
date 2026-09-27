@@ -1,15 +1,15 @@
-import 'package:PiliPlus/http/constants.dart';
-import 'package:PiliPlus/models/horizontal_video_model.dart';
-import 'package:PiliPlus/models/model_avatar.dart';
-import 'package:PiliPlus/models/model_owner.dart';
-import 'package:PiliPlus/models/model_video.dart';
-import 'package:PiliPlus/models/search/search_esports.dart';
-import 'package:PiliPlus/utils/duration_utils.dart';
-import 'package:PiliPlus/utils/em.dart';
-import 'package:PiliPlus/utils/extension/iterable_ext.dart';
-import 'package:PiliPlus/utils/extension/string_ext.dart';
-import 'package:PiliPlus/utils/global_data.dart';
-import 'package:PiliPlus/utils/parse_int.dart';
+import 'package:pili_aurora/http/constants.dart';
+import 'package:pili_aurora/models/horizontal_video_model.dart';
+import 'package:pili_aurora/models/model_avatar.dart';
+import 'package:pili_aurora/models/model_owner.dart';
+import 'package:pili_aurora/models/model_video.dart';
+import 'package:pili_aurora/models/search/search_esports.dart';
+import 'package:pili_aurora/utils/duration_utils.dart';
+import 'package:pili_aurora/utils/em.dart';
+import 'package:pili_aurora/utils/extension/iterable_ext.dart';
+import 'package:pili_aurora/utils/extension/string_ext.dart';
+import 'package:pili_aurora/utils/global_data.dart';
+import 'package:pili_aurora/utils/parse_int.dart';
 import 'package:flutter/foundation.dart' show kDebugMode;
 
 abstract class SearchNumData<T> {

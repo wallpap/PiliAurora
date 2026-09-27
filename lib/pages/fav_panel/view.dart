@@ -1,9 +1,9 @@
-import 'package:PiliPlus/common/widgets/loading_widget/loading_widget.dart';
-import 'package:PiliPlus/http/loading_state.dart';
-import 'package:PiliPlus/models_new/fav/fav_folder/list.dart';
-import 'package:PiliPlus/pages/common/common_intro_controller.dart';
-import 'package:PiliPlus/utils/bili_utils.dart';
-import 'package:PiliPlus/utils/feed_back.dart';
+import 'package:pili_aurora/common/widgets/loading_widget/loading_widget.dart';
+import 'package:pili_aurora/http/loading_state.dart';
+import 'package:pili_aurora/models_new/fav/fav_folder/list.dart';
+import 'package:pili_aurora/pages/common/common_intro_controller.dart';
+import 'package:pili_aurora/utils/bili_utils.dart';
+import 'package:pili_aurora/utils/feed_back.dart';
 import 'package:get/get.dart';
 import 'package:material_ui/material_ui.dart';
 

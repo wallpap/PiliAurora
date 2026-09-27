@@ -1,9 +1,9 @@
-import 'package:PiliPlus/common/widgets/dialog/dialog.dart';
-import 'package:PiliPlus/grpc/bilibili/app/im/v1.pb.dart'
+import 'package:pili_aurora/common/widgets/dialog/dialog.dart';
+import 'package:pili_aurora/grpc/bilibili/app/im/v1.pb.dart'
     show ThreeDotItem, ThreeDotItemType, IMSettingType;
-import 'package:PiliPlus/pages/common/common_whisper_controller.dart';
-import 'package:PiliPlus/pages/contact/view.dart';
-import 'package:PiliPlus/pages/whisper_settings/view.dart';
+import 'package:pili_aurora/pages/common/common_whisper_controller.dart';
+import 'package:pili_aurora/pages/contact/view.dart';
+import 'package:pili_aurora/pages/whisper_settings/view.dart';
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:get/get.dart';
 import 'package:material_design_icons_flutter/material_design_icons_flutter.dart';
