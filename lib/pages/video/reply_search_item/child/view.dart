@@ -1,12 +1,12 @@
-import 'package:PiliPlus/common/widgets/flutter/refresh_indicator.dart';
-import 'package:PiliPlus/common/widgets/loading_widget/http_error.dart';
-import 'package:PiliPlus/grpc/bilibili/main/community/reply/v1.pb.dart'
+import 'package:pili_aurora/common/widgets/flutter/refresh_indicator.dart';
+import 'package:pili_aurora/common/widgets/loading_widget/http_error.dart';
+import 'package:pili_aurora/grpc/bilibili/main/community/reply/v1.pb.dart'
     show SearchItem;
-import 'package:PiliPlus/http/loading_state.dart';
-import 'package:PiliPlus/models/common/reply/reply_search_type.dart';
-import 'package:PiliPlus/pages/video/reply_search_item/child/controller.dart';
-import 'package:PiliPlus/pages/video/reply_search_item/child/widgets/item.dart';
-import 'package:PiliPlus/utils/grid.dart';
+import 'package:pili_aurora/http/loading_state.dart';
+import 'package:pili_aurora/models/common/reply/reply_search_type.dart';
+import 'package:pili_aurora/pages/video/reply_search_item/child/controller.dart';
+import 'package:pili_aurora/pages/video/reply_search_item/child/widgets/item.dart';
+import 'package:pili_aurora/utils/grid.dart';
 import 'package:get/get.dart';
 import 'package:material_ui/material_ui.dart';
 

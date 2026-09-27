@@ -1,16 +1,16 @@
 import 'dart:async';
 
-import 'package:PiliPlus/common/assets.dart';
-import 'package:PiliPlus/models_new/pgc/pgc_info_model/episode.dart';
-import 'package:PiliPlus/models_new/pgc/pgc_info_model/new_ep.dart';
-import 'package:PiliPlus/models_new/video/video_detail/episode.dart'
+import 'package:pili_aurora/common/assets.dart';
+import 'package:pili_aurora/models_new/pgc/pgc_info_model/episode.dart';
+import 'package:pili_aurora/models_new/pgc/pgc_info_model/new_ep.dart';
+import 'package:pili_aurora/models_new/video/video_detail/episode.dart'
     hide EpisodeItem;
-import 'package:PiliPlus/pages/video/controller.dart';
-import 'package:PiliPlus/utils/accounts.dart';
-import 'package:PiliPlus/utils/extension/num_ext.dart';
-import 'package:PiliPlus/utils/extension/theme_ext.dart';
-import 'package:PiliPlus/utils/storage_pref.dart';
-import 'package:PiliPlus/utils/utils.dart';
+import 'package:pili_aurora/pages/video/controller.dart';
+import 'package:pili_aurora/utils/accounts.dart';
+import 'package:pili_aurora/utils/extension/num_ext.dart';
+import 'package:pili_aurora/utils/extension/theme_ext.dart';
+import 'package:pili_aurora/utils/storage_pref.dart';
+import 'package:pili_aurora/utils/utils.dart';
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:flutter_svg/svg.dart';
 import 'package:get/get.dart';

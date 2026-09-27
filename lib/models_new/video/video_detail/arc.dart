@@ -1,6 +1,6 @@
-import 'package:PiliPlus/models/model_owner.dart';
-import 'package:PiliPlus/models_new/video/video_detail/dimension.dart';
-import 'package:PiliPlus/models_new/video/video_detail/stat.dart';
+import 'package:pili_aurora/models/model_owner.dart';
+import 'package:pili_aurora/models_new/video/video_detail/dimension.dart';
+import 'package:pili_aurora/models_new/video/video_detail/stat.dart';
 
 class Arc {
   int? aid;

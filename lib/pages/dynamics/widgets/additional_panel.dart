@@ -1,13 +1,13 @@
-import 'package:PiliPlus/common/style.dart';
-import 'package:PiliPlus/common/widgets/gesture/tap_gesture_recognizer.dart';
-import 'package:PiliPlus/common/widgets/image/network_img_layer.dart';
-import 'package:PiliPlus/common/widgets/selection_text.dart';
-import 'package:PiliPlus/http/dynamics.dart';
-import 'package:PiliPlus/http/loading_state.dart';
-import 'package:PiliPlus/models/dynamics/result.dart';
-import 'package:PiliPlus/pages/dynamics/widgets/vote.dart';
-import 'package:PiliPlus/utils/app_scheme.dart';
-import 'package:PiliPlus/utils/num_utils.dart';
+import 'package:pili_aurora/common/style.dart';
+import 'package:pili_aurora/common/widgets/gesture/tap_gesture_recognizer.dart';
+import 'package:pili_aurora/common/widgets/image/network_img_layer.dart';
+import 'package:pili_aurora/common/widgets/selection_text.dart';
+import 'package:pili_aurora/http/dynamics.dart';
+import 'package:pili_aurora/http/loading_state.dart';
+import 'package:pili_aurora/models/dynamics/result.dart';
+import 'package:pili_aurora/pages/dynamics/widgets/vote.dart';
+import 'package:pili_aurora/utils/app_scheme.dart';
+import 'package:pili_aurora/utils/num_utils.dart';
 import 'package:get/get.dart';
 import 'package:material_ui/material_ui.dart';
 

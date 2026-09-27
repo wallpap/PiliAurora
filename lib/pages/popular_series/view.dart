@@ -1,20 +1,20 @@
 import 'dart:math';
 
-import 'package:PiliPlus/common/widgets/flutter/refresh_indicator.dart';
-import 'package:PiliPlus/common/widgets/loading_widget/http_error.dart';
-import 'package:PiliPlus/common/widgets/scaffold/simple_scaffold.dart';
-import 'package:PiliPlus/common/widgets/scroll_physics.dart'
+import 'package:pili_aurora/common/widgets/flutter/refresh_indicator.dart';
+import 'package:pili_aurora/common/widgets/loading_widget/http_error.dart';
+import 'package:pili_aurora/common/widgets/scaffold/simple_scaffold.dart';
+import 'package:pili_aurora/common/widgets/scroll_physics.dart'
     show ReloadScrollPhysics;
-import 'package:PiliPlus/common/widgets/sliver/sliver_floating_header.dart';
-import 'package:PiliPlus/common/widgets/video_card/video_card_h.dart';
-import 'package:PiliPlus/common/widgets/view_sliver_safe_area.dart';
-import 'package:PiliPlus/http/loading_state.dart';
-import 'package:PiliPlus/models/common/video/source_type.dart';
-import 'package:PiliPlus/models/model_hot_video_item.dart';
-import 'package:PiliPlus/models_new/popular/popular_series_one/config.dart';
-import 'package:PiliPlus/pages/popular_series/controller.dart';
-import 'package:PiliPlus/utils/grid.dart';
-import 'package:PiliPlus/utils/page_utils.dart';
+import 'package:pili_aurora/common/widgets/sliver/sliver_floating_header.dart';
+import 'package:pili_aurora/common/widgets/video_card/video_card_h.dart';
+import 'package:pili_aurora/common/widgets/view_sliver_safe_area.dart';
+import 'package:pili_aurora/http/loading_state.dart';
+import 'package:pili_aurora/models/common/video/source_type.dart';
+import 'package:pili_aurora/models/model_hot_video_item.dart';
+import 'package:pili_aurora/models_new/popular/popular_series_one/config.dart';
+import 'package:pili_aurora/pages/popular_series/controller.dart';
+import 'package:pili_aurora/utils/grid.dart';
+import 'package:pili_aurora/utils/page_utils.dart';
 import 'package:get/get.dart';
 import 'package:material_ui/material_ui.dart';
 

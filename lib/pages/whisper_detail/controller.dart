@@ -1,16 +1,16 @@
 import 'dart:async';
 import 'dart:convert';
 
-import 'package:PiliPlus/grpc/bilibili/im/interfaces/v1.pb.dart'
+import 'package:pili_aurora/grpc/bilibili/im/interfaces/v1.pb.dart'
     show EmotionInfo, RspSessionMsg;
-import 'package:PiliPlus/grpc/bilibili/im/type.pb.dart' show Msg, MsgType;
-import 'package:PiliPlus/grpc/im.dart';
-import 'package:PiliPlus/http/loading_state.dart';
-import 'package:PiliPlus/http/msg.dart';
-import 'package:PiliPlus/pages/common/common_list_controller.dart';
-import 'package:PiliPlus/utils/accounts.dart';
-import 'package:PiliPlus/utils/extension/scroll_controller_ext.dart';
-import 'package:PiliPlus/utils/feed_back.dart';
+import 'package:pili_aurora/grpc/bilibili/im/type.pb.dart' show Msg, MsgType;
+import 'package:pili_aurora/grpc/im.dart';
+import 'package:pili_aurora/http/loading_state.dart';
+import 'package:pili_aurora/http/msg.dart';
+import 'package:pili_aurora/pages/common/common_list_controller.dart';
+import 'package:pili_aurora/utils/accounts.dart';
+import 'package:pili_aurora/utils/extension/scroll_controller_ext.dart';
+import 'package:pili_aurora/utils/feed_back.dart';
 import 'package:fixnum/fixnum.dart';
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:get/get.dart';

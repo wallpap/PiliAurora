@@ -25,6 +25,8 @@ PiliAurora 以 PiliPlus `2.1.5`（提交 [`a30fcc310`](https://github.com/bggRGj
 
 - 2026-09-25 至 2026-09-26：收敛为 Android 和 Windows 平台，补齐构建工具，调整播放、弹幕和评论处理。具体修改及归属见保留的 [提交历史](https://github.com/wallpap/PiliAurora/commits/main)。
 - 2026-09-27：重写 README，以项目功能、下载和构建为主体，保留上游引用，并补充许可证检查记录。
+- 2026-09-27：将应用源码、反馈、更新和 Windows 安装器的发布者入口调整为 PiliAurora，同步 Issue 模板与构建流程的仓库引用；更新检查支持仓库尚无发布版本的情况。
+- 2026-09-27：将显示名称和构建产物统一为 PiliAurora，Dart 包名改为 `pili_aurora`；使用新的 Android 应用 ID `io.github.wallpap.piliaurora`、Java/Kotlin 命名空间及 Windows 安装器 ID，使本项目可与 PiliPlus 并存。原有版权与许可声明继续保留。
 
 ### GPL 版本表述
 
@@ -50,7 +52,7 @@ PiliAurora 以 PiliPlus `2.1.5`（提交 [`a30fcc310`](https://github.com/bggRGj
 | Anime4K AutoDownscalePre x2/x4 | [x2 源码头](assets/shaders/Anime4K_AutoDownscalePre_x2.glsl)、[x4 源码头](assets/shaders/Anime4K_AutoDownscalePre_x4.glsl) | 文件自带 Unlicense 公有领域声明及许可、无担保文本；应按文件自身声明记录，不能一概标作 MIT。 |
 | account_manager 中的 cookie manager | [独立 LICENSE](lib/utils/accounts/account_manager/LICENSE)、[README](lib/utils/accounts/account_manager/README.md) | 已确认 MIT，版权为 2018 Wen Du (wendux) 和 2022 The CFUG Team。保留完整版权、许可和无担保文本。上游：[dio cookie_manager LICENSE](https://github.com/cfug/dio/blob/main/plugins/cookie_manager/LICENSE)。 |
 | 复制或修改的 Flutter 组件 | [refresh_indicator.dart](lib/common/widgets/flutter/refresh_indicator.dart) 等 `lib/common/widgets/flutter/` 文件，以及 [floating_navigation_bar.dart](lib/common/widgets/floating_navigation_bar.dart)、[mouse_interactive_viewer.dart](lib/common/widgets/gesture/mouse_interactive_viewer.dart)、[image.dart](lib/common/widgets/image_viewer/image.dart) | 已确认含 Flutter Authors 版权及 BSD-style 授权头。仓库受跟踪的独立 LICENSE 文件中未发现对应 BSD 全文，且根 LICENSE 为 GPL，与源码头的引用不匹配。应补充对应 Flutter BSD 许可文本；源码保留通知，二进制附带版权、条件和免责声明。来源：[Flutter LICENSE](https://github.com/flutter/flutter/blob/master/LICENSE)。具体代码基于哪个 Flutter 提交未逐项核对。 |
-| Android MediaHelper.java | [源码头](android/app/src/main/java/com/example/piliplus/MediaHelper.java) | 已确认 `Copyright 2018 The Android Open Source Project` 和 Apache-2.0 头。仓库未发现独立 Apache-2.0 全文；应随分发补充全文，保留原声明，并在修改该文件时加显著修改说明。若来源包含适用 NOTICE，也应保留；本次未确认原始文件来源及其 NOTICE。依据：[Apache-2.0 第 4 条](https://www.apache.org/licenses/LICENSE-2.0.txt)。 |
+| Android MediaHelper.java | [源码头](android/app/src/main/java/io/github/wallpap/piliaurora/MediaHelper.java) | 已确认 `Copyright 2018 The Android Open Source Project` 和 Apache-2.0 头。仓库未发现独立 Apache-2.0 全文；应随分发补充全文，保留原声明，并在修改该文件时加显著修改说明。若来源包含适用 NOTICE，也应保留；本次未确认原始文件来源及其 NOTICE。依据：[Apache-2.0 第 4 条](https://www.apache.org/licenses/LICENSE-2.0.txt)。 |
 | TeX 转 Unicode 代码与数据 | [latex_to_unicode.dart](lib/utils/latex_to_unicode.dart)、[latex_unicode_data.dart](lib/utils/latex_unicode_data.dart) | 前者注明参考 `pylatexenc (MIT)`。仅看到参考链接，尚未确认是否复制或改编其有版权的实质代码/数据；不能据此直接认定侵权。若存在复制或改编，应补其 MIT 版权和许可全文。来源：[pylatexenc LICENSE](https://github.com/phfaist/pylatexenc/blob/main/LICENSE.txt)，版权为 2015–2023 Philippe Faist。 |
 
 本次扫描受跟踪的 `LICENSE`、`COPYING`、`NOTICE` 类文件发现：根 LICENSE、shaders/LICENSE 和 account_manager/LICENSE。以上缺口是在本次 README 重写前已存在的声明情况；本核查文档没有修补第三方许可文件。

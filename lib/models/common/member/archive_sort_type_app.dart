@@ -1,4 +1,4 @@
-import 'package:PiliPlus/models/common/enum_with_label.dart';
+import 'package:pili_aurora/models/common/enum_with_label.dart';
 
 enum ArchiveSortTypeApp with EnumWithLabel {
   desc('默认'),

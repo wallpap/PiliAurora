@@ -1,25 +1,25 @@
 import 'dart:async' show Timer;
 
-import 'package:PiliPlus/common/widgets/image/network_img_layer.dart';
-import 'package:PiliPlus/common/widgets/selection_text.dart';
-import 'package:PiliPlus/models_new/live/live_superchat/item.dart';
-import 'package:PiliPlus/pages/member/widget/medal_widget.dart';
-import 'package:PiliPlus/utils/app_scheme.dart';
-import 'package:PiliPlus/utils/color_utils.dart';
-import 'package:PiliPlus/utils/date_utils.dart';
-import 'package:PiliPlus/utils/extension/iterable_ext.dart';
-import 'package:PiliPlus/utils/extension/selectable_region_ext.dart';
-import 'package:PiliPlus/utils/image_utils.dart';
-import 'package:PiliPlus/utils/page_utils.dart';
-import 'package:PiliPlus/utils/platform_utils.dart';
-import 'package:PiliPlus/utils/screenshot.dart';
-import 'package:PiliPlus/utils/utils.dart';
+import 'package:pili_aurora/common/widgets/image/network_img_layer.dart';
+import 'package:pili_aurora/common/widgets/selection_text.dart';
+import 'package:pili_aurora/models_new/live/live_superchat/item.dart';
+import 'package:pili_aurora/pages/member/widget/medal_widget.dart';
+import 'package:pili_aurora/utils/app_scheme.dart';
+import 'package:pili_aurora/utils/color_utils.dart';
+import 'package:pili_aurora/utils/date_utils.dart';
+import 'package:pili_aurora/utils/extension/iterable_ext.dart';
+import 'package:pili_aurora/utils/extension/selectable_region_ext.dart';
+import 'package:pili_aurora/utils/image_utils.dart';
+import 'package:pili_aurora/utils/page_utils.dart';
+import 'package:pili_aurora/utils/platform_utils.dart';
+import 'package:pili_aurora/utils/screenshot.dart';
+import 'package:pili_aurora/utils/utils.dart';
 import 'package:cached_network_image_ce/cached_network_image.dart';
 import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:get/get.dart';
 import 'package:material_ui/material_ui.dart';
 
-part 'package:PiliPlus/common/widgets/context_menu/live_menu_helper.dart';
+part 'package:pili_aurora/common/widgets/context_menu/live_menu_helper.dart';
 
 class SuperChatCard extends StatefulWidget {
   const SuperChatCard({

@@ -1,4 +1,4 @@
-import 'package:PiliPlus/models_new/pgc/pgc_index_condition/sort.dart';
+import 'package:pili_aurora/models_new/pgc/pgc_index_condition/sort.dart';
 
 class PgcIndexConditionData {
   List<PgcConditionFilter>? filter;

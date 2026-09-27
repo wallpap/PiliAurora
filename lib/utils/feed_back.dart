@@ -1,4 +1,4 @@
-import 'package:PiliPlus/utils/storage_pref.dart';
+import 'package:pili_aurora/utils/storage_pref.dart';
 import 'package:flutter/services.dart' show HapticFeedback;
 
 bool enableFeedback = Pref.feedBackEnable;

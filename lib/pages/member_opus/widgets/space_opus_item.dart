@@ -1,8 +1,8 @@
-import 'package:PiliPlus/common/widgets/image/network_img_layer.dart';
-import 'package:PiliPlus/common/widgets/stat/stat.dart';
-import 'package:PiliPlus/models/common/stat_type.dart';
-import 'package:PiliPlus/models_new/space/space_opus/item.dart';
-import 'package:PiliPlus/utils/page_utils.dart';
+import 'package:pili_aurora/common/widgets/image/network_img_layer.dart';
+import 'package:pili_aurora/common/widgets/stat/stat.dart';
+import 'package:pili_aurora/models/common/stat_type.dart';
+import 'package:pili_aurora/models_new/space/space_opus/item.dart';
+import 'package:pili_aurora/utils/page_utils.dart';
 import 'package:material_ui/material_ui.dart';
 
 class SpaceOpusItem extends StatelessWidget {

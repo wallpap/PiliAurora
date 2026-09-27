@@ -1,14 +1,14 @@
 import 'dart:io' show Platform;
 
-import 'package:PiliPlus/build_config.dart';
-import 'package:PiliPlus/common/constants.dart';
-import 'package:PiliPlus/http/api.dart';
-import 'package:PiliPlus/http/browser_ua.dart';
-import 'package:PiliPlus/http/init.dart';
-import 'package:PiliPlus/utils/accounts/account.dart';
-import 'package:PiliPlus/utils/page_utils.dart';
-import 'package:PiliPlus/utils/storage.dart';
-import 'package:PiliPlus/utils/storage_key.dart';
+import 'package:pili_aurora/build_config.dart';
+import 'package:pili_aurora/common/constants.dart';
+import 'package:pili_aurora/http/api.dart';
+import 'package:pili_aurora/http/browser_ua.dart';
+import 'package:pili_aurora/http/init.dart';
+import 'package:pili_aurora/utils/accounts/account.dart';
+import 'package:pili_aurora/utils/page_utils.dart';
+import 'package:pili_aurora/utils/storage.dart';
+import 'package:pili_aurora/utils/storage_key.dart';
 import 'package:device_info_plus/device_info_plus.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart' show kDebugMode;
@@ -28,13 +28,20 @@ abstract final class Update {
           extra: {'account': const NoAccount()},
         ),
       );
-      if (res.data is Map || res.data.isEmpty) {
+      final releases = res.data;
+      if (releases is! List) {
         if (!isAuto) {
           SmartDialog.showToast('检查更新失败，GitHub接口未返回数据，请检查网络');
         }
         return;
       }
-      final data = res.data[0];
+      if (releases.isEmpty) {
+        if (!isAuto) {
+          SmartDialog.showToast('暂无已发布版本');
+        }
+        return;
+      }
+      final data = releases.first;
       final int latest =
           DateTime.parse(data['created_at']).millisecondsSinceEpoch ~/ 1000;
       if (BuildConfig.buildTime >= latest) {

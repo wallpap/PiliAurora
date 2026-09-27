@@ -1,8 +1,8 @@
-import 'package:PiliPlus/grpc/bilibili/app/dynamic/v2.pb.dart'
+import 'package:pili_aurora/grpc/bilibili/app/dynamic/v2.pb.dart'
     show LikeListReply, ModuleAuthor;
-import 'package:PiliPlus/grpc/dyn.dart';
-import 'package:PiliPlus/http/loading_state.dart';
-import 'package:PiliPlus/pages/common/common_list_controller.dart';
+import 'package:pili_aurora/grpc/dyn.dart';
+import 'package:pili_aurora/http/loading_state.dart';
+import 'package:pili_aurora/pages/common/common_list_controller.dart';
 import 'package:fixnum/fixnum.dart' show Int64;
 import 'package:get/get.dart';
 

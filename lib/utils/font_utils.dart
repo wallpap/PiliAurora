@@ -3,10 +3,10 @@ import 'dart:io' show File;
 import 'dart:typed_data';
 import 'dart:ui' show loadFontFromList;
 
-import 'package:PiliPlus/utils/android/bindings.g.dart';
-import 'package:PiliPlus/utils/path_utils.dart';
-import 'package:PiliPlus/utils/storage.dart';
-import 'package:PiliPlus/utils/storage_key.dart';
+import 'package:pili_aurora/utils/android/bindings.g.dart';
+import 'package:pili_aurora/utils/path_utils.dart';
+import 'package:pili_aurora/utils/storage.dart';
+import 'package:pili_aurora/utils/storage_key.dart';
 import 'package:ffi/ffi.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart'

@@ -1,13 +1,13 @@
 import 'dart:convert';
 
-import 'package:PiliPlus/grpc/bilibili/community/service/dm/v1.pb.dart';
-import 'package:PiliPlus/pages/danmaku/controller.dart';
-import 'package:PiliPlus/pages/danmaku/danmaku_model.dart';
-import 'package:PiliPlus/pages/danmaku/render_guard.dart';
-import 'package:PiliPlus/plugin/pl_player/controller.dart';
-import 'package:PiliPlus/plugin/pl_player/models/play_status.dart';
-import 'package:PiliPlus/plugin/pl_player/utils/danmaku_options.dart';
-import 'package:PiliPlus/utils/danmaku_utils.dart';
+import 'package:pili_aurora/grpc/bilibili/community/service/dm/v1.pb.dart';
+import 'package:pili_aurora/pages/danmaku/controller.dart';
+import 'package:pili_aurora/pages/danmaku/danmaku_model.dart';
+import 'package:pili_aurora/pages/danmaku/render_guard.dart';
+import 'package:pili_aurora/plugin/pl_player/controller.dart';
+import 'package:pili_aurora/plugin/pl_player/models/play_status.dart';
+import 'package:pili_aurora/plugin/pl_player/utils/danmaku_options.dart';
+import 'package:pili_aurora/utils/danmaku_utils.dart';
 import 'package:canvas_danmaku/canvas_danmaku.dart';
 import 'package:get/get.dart';
 import 'package:material_ui/material_ui.dart';

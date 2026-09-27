@@ -1,9 +1,9 @@
-import 'package:PiliPlus/http/live.dart';
-import 'package:PiliPlus/http/loading_state.dart';
-import 'package:PiliPlus/models/common/live/live_contribution_rank_type.dart';
-import 'package:PiliPlus/models_new/live/live_contribution_rank/data.dart';
-import 'package:PiliPlus/models_new/live/live_contribution_rank/item.dart';
-import 'package:PiliPlus/pages/common/common_list_controller.dart';
+import 'package:pili_aurora/http/live.dart';
+import 'package:pili_aurora/http/loading_state.dart';
+import 'package:pili_aurora/models/common/live/live_contribution_rank_type.dart';
+import 'package:pili_aurora/models_new/live/live_contribution_rank/data.dart';
+import 'package:pili_aurora/models_new/live/live_contribution_rank/item.dart';
+import 'package:pili_aurora/pages/common/common_list_controller.dart';
 
 class ContributionRankController
     extends

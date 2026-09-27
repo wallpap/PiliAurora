@@ -1,17 +1,17 @@
-import 'package:PiliPlus/common/style.dart';
-import 'package:PiliPlus/common/widgets/badge.dart';
-import 'package:PiliPlus/common/widgets/image/image_save.dart';
-import 'package:PiliPlus/common/widgets/image/network_img_layer.dart';
-import 'package:PiliPlus/common/widgets/progress_bar/video_progress_indicator.dart';
-import 'package:PiliPlus/common/widgets/stat/stat.dart';
-import 'package:PiliPlus/common/widgets/video_popup_menu.dart';
-import 'package:PiliPlus/http/search.dart';
-import 'package:PiliPlus/models/horizontal_video_model.dart';
-import 'package:PiliPlus/models_new/video/video_detail/dimension.dart';
-import 'package:PiliPlus/utils/date_utils.dart';
-import 'package:PiliPlus/utils/duration_utils.dart';
-import 'package:PiliPlus/utils/page_utils.dart';
-import 'package:PiliPlus/utils/platform_utils.dart';
+import 'package:pili_aurora/common/style.dart';
+import 'package:pili_aurora/common/widgets/badge.dart';
+import 'package:pili_aurora/common/widgets/image/image_save.dart';
+import 'package:pili_aurora/common/widgets/image/network_img_layer.dart';
+import 'package:pili_aurora/common/widgets/progress_bar/video_progress_indicator.dart';
+import 'package:pili_aurora/common/widgets/stat/stat.dart';
+import 'package:pili_aurora/common/widgets/video_popup_menu.dart';
+import 'package:pili_aurora/http/search.dart';
+import 'package:pili_aurora/models/horizontal_video_model.dart';
+import 'package:pili_aurora/models_new/video/video_detail/dimension.dart';
+import 'package:pili_aurora/utils/date_utils.dart';
+import 'package:pili_aurora/utils/duration_utils.dart';
+import 'package:pili_aurora/utils/page_utils.dart';
+import 'package:pili_aurora/utils/platform_utils.dart';
 import 'package:material_ui/material_ui.dart';
 
 // 视频卡片 - 水平布局

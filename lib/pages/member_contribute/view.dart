@@ -1,14 +1,14 @@
-import 'package:PiliPlus/common/widgets/loading_widget/loading_widget.dart';
-import 'package:PiliPlus/models/common/member/contribute_type.dart';
-import 'package:PiliPlus/models_new/space/space/tab2.dart';
-import 'package:PiliPlus/pages/member_article/view.dart';
-import 'package:PiliPlus/pages/member_audio/view.dart';
-import 'package:PiliPlus/pages/member_comic/view.dart';
-import 'package:PiliPlus/pages/member_contribute/controller.dart';
-import 'package:PiliPlus/pages/member_opus/view.dart';
-import 'package:PiliPlus/pages/member_season_series/view.dart';
-import 'package:PiliPlus/pages/member_video/view.dart';
-import 'package:PiliPlus/utils/extension/get_ext.dart';
+import 'package:pili_aurora/common/widgets/loading_widget/loading_widget.dart';
+import 'package:pili_aurora/models/common/member/contribute_type.dart';
+import 'package:pili_aurora/models_new/space/space/tab2.dart';
+import 'package:pili_aurora/pages/member_article/view.dart';
+import 'package:pili_aurora/pages/member_audio/view.dart';
+import 'package:pili_aurora/pages/member_comic/view.dart';
+import 'package:pili_aurora/pages/member_contribute/controller.dart';
+import 'package:pili_aurora/pages/member_opus/view.dart';
+import 'package:pili_aurora/pages/member_season_series/view.dart';
+import 'package:pili_aurora/pages/member_video/view.dart';
+import 'package:pili_aurora/utils/extension/get_ext.dart';
 import 'package:get/get.dart';
 import 'package:material_ui/material_ui.dart';
 

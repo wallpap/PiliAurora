@@ -1,4 +1,4 @@
-import 'package:PiliPlus/utils/danmaku_utils.dart';
+import 'package:pili_aurora/utils/danmaku_utils.dart';
 import 'package:flutter/services.dart'
     show LengthLimitingTextInputFormatter, FilteringTextInputFormatter;
 import 'package:get/get.dart';

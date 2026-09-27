@@ -14,7 +14,8 @@
  * limitations under the License.
  */
 
-package com.example.piliplus;
+// PiliAurora 修改（2026-09-27）：调整 Java 包名。
+package io.github.wallpap.piliaurora;
 
 import android.app.PendingIntent;
 import android.content.Context;

@@ -1,6 +1,6 @@
-import 'package:PiliPlus/common/widgets/custom_arc.dart';
-import 'package:PiliPlus/utils/extension/theme_ext.dart';
-import 'package:PiliPlus/utils/platform_utils.dart';
+import 'package:pili_aurora/common/widgets/custom_arc.dart';
+import 'package:pili_aurora/utils/extension/theme_ext.dart';
+import 'package:pili_aurora/utils/platform_utils.dart';
 import 'package:material_ui/material_ui.dart';
 
 class ActionItem extends StatelessWidget {

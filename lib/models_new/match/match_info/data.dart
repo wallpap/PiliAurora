@@ -1,4 +1,4 @@
-import 'package:PiliPlus/models_new/match/match_info/contest.dart';
+import 'package:pili_aurora/models_new/match/match_info/contest.dart';
 
 class MatchInfoData {
   MatchContest? contest;

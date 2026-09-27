@@ -10,21 +10,20 @@ param(
 $ErrorActionPreference = 'Stop'
 
 if (-not $OutputPath) {
-    $OutputPath = Join-Path $env:TEMP ("piliplus-trace-{0}.csv" -f (Get-Date -Format 'yyyyMMdd-HHmmss'))
+    $OutputPath = Join-Path $env:TEMP ("pili_aurora-trace-{0}.csv" -f (Get-Date -Format 'yyyyMMdd-HHmmss'))
 }
 
 if (-not $PSBoundParameters.ContainsKey('ProcessId')) {
-    $matches = @(Get-CimInstance Win32_Process -Filter "name = 'piliplus.exe'" |
-        Where-Object { $_.ExecutablePath -like '*\PiliPlus\*' })
+    $matches = @(Get-CimInstance Win32_Process -Filter "name = 'PiliAurora.exe'")
     if ($matches.Count -ne 1) {
-        throw "Expected one PiliPlus process, found $($matches.Count). Pass -ProcessId."
+        throw "Expected one PiliAurora process, found $($matches.Count). Pass -ProcessId."
     }
     $ProcessId = $matches[0].ProcessId
 }
 
 $target = Get-CimInstance Win32_Process -Filter "ProcessId = $ProcessId"
-if (-not $target -or $target.Name -ne 'piliplus.exe') {
-    throw "Process $ProcessId is not piliplus.exe."
+if (-not $target -or $target.Name -ne 'PiliAurora.exe') {
+    throw "Process $ProcessId is not PiliAurora.exe."
 }
 
 $samples = [System.Collections.Generic.List[object]]::new()

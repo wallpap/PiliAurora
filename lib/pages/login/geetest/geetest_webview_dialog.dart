@@ -1,5 +1,5 @@
-import 'package:PiliPlus/http/browser_ua.dart';
-import 'package:PiliPlus/main.dart';
+import 'package:pili_aurora/http/browser_ua.dart';
+import 'package:pili_aurora/main.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:get/get.dart';
 import 'package:material_ui/material_ui.dart';

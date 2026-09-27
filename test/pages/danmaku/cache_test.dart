@@ -1,5 +1,5 @@
-import 'package:PiliPlus/grpc/bilibili/community/service/dm/v1.pb.dart';
-import 'package:PiliPlus/pages/danmaku/cache.dart';
+import 'package:pili_aurora/grpc/bilibili/community/service/dm/v1.pb.dart';
+import 'package:pili_aurora/pages/danmaku/cache.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 DanmakuElem _element(int progress, int id) => DanmakuElem(

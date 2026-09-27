@@ -26,7 +26,7 @@
 
 前往 [发布页面](https://github.com/wallpap/PiliAurora/releases) 查看可用安装包，也可以按下文从源码构建。
 
-当前构建的应用仍显示为 `PiliPlus`，应用内更新入口指向 PiliPlus 发布页。获取 PiliAurora 请使用本仓库的发布页面或源码。
+尚未发布安装包时，请从源码构建。PiliAurora 使用独立的安装标识，可与 PiliPlus 并存；账号、设置和离线文件保存在各自的数据目录。
 
 ## 开发与构建
 

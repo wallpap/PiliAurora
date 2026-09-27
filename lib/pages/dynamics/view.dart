@@ -1,15 +1,15 @@
-import 'package:PiliPlus/common/widgets/scroll_physics.dart' show tabBarView;
-import 'package:PiliPlus/http/loading_state.dart';
-import 'package:PiliPlus/models/common/dynamic/dynamics_type.dart';
-import 'package:PiliPlus/models/common/dynamic/up_panel_position.dart';
-import 'package:PiliPlus/models/dynamics/up.dart';
-import 'package:PiliPlus/pages/common/common_page.dart';
-import 'package:PiliPlus/pages/dynamics/controller.dart';
-import 'package:PiliPlus/pages/dynamics/widgets/up_panel.dart';
-import 'package:PiliPlus/pages/dynamics_create/view.dart';
-import 'package:PiliPlus/pages/dynamics_tab/view.dart';
-import 'package:PiliPlus/pages/main/controller.dart';
-import 'package:PiliPlus/utils/extension/get_ext.dart';
+import 'package:pili_aurora/common/widgets/scroll_physics.dart' show tabBarView;
+import 'package:pili_aurora/http/loading_state.dart';
+import 'package:pili_aurora/models/common/dynamic/dynamics_type.dart';
+import 'package:pili_aurora/models/common/dynamic/up_panel_position.dart';
+import 'package:pili_aurora/models/dynamics/up.dart';
+import 'package:pili_aurora/pages/common/common_page.dart';
+import 'package:pili_aurora/pages/dynamics/controller.dart';
+import 'package:pili_aurora/pages/dynamics/widgets/up_panel.dart';
+import 'package:pili_aurora/pages/dynamics_create/view.dart';
+import 'package:pili_aurora/pages/dynamics_tab/view.dart';
+import 'package:pili_aurora/pages/main/controller.dart';
+import 'package:pili_aurora/utils/extension/get_ext.dart';
 import 'package:get/get.dart';
 import 'package:material_ui/material_ui.dart' hide DraggableScrollableSheet;
 

@@ -1,11 +1,11 @@
-import 'package:PiliPlus/common/widgets/progress_bar/audio_video_progress_bar.dart';
-import 'package:PiliPlus/common/widgets/progress_bar/segment_progress_bar.dart';
-import 'package:PiliPlus/pages/video/controller.dart';
-import 'package:PiliPlus/plugin/pl_player/controller.dart';
-import 'package:PiliPlus/plugin/pl_player/view/view.dart';
-import 'package:PiliPlus/utils/extension/theme_ext.dart';
-import 'package:PiliPlus/utils/feed_back.dart';
-import 'package:PiliPlus/utils/platform_utils.dart';
+import 'package:pili_aurora/common/widgets/progress_bar/audio_video_progress_bar.dart';
+import 'package:pili_aurora/common/widgets/progress_bar/segment_progress_bar.dart';
+import 'package:pili_aurora/pages/video/controller.dart';
+import 'package:pili_aurora/plugin/pl_player/controller.dart';
+import 'package:pili_aurora/plugin/pl_player/view/view.dart';
+import 'package:pili_aurora/utils/extension/theme_ext.dart';
+import 'package:pili_aurora/utils/feed_back.dart';
+import 'package:pili_aurora/utils/platform_utils.dart';
 import 'package:get/get.dart';
 import 'package:material_ui/material_ui.dart';
 

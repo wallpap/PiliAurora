@@ -1,8 +1,8 @@
-import 'package:PiliPlus/http/fav.dart';
-import 'package:PiliPlus/http/loading_state.dart';
-import 'package:PiliPlus/models_new/fav/fav_article/data.dart';
-import 'package:PiliPlus/models_new/fav/fav_article/item.dart';
-import 'package:PiliPlus/pages/common/common_list_controller.dart';
+import 'package:pili_aurora/http/fav.dart';
+import 'package:pili_aurora/http/loading_state.dart';
+import 'package:pili_aurora/models_new/fav/fav_article/data.dart';
+import 'package:pili_aurora/models_new/fav/fav_article/item.dart';
+import 'package:pili_aurora/pages/common/common_list_controller.dart';
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 
 class FavArticleController

@@ -1,20 +1,20 @@
 import 'dart:async';
 
-import 'package:PiliPlus/common/widgets/animated_height.dart';
-import 'package:PiliPlus/common/widgets/draggable_sheet/dyn.dart';
-import 'package:PiliPlus/common/widgets/flutter/text_field/text_field.dart';
-import 'package:PiliPlus/common/widgets/image/network_img_layer.dart';
-import 'package:PiliPlus/common/widgets/scroll_physics.dart'
+import 'package:pili_aurora/common/widgets/animated_height.dart';
+import 'package:pili_aurora/common/widgets/draggable_sheet/dyn.dart';
+import 'package:pili_aurora/common/widgets/flutter/text_field/text_field.dart';
+import 'package:pili_aurora/common/widgets/image/network_img_layer.dart';
+import 'package:pili_aurora/common/widgets/scroll_physics.dart'
     show platformClampingPhysics;
-import 'package:PiliPlus/http/dynamics.dart';
-import 'package:PiliPlus/http/loading_state.dart';
-import 'package:PiliPlus/models/dynamics/result.dart';
-import 'package:PiliPlus/pages/common/publish/common_rich_text_pub_page.dart';
-import 'package:PiliPlus/pages/dynamics_mention/controller.dart';
-import 'package:PiliPlus/pages/emote/controller.dart';
-import 'package:PiliPlus/pages/emote/view.dart';
-import 'package:PiliPlus/utils/accounts.dart';
-import 'package:PiliPlus/utils/request_utils.dart';
+import 'package:pili_aurora/http/dynamics.dart';
+import 'package:pili_aurora/http/loading_state.dart';
+import 'package:pili_aurora/models/dynamics/result.dart';
+import 'package:pili_aurora/pages/common/publish/common_rich_text_pub_page.dart';
+import 'package:pili_aurora/pages/dynamics_mention/controller.dart';
+import 'package:pili_aurora/pages/emote/controller.dart';
+import 'package:pili_aurora/pages/emote/view.dart';
+import 'package:pili_aurora/utils/accounts.dart';
+import 'package:pili_aurora/utils/request_utils.dart';
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:get/get.dart';
 import 'package:material_ui/material_ui.dart' hide TextField;
