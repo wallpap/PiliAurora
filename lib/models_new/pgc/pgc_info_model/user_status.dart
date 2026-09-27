@@ -1,4 +1,4 @@
-import 'package:PiliPlus/models_new/pgc/pgc_info_model/user_progress.dart';
+import 'package:pili_aurora/models_new/pgc/pgc_info_model/user_progress.dart';
 
 class UserStatus {
   UserProgress? progress;

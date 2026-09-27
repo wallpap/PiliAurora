@@ -1,6 +1,6 @@
-import 'package:PiliPlus/models_new/upower_rank/level_info.dart';
-import 'package:PiliPlus/models_new/upower_rank/rank_info.dart';
-import 'package:PiliPlus/utils/extension/iterable_ext.dart';
+import 'package:pili_aurora/models_new/upower_rank/level_info.dart';
+import 'package:pili_aurora/models_new/upower_rank/rank_info.dart';
+import 'package:pili_aurora/utils/extension/iterable_ext.dart';
 
 class UpowerRankData {
   List<UpowerRankInfo>? rankInfo;

@@ -1,4 +1,4 @@
-import 'package:PiliPlus/models/common/enum_with_label.dart';
+import 'package:pili_aurora/models/common/enum_with_label.dart';
 
 enum DynamicsTabType implements EnumWithLabel {
   all('全部'),

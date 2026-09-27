@@ -7,5 +7,5 @@
     "source.organizeImports": "explicit"
     // "source.fixAll": "explicit",
   },
-  "cmake.sourceDirectory": "E:/Code/clone/PiliPlus/windows"
+  "cmake.sourceDirectory": "${workspaceFolder}/windows"
 }

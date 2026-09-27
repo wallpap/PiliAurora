@@ -50,14 +50,14 @@ jobs:
 
       - name: Prepare Upload
         run: |
-          mkdir -p Release/PiliPlus-Win
-          mkdir -p PiliPlus-Win-Setup
-          mv build/windows/x64/runner/Release/* Release/PiliPlus-Win/
-          mv dist/**/*.exe PiliPlus-Win-Setup/PiliPlus_windows_${{env.version}}_x64_setup.exe
+          mkdir -p Release/PiliAurora-Win
+          mkdir -p PiliAurora-Win-Setup
+          mv build/windows/x64/runner/Release/* Release/PiliAurora-Win/
+          mv dist/**/*.exe PiliAurora-Win-Setup/PiliAurora_windows_${{env.version}}_x64_setup.exe
 
       - name: Compress
         run: |
-          Compress-Archive -Path "Release/PiliPlus-Win" -DestinationPath "PiliPlus_windows_${{env.version}}_x64_portable.zip"
+          Compress-Archive -Path "Release/PiliAurora-Win" -DestinationPath "PiliAurora_windows_${{env.version}}_x64_portable.zip"
         shell: pwsh
 
       - name: Release
@@ -67,19 +67,19 @@ jobs:
           tag_name: ${{ github.event.inputs.tag }}
           name: ${{ github.event.inputs.tag }}
           files: |
-            PiliPlus_windows_*.zip
-            PiliPlus-Win-Setup/PiliPlus_windows_*.exe
+            PiliAurora_windows_*.zip
+            PiliAurora-Win-Setup/PiliAurora_windows_*.exe
 
       - name: Upload windows file release
         uses: actions/upload-artifact@v7
         with:
           archive: false
           name: Windows-file-x64-release
-          path: PiliPlus_windows_*.zip
+          path: PiliAurora_windows_*.zip
 
       - name: Upload windows setup release
         uses: actions/upload-artifact@v7
         with:
           archive: false
           name: Windows-setup-x64-release
-          path: PiliPlus-Win-Setup/PiliPlus_windows_*.exe
+          path: PiliAurora-Win-Setup/PiliAurora_windows_*.exe

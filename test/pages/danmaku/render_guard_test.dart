@@ -1,4 +1,4 @@
-import 'package:PiliPlus/pages/danmaku/render_guard.dart';
+import 'package:pili_aurora/pages/danmaku/render_guard.dart';
 import 'package:canvas_danmaku/canvas_danmaku.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:material_ui/material_ui.dart';

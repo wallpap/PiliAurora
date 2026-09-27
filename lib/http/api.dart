@@ -1,4 +1,5 @@
-import 'package:PiliPlus/http/constants.dart';
+import 'package:pili_aurora/common/constants.dart';
+import 'package:pili_aurora/http/constants.dart';
 
 abstract final class Api {
   // 推荐视频
@@ -410,7 +411,7 @@ abstract final class Api {
 
   // github 获取最新版
   static const String latestApp =
-      'https://api.github.com/repos/bggRGjQaUbCoE/PiliPlus/releases';
+      'https://api.github.com/repos/${Constants.githubRepository}/releases';
 
   // 多少人在看
   // https://api.bilibili.com/x/player/online/total?aid=913663681&cid=1203559746&bvid=BV1MM4y1s7NZ&ts=56427838

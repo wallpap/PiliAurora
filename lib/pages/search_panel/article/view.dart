@@ -1,9 +1,9 @@
-import 'package:PiliPlus/common/widgets/sliver/sliver_floating_header.dart';
-import 'package:PiliPlus/models/search/result.dart';
-import 'package:PiliPlus/pages/search_panel/article/controller.dart';
-import 'package:PiliPlus/pages/search_panel/article/widgets/item.dart';
-import 'package:PiliPlus/pages/search_panel/view.dart';
-import 'package:PiliPlus/utils/grid.dart';
+import 'package:pili_aurora/common/widgets/sliver/sliver_floating_header.dart';
+import 'package:pili_aurora/models/search/result.dart';
+import 'package:pili_aurora/pages/search_panel/article/controller.dart';
+import 'package:pili_aurora/pages/search_panel/article/widgets/item.dart';
+import 'package:pili_aurora/pages/search_panel/view.dart';
+import 'package:pili_aurora/utils/grid.dart';
 import 'package:get/get.dart';
 import 'package:material_ui/material_ui.dart';
 

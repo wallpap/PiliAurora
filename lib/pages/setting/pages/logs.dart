@@ -1,17 +1,17 @@
 import 'dart:async' show Timer;
 import 'dart:convert' show jsonDecode;
 
-import 'package:PiliPlus/common/constants.dart';
-import 'package:PiliPlus/common/widgets/button/icon_button.dart';
-import 'package:PiliPlus/common/widgets/loading_widget/loading_widget.dart';
-import 'package:PiliPlus/common/widgets/selection_text.dart';
-import 'package:PiliPlus/services/logger.dart';
-import 'package:PiliPlus/utils/date_utils.dart';
-import 'package:PiliPlus/utils/page_utils.dart';
-import 'package:PiliPlus/utils/storage.dart';
-import 'package:PiliPlus/utils/storage_key.dart';
-import 'package:PiliPlus/utils/storage_pref.dart';
-import 'package:PiliPlus/utils/utils.dart';
+import 'package:pili_aurora/common/constants.dart';
+import 'package:pili_aurora/common/widgets/button/icon_button.dart';
+import 'package:pili_aurora/common/widgets/loading_widget/loading_widget.dart';
+import 'package:pili_aurora/common/widgets/selection_text.dart';
+import 'package:pili_aurora/services/logger.dart';
+import 'package:pili_aurora/utils/date_utils.dart';
+import 'package:pili_aurora/utils/page_utils.dart';
+import 'package:pili_aurora/utils/storage.dart';
+import 'package:pili_aurora/utils/storage_key.dart';
+import 'package:pili_aurora/utils/storage_pref.dart';
+import 'package:pili_aurora/utils/utils.dart';
 import 'package:catcher_2/catcher_2.dart';
 import 'package:catcher_2/utils/log_printer.dart';
 import 'package:flutter/foundation.dart';
@@ -423,7 +423,8 @@ class _ReportCard extends StatelessWidget {
                     .map(
                       (i) => TextSpan(
                         text: '$i\n',
-                        style: i.contains('(package:${Constants.appName}')
+                        style:
+                            i.contains('(package:${Constants.dartPackageName}/')
                             ? TextStyle(
                                 color: colorScheme.onSurface,
                                 fontWeight: .w600,

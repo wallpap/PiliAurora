@@ -1,16 +1,16 @@
 import 'dart:async' show StreamSubscription, Timer;
 import 'dart:math' as math;
 
-import 'package:PiliPlus/common/widgets/dialog/simple_dialog_option.dart';
-import 'package:PiliPlus/common/widgets/progress_bar/segment_progress_bar.dart';
-import 'package:PiliPlus/http/loading_state.dart';
-import 'package:PiliPlus/http/sponsor_block.dart';
-import 'package:PiliPlus/models/common/sponsor_block/segment_model.dart';
-import 'package:PiliPlus/models/common/sponsor_block/segment_type.dart';
-import 'package:PiliPlus/models/common/sponsor_block/skip_type.dart';
-import 'package:PiliPlus/models_new/sponsor_block/segment_item.dart';
-import 'package:PiliPlus/utils/duration_utils.dart';
-import 'package:PiliPlus/utils/storage_pref.dart';
+import 'package:pili_aurora/common/widgets/dialog/simple_dialog_option.dart';
+import 'package:pili_aurora/common/widgets/progress_bar/segment_progress_bar.dart';
+import 'package:pili_aurora/http/loading_state.dart';
+import 'package:pili_aurora/http/sponsor_block.dart';
+import 'package:pili_aurora/models/common/sponsor_block/segment_model.dart';
+import 'package:pili_aurora/models/common/sponsor_block/segment_type.dart';
+import 'package:pili_aurora/models/common/sponsor_block/skip_type.dart';
+import 'package:pili_aurora/models_new/sponsor_block/segment_item.dart';
+import 'package:pili_aurora/utils/duration_utils.dart';
+import 'package:pili_aurora/utils/storage_pref.dart';
 import 'package:easy_debounce/easy_throttle.dart';
 import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';

@@ -1,8 +1,8 @@
-import 'package:PiliPlus/common/widgets/badge.dart';
-import 'package:PiliPlus/common/widgets/image/network_img_layer.dart';
-import 'package:PiliPlus/models/common/badge_type.dart';
-import 'package:PiliPlus/models_new/space/space_shop/item.dart';
-import 'package:PiliPlus/utils/extension/theme_ext.dart';
+import 'package:pili_aurora/common/widgets/badge.dart';
+import 'package:pili_aurora/common/widgets/image/network_img_layer.dart';
+import 'package:pili_aurora/models/common/badge_type.dart';
+import 'package:pili_aurora/models_new/space/space_shop/item.dart';
+import 'package:pili_aurora/utils/extension/theme_ext.dart';
 import 'package:get/get.dart';
 import 'package:material_ui/material_ui.dart';
 

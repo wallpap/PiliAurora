@@ -1,10 +1,10 @@
-import 'package:PiliPlus/common/widgets/scaffold/simple_scaffold.dart';
-import 'package:PiliPlus/common/widgets/scroll_physics.dart' show tabBarView;
-import 'package:PiliPlus/common/widgets/view_safe_area.dart';
-import 'package:PiliPlus/models/common/reply/reply_search_type.dart';
-import 'package:PiliPlus/pages/video/reply_search_item/child/view.dart';
-import 'package:PiliPlus/pages/video/reply_search_item/controller.dart';
-import 'package:PiliPlus/utils/utils.dart';
+import 'package:pili_aurora/common/widgets/scaffold/simple_scaffold.dart';
+import 'package:pili_aurora/common/widgets/scroll_physics.dart' show tabBarView;
+import 'package:pili_aurora/common/widgets/view_safe_area.dart';
+import 'package:pili_aurora/models/common/reply/reply_search_type.dart';
+import 'package:pili_aurora/pages/video/reply_search_item/child/view.dart';
+import 'package:pili_aurora/pages/video/reply_search_item/controller.dart';
+import 'package:pili_aurora/utils/utils.dart';
 import 'package:get/get.dart';
 import 'package:material_ui/material_ui.dart';
 

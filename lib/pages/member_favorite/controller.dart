@@ -1,10 +1,10 @@
-import 'package:PiliPlus/http/api.dart';
-import 'package:PiliPlus/http/fav.dart';
-import 'package:PiliPlus/http/init.dart';
-import 'package:PiliPlus/http/loading_state.dart';
-import 'package:PiliPlus/models_new/space/space_fav/data.dart';
-import 'package:PiliPlus/models_new/space/space_fav/list.dart';
-import 'package:PiliPlus/pages/common/common_data_controller.dart';
+import 'package:pili_aurora/http/api.dart';
+import 'package:pili_aurora/http/fav.dart';
+import 'package:pili_aurora/http/init.dart';
+import 'package:pili_aurora/http/loading_state.dart';
+import 'package:pili_aurora/models_new/space/space_fav/data.dart';
+import 'package:pili_aurora/models_new/space/space_fav/list.dart';
+import 'package:pili_aurora/pages/common/common_data_controller.dart';
 import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:get/get.dart';

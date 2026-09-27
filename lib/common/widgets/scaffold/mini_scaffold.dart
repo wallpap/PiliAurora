@@ -1,7 +1,7 @@
 import 'dart:async' show Completer;
 
-import 'package:PiliPlus/common/widgets/scaffold/bottom_sheet.dart';
-import 'package:PiliPlus/common/widgets/scaffold/bottom_sheet_layout.dart';
+import 'package:pili_aurora/common/widgets/scaffold/bottom_sheet.dart';
+import 'package:pili_aurora/common/widgets/scaffold/bottom_sheet_layout.dart';
 import 'package:get/get_core/src/get_main.dart';
 import 'package:get/get_navigation/src/extension_navigation.dart';
 import 'package:material_ui/material_ui.dart';

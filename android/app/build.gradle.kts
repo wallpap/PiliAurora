@@ -18,7 +18,7 @@ if (!isBuiltInKotlinEnabled) {
 }
 
 android {
-    namespace = "com.example.piliplus"
+    namespace = "io.github.wallpap.piliaurora"
     compileSdk = 37
     ndkVersion = flutter.ndkVersion
 
@@ -28,7 +28,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.example.piliplus"
+        applicationId = "io.github.wallpap.piliaurora"
         minSdk = flutter.minSdkVersion
         targetSdk = 37
         versionCode = flutter.versionCode
@@ -70,7 +70,7 @@ android {
                 resValue(
                     type = "string",
                     name = "app_name",
-                    value = "PiliPlus dev",
+                    value = "PiliAurora dev",
                 )
             }
 //            proguardFiles(

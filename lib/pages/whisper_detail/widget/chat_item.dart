@@ -1,26 +1,26 @@
 import 'dart:convert';
 import 'dart:math' as math;
 
-import 'package:PiliPlus/common/constants.dart';
-import 'package:PiliPlus/common/style.dart';
-import 'package:PiliPlus/common/widgets/badge.dart';
-import 'package:PiliPlus/common/widgets/emote_tooltip.dart';
-import 'package:PiliPlus/common/widgets/gesture/tap_gesture_recognizer.dart';
-import 'package:PiliPlus/common/widgets/image/network_img_layer.dart';
-import 'package:PiliPlus/common/widgets/image_viewer/hero.dart';
-import 'package:PiliPlus/common/widgets/selection_text.dart';
-import 'package:PiliPlus/grpc/bilibili/im/interfaces/v1.pb.dart'
+import 'package:pili_aurora/common/constants.dart';
+import 'package:pili_aurora/common/style.dart';
+import 'package:pili_aurora/common/widgets/badge.dart';
+import 'package:pili_aurora/common/widgets/emote_tooltip.dart';
+import 'package:pili_aurora/common/widgets/gesture/tap_gesture_recognizer.dart';
+import 'package:pili_aurora/common/widgets/image/network_img_layer.dart';
+import 'package:pili_aurora/common/widgets/image_viewer/hero.dart';
+import 'package:pili_aurora/common/widgets/selection_text.dart';
+import 'package:pili_aurora/grpc/bilibili/im/interfaces/v1.pb.dart'
     show EmotionInfo;
-import 'package:PiliPlus/grpc/bilibili/im/type.pb.dart' show Msg, MsgType;
-import 'package:PiliPlus/http/search.dart';
-import 'package:PiliPlus/models/common/image_preview_type.dart';
-import 'package:PiliPlus/utils/app_scheme.dart';
-import 'package:PiliPlus/utils/date_utils.dart';
-import 'package:PiliPlus/utils/duration_utils.dart';
-import 'package:PiliPlus/utils/extension/num_ext.dart';
-import 'package:PiliPlus/utils/id_utils.dart';
-import 'package:PiliPlus/utils/image_utils.dart';
-import 'package:PiliPlus/utils/page_utils.dart';
+import 'package:pili_aurora/grpc/bilibili/im/type.pb.dart' show Msg, MsgType;
+import 'package:pili_aurora/http/search.dart';
+import 'package:pili_aurora/models/common/image_preview_type.dart';
+import 'package:pili_aurora/utils/app_scheme.dart';
+import 'package:pili_aurora/utils/date_utils.dart';
+import 'package:pili_aurora/utils/duration_utils.dart';
+import 'package:pili_aurora/utils/extension/num_ext.dart';
+import 'package:pili_aurora/utils/id_utils.dart';
+import 'package:pili_aurora/utils/image_utils.dart';
+import 'package:pili_aurora/utils/page_utils.dart';
 import 'package:cached_network_image_ce/cached_network_image.dart';
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:get/get.dart';

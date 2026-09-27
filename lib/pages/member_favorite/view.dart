@@ -1,13 +1,13 @@
-import 'package:PiliPlus/common/skeleton/video_card_h.dart';
-import 'package:PiliPlus/common/sliver_single_child_delegate.dart';
-import 'package:PiliPlus/common/widgets/flutter/refresh_indicator.dart';
-import 'package:PiliPlus/common/widgets/loading_widget/http_error.dart';
-import 'package:PiliPlus/common/widgets/sliver/sliver_pinned_header.dart';
-import 'package:PiliPlus/http/loading_state.dart';
-import 'package:PiliPlus/models_new/space/space_fav/data.dart';
-import 'package:PiliPlus/pages/member_favorite/controller.dart';
-import 'package:PiliPlus/pages/member_favorite/widget/item.dart';
-import 'package:PiliPlus/utils/grid.dart';
+import 'package:pili_aurora/common/skeleton/video_card_h.dart';
+import 'package:pili_aurora/common/sliver_single_child_delegate.dart';
+import 'package:pili_aurora/common/widgets/flutter/refresh_indicator.dart';
+import 'package:pili_aurora/common/widgets/loading_widget/http_error.dart';
+import 'package:pili_aurora/common/widgets/sliver/sliver_pinned_header.dart';
+import 'package:pili_aurora/http/loading_state.dart';
+import 'package:pili_aurora/models_new/space/space_fav/data.dart';
+import 'package:pili_aurora/pages/member_favorite/controller.dart';
+import 'package:pili_aurora/pages/member_favorite/widget/item.dart';
+import 'package:pili_aurora/utils/grid.dart';
 import 'package:get/get.dart';
 import 'package:material_ui/material_ui.dart';
 

@@ -1,7 +1,7 @@
 import 'dart:io' show Platform;
 
-import 'package:PiliPlus/models/video/play/url.dart' show Volume;
-import 'package:PiliPlus/utils/storage_pref.dart';
+import 'package:pili_aurora/models/video/play/url.dart' show Volume;
+import 'package:pili_aurora/utils/storage_pref.dart';
 
 enum AudioNormalization {
   disable('禁用'),

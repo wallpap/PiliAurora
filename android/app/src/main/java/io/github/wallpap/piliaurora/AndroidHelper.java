@@ -1,4 +1,4 @@
-package com.example.piliplus;
+package io.github.wallpap.piliaurora;
 
 import android.annotation.SuppressLint;
 import android.app.Activity;

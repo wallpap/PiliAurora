@@ -1,4 +1,4 @@
-import 'package:PiliPlus/http/api.dart';
+import 'package:pili_aurora/http/api.dart';
 
 enum PgcReviewType {
   long(label: '长评', api: Api.pgcReviewL),

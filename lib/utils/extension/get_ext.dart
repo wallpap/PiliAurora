@@ -1,4 +1,4 @@
-import 'package:PiliPlus/main.dart';
+import 'package:pili_aurora/main.dart';
 import 'package:get/get.dart';
 
 extension GetExt on GetInterface {

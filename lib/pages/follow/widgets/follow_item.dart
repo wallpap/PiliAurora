@@ -1,8 +1,8 @@
-import 'package:PiliPlus/common/widgets/pendant_avatar.dart';
-import 'package:PiliPlus/models_new/follow/list.dart';
-import 'package:PiliPlus/pages/share/view.dart' show UserModel;
-import 'package:PiliPlus/utils/feed_back.dart';
-import 'package:PiliPlus/utils/request_utils.dart';
+import 'package:pili_aurora/common/widgets/pendant_avatar.dart';
+import 'package:pili_aurora/models_new/follow/list.dart';
+import 'package:pili_aurora/pages/share/view.dart' show UserModel;
+import 'package:pili_aurora/utils/feed_back.dart';
+import 'package:pili_aurora/utils/request_utils.dart';
 import 'package:get/get.dart';
 import 'package:material_ui/material_ui.dart';
 

@@ -1,4 +1,4 @@
-package com.example.piliplus
+package io.github.wallpap.piliaurora
 
 import android.os.Build
 import android.os.Bundle

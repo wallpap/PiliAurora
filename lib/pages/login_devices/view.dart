@@ -1,12 +1,12 @@
-import 'package:PiliPlus/common/widgets/flutter/list_tile.dart';
-import 'package:PiliPlus/common/widgets/flutter/refresh_indicator.dart';
-import 'package:PiliPlus/common/widgets/loading_widget/http_error.dart';
-import 'package:PiliPlus/common/widgets/scaffold/simple_scaffold.dart';
-import 'package:PiliPlus/common/widgets/view_sliver_safe_area.dart';
-import 'package:PiliPlus/http/loading_state.dart';
-import 'package:PiliPlus/models_new/login_devices/device.dart';
-import 'package:PiliPlus/pages/login_devices/controller.dart';
-import 'package:PiliPlus/utils/extension/widget_ext.dart';
+import 'package:pili_aurora/common/widgets/flutter/list_tile.dart';
+import 'package:pili_aurora/common/widgets/flutter/refresh_indicator.dart';
+import 'package:pili_aurora/common/widgets/loading_widget/http_error.dart';
+import 'package:pili_aurora/common/widgets/scaffold/simple_scaffold.dart';
+import 'package:pili_aurora/common/widgets/view_sliver_safe_area.dart';
+import 'package:pili_aurora/http/loading_state.dart';
+import 'package:pili_aurora/models_new/login_devices/device.dart';
+import 'package:pili_aurora/pages/login_devices/controller.dart';
+import 'package:pili_aurora/utils/extension/widget_ext.dart';
 import 'package:get/get.dart';
 import 'package:material_ui/material_ui.dart' hide ListTile;
 

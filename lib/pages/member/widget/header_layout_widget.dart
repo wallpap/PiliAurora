@@ -17,7 +17,7 @@
 
 import 'dart:math' as math;
 
-import 'package:PiliPlus/common/widgets/slotted_layout_helper.dart';
+import 'package:pili_aurora/common/widgets/slotted_layout_helper.dart';
 import 'package:material_ui/material_ui.dart';
 
 const double kHeaderHeight = 135.0;

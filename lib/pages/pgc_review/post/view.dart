@@ -1,7 +1,7 @@
-import 'package:PiliPlus/common/widgets/custom_icon.dart';
-import 'package:PiliPlus/common/widgets/view_insets_safe_area.dart';
-import 'package:PiliPlus/http/pgc.dart';
-import 'package:PiliPlus/utils/accounts.dart';
+import 'package:pili_aurora/common/widgets/custom_icon.dart';
+import 'package:pili_aurora/common/widgets/view_insets_safe_area.dart';
+import 'package:pili_aurora/http/pgc.dart';
+import 'package:pili_aurora/utils/accounts.dart';
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:get/get.dart';
 import 'package:material_ui/material_ui.dart';

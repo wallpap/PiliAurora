@@ -1,8 +1,8 @@
-import 'package:PiliPlus/models/model_rec_video_item.dart';
-import 'package:PiliPlus/models/model_video.dart';
-import 'package:PiliPlus/utils/id_utils.dart';
-import 'package:PiliPlus/utils/num_utils.dart';
-import 'package:PiliPlus/utils/parse_string.dart';
+import 'package:pili_aurora/models/model_rec_video_item.dart';
+import 'package:pili_aurora/models/model_video.dart';
+import 'package:pili_aurora/utils/id_utils.dart';
+import 'package:pili_aurora/utils/num_utils.dart';
+import 'package:pili_aurora/utils/parse_string.dart';
 
 class RcmdVideoItemAppModel extends BaseRcmdVideoItemModel {
   int? get id => aid;

@@ -1,4 +1,4 @@
-import 'package:PiliPlus/models/common/enum_with_label.dart';
+import 'package:pili_aurora/models/common/enum_with_label.dart';
 
 enum DynamicBadgeMode implements EnumWithLabel {
   hidden('隐藏'),

@@ -1,8 +1,8 @@
-import 'package:PiliPlus/http/video.dart';
-import 'package:PiliPlus/pages/rcmd/controller.dart';
-import 'package:PiliPlus/pages/setting/models/model.dart';
-import 'package:PiliPlus/utils/recommend_filter.dart';
-import 'package:PiliPlus/utils/storage_key.dart';
+import 'package:pili_aurora/http/video.dart';
+import 'package:pili_aurora/pages/rcmd/controller.dart';
+import 'package:pili_aurora/pages/setting/models/model.dart';
+import 'package:pili_aurora/utils/recommend_filter.dart';
+import 'package:pili_aurora/utils/storage_key.dart';
 import 'package:flutter/foundation.dart';
 import 'package:get/get.dart';
 import 'package:material_ui/material_ui.dart';

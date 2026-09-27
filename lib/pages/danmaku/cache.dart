@@ -1,7 +1,7 @@
 import 'dart:collection';
 
-import 'package:PiliPlus/grpc/bilibili/community/service/dm/v1.pb.dart';
-import 'package:PiliPlus/utils/danmaku_utils.dart';
+import 'package:pili_aurora/grpc/bilibili/community/service/dm/v1.pb.dart';
+import 'package:pili_aurora/utils/danmaku_utils.dart';
 
 /// 按 100 毫秒分桶保存弹幕，按分段淘汰以避免只留下不完整分段。
 class DanmakuCache {

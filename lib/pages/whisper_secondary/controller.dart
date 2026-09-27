@@ -1,8 +1,8 @@
-import 'package:PiliPlus/grpc/bilibili/app/im/v1.pb.dart'
+import 'package:pili_aurora/grpc/bilibili/app/im/v1.pb.dart'
     show Offset, Session, SessionPageType, SessionSecondaryReply, ThreeDotItem;
-import 'package:PiliPlus/grpc/im.dart';
-import 'package:PiliPlus/http/loading_state.dart';
-import 'package:PiliPlus/pages/common/common_whisper_controller.dart';
+import 'package:pili_aurora/grpc/im.dart';
+import 'package:pili_aurora/http/loading_state.dart';
+import 'package:pili_aurora/pages/common/common_whisper_controller.dart';
 import 'package:get/get.dart';
 import 'package:protobuf/protobuf.dart' show PbMap;
 

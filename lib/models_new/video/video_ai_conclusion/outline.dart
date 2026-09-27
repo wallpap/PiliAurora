@@ -1,4 +1,4 @@
-import 'package:PiliPlus/models_new/video/video_ai_conclusion/part_outline.dart';
+import 'package:pili_aurora/models_new/video/video_ai_conclusion/part_outline.dart';
 
 class Outline {
   String? title;
