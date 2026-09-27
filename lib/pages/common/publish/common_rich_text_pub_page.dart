@@ -5,6 +5,7 @@ import 'package:pili_aurora/common/widgets/button/icon_button.dart';
 import 'package:pili_aurora/common/widgets/button/toolbar_icon_button.dart';
 import 'package:pili_aurora/common/widgets/flutter/text_field/controller.dart';
 import 'package:pili_aurora/common/widgets/flutter/text_field/text_field.dart';
+import 'package:pili_aurora/common/widgets/image/cached_image.dart';
 import 'package:pili_aurora/http/msg.dart';
 import 'package:pili_aurora/models/common/image_preview_type.dart';
 import 'package:pili_aurora/models/common/publish_panel_type.dart';
@@ -24,8 +25,6 @@ import 'package:pili_aurora/utils/feed_back.dart';
 import 'package:pili_aurora/utils/image_utils.dart';
 import 'package:pili_aurora/utils/page_utils.dart';
 import 'package:pili_aurora/utils/platform_utils.dart';
-import 'package:cached_network_image_ce/cached_network_image.dart'
-    hide CacheManager;
 import 'package:dio/dio.dart' show CancelToken;
 import 'package:easy_debounce/easy_throttle.dart';
 import 'package:flutter/foundation.dart' show kDebugMode;
@@ -146,7 +145,7 @@ abstract class CommonRichTextPubPageState<T extends CommonRichTextPubPage>
                   filterQuality: .low,
                   cacheHeight: height.cacheSize(context),
                 ),
-                OpusPicModel e => CachedNetworkImage(
+                OpusPicModel e => CachedImage(
                   imageUrl: ImageUtils.thumbnailUrl(e.url!),
                   height: height,
                   filterQuality: .low,

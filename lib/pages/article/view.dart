@@ -4,6 +4,7 @@ import 'package:pili_aurora/common/widgets/badge.dart';
 import 'package:pili_aurora/common/widgets/custom_icon.dart';
 import 'package:pili_aurora/common/widgets/flutter/refresh_indicator.dart';
 import 'package:pili_aurora/common/widgets/gesture/horizontal_drag_gesture_recognizer.dart';
+import 'package:pili_aurora/common/widgets/image/cached_image.dart';
 import 'package:pili_aurora/common/widgets/image/network_img_layer.dart';
 import 'package:pili_aurora/common/widgets/scaffold/mini_scaffold.dart';
 import 'package:pili_aurora/common/widgets/scaffold/simple_scaffold.dart';
@@ -11,7 +12,8 @@ import 'package:pili_aurora/common/widgets/scroll_physics.dart'
     show tabBarScrollPhysics;
 import 'package:pili_aurora/common/widgets/sliver/sliver_to_box_adapter.dart';
 import 'package:pili_aurora/models/common/image_preview_type.dart';
-import 'package:pili_aurora/models/dynamics/article_content_model.dart' show Pic;
+import 'package:pili_aurora/models/dynamics/article_content_model.dart'
+    show Pic;
 import 'package:pili_aurora/models/dynamics/result.dart' show DynamicStat;
 import 'package:pili_aurora/pages/article/controller.dart';
 import 'package:pili_aurora/pages/article/widgets/article_ops.dart';
@@ -28,7 +30,6 @@ import 'package:pili_aurora/utils/num_utils.dart';
 import 'package:pili_aurora/utils/page_utils.dart';
 import 'package:pili_aurora/utils/share_utils.dart';
 import 'package:pili_aurora/utils/utils.dart';
-import 'package:cached_network_image_ce/cached_network_image.dart';
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:get/get.dart';
@@ -536,7 +537,7 @@ class _ArticlePageState extends CommonDynPageState<ArticlePage> {
                     clipBehavior: .none,
                     alignment: Alignment.center,
                     children: [
-                      CachedNetworkImage(
+                      CachedImage(
                         height: height,
                         width: maxWidth,
                         memCacheWidth: memCacheWidth,

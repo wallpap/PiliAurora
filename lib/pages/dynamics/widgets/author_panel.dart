@@ -4,6 +4,7 @@ import 'package:pili_aurora/common/assets.dart';
 import 'package:pili_aurora/common/style.dart';
 import 'package:pili_aurora/common/widgets/custom_icon.dart';
 import 'package:pili_aurora/common/widgets/dialog/report.dart';
+import 'package:pili_aurora/common/widgets/image/cached_image.dart';
 import 'package:pili_aurora/common/widgets/pendant_avatar.dart';
 import 'package:pili_aurora/common/widgets/translucent_row.dart';
 import 'package:pili_aurora/http/constants.dart';
@@ -25,7 +26,6 @@ import 'package:pili_aurora/utils/image_utils.dart';
 import 'package:pili_aurora/utils/page_utils.dart';
 import 'package:pili_aurora/utils/request_utils.dart';
 import 'package:pili_aurora/utils/share_utils.dart';
-import 'package:cached_network_image_ce/cached_network_image.dart';
 import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:get/get.dart';
@@ -187,7 +187,7 @@ class AuthorPanel extends StatelessWidget {
             right: 0,
             bottom: 0,
             child: Center(
-              child: CachedNetworkImage(
+              child: CachedImage(
                 height: height,
                 memCacheHeight: height.cacheSize(context),
                 imageUrl: ImageUtils.safeThumbnailUrl(

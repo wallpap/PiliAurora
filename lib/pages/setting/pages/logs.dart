@@ -1,16 +1,17 @@
 import 'dart:async' show Timer;
-import 'dart:convert' show jsonDecode;
+import 'dart:convert' show jsonDecode, Utf8Decoder, LineSplitter;
+import 'dart:collection';
 
 import 'package:pili_aurora/common/constants.dart';
 import 'package:pili_aurora/common/widgets/button/icon_button.dart';
 import 'package:pili_aurora/common/widgets/loading_widget/loading_widget.dart';
 import 'package:pili_aurora/common/widgets/selection_text.dart';
 import 'package:pili_aurora/services/logger.dart';
+import 'package:pili_aurora/services/diagnostics/diagnostics.dart';
+import 'package:pili_aurora/services/diagnostics/redact.dart';
+import 'package:pili_aurora/pages/about/diagnostics_page.dart';
 import 'package:pili_aurora/utils/date_utils.dart';
 import 'package:pili_aurora/utils/page_utils.dart';
-import 'package:pili_aurora/utils/storage.dart';
-import 'package:pili_aurora/utils/storage_key.dart';
-import 'package:pili_aurora/utils/storage_pref.dart';
 import 'package:pili_aurora/utils/utils.dart';
 import 'package:catcher_2/catcher_2.dart';
 import 'package:catcher_2/utils/log_printer.dart';
@@ -29,7 +30,6 @@ class LogsPage extends StatefulWidget {
 class _LogsPageState extends State<LogsPage> {
   List<_ExpandedItem<Report>> logsContent = [];
   _ExpandedItem<_DeviceInfo>? _deviceInfo;
-  late bool enableLog = Pref.enableLog;
 
   @override
   void initState() {
@@ -50,14 +50,34 @@ class _LogsPageState extends State<LogsPage> {
 
   Future<void> getLog() async {
     final logsPath = await LoggerUtils.getLogsPath();
-    logsContent = (await logsPath.readAsLines()).reversed.map((i) {
+    final recent = Queue<String>();
+    final length = logsPath.lengthSync();
+    final offset = length > 1048576 ? length - 1048576 : 0;
+    var partial = offset > 0;
+    await for (final line
+        in logsPath
+            .openRead(offset)
+            .transform(const Utf8Decoder(allowMalformed: true))
+            .transform(const LineSplitter())) {
+      if (partial) {
+        partial = false;
+        continue;
+      }
+      recent.add(line);
+      if (recent.length > 200) recent.removeFirst();
+    }
+    logsContent = recent.toList().reversed.map((i) {
       try {
-        final log = Report.fromJson(jsonDecode(i));
+        final log = Report.fromJson(
+          Map<String, dynamic>.from(
+            DiagnosticRedactor.clean(jsonDecode(i)) as Map,
+          ),
+        );
         return _ExpandedItem(log);
       } catch (e, s) {
         return _ExpandedItem(
           Report(
-            'Parse log failed: $e\n\n\n$i',
+            DiagnosticRedactor.text('Parse log failed: $e\n\n\n$i'),
             s,
             DateTime.now(),
             const {},
@@ -127,17 +147,16 @@ class _LogsPageState extends State<LogsPage> {
                   child: const Text('引发错误'),
                 ),
               PopupMenuItem(
-                onTap: () {
-                  enableLog = !enableLog;
-                  GStorage.setting.put(SettingBoxKey.enableLog, enableLog);
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text('已${enableLog ? '开启' : '关闭'}，重启生效'),
-                      duration: _snackBarDisplayDuration,
-                    ),
-                  );
-                },
-                child: Text('${enableLog ? '关闭' : '开启'}日志'),
+                onTap: () => showDiagnosticLogLevelDialog(context),
+                child: Text('日志等级：${Diagnostics.instance.level.label}'),
+              ),
+              PopupMenuItem(
+                onTap: () => Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => const DiagnosticsPage(),
+                  ),
+                ),
+                child: const Text('查看运行日志与性能'),
               ),
               PopupMenuItem(
                 onTap: copyLogs,

@@ -1,6 +1,9 @@
 // ignore_for_file: constant_identifier_names
 
 abstract final class SettingBoxKey {
+  static const diagnosticLogLevel = 'diagnosticLogLevel',
+      performanceTracing = 'performanceTracing',
+      performanceIntervalMs = 'performanceIntervalMs';
   static const String btmProgressBehavior = 'btmProgressBehavior',
       defaultVideoQa = 'defaultVideoQa',
       defaultVideoQaCellular = 'defaultVideoQaCellular',
