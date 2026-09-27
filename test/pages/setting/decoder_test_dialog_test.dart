@@ -4,9 +4,11 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hive_ce/hive.dart';
 import 'package:material_ui/material_ui.dart';
+import 'package:pili_aurora/http/browser_ua.dart';
+import 'package:pili_aurora/http/constants.dart';
+import 'package:pili_aurora/pages/setting/widgets/decoder_test_dialog.dart';
 import 'package:pili_aurora/models/common/video/video_quality.dart';
 import 'package:pili_aurora/models/video/play/url.dart';
-import 'package:pili_aurora/pages/setting/widgets/decoder_test_dialog.dart';
 import 'package:pili_aurora/utils/storage.dart';
 
 Future<void> _open(
@@ -56,6 +58,18 @@ void main() {
   tearDownAll(() async {
     await Hive.close();
     await directory.delete(recursive: true);
+  });
+
+  test('decoder media requests use the same headers as normal playback', () {
+    String? capturedUserAgent;
+    String? capturedReferer;
+    configureDecoderTestMediaHeaders(({String? userAgent, String? referer}) {
+      capturedUserAgent = userAgent;
+      capturedReferer = referer;
+    });
+
+    expect(capturedUserAgent, BrowserUa.pc);
+    expect(capturedReferer, HttpString.baseUrl);
   });
 
   testWidgets('decoder dialog opens within the app Material UI context', (

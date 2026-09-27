@@ -7,6 +7,8 @@ import 'package:material_ui/material_ui.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
 import 'package:pili_aurora/http/video.dart';
+import 'package:pili_aurora/http/browser_ua.dart';
+import 'package:pili_aurora/http/constants.dart';
 import 'package:pili_aurora/models/common/video/video_quality.dart';
 import 'package:pili_aurora/models/common/video/video_type.dart';
 import 'package:pili_aurora/models/video/play/url.dart';
@@ -15,6 +17,16 @@ import 'package:pili_aurora/utils/storage_pref.dart';
 import 'package:pili_aurora/services/diagnostics/diagnostics.dart';
 import 'package:pili_aurora/services/diagnostics/player_diagnostics.dart';
 import 'package:pili_aurora/services/diagnostics/process_metrics.dart';
+
+typedef DecoderMediaHeaderWriter = void Function({
+  String? userAgent,
+  String? referer,
+});
+
+/// 使用和普通播放器相同的媒体请求头，避免 CDN 将测试流拒绝为 403。
+void configureDecoderTestMediaHeaders(DecoderMediaHeaderWriter write) {
+  write(userAgent: BrowserUa.pc, referer: HttpString.baseUrl);
+}
 
 /// 解码器兼容性测试入口。
 ///
@@ -270,6 +282,12 @@ class _DecoderTestDialogState extends State<DecoderTestDialog> {
           hwdec: decoder.hwdec,
         ),
       );
+      configureDecoderTestMediaHeaders(({
+        String? userAgent,
+        String? referer,
+      }) {
+        player!.setMediaHeader(userAgent: userAgent, referer: referer);
+      });
       _activeVideoController = videoController;
       if (mounted) setState(() {});
       final url = codec.playUrls.firstOrNull;
