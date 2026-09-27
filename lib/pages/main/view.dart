@@ -1,4 +1,4 @@
-import 'dart:async' show unawaited;
+import 'dart:async';
 import 'dart:io';
 
 import 'package:pili_aurora/common/assets.dart';
@@ -49,6 +49,7 @@ class _MainAppState extends PopScopeState<MainApp>
   tray.Menu? _trayMenu;
   tray.MenuItem? _trayShowItem;
   tray.MenuItem? _trayExitItem;
+  bool _isClosing = false;
 
   @override
   bool get initCanPop => false;
@@ -167,9 +168,11 @@ class _MainAppState extends PopScopeState<MainApp>
   }
 
   Future<void> _onClose() async {
+    if (_isClosing) return;
+    _isClosing = true;
+    _disposeTray();
     await GStorage.compact();
     await GStorage.close();
-    _disposeTray();
     if (Platform.isWindows) {
       // flutter_inappwebview
       // 6.2.0-beta.2+ https://github.com/pichillilorenzo/flutter_inappwebview/issues/2482
@@ -232,6 +235,12 @@ class _MainAppState extends PopScopeState<MainApp>
 
   Future<void> _show() {
     return windowManager.show();
+  }
+
+  void _scheduleClose() {
+    if (_isClosing) return;
+    // Windows 在原生菜单回调中派发菜单项事件，先让回调返回再释放菜单和关闭存储。
+    Timer.run(() => unawaited(_onClose()));
   }
 
   void _disposeTray() {
@@ -303,7 +312,7 @@ class _MainAppState extends PopScopeState<MainApp>
       if (event is tray.MenuItemClickedEvent) unawaited(_show());
     });
     exitItem.addListener((event) {
-      if (event is tray.MenuItemClickedEvent) unawaited(_onClose());
+      if (event is tray.MenuItemClickedEvent) _scheduleClose();
     });
     trayMenu
       ..addItem(showItem)
