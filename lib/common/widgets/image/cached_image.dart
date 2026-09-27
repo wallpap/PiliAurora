@@ -299,7 +299,7 @@ class CachedImage extends StatelessWidget {
     this.height,
     this.memCacheWidth,
     this.memCacheHeight,
-    this.maxDecodePixels,
+    this.maxDecodePixels = 1 << 20,
     this.fit,
     this.alignment = Alignment.center,
     this.filterQuality = FilterQuality.low,
