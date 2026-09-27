@@ -393,4 +393,21 @@ void main() {
     await tester.pump();
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets('cached image applies the thumbnail pixel budget by default', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      Directionality(
+        textDirection: TextDirection.ltr,
+        child: CachedImage(
+          imageUrl: 'https://example.test/unbounded.png',
+          cacheManager: manager,
+        ),
+      ),
+    );
+
+    final provider = tester.widget<Image>(find.byType(Image)).image;
+    expect((provider as CachedImageProvider).maxDecodePixels, 1 << 20);
+  });
 }
