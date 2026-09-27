@@ -4,10 +4,17 @@ param(
     [int]$DurationSeconds = 180,
     [ValidateRange(1, 60)]
     [int]$IntervalSeconds = 2,
+    [ValidateRange(100, 60000)]
+    [int]$IntervalMilliseconds,
+    [switch]$SkipGpuCounters,
     [string]$OutputPath
 )
 
 $ErrorActionPreference = 'Stop'
+
+if (-not $PSBoundParameters.ContainsKey('IntervalMilliseconds')) {
+    $IntervalMilliseconds = $IntervalSeconds * 1000
+}
 
 if (-not $OutputPath) {
     $OutputPath = Join-Path $env:TEMP ("pili_aurora-trace-{0}.csv" -f (Get-Date -Format 'yyyyMMdd-HHmmss'))
@@ -32,6 +39,7 @@ $previousCpu = $null
 $previousTime = $null
 
 while ((Get-Date) -lt $deadline) {
+    $sampleTimer = [System.Diagnostics.Stopwatch]::StartNew()
     $process = Get-Process -Id $ProcessId -ErrorAction SilentlyContinue
     if (-not $process) { break }
 
@@ -47,27 +55,30 @@ while ((Get-Date) -lt $deadline) {
 
     $gpuSharedMiB = $null
     $gpuDedicatedMiB = $null
-    try {
-        $paths = @(Get-Counter -ListSet 'GPU Process Memory' -ErrorAction Stop |
-            Select-Object -ExpandProperty PathsWithInstances |
-            Where-Object { $_ -match "pid_${ProcessId}_" -and $_ -match '\\(Shared|Dedicated) Usage$' })
-        if ($paths.Count -gt 0) {
-            $gpuCounters = (Get-Counter -Counter $paths -ErrorAction Stop).CounterSamples
-            $shared = @($gpuCounters | Where-Object { $_.Path -match '\\Shared Usage$' } |
-                Measure-Object CookedValue -Sum)[0].Sum
-            $dedicated = @($gpuCounters | Where-Object { $_.Path -match '\\Dedicated Usage$' } |
-                Measure-Object CookedValue -Sum)[0].Sum
-            $gpuSharedMiB = [math]::Round($shared / 1MB, 1)
-            $gpuDedicatedMiB = [math]::Round($dedicated / 1MB, 1)
+    if (-not $SkipGpuCounters) {
+        try {
+            $paths = @(Get-Counter -ListSet 'GPU Process Memory' -ErrorAction Stop |
+                Select-Object -ExpandProperty PathsWithInstances |
+                Where-Object { $_ -match "pid_${ProcessId}_" -and $_ -match '\\(Shared|Dedicated) Usage$' })
+            if ($paths.Count -gt 0) {
+                $gpuCounters = (Get-Counter -Counter $paths -ErrorAction Stop).CounterSamples
+                $shared = @($gpuCounters | Where-Object { $_.Path -match '\\Shared Usage$' } |
+                    Measure-Object CookedValue -Sum)[0].Sum
+                $dedicated = @($gpuCounters | Where-Object { $_.Path -match '\\Dedicated Usage$' } |
+                    Measure-Object CookedValue -Sum)[0].Sum
+                $gpuSharedMiB = [math]::Round($shared / 1MB, 1)
+                $gpuDedicatedMiB = [math]::Round($dedicated / 1MB, 1)
+            }
+        } catch {
+            # GPU 计数器并非所有 Windows 设备都可用。
         }
-    } catch {
-        # GPU 计数器并非所有 Windows 设备都可用。
     }
 
     $samples.Add([pscustomobject]@{
         Time = $now.ToString('o')
         ProcessId = $ProcessId
         WorkingMiB = [math]::Round($process.WorkingSet64 / 1MB, 1)
+        ProcessPeakWorkingMiB = [math]::Round($process.PeakWorkingSet64 / 1MB, 1)
         PrivateMiB = [math]::Round($process.PrivateMemorySize64 / 1MB, 1)
         CpuPercentOneCore = $cpuPercent
         GpuSharedMiB = $gpuSharedMiB
@@ -75,7 +86,8 @@ while ((Get-Date) -lt $deadline) {
     })
     $previousCpu = $cpuSeconds
     $previousTime = $now
-    Start-Sleep -Seconds $IntervalSeconds
+    $remainingMilliseconds = [math]::Max(1, $IntervalMilliseconds - $sampleTimer.ElapsedMilliseconds)
+    Start-Sleep -Milliseconds $remainingMilliseconds
 }
 
 $samples | Export-Csv -LiteralPath $OutputPath -NoTypeInformation -Encoding utf8
@@ -83,6 +95,7 @@ $samples | Export-Csv -LiteralPath $OutputPath -NoTypeInformation -Encoding utf8
     OutputPath = $OutputPath
     Samples = $samples.Count
     PeakWorkingMiB = ($samples | Measure-Object WorkingMiB -Maximum).Maximum
+    ProcessPeakWorkingMiB = ($samples | Measure-Object ProcessPeakWorkingMiB -Maximum).Maximum
     PeakPrivateMiB = ($samples | Measure-Object PrivateMiB -Maximum).Maximum
     ProcessStillRunning = [bool](Get-Process -Id $ProcessId -ErrorAction SilentlyContinue)
 }

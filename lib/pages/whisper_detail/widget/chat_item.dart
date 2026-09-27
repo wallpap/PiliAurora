@@ -6,6 +6,7 @@ import 'package:pili_aurora/common/style.dart';
 import 'package:pili_aurora/common/widgets/badge.dart';
 import 'package:pili_aurora/common/widgets/emote_tooltip.dart';
 import 'package:pili_aurora/common/widgets/gesture/tap_gesture_recognizer.dart';
+import 'package:pili_aurora/common/widgets/image/cached_image.dart';
 import 'package:pili_aurora/common/widgets/image/network_img_layer.dart';
 import 'package:pili_aurora/common/widgets/image_viewer/hero.dart';
 import 'package:pili_aurora/common/widgets/selection_text.dart';
@@ -21,7 +22,6 @@ import 'package:pili_aurora/utils/extension/num_ext.dart';
 import 'package:pili_aurora/utils/id_utils.dart';
 import 'package:pili_aurora/utils/image_utils.dart';
 import 'package:pili_aurora/utils/page_utils.dart';
-import 'package:cached_network_image_ce/cached_network_image.dart';
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:get/get.dart';
 import 'package:material_ui/material_ui.dart';
@@ -803,7 +803,7 @@ class ChatItem extends StatelessWidget {
         final maxWidth = math.max(400.0, constraints.maxWidth);
         Widget child = ClipRRect(
           borderRadius: Style.mdRadius,
-          child: CachedNetworkImage(
+          child: CachedImage(
             width: maxWidth,
             memCacheWidth: maxWidth.cacheSize(context),
             imageUrl: ImageUtils.thumbnailUrl(content['pic_url']),

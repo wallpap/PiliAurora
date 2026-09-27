@@ -1,6 +1,7 @@
 import 'package:pili_aurora/common/assets.dart';
 import 'package:pili_aurora/common/style.dart';
 import 'package:pili_aurora/common/widgets/avatars.dart';
+import 'package:pili_aurora/common/widgets/image/cached_image.dart';
 import 'package:pili_aurora/common/widgets/image_viewer/hero.dart';
 import 'package:pili_aurora/common/widgets/pendant_avatar.dart';
 import 'package:pili_aurora/common/widgets/scroll_physics.dart'
@@ -38,7 +39,6 @@ import 'package:pili_aurora/utils/num_utils.dart';
 import 'package:pili_aurora/utils/page_utils.dart';
 import 'package:pili_aurora/utils/platform_utils.dart';
 import 'package:pili_aurora/utils/utils.dart';
-import 'package:cached_network_image_ce/cached_network_image.dart';
 import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:get/get.dart';
@@ -249,7 +249,7 @@ class UserInfoCard extends StatelessWidget {
               ),
             ),
           // if (card.nameplate?.imageSmall?.isNotEmpty ?? false)
-          //   CachedNetworkImage(
+          //   CachedImage(
           //     imageUrl: ImageUtils.thumbnailUrl(card.nameplate!.imageSmall!),
           //     height: 20,
           //     placeholder: (context, url) {
@@ -641,7 +641,7 @@ class UserInfoCard extends StatelessWidget {
                 final img = imgUrls[index];
                 return fromHero(
                   tag: img.fullCover,
-                  child: CachedNetworkImage(
+                  child: CachedImage(
                     fit: .cover,
                     alignment: Alignment(0.0, img.dy),
                     height: kHeaderHeight,
@@ -696,7 +696,7 @@ class UserInfoCard extends StatelessWidget {
       onTap: () => PageUtils.imageView(imgList: [SourceModel(url: img)]),
       child: fromHero(
         tag: img,
-        child: CachedNetworkImage(
+        child: CachedImage(
           fit: .cover,
           alignment: alignment,
           height: kHeaderHeight,
@@ -746,7 +746,7 @@ class UserInfoCard extends StatelessWidget {
       child: Row(
         children: [
           if (icon != null) ...[
-            CachedNetworkImage(
+            CachedImage(
               height: 20,
               memCacheHeight: 20.cacheSize(context),
               imageUrl: ImageUtils.thumbnailUrl(icon),

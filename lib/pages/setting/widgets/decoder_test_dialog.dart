@@ -1,9 +1,9 @@
 import 'dart:async';
-import 'dart:io' show Platform, Process, ProcessInfo;
+import 'dart:io' show Platform;
 import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart' show kDebugMode;
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
 import 'package:pili_aurora/http/video.dart';
@@ -12,13 +12,18 @@ import 'package:pili_aurora/models/common/video/video_type.dart';
 import 'package:pili_aurora/models/video/play/url.dart';
 import 'package:pili_aurora/plugin/pl_player/models/hwdec_type.dart';
 import 'package:pili_aurora/utils/storage_pref.dart';
+import 'package:pili_aurora/services/diagnostics/diagnostics.dart';
+import 'package:pili_aurora/services/diagnostics/player_diagnostics.dart';
+import 'package:pili_aurora/services/diagnostics/process_metrics.dart';
 
 /// 解码器兼容性测试入口。
 ///
 /// 测试沿用播放器的 media_kit 配置。每个格式和后端组合都会创建独立播放器，
 /// 并单独采集一段性能数据。
 class DecoderTestDialog extends StatefulWidget {
-  const DecoderTestDialog({super.key});
+  const DecoderTestDialog({super.key, this.sampleLoader});
+
+  final Future<List<VideoItem>> Function()? sampleLoader;
 
   @override
   State<DecoderTestDialog> createState() => _DecoderTestDialogState();
@@ -115,14 +120,8 @@ class _DecoderTestDialogState extends State<DecoderTestDialog> {
       });
     }
     try {
-      final result = await VideoHttp.videoUrl(
-        cid: _sampleCid,
-        bvid: _sampleBvid,
-        qn: VideoQuality.high1080.code,
-        tryLook: false,
-        videoType: VideoType.ugc,
-      ).timeout(_sampleTimeout);
-      final videos = result.dataOrNull?.dash?.video ?? const <VideoItem>[];
+      final videos = await (widget.sampleLoader?.call() ?? _fetchSample())
+          .timeout(_sampleTimeout);
       final codecs = <int, VideoItem>{};
       for (final video in videos) {
         if ([7, 12, 13].contains(video.codecid) && video.playUrls.isNotEmpty) {
@@ -141,13 +140,29 @@ class _DecoderTestDialogState extends State<DecoderTestDialog> {
         if (_codecs.isEmpty) _error = '公开视频未提供可测试的 AVC、HEVC 或 AV1 格式';
       });
     } catch (error) {
-      if (kDebugMode) debugPrint('Decoder test sample load failed: $error');
+      Diagnostics.instance.log(
+        DiagnosticLogLevel.error,
+        'decoderTest',
+        '测试视频加载失败',
+        details: {'error': error},
+      );
       if (!mounted) return;
       setState(() {
         _loading = false;
         _error = '无法获取测试视频，请检查网络后重试';
       });
     }
+  }
+
+  Future<List<VideoItem>> _fetchSample() async {
+    final result = await VideoHttp.videoUrl(
+      cid: _sampleCid,
+      bvid: _sampleBvid,
+      qn: VideoQuality.high1080.code,
+      tryLook: false,
+      videoType: VideoType.ugc,
+    );
+    return result.dataOrNull?.dash?.video ?? const <VideoItem>[];
   }
 
   String _codecName(VideoItem item) => switch (item.codecid) {
@@ -224,6 +239,7 @@ class _DecoderTestDialogState extends State<DecoderTestDialog> {
     HwDecType decoder,
   ) async {
     Player? player;
+    PlayerDiagnostics? diagnostics;
     StreamSubscription<String>? errorSubscription;
     String? playbackError;
     final monitor = _PerformanceMonitor();
@@ -236,6 +252,13 @@ class _DecoderTestDialogState extends State<DecoderTestDialog> {
         ),
       );
       _activePlayer = player;
+      diagnostics = PlayerDiagnostics(
+        player,
+        extra: () => {
+          'purpose': 'decoderTest',
+          'requestedDecoder': decoder.hwdec,
+        },
+      );
       final errors = Completer<String>();
       errorSubscription = player.stream.error.listen((message) {
         if (!errors.isCompleted) errors.complete(message);
@@ -283,15 +306,19 @@ class _DecoderTestDialogState extends State<DecoderTestDialog> {
         performance: await monitor.stop(),
       );
     } catch (error) {
-      if (kDebugMode) {
-        debugPrint('Decoder test ${decoder.hwdec} failed: $error');
-      }
+      Diagnostics.instance.log(
+        DiagnosticLogLevel.error,
+        'decoderTest',
+        error,
+        details: {'decoder': decoder.hwdec, 'codec': codec.codecid},
+      );
       final message = error.toString().replaceFirst('Bad state: ', '');
       return _DecoderResult.failure(
         message.length > 68 ? '初始化或播放失败' : message,
         performance: await monitor.stop(),
       );
     } finally {
+      diagnostics?.dispose();
       await errorSubscription?.cancel();
       if (identical(_activePlayer, player)) {
         _activePlayer = null;
@@ -412,7 +439,7 @@ class _DecoderTestDialogState extends State<DecoderTestDialog> {
         Text('硬解模式', style: theme.textTheme.titleSmall),
         const SizedBox(height: 4),
         Text(
-          '选择硬解模式进行实际播放测试。软件解码可作为 CPU 基线，GPU 指标在系统不支持时显示为 --。',
+          '选择硬解模式进行实际播放测试。软件解码可作为 CPU 基线，当前未提供 GPU 用量。',
           style: theme.textTheme.bodySmall,
         ),
         const SizedBox(height: 8),
@@ -448,7 +475,7 @@ class _DecoderTestDialogState extends State<DecoderTestDialog> {
           Text('测试结果', style: theme.textTheme.titleSmall),
           const SizedBox(height: 4),
           Text(
-            'CPU 为系统占用，内存为 PiliAurora 进程峰值，GPU 为系统引擎占用。数值越低通常越省资源。',
+            'CPU 为 PiliAurora 进程占全机的比例，内存为本轮采样的进程工作集峰值。其他页面也会影响结果；-- 表示指标不可用。',
             style: theme.textTheme.bodySmall,
           ),
           const SizedBox(height: 8),
@@ -587,7 +614,7 @@ class _DecoderResultTile extends StatelessWidget {
       subtitle: Text(
         '$status\n'
         'CPU ${_metric(performance?.averageCpu, '%')}  ·  '
-        '内存 ${_metric(performance?.peakMemoryMb, ' MB')}  ·  '
+        '内存 ${_metric(performance?.peakMemoryMb, ' MiB')}  ·  '
         'GPU ${_metric(performance?.averageGpu, '%')}',
         maxLines: 3,
         overflow: TextOverflow.ellipsis,
@@ -608,97 +635,45 @@ class _PerformanceSummary {
   });
 }
 
-class _PerformanceSample {
-  final double? cpu;
-  final double memoryMb;
-  final double? gpu;
-
-  const _PerformanceSample({this.cpu, required this.memoryMb, this.gpu});
-}
-
 class _PerformanceMonitor {
   static const _interval = Duration(milliseconds: 750);
 
   Timer? _timer;
-  final List<_PerformanceSample> _samples = [];
-  Future<void>? _pendingRead;
+  final _metrics = ProcessMetrics();
+  double _cpuTotal = 0;
+  int _cpuSamples = 0;
+  double? _peakMemoryMb;
 
   void start() {
-    _samples.clear();
-    unawaited(_record());
-    _timer = Timer.periodic(_interval, (_) => unawaited(_record()));
+    _timer?.cancel();
+    _metrics.reset();
+    _cpuTotal = 0;
+    _cpuSamples = 0;
+    _peakMemoryMb = null;
+    _record();
+    _timer = Timer.periodic(_interval, (_) => _record());
   }
 
   Future<_PerformanceSummary> stop() async {
     _timer?.cancel();
     _timer = null;
-    await _record();
-    final cpu = _samples
-        .map((sample) => sample.cpu)
-        .whereType<double>()
-        .toList();
-    final gpu = _samples
-        .map((sample) => sample.gpu)
-        .whereType<double>()
-        .toList();
-    final memory = _samples.map((sample) => sample.memoryMb).toList();
+    _record();
     return _PerformanceSummary(
-      averageCpu: cpu.isEmpty ? null : cpu.reduce((a, b) => a + b) / cpu.length,
-      peakMemoryMb: memory.isEmpty ? null : memory.reduce(math.max),
-      averageGpu: gpu.isEmpty ? null : gpu.reduce((a, b) => a + b) / gpu.length,
+      averageCpu: _cpuSamples == 0 ? null : _cpuTotal / _cpuSamples,
+      peakMemoryMb: _peakMemoryMb,
+      averageGpu: null,
     );
   }
 
-  Future<void> _record() async {
-    final pending = _pendingRead;
-    if (pending != null) {
-      await pending;
-      return;
+  void _record() {
+    final values = _metrics.sample();
+    if (values['cpuPercentMachine'] case final num cpu) {
+      _cpuTotal += cpu;
+      _cpuSamples++;
     }
-    final future = _recordInternal();
-    _pendingRead = future;
-    try {
-      await future;
-    } finally {
-      if (identical(_pendingRead, future)) _pendingRead = null;
+    if (values['rssBytes'] case final num bytes) {
+      final memoryMb = bytes / 1048576;
+      _peakMemoryMb = math.max(_peakMemoryMb ?? 0, memoryMb);
     }
-  }
-
-  Future<void> _recordInternal() async {
-    try {
-      final memoryMb = ProcessInfo.currentRss / (1024 * 1024);
-      double? cpu;
-      double? gpu;
-      if (Platform.isWindows) {
-        final values = await _readWindowsCounters();
-        cpu = values.$1;
-        gpu = values.$2;
-      }
-      _samples.add(_PerformanceSample(cpu: cpu, memoryMb: memoryMb, gpu: gpu));
-    } catch (_) {
-      // 播放器重启时计数器可能暂时不可用，但仍保留内存采样。
-      _samples.add(
-        _PerformanceSample(
-          memoryMb: ProcessInfo.currentRss / (1024 * 1024),
-        ),
-      );
-    }
-  }
-
-  Future<(double?, double?)> _readWindowsCounters() async {
-    const script = r'''
-$cpu = (Get-Counter '\Processor(_Total)\% Processor Time' -ErrorAction SilentlyContinue).CounterSamples | Select-Object -First 1 -ExpandProperty CookedValue
-$gpu = (Get-Counter '\GPU Engine(*)\Utilization Percentage' -ErrorAction SilentlyContinue).CounterSamples | Measure-Object -Property CookedValue -Maximum | Select-Object -ExpandProperty Maximum
-"$cpu|$gpu"
-''';
-    final result = await Process.run(
-      'powershell.exe',
-      ['-NoProfile', '-NonInteractive', '-Command', script],
-    ).timeout(const Duration(seconds: 2));
-    if (result.exitCode != 0) return (null, null);
-    final output = result.stdout.toString().trim();
-    final parts = output.split('|');
-    if (parts.length < 2) return (null, null);
-    return (double.tryParse(parts[0].trim()), double.tryParse(parts[1].trim()));
   }
 }

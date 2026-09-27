@@ -1,6 +1,8 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:pili_aurora/services/diagnostics/http_diagnostics.dart';
+
 import 'package:pili_aurora/http/api.dart';
 import 'package:pili_aurora/http/constants.dart';
 import 'package:pili_aurora/http/loading_state.dart';
@@ -18,7 +20,6 @@ import 'package:brotli/brotli.dart';
 import 'package:dio/dio.dart';
 import 'package:dio/io.dart';
 import 'package:dio_http2_adapter/dio_http2_adapter.dart';
-import 'package:flutter/foundation.dart' show kDebugMode;
 
 class Request {
   static const _gzipDecoder = GZipDecoder();
@@ -193,23 +194,13 @@ class Request {
       );
     }
 
-    // 日志拦截器 输出请求、响应内容
-    if (kDebugMode) {
-      dio.interceptors.add(
-        LogInterceptor(
-          request: false,
-          requestHeader: false,
-          responseHeader: false,
-        ),
-      );
-    }
+    dio.interceptors.add(DiagnosticHttpInterceptor());
 
     dio
       ..transformer = BackgroundTransformer()
       ..options.validateStatus = (int? status) {
         return status != null && status >= 200 && status < 300;
       };
-
   }
 
   /*

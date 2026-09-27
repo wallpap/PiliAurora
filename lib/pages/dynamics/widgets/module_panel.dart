@@ -1,5 +1,6 @@
 import 'package:pili_aurora/common/style.dart';
 import 'package:pili_aurora/common/widgets/badge.dart';
+import 'package:pili_aurora/common/widgets/image/cached_image.dart';
 import 'package:pili_aurora/common/widgets/image/network_img_layer.dart';
 import 'package:pili_aurora/grpc/bilibili/app/listener/v1.pbenum.dart'
     show PlaylistSource;
@@ -13,7 +14,6 @@ import 'package:pili_aurora/pages/dynamics/widgets/video_panel.dart';
 import 'package:pili_aurora/utils/extension/num_ext.dart';
 import 'package:pili_aurora/utils/image_utils.dart';
 import 'package:pili_aurora/utils/page_utils.dart';
-import 'package:cached_network_image_ce/cached_network_image.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:material_ui/material_ui.dart';
 
@@ -140,7 +140,7 @@ Widget module(
                 if (common.cover?.isNotEmpty ?? false)
                   ClipRRect(
                     borderRadius: const BorderRadius.all(Radius.circular(6)),
-                    child: CachedNetworkImage(
+                    child: CachedImage(
                       width: 45,
                       height: 45,
                       fit: BoxFit.cover,

@@ -2,7 +2,6 @@ import 'dart:async' show StreamSubscription, Timer, unawaited;
 import 'dart:convert' show ascii, utf8;
 import 'dart:io' show Platform;
 import 'dart:math' show max, min;
-import 'dart:ui' as ui;
 
 import 'package:pili_aurora/common/assets.dart';
 import 'package:pili_aurora/http/browser_ua.dart';
@@ -30,7 +29,10 @@ import 'package:pili_aurora/plugin/pl_player/models/play_status.dart';
 import 'package:pili_aurora/plugin/pl_player/models/video_fit_type.dart';
 import 'package:pili_aurora/plugin/pl_player/utils/fullscreen.dart';
 import 'package:pili_aurora/plugin/pl_player/utils/decode_fallback.dart';
+import 'package:pili_aurora/plugin/pl_player/utils/preview_image_cache.dart';
 import 'package:pili_aurora/services/service_locator.dart';
+import 'package:pili_aurora/services/diagnostics/diagnostics.dart';
+import 'package:pili_aurora/services/diagnostics/player_diagnostics.dart';
 import 'package:pili_aurora/utils/accounts.dart';
 import 'package:pili_aurora/utils/android/android_helper.dart';
 import 'package:pili_aurora/utils/android/bindings.g.dart';
@@ -68,45 +70,8 @@ import 'package:window_manager/window_manager.dart';
 
 typedef PlayCallback = Future<void>? Function();
 
-class PreviewImageCache {
-  static const _maxEntries = 3;
-  final _cache = <String, ui.Image?>{};
-  int _generation = 0;
-
-  int get generation => _generation;
-
-  ui.Image? acquire(String key) {
-    final image = _cache[key];
-    if (image == null) return null;
-    _cache
-      ..remove(key)
-      ..[key] = image;
-    return image.clone();
-  }
-
-  void put(String key, ui.Image image) {
-    final previous = _cache.remove(key);
-    if (previous != null && !identical(previous, image)) {
-      previous.dispose();
-    }
-    _cache[key] = image;
-    while (_cache.length > _maxEntries) {
-      final oldestKey = _cache.keys.first;
-      final oldest = _cache.remove(oldestKey);
-      oldest?.dispose();
-    }
-  }
-
-  void clear() {
-    _generation++;
-    for (final image in _cache.values) {
-      image?.dispose();
-    }
-    _cache.clear();
-  }
-}
-
 class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
+  PlayerDiagnostics? _diagnostics;
   Player? _videoPlayerController;
   VideoController? _videoController;
 
@@ -712,10 +677,13 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
       onInit?.call();
     } catch (err, stackTrace) {
       dataStatus.value = DataStatus.error;
-      if (kDebugMode) {
-        debugPrint(stackTrace.toString());
-        debugPrint('plPlayer err:  $err');
-      }
+      Diagnostics.instance.log(
+        DiagnosticLogLevel.error,
+        'player',
+        '播放器初始化失败',
+        details: {'error': err},
+        stack: stackTrace,
+      );
     } finally {
       _processing = false;
     }
@@ -940,16 +908,25 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
       }
 
       // 当前硬解后端失败时，重开媒体并尝试下一个候选项。
+      Diagnostics.instance.log(
+        DiagnosticLogLevel.info,
+        'player',
+        '切换解码器',
+        details: {'failed': failed, 'next': next},
+      );
       player.setProperty('hwdec', next);
       await player.open(media, play: wasPlaying);
       SmartDialog.showToast(
         next == HwDecType.no.hwdec ? 'AV1 硬解不可用，已切换软解' : 'AV1 硬解失败，尝试 $next',
       );
     } catch (error, stackTrace) {
-      if (kDebugMode) {
-        debugPrint('AV1 hardware decode fallback failed: $error');
-        debugPrint(stackTrace.toString());
-      }
+      Diagnostics.instance.log(
+        DiagnosticLogLevel.error,
+        'player',
+        '硬解回退失败',
+        details: {'error': error},
+        stack: stackTrace,
+      );
     } finally {
       _hardwareDecodeRetryInProgress = false;
       if (_hardwareDecodeRetryPending) {
@@ -1015,6 +992,15 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
   /// 播放事件监听
   void _startListeners(NativePlayer player) {
     assert(_subscriptions == null);
+    _diagnostics = PlayerDiagnostics(
+      player,
+      extra: () => {
+        'previewCacheBytes': previewCache.sizeBytes,
+        'previewCacheLimitBytes': previewCache.maxBytes,
+        'attachedPages': _playerCount,
+        'live': isLive,
+      },
+    );
     final stream = player.stream;
     _subscriptions = [
       /// playing
@@ -1091,18 +1077,8 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
           _updatePlaybackState();
         }
       }),
-      if (kDebugMode)
-        stream.log.listen(((PlayerLog log) {
-          if (log.level == 'error' || log.level == 'fatal') {
-            Utils.reportError(
-              '${log.level}: ${log.prefix}: ${log.text}\n${player.state.playlist}',
-              null,
-            );
-          } else {
-            debugPrint(log.toString());
-          }
-        })),
       stream.error.listen((String event) {
+        Diagnostics.instance.log(DiagnosticLogLevel.error, 'player', event);
         if (dataSource is FileSource &&
             event.startsWith("Failed to open file")) {
           return;
@@ -1168,6 +1144,8 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
 
   /// 移除事件监听
   void _removeListeners() {
+    _diagnostics?.dispose();
+    _diagnostics = null;
     _subscriptions?.forEach((e) => e.cancel());
     _subscriptions?.clear();
     _subscriptions = null;

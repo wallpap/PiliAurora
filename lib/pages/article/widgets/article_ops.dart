@@ -1,12 +1,12 @@
 import 'dart:math' as math;
 
 import 'package:pili_aurora/common/style.dart';
+import 'package:pili_aurora/common/widgets/image/cached_image.dart';
 import 'package:pili_aurora/models_new/article/article_view/ops.dart';
 import 'package:pili_aurora/pages/dynamics/widgets/vote.dart';
 import 'package:pili_aurora/utils/app_scheme.dart';
 import 'package:pili_aurora/utils/extension/num_ext.dart';
 import 'package:pili_aurora/utils/image_utils.dart';
-import 'package:cached_network_image_ce/cached_network_image.dart';
 import 'package:get/get.dart';
 import 'package:material_ui/material_ui.dart';
 
@@ -69,7 +69,7 @@ class ArticleOpus extends StatelessWidget {
                     },
                     child: ClipRRect(
                       borderRadius: Style.mdRadius,
-                      child: CachedNetworkImage(
+                      child: CachedImage(
                         width: width,
                         height: height,
                         memCacheWidth: width.cacheSize(context),

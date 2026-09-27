@@ -34,6 +34,12 @@ class ScaledWidgetsFlutterBinding extends WidgetsFlutterBinding {
   static WidgetsBinding ensureInitialized({double scaleFactor = 1.0}) =>
       _binding ??= ScaledWidgetsFlutterBinding._(scaleFactor: scaleFactor);
 
+  @override
+  ImageCache createImageCache() => super.createImageCache()
+    // 磁盘缓存负责回看；内存仅保留近期解码结果。可见图片不受 LRU 淘汰影响。
+    ..maximumSizeBytes = 64 << 20
+    ..maximumSize = 256;
+
   /// Override the method from [RendererBinding.createViewConfiguration] to
   /// change what size or device pixel ratio the [RenderView] will use.
   ///

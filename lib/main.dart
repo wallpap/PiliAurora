@@ -14,6 +14,7 @@ import 'package:pili_aurora/router/app_pages.dart';
 import 'package:pili_aurora/services/account_service.dart';
 import 'package:pili_aurora/services/download/download_service.dart';
 import 'package:pili_aurora/services/logger.dart';
+import 'package:pili_aurora/services/diagnostics/diagnostics.dart';
 import 'package:pili_aurora/services/service_locator.dart';
 import 'package:pili_aurora/utils/cache_manager.dart';
 import 'package:pili_aurora/utils/calc_window_position.dart';
@@ -101,6 +102,7 @@ void main() async {
     exit(0);
   }
   ScaledWidgetsFlutterBinding.instance.scaleFactor = Pref.uiScale;
+  await LoggerUtils.initialize();
   await Future.wait([
     _initDownPath(),
     _initTmpPath(),
@@ -188,28 +190,24 @@ void main() async {
     await MyApp.initPlatformState();
   }
 
-  if (Pref.enableLog) {
-    // 异常捕获 logo记录
-    final customParameters = {
-      'Build Time': DateFormatUtils.format(
-        BuildConfig.buildTime,
-        format: DateFormatUtils.longFormatDs,
-      ),
-      'Commit Hash': BuildConfig.commitHash,
-      'MPV Api Version':
-          '${NativePlayer.apiVersion >> 16}.${NativePlayer.apiVersion & 0xFFFF}',
-    };
-    final fileHandler = await JsonFileHandler.init();
+  // 始终安装异常捕获，日志等级可即时切换。
+  final customParameters = {
+    'Build Time': DateFormatUtils.format(
+      BuildConfig.buildTime,
+      format: DateFormatUtils.longFormatDs,
+    ),
+    'Commit Hash': BuildConfig.commitHash,
+    'MPV Api Version':
+        '${NativePlayer.apiVersion >> 16}.${NativePlayer.apiVersion & 0xFFFF}',
+  };
+  final fileHandler = await JsonFileHandler.init();
 
-    Catcher2(
-      [?fileHandler, const ConsoleHandler()],
-      const MyApp(),
-      logger: logger,
-      customParameters: customParameters,
-    );
-  } else {
-    runApp(const MyApp());
-  }
+  Catcher2(
+    [?fileHandler],
+    const MyApp(),
+    logger: logger,
+    customParameters: customParameters,
+  );
 }
 
 KeyEventResult _onKeyEvent(KeyEvent event) {
@@ -300,6 +298,7 @@ class MyApp extends StatelessWidget {
         builder: _builder,
       ),
       navigatorObservers: [
+        DiagnosticRouteObserver(),
         routeObserver,
         FlutterSmartDialog.observer,
       ],

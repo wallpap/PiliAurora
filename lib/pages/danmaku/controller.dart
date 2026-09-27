@@ -11,6 +11,7 @@ import 'package:pili_aurora/utils/accounts.dart';
 import 'package:pili_aurora/utils/danmaku_utils.dart';
 import 'package:pili_aurora/utils/path_utils.dart';
 import 'package:pili_aurora/utils/utils.dart';
+import 'package:pili_aurora/services/diagnostics/diagnostics.dart';
 import 'package:path/path.dart' as path;
 
 class PlDanmakuController {
@@ -18,7 +19,19 @@ class PlDanmakuController {
     this._cid,
     this._plPlayerController,
     this._isFileSource,
-  ) : _mergeDanmaku = _plPlayerController.mergeDanmaku;
+  ) : _mergeDanmaku = _plPlayerController.mergeDanmaku {
+    _unregisterDiagnostics = Diagnostics.instance.register(
+      'danmaku.$hashCode',
+      () => {
+        'elements': _cache.elementCount,
+        'buckets': _cache.bucketCount,
+        'pendingSegments': _requestedSeg.length,
+        'localFile': _isFileSource,
+      },
+    );
+  }
+
+  late final void Function() _unregisterDiagnostics;
 
   final int _cid;
   final PlPlayerController _plPlayerController;
@@ -33,6 +46,7 @@ class PlDanmakuController {
   bool _disposed = false;
 
   void dispose() {
+    _unregisterDiagnostics();
     _disposed = true;
     _cache.clear();
     _requestedSeg.clear();
