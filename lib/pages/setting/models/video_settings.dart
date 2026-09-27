@@ -7,6 +7,7 @@ import 'package:pili_aurora/models/common/video/video_decode_type.dart';
 import 'package:pili_aurora/models/common/video/video_quality.dart';
 import 'package:pili_aurora/pages/setting/models/model.dart';
 import 'package:pili_aurora/pages/setting/widgets/ordered_multi_select_dialog.dart';
+import 'package:pili_aurora/pages/setting/widgets/decoder_test_dialog.dart';
 import 'package:pili_aurora/pages/setting/widgets/select_dialog.dart';
 import 'package:pili_aurora/plugin/pl_player/models/audio_output_type.dart';
 import 'package:pili_aurora/plugin/pl_player/models/hwdec_type.dart';
@@ -168,16 +169,53 @@ List<SettingsModel> get videoSettings => [
   NormalModel(
     title: '视频同步',
     leading: const Icon(Icons.view_timeline_outlined),
-    getSubtitle: () => '当前：${Pref.videoSync}（此项即mpv的--video-sync）',
+    getSubtitle: () => '当前：${_videoSyncName(Pref.videoSync)}，控制画面与声音如何保持同步',
     onTap: _showVideoSyncDialog,
   ),
   NormalModel(
     title: '硬解模式',
     leading: const Icon(Icons.memory_outlined),
-    getSubtitle: () => '当前：${Pref.hardwareDecoding}（此项即mpv的--hwdec）',
+    getSubtitle: () =>
+        '当前：${Pref.hardwareDecoding.split(',').map(_hwdecName).join(' → ')}，按顺序尝试',
     onTap: _showHwDecDialog,
   ),
+  const NormalModel(
+    title: '解码器测试',
+    subtitle: '实测设备对 AVC、HEVC、AV1 视频的播放兼容性和流畅度',
+    leading: Icon(Icons.speed_outlined),
+    onTap: _showDecoderTestDialog,
+  ),
 ];
+
+String _videoSyncName(String value) => switch (value) {
+  'audio' => '跟随声音时钟',
+  'display-resample' => '匹配屏幕刷新率（推荐）',
+  'display-resample-vdrop' => '匹配刷新率，必要时少显示一帧',
+  'display-resample-desync' => '匹配刷新率，允许音画短暂偏差',
+  'display-tempo' => '微调播放速度以匹配屏幕',
+  'display-vdrop' => '匹配刷新率，必要时跳过画面',
+  'display-adrop' => '匹配刷新率，必要时调整声音',
+  'display-desync' => '跟随屏幕刷新率，不强制音画同步',
+  'desync' => '不做音画同步',
+  _ => value,
+};
+
+String _hwdecName(String value) =>
+    HwDecType.values
+        .where((type) => type.hwdec == value)
+        .map((type) => type.desc.split('：').first)
+        .firstOrNull ??
+    value;
+
+Future<void> _showDecoderTestDialog(
+  BuildContext context,
+  VoidCallback setState,
+) async {
+  await showDialog<void>(
+    context: context,
+    builder: (context) => const DecoderTestDialog(),
+  );
+}
 
 Future<void> _showCDNDialog(BuildContext context, VoidCallback setState) async {
   final res = await showDialog<CDNService>(
@@ -418,22 +456,24 @@ Future<void> _showVideoSyncDialog(
   BuildContext context,
   VoidCallback setState,
 ) async {
+  const options = <(String, String, String)>[
+    ('audio', '跟随声音时钟', '适合普通显示器，优先让画面跟上声音'),
+    ('display-resample', '匹配屏幕刷新率（推荐）', '平滑调整画面节奏，减少卡顿和音画偏差'),
+    ('display-resample-vdrop', '匹配刷新率，必要时跳帧', '平时平滑播放，偏差过大时跳过一帧'),
+    ('display-resample-desync', '匹配刷新率，允许短暂偏差', '优先画面流畅，不强制修正音画偏差'),
+    ('display-tempo', '微调播放速度', '轻微加快或放慢声音来匹配屏幕刷新率'),
+    ('display-vdrop', '匹配刷新率，跳过画面', '偏差过大时跳过画面帧'),
+    ('display-adrop', '匹配刷新率，调整声音', '偏差过大时微调声音节奏'),
+    ('display-desync', '跟随屏幕刷新率', '优先匹配屏幕，不主动保持音画同步'),
+    ('desync', '不做同步', '不校正音画与屏幕刷新率的差异'),
+  ];
   final res = await showDialog<String>(
     context: context,
     builder: (context) => SelectDialog<String>(
       title: '视频同步',
       value: Pref.videoSync,
-      values: const [
-        'audio',
-        'display-resample',
-        'display-resample-vdrop',
-        'display-resample-desync',
-        'display-tempo',
-        'display-vdrop',
-        'display-adrop',
-        'display-desync',
-        'desync',
-      ].map((e) => (e, e)).toList(),
+      values: options.map((option) => (option.$1, option.$2)).toList(),
+      subtitleBuilder: (context, index) => Text(options[index].$3),
     ),
   );
   if (res != null) {
@@ -452,7 +492,7 @@ Future<void> _showHwDecDialog(
       title: '硬解模式',
       initValues: Pref.hardwareDecoding.split(','),
       values: {
-        for (final e in HwDecType.values) e.hwdec: '${e.hwdec}\n${e.desc}',
+        for (final e in HwDecType.values) e.hwdec: '${e.desc}\n参数：${e.hwdec}',
       },
     ),
   );

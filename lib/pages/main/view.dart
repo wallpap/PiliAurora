@@ -1,3 +1,4 @@
+import 'dart:async' show unawaited;
 import 'dart:io';
 
 import 'package:pili_aurora/common/assets.dart';
@@ -24,7 +25,7 @@ import 'package:pili_aurora/utils/storage_key.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'package:material_ui/material_ui.dart';
-import 'package:tray_manager/tray_manager.dart';
+import 'package:tray_manager/tray_manager.dart' as tray;
 import 'package:win32/win32.dart' as kernel32;
 import 'package:window_manager/window_manager.dart';
 
@@ -36,17 +37,18 @@ class MainApp extends StatefulWidget {
 }
 
 class _MainAppState extends PopScopeState<MainApp>
-    with
-        RouteAware,
-        RouteAwareMixin,
-        WidgetsBindingObserver,
-        WindowListener,
-        TrayListener {
+    with RouteAware, RouteAwareMixin, WidgetsBindingObserver, WindowListener {
   final _mainController = Get.put(MainController());
   late final _setting = GStorage.setting;
   late EdgeInsets _padding;
   late ColorScheme _colorScheme;
   Brightness? _brightness;
+  tray.TrayIcon? _trayIcon;
+  tray.ListenerId? _trayListenerId;
+  tray.Image? _trayImage;
+  tray.Menu? _trayMenu;
+  tray.MenuItem? _trayShowItem;
+  tray.MenuItem? _trayExitItem;
 
   @override
   bool get initCanPop => false;
@@ -60,7 +62,6 @@ class _MainAppState extends PopScopeState<MainApp>
         ..addListener(this)
         ..setPreventClose(true);
       if (_mainController.showTrayIcon) {
-        trayManager.addListener(this);
         _handleTray();
       }
     }
@@ -115,7 +116,7 @@ class _MainAppState extends PopScopeState<MainApp>
   @override
   void dispose() {
     if (PlatformUtils.isDesktop) {
-      trayManager.removeListener(this);
+      _disposeTray();
       windowManager.removeListener(this);
     }
     removeObserverMobile(this);
@@ -168,7 +169,7 @@ class _MainAppState extends PopScopeState<MainApp>
   Future<void> _onClose() async {
     await GStorage.compact();
     await GStorage.close();
-    await trayManager.destroy();
+    _disposeTray();
     if (Platform.isWindows) {
       // flutter_inappwebview
       // 6.2.0-beta.2+ https://github.com/pichillilorenzo/flutter_inappwebview/issues/2482
@@ -233,8 +234,27 @@ class _MainAppState extends PopScopeState<MainApp>
     return windowManager.show();
   }
 
-  @override
-  Future<void> onTrayIconMouseDown() async {
+  void _disposeTray() {
+    final trayIcon = _trayIcon;
+    if (trayIcon != null) {
+      if (_trayListenerId case final listenerId?) {
+        trayIcon.removeListener(listenerId);
+      }
+      trayIcon.dispose();
+    }
+    _trayIcon = null;
+    _trayListenerId = null;
+    _trayMenu?.dispose();
+    _trayMenu = null;
+    _trayShowItem?.dispose();
+    _trayShowItem = null;
+    _trayExitItem?.dispose();
+    _trayExitItem = null;
+    _trayImage?.dispose();
+    _trayImage = null;
+  }
+
+  Future<void> _handleTrayIconClick() async {
     if (await windowManager.isVisible()) {
       _onHideWindow();
       _hide();
@@ -244,34 +264,57 @@ class _MainAppState extends PopScopeState<MainApp>
     }
   }
 
-  @override
-  Future<void> onTrayIconRightMouseDown() async {
-    // ignore: deprecated_member_use
-    trayManager.popUpContextMenu(bringAppToFront: true);
-  }
-
-  @override
-  void onTrayMenuItemClick(MenuItem menuItem) {
-    switch (menuItem.key) {
-      case 'show':
-        _show();
-      case 'exit':
-        _onClose();
-    }
-  }
-
-  Future<void> _handleTray() async {
-    await trayManager.setIcon(Assets.logoIco);
-    await trayManager.setToolTip(Constants.appName);
-
-    Menu trayMenu = Menu(
-      items: [
-        MenuItem(key: 'show', label: '显示窗口'),
-        MenuItem.separator(),
-        MenuItem(key: 'exit', label: '退出 ${Constants.appName}'),
-      ],
+  void _handleTray() {
+    final trayIcon = tray.TrayIcon.create();
+    final trayImage = tray.ImageAsset.fromAsset(Assets.logoIco);
+    final trayMenu = tray.Menu.create();
+    final showItem = tray.MenuItem.createWithLabelAndType(
+      '显示窗口',
+      tray.MenuItemType.normal,
     );
-    await trayManager.setContextMenu(trayMenu);
+    final exitItem = tray.MenuItem.createWithLabelAndType(
+      '退出 ${Constants.appName}',
+      tray.MenuItemType.normal,
+    );
+    if (trayIcon == null ||
+        trayImage == null ||
+        trayMenu == null ||
+        showItem == null ||
+        exitItem == null) {
+      trayIcon?.dispose();
+      trayImage?.dispose();
+      trayMenu?.dispose();
+      showItem?.dispose();
+      exitItem?.dispose();
+      return;
+    }
+
+    _trayIcon = trayIcon;
+    _trayImage = trayImage;
+    _trayMenu = trayMenu;
+    _trayShowItem = showItem;
+    _trayExitItem = exitItem;
+    _trayListenerId = trayIcon.addListener((event) {
+      if (event is tray.TrayIconClickedEvent) {
+        unawaited(_handleTrayIconClick());
+      }
+    });
+    showItem.addListener((event) {
+      if (event is tray.MenuItemClickedEvent) unawaited(_show());
+    });
+    exitItem.addListener((event) {
+      if (event is tray.MenuItemClickedEvent) unawaited(_onClose());
+    });
+    trayMenu
+      ..addItem(showItem)
+      ..addSeparator()
+      ..addItem(exitItem);
+    trayIcon
+      ..icon = trayImage
+      ..setTooltip(Constants.appName)
+      ..setContextMenu(trayMenu)
+      ..setContextMenuTrigger(tray.ContextMenuTrigger.rightClicked)
+      ..setVisible(true);
   }
 
   @pragma('vm:prefer-inline')
