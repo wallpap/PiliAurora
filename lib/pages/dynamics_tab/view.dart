@@ -25,13 +25,9 @@ class DynamicsTabPage extends StatefulWidget {
   State<DynamicsTabPage> createState() => _DynamicsTabPageState();
 }
 
-class _DynamicsTabPageState extends State<DynamicsTabPage>
-    with AutomaticKeepAliveClientMixin, DynMixin {
+class _DynamicsTabPageState extends State<DynamicsTabPage> with DynMixin {
   final dynamicsController = Get.putOrFind(DynamicsController.new);
   late final DynamicsTabController controller;
-
-  @override
-  bool get wantKeepAlive => true;
 
   @override
   void initState() {
@@ -49,10 +45,10 @@ class _DynamicsTabPageState extends State<DynamicsTabPage>
 
   @override
   Widget build(BuildContext context) {
-    super.build(context);
     return refreshIndicator(
       onRefresh: onRefresh,
       child: CustomScrollView(
+        key: PageStorageKey(widget.dynamicsType.name),
         physics: const AlwaysScrollableScrollPhysics(),
         controller: controller.scrollController,
         slivers: [
