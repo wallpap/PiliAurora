@@ -266,7 +266,10 @@ switch ($platform.ToLower()) {
     default {}
 }
 
-$PubCacheDir = (Resolve-Path $PubCacheDir).Path
+if (-not (Test-Path -LiteralPath $PubCacheDir -PathType Container)) {
+    New-Item -ItemType Directory -Path $PubCacheDir -Force | Out-Null
+}
+$PubCacheDir = (Resolve-Path -LiteralPath $PubCacheDir).Path
 $HostedPubDir = Join-Path $PubCacheDir "hosted/pub.dev"
 
 try {
