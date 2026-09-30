@@ -4,6 +4,8 @@
 
 浏览视频与番剧、观看直播、管理收藏和离线缓存，也支持动态、评论和站内消息。
 
+基于 [PiliPlus](https://github.com/bggRGjQaUbCoE/PiliPlus) 进一步开发,做了激进的修改,对部分功能进行了优化,理论上资源使用会更少,主要为自用,欢迎尝试使用.
+
 [源码](https://github.com/wallpap/PiliAurora) · [发布版本](https://github.com/wallpap/PiliAurora/releases) · [问题反馈](https://github.com/wallpap/PiliAurora/issues) · [许可证](LICENSE)
 
 ## 功能
@@ -72,7 +74,5 @@ PiliAurora 基于 [PiliPlus](https://github.com/bggRGjQaUbCoE/PiliPlus) 开发�
 本项目采用 **GNU GPL v3**，完整条款见 [LICENSE](LICENSE)。具体文件的独立许可和许可证版本选项以各自声明为准。
 
 修改和分发时须保留适用的版权、许可和无担保声明，标注修改及日期；分发二进制时须按 GPL 要求提供对应源码。第三方组件须同时遵守各自的许可条件。
-
-项目来源、维护日期和许可检查范围见 [许可证检查记录](LICENSE_REVIEW.md)。
 
 本项目与 Bilibili 官方无隶属关系。使用相关服务和内容时，请遵守其服务条款及适用法律。软件按许可证原文提供，不附带担保。

@@ -408,6 +408,10 @@ class _MainAppState extends PopScopeState<MainApp>
         );
       }
 
+      // 底栏内容不随滚动改变，只有位移在变；单独成层后每帧只更新这一层，
+      // 不必把它并入整页的重绘记录。
+      bottomNav = RepaintBoundary(child: bottomNav);
+
       if (_mainController.hideBottomBar) {
         if (_mainController.barOffset case final barOffset?) {
           return Obx(
