@@ -6,6 +6,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pili_aurora/models_new/download/bili_download_entry_info.dart';
 import 'package:pili_aurora/services/download/download_manager.dart';
+import 'package:pili_aurora/services/download/response_adapter.dart';
 
 void main() {
   late Directory directory;
@@ -77,6 +78,77 @@ void main() {
     expect(errors, hasLength(1));
     expect(errors.single, isNotNull);
     expect(await file.readAsBytes(), [1, 2, 3]);
+  });
+
+  test(
+    'network idle timeout keeps partial bytes and reports failure once',
+    () async {
+      final source = StreamController<Uint8List>();
+      var cancelled = false;
+      source.onCancel = () => cancelled = true;
+      client.options.receiveTimeout = const Duration(milliseconds: 100);
+      client.httpClientAdapter = DownloadResponseAdapter(
+        _Adapter((_) async {
+          scheduleMicrotask(() => source.add(Uint8List.fromList([1, 2, 3])));
+          return ResponseBody(source.stream, 200);
+        }),
+      );
+      final errors = <Object?>[];
+      final file = File('${directory.path}/timed-out.bin');
+      final manager = DownloadManager(
+        url: 'https://example.test/video',
+        path: file.path,
+        client: client,
+        onReceiveProgress: null,
+        onDone: ([error]) => errors.add(error),
+      );
+      await manager.task;
+      expect(manager.status, DownloadStatus.failDownload);
+      expect(errors, hasLength(1));
+      expect(
+        errors.single,
+        isA<DioException>().having(
+          (error) => error.type,
+          'type',
+          DioExceptionType.receiveTimeout,
+        ),
+      );
+      expect(await file.readAsBytes(), [1, 2, 3]);
+      expect(cancelled, isTrue);
+      await source.close();
+    },
+  );
+
+  test('write pipeline failures cancel the network response', () async {
+    final source = StreamController<Uint8List>();
+    var cancelled = false;
+    source.onCancel = () => cancelled = true;
+    client.options.receiveTimeout = const Duration(seconds: 10);
+    client.httpClientAdapter = DownloadResponseAdapter(
+      _Adapter((_) async {
+        scheduleMicrotask(() => source.add(Uint8List.fromList([1, 2, 3])));
+        return ResponseBody(source.stream, 200);
+      }),
+    );
+    const writeError = FileSystemException('write pipeline failed');
+    final errors = <Object?>[];
+    final manager = DownloadManager(
+      url: 'https://example.test/video',
+      path: '${directory.path}/write-failure.bin',
+      client: client,
+      onReceiveProgress: (received, _) {
+        if (received > 0) throw writeError;
+      },
+      onDone: ([error]) => errors.add(error),
+    );
+    addTearDown(() async {
+      await manager.cancel(isDelete: true);
+      await source.close();
+    });
+    await manager.task;
+    expect(manager.status, DownloadStatus.failDownload);
+    expect(errors, [writeError]);
+    expect(cancelled, isTrue);
   });
 
   test(

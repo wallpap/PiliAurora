@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:pili_aurora/services/diagnostics/http_diagnostics.dart';
+import 'package:pili_aurora/services/download/response_adapter.dart';
 
 import 'package:pili_aurora/http/api.dart';
 import 'package:pili_aurora/http/constants.dart';
@@ -112,7 +113,7 @@ class Request {
     return h11;
   }
 
-  static (IOHttpClientAdapter, ConnectionManager?) _createPool() {
+  static (HttpClientAdapter, ConnectionManager?) _createPool() {
     final bool enableSystemProxy;
     late final String systemProxyHost;
     late final int? systemProxyPort;
@@ -152,7 +153,7 @@ class Request {
                 : null,
           )
         : null;
-    return (http11Adapter, connectionManager);
+    return (DownloadResponseAdapter(http11Adapter), connectionManager);
   }
 
   /*
