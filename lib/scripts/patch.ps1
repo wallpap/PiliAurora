@@ -4,6 +4,8 @@ param(
 
 $ErrorActionPreference = "Stop"
 
+$IsWindowsPlatform = [System.Environment]::OSVersion.Platform -eq [System.PlatformID]::Win32NT
+
 $Workspace = if ($env:GITHUB_WORKSPACE) {
     $env:GITHUB_WORKSPACE
 } else {
@@ -74,7 +76,7 @@ function Apply-Patch([string]$PatchPath) {
 
 $FlutterRoot = Resolve-FlutterRoot
 $FlutterExecutable = Join-Path $FlutterRoot "bin/flutter"
-if (Test-Path "$FlutterExecutable.bat") {
+if ($IsWindowsPlatform -and (Test-Path "$FlutterExecutable.bat")) {
     $FlutterExecutable = "$FlutterExecutable.bat"
 }
 
@@ -252,7 +254,7 @@ $patches_material = @($ModalBarrierPatchMaterial, $NavigationDrawerPatchMaterial
 
 $PubCacheDir = $env:PUB_CACHE
 if (-not $PubCacheDir) {
-    $PubCacheDir = if ($IsWindows) {
+    $PubCacheDir = if ($IsWindowsPlatform) {
         Join-Path $env:LOCALAPPDATA "Pub/Cache"
     } else {
         Join-Path $HOME ".pub-cache"
@@ -287,6 +289,10 @@ try {
 & $FlutterExecutable pub get
 if ($LASTEXITCODE -ne 0) {
     throw "flutter pub get failed with exit code $LASTEXITCODE"
+}
+
+if (-not (Test-Path -LiteralPath $HostedPubDir -PathType Container)) {
+    throw "flutter pub get completed but Pub cache directory was not created: $HostedPubDir"
 }
 
 $MaterialUiDir = Get-ChildItem $HostedPubDir -Directory |
