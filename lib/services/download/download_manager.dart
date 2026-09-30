@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:pili_aurora/http/init.dart';
 import 'package:pili_aurora/models_new/download/bili_download_entry_info.dart';
+import 'package:pili_aurora/services/download/stream_writer.dart';
 import 'package:pili_aurora/utils/extension/file_ext.dart';
 import 'package:pili_aurora/utils/extension/string_ext.dart';
 import 'package:dio/dio.dart';
@@ -18,12 +19,14 @@ class DownloadManager {
   DownloadStatus get status => _status;
   final _cancelToken = CancelToken();
   late Future<void> task;
+  final Dio? client;
 
   DownloadManager({
     required this.url,
     required this.path,
     required this.onReceiveProgress,
     required this.onDone,
+    this.client,
   }) {
     task = _start();
   }
@@ -58,7 +61,7 @@ class DownloadManager {
 
     Response<ResponseBody> response;
     try {
-      response = await Request.http11Dio.get<ResponseBody>(
+      response = await (client ?? Request.http11Dio).get<ResponseBody>(
         url.http2https,
         options: Options(
           headers: {'range': 'bytes=$received-'},
@@ -82,16 +85,28 @@ class DownloadManager {
 
     int? last;
     try {
-      await for (final chunk in data.stream) {
-        sink.add(chunk);
-        received += chunk.length;
-        final now = DateTime.now().millisecondsSinceEpoch ~/ 1000;
-        if (last != now) {
-          last = now;
-          onReceiveProgress?.call(received, contentLength);
-        }
-      }
+      await writeDownloadStream(
+        data.stream,
+        sink,
+        initialBytes: received,
+        onProgress: (received) {
+          final now = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+          if (last != now) {
+            last = now;
+            onReceiveProgress?.call(received, contentLength);
+          }
+        },
+      );
       await sink.close();
+      if (_cancelToken.isCancelled) {
+        onDone(
+          DioException.requestCancelled(
+            requestOptions: response.requestOptions,
+            reason: _cancelToken.cancelError,
+          ),
+        );
+        return;
+      }
       _status = DownloadStatus.completed;
       onDone();
     } catch (e) {
