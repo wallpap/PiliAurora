@@ -1,4 +1,4 @@
-name: Build
+name: Build Android and Windows x64
 
 on:
     # pull_request:
@@ -12,19 +12,19 @@ on:
     workflow_dispatch:
         inputs:
             build_android:
-                description: "Build Android"
+                description: "Build Android APK"
                 required: false
                 default: true
                 type: boolean
 
             build_win_x64:
-                description: "Build Win-x64"
+                description: "Build Windows x64"
                 required: false
                 default: true
                 type: boolean
 
             tag:
-                description: "tag"
+                description: "Release tag; empty only uploads workflow artifacts"
                 required: false
                 default: ""
                 type: string
@@ -37,12 +37,12 @@ jobs:
         permissions: write-all
 
         steps:
-            - name: 代码迁出
+            - name: Checkout repository
               uses: actions/checkout@v7
               with:
                   fetch-depth: 0
 
-            - name: 构建Java环境
+            - name: Set up Java
               uses: actions/setup-java@v5
               with:
                   distribution: "zulu"
@@ -52,7 +52,7 @@ jobs:
                       android/*.gradle*
                       android/**/gradle-wrapper.properties
 
-            - name: 安装Flutter
+            - name: Set up Flutter
               uses: subosito/flutter-action@v2
               id: flutter-action
               with:
@@ -60,11 +60,11 @@ jobs:
                   flutter-version-file: pubspec.yaml
                   cache: true
 
-            - name: Apply Patch
+            - name: Apply Flutter patches
               shell: pwsh
               run: lib/scripts/patch.ps1 android
 
-            - name: Write key
+            - name: Write signing key
               if: github.event_name == 'workflow_dispatch'
               run: |
                   if [ ! -z "${{ secrets.SIGN_KEYSTORE_BASE64 }}" ]; then
@@ -75,21 +75,21 @@ jobs:
                     echo keyPassword='${{ secrets.KEY_PASSWORD }}' >> android/key.properties
                   fi
 
-            - name: Set and Extract version
+            - name: Write version and build info
               if: ${{ github.event_name == 'workflow_dispatch' }}
               shell: pwsh
               run: lib/scripts/build.ps1 android
 
-            - name: Flutter Build Release Apk
+            - name: Build release APK
               if: ${{ github.event_name == 'workflow_dispatch' }}
               run: flutter build apk --release --split-per-abi --dart-define-from-file=pili_release.json --no-pub
 
-            - name: Flutter Build Dev Apk
+            - name: Build dev APK
               if: ${{ github.event_name == 'pull_request' }}
               run: |
                   flutter build apk --release --split-per-abi --android-project-arg dev=1 --no-pub
 
-            - name: Rename
+            - name: Rename APK with version and ABI
               run: |
                   for file in build/app/outputs/flutter-apk/app-*-release.apk; do
                     abi=$(echo "$file" | sed -E 's|.*app-(.*)-release\.apk|\1|')
@@ -105,25 +105,25 @@ jobs:
                   name: ${{ github.event.inputs.tag }}
                   files: PiliAurora_android_*.apk
 
-            - name: 上传
+            - name: Upload arm64-v8a APK
               uses: actions/upload-artifact@v7
               with:
                   archive: false
-                  name: Android_arm64-v8a
+                  name: PiliAurora_android_${{ env.version }}_arm64-v8a
                   path: PiliAurora_android_*_arm64-v8a.apk
 
-            - name: 上传
+            - name: Upload armeabi-v7a APK
               uses: actions/upload-artifact@v7
               with:
                   archive: false
-                  name: Android_armeabi-v7a
+                  name: PiliAurora_android_${{ env.version }}_armeabi-v7a
                   path: PiliAurora_android_*_armeabi-v7a.apk
 
-            - name: 上传
+            - name: Upload x86_64 APK
               uses: actions/upload-artifact@v7
               with:
                   archive: false
-                  name: Android_x86_64
+                  name: PiliAurora_android_${{ env.version }}_x86_64
                   path: PiliAurora_android_*_x86_64.apk
 
     win_x64:
