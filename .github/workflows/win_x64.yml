@@ -1,32 +1,38 @@
-name: Build for Windows x64
+name: Build Windows x64
 
 on:
   workflow_call:
     inputs:
       tag:
-        description: "tag"
+        description: "Release tag; empty skips publishing a release"
         required: false
         default: ""
         type: string
   workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag; empty skips publishing a release"
+        required: false
+        default: ""
+        type: string
 
 jobs:
   build-windows-app:
     name: Release Windows x64
     runs-on: windows-latest
     steps:
-      - name: Checkout code
+      - name: Checkout repository
         uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
-      - name: Setup flutter
+      - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
           channel: stable
           flutter-version-file: pubspec.yaml
 
-      - name: Add fastforge and Inno Setup
+      - name: Install fastforge and Inno Setup
         run: |
           dart pub global activate fastforge
           choco install innosetup
@@ -36,29 +42,37 @@ jobs:
           Copy-Item "windows/packaging/exe/ChineseSimplified.isl" "C:\Program Files (x86)\Inno Setup 6\Languages\ChineseSimplified.isl"
         shell: pwsh
 
-      - name: Set and Extract version
+      - name: Write version and build info
         shell: pwsh
         run: lib/scripts/build.ps1
 
-      - name: Apply Patch
+      - name: Apply Flutter patches
         shell: pwsh
         run: lib/scripts/patch.ps1 windows
 
-      - name: Build Windows
+      - name: Build Windows release
         run: |
           fastforge package --platform windows --targets exe --flutter-build-args="dart-define-from-file=pili_release.json,no-pub" --skip-clean
 
-      - name: Prepare Upload
-        run: |
-          mkdir -p Release/PiliAurora-Win
-          mkdir -p PiliAurora-Win-Setup
-          mv build/windows/x64/runner/Release/* Release/PiliAurora-Win/
-          mv dist/**/*.exe PiliAurora-Win-Setup/PiliAurora_windows_${{env.version}}_x64_setup.exe
-
-      - name: Compress
-        run: |
-          Compress-Archive -Path "Release/PiliAurora-Win" -DestinationPath "PiliAurora_windows_${{env.version}}_x64_portable.zip"
+      - name: Package Windows portable
         shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $portable = "PiliAurora_windows_${{ env.version }}_x64"
+          New-Item -ItemType Directory -Path $portable -Force | Out-Null
+          New-Item -ItemType Directory -Path PiliAurora-Win-Setup -Force | Out-Null
+          Copy-Item "build/windows/x64/runner/Release/*" $portable -Recurse -Force
+          Move-Item "dist/*.exe" "PiliAurora-Win-Setup/PiliAurora_windows_${{ env.version }}_x64_setup.exe"
+          if (-not (Test-Path "$portable/PiliAurora.exe")) {
+            throw "Portable build output is incomplete: $portable/PiliAurora.exe not found"
+          }
+          Write-Host "Portable folder: $portable"
+
+      - name: Compress Windows portable
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          Compress-Archive -Path "PiliAurora_windows_${{ env.version }}_x64" -DestinationPath "PiliAurora_windows_${{ env.version }}_x64_portable.zip"
 
       - name: Release
         if: ${{ github.event.inputs.tag != '' }}
@@ -67,19 +81,19 @@ jobs:
           tag_name: ${{ github.event.inputs.tag }}
           name: ${{ github.event.inputs.tag }}
           files: |
-            PiliAurora_windows_*.zip
-            PiliAurora-Win-Setup/PiliAurora_windows_*.exe
+            PiliAurora_windows_*_x64_portable.zip
+            PiliAurora-Win-Setup/PiliAurora_windows_*_x64_setup.exe
 
-      - name: Upload windows file release
+      - name: Upload Windows portable
         uses: actions/upload-artifact@v7
         with:
           archive: false
-          name: Windows-file-x64-release
-          path: PiliAurora_windows_*.zip
+          name: PiliAurora_windows_${{ env.version }}_x64_portable
+          path: PiliAurora_windows_*_x64_portable.zip
 
-      - name: Upload windows setup release
+      - name: Upload Windows setup
         uses: actions/upload-artifact@v7
         with:
           archive: false
-          name: Windows-setup-x64-release
-          path: PiliAurora-Win-Setup/PiliAurora_windows_*.exe
+          name: PiliAurora_windows_${{ env.version }}_x64_setup
+          path: PiliAurora-Win-Setup/PiliAurora_windows_*_x64_setup.exe
