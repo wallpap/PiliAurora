@@ -20,6 +20,8 @@ jobs:
   build-windows-app:
     name: Release Windows x64
     runs-on: windows-latest
+    env:
+      INNO_SETUP_PATH: 'C:\Program Files (x86)\Inno Setup 6'
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
@@ -33,14 +35,21 @@ jobs:
           flutter-version-file: pubspec.yaml
 
       - name: Install fastforge and Inno Setup
-        run: |
-          dart pub global activate fastforge
-          choco install innosetup
-
-      - name: Add Chinese language file for Inno Setup
-        run: |
-          Copy-Item "windows/packaging/exe/ChineseSimplified.isl" "C:\Program Files (x86)\Inno Setup 6\Languages\ChineseSimplified.isl"
         shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          dart pub global activate fastforge
+
+          $innoSetupPath = $env:INNO_SETUP_PATH
+          $iscc = Join-Path $innoSetupPath "ISCC.exe"
+          if (-not (Test-Path $iscc)) {
+            choco install innosetup -y --no-progress
+          }
+          if (-not (Test-Path $iscc)) {
+            throw "ISCC.exe not found at $iscc; fastforge silently skips the exe target when Inno Setup 6 is missing"
+          }
+          Copy-Item "windows/packaging/exe/ChineseSimplified.isl" (Join-Path $innoSetupPath "Languages/ChineseSimplified.isl") -Force
+          Write-Host "Inno Setup: $iscc"
 
       - name: Write version and build info
         shell: pwsh
@@ -54,19 +63,36 @@ jobs:
         run: |
           fastforge package --platform windows --targets exe --flutter-build-args="dart-define-from-file=pili_release.json,no-pub" --skip-clean
 
-      - name: Package Windows portable
+      - name: Package Windows portable and installer
         shell: pwsh
         run: |
           $ErrorActionPreference = "Stop"
           $portable = "PiliAurora_windows_${{ env.version }}_x64"
-          New-Item -ItemType Directory -Path $portable -Force | Out-Null
-          New-Item -ItemType Directory -Path PiliAurora-Win-Setup -Force | Out-Null
-          Copy-Item "build/windows/x64/runner/Release/*" $portable -Recurse -Force
-          Move-Item "dist/*.exe" "PiliAurora-Win-Setup/PiliAurora_windows_${{ env.version }}_x64_setup.exe"
-          if (-not (Test-Path "$portable/PiliAurora.exe")) {
-            throw "Portable build output is incomplete: $portable/PiliAurora.exe not found"
+          $setupDir = "PiliAurora-Win-Setup"
+
+          $releaseDir = "build/windows/x64/runner/Release"
+          if (-not (Test-Path "$releaseDir/PiliAurora.exe")) {
+            throw "Portable build output is incomplete: $releaseDir/PiliAurora.exe not found"
           }
+          New-Item -ItemType Directory -Path $portable -Force | Out-Null
+          Move-Item "$releaseDir/*" $portable -Force
           Write-Host "Portable folder: $portable"
+
+          Write-Host "dist directory:"
+          if (Test-Path dist) { Get-ChildItem dist -Recurse | ForEach-Object { Write-Host "  $($_.FullName)" } }
+
+          New-Item -ItemType Directory -Path $setupDir -Force | Out-Null
+          if (-not (Test-Path dist)) {
+            throw "The Windows installer was not produced: dist directory does not exist"
+          }
+          $installers = @(Get-ChildItem -Path "dist" -Filter *.exe -File -Recurse)
+          if ($installers.Count -ne 1) {
+            $found = if ($installers.Count) { ($installers.FullName -join ', ') } else { 'none' }
+            throw "Expected exactly one installer in dist, found $($installers.Count): $found"
+          }
+          $setup = Join-Path $setupDir "PiliAurora_windows_${{ env.version }}_x64_setup.exe"
+          Move-Item $installers[0].FullName $setup -Force
+          Write-Host "Installer: $setup"
 
       - name: Compress Windows portable
         shell: pwsh
@@ -88,6 +114,7 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           archive: false
+          if-no-files-found: error
           name: PiliAurora_windows_${{ env.version }}_x64_portable
           path: PiliAurora_windows_*_x64_portable.zip
 
@@ -95,5 +122,6 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           archive: false
+          if-no-files-found: error
           name: PiliAurora_windows_${{ env.version }}_x64_setup
           path: PiliAurora-Win-Setup/PiliAurora_windows_*_x64_setup.exe
