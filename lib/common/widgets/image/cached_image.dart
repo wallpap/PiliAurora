@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:collection';
 import 'dart:io' show File;
 import 'dart:math' as math;
 import 'dart:ui' as ui;
@@ -236,6 +237,8 @@ class _ThrottledCodec implements ui.Codec {
 
   final ui.Codec _codec;
   bool _disposed = false;
+  bool _firstFrame = true;
+  _FrameAdmission? _admission;
 
   @override
   int get frameCount => _codec.frameCount;
@@ -248,10 +251,6 @@ class _ThrottledCodec implements ui.Codec {
     final operation = Diagnostics.instance.begin('imageFrame', '解码图片帧');
     try {
       final frame = await _codec.getNextFrame();
-      if (_disposed) {
-        frame.image.dispose();
-        return frame;
-      }
       operation?.finish(
         details: {
           'width': frame.image.width,
@@ -259,6 +258,19 @@ class _ThrottledCodec implements ui.Codec {
           'rgbaBytes': frame.image.width * frame.image.height * 4,
         },
       );
+      if (_firstFrame && !_disposed) {
+        _firstFrame = false;
+        // 按解码字节数分批交付首帧，避免图片更新集中到同一个绘制周期。
+        final admission = _admission = _FrameBudget.admit(
+          frame.image.width * frame.image.height * 4,
+        );
+        await admission.ready;
+        _admission = null;
+      }
+      if (_disposed) {
+        frame.image.dispose();
+        return frame;
+      }
       return frameCount > 1 &&
               frame.duration < const Duration(milliseconds: 100)
           ? _SlowFrame(frame.image)
@@ -275,6 +287,8 @@ class _ThrottledCodec implements ui.Codec {
   void dispose() {
     if (_disposed) return;
     _disposed = true;
+    _admission?.cancel();
+    _admission = null;
     Diagnostics.instance.gauge('imageCodecs', --_activeCodecs);
     _codec.dispose();
   }
@@ -288,6 +302,160 @@ class _SlowFrame implements ui.FrameInfo {
 
   @override
   Duration get duration => const Duration(milliseconds: 100);
+}
+
+/// 图片首次可用时淡入一次；淡入结束后只返回图片本身，不再保留过渡层。
+///
+/// 图片和占位共用一个控制器，保留独立的淡入、淡出时长；
+/// 动画结束后移除过渡结构，避免继续保留透明度合成层。
+class _ImageFadeIn extends StatefulWidget {
+  const _ImageFadeIn({
+    super.key,
+    required this.child,
+    required this.placeholder,
+    required this.duration,
+    required this.fadeOutDuration,
+    required this.ready,
+    required this.animate,
+  });
+
+  /// 已解码的图片子树（`Image.frameBuilder` 的 child）。
+  final Widget child;
+
+  /// 图片尚未可用时显示的内容。
+  final Widget placeholder;
+
+  /// 淡入时长；[Duration.zero] 表示直接显示。
+  final Duration duration;
+  final Duration fadeOutDuration;
+
+  /// 图片是否已经可用。
+  final bool ready;
+
+  /// 是否播放淡入；同步命中缓存时为 false。
+  final bool animate;
+
+  @override
+  State<_ImageFadeIn> createState() => _ImageFadeInState();
+}
+
+class _ImageFadeInState extends State<_ImageFadeIn>
+    with SingleTickerProviderStateMixin {
+  /// 惰性创建：同步命中缓存的图片不淡入，就不该为它建控制器。
+  AnimationController? _fade;
+
+  AnimationController get _controller =>
+      _fade ??= AnimationController(vsync: this, duration: _transitionDuration)
+        ..addStatusListener(_onStatusChanged);
+
+  Duration get _transitionDuration => Duration(
+    microseconds: math.max(
+      widget.duration.inMicroseconds,
+      widget.fadeOutDuration.inMicroseconds,
+    ),
+  );
+
+  late Animation<double> _imageOpacity;
+  late Animation<double> _placeholderOpacity;
+
+  /// 淡入已结束：子树退回普通结构，不再有过渡层。
+  bool _done = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _startIfReady();
+  }
+
+  @override
+  void didUpdateWidget(_ImageFadeIn oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!widget.ready) {
+      // 图片再次不可用（例如换了 URL）：回到占位，下次可用时重新淡入。
+      _fade?.reset();
+      _done = false;
+      return;
+    }
+    if (!widget.animate || _transitionDuration == Duration.zero) {
+      _fade?.stop();
+      _done = true;
+      return;
+    }
+    if (!oldWidget.ready) {
+      _startIfReady();
+    } else if (!_done &&
+        (widget.duration != oldWidget.duration ||
+            widget.fadeOutDuration != oldWidget.fadeOutDuration)) {
+      _configureOpacities();
+      _controller.forward();
+    }
+  }
+
+  void _startIfReady() {
+    if (!widget.ready) return;
+    // didUpdateWidget 之后紧接着就会 build，无需 setState。
+    if (!widget.animate || _transitionDuration == Duration.zero) {
+      _fade?.stop();
+      _done = true;
+      return;
+    }
+    _done = false;
+    _configureOpacities();
+    _controller.forward(from: 0);
+  }
+
+  void _configureOpacities() {
+    _controller.duration = _transitionDuration;
+    _imageOpacity = _opacity(widget.duration);
+    _placeholderOpacity = _opacity(widget.fadeOutDuration, reverse: true);
+  }
+
+  Animation<double> _opacity(Duration duration, {bool reverse = false}) {
+    if (duration == Duration.zero) {
+      return AlwaysStoppedAnimation(reverse ? 0 : 1);
+    }
+    final opacity = _controller.drive(
+      CurveTween(
+        curve: Interval(
+          0,
+          duration.inMicroseconds / _transitionDuration.inMicroseconds,
+        ),
+      ),
+    );
+    return reverse ? opacity.drive(Tween<double>(begin: 1, end: 0)) : opacity;
+  }
+
+  void _onStatusChanged(AnimationStatus status) {
+    if (status == AnimationStatus.completed && mounted) {
+      setState(() => _done = true);
+    }
+  }
+
+  @override
+  void dispose() {
+    _fade?.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!widget.ready) return widget.placeholder;
+    if (_done) return widget.child;
+    return Stack(
+      alignment: Alignment.center,
+      children: [
+        if (widget.fadeOutDuration != Duration.zero)
+          FadeTransition(
+            opacity: _placeholderOpacity,
+            child: widget.placeholder,
+          ),
+        if (widget.duration == Duration.zero)
+          widget.child
+        else
+          FadeTransition(opacity: _imageOpacity, child: widget.child),
+      ],
+    );
+  }
 }
 
 class CachedImage extends StatelessWidget {
@@ -345,19 +513,16 @@ class CachedImage extends StatelessWidget {
     color: color,
     colorBlendMode: colorBlendMode,
     errorBuilder: errorBuilder ?? (context, _, _) => _placeholder(context),
-    frameBuilder: (context, child, frame, synchronouslyLoaded) {
-      if (synchronouslyLoaded) return child;
-      return AnimatedSwitcher(
-        duration: fadeInDuration,
-        reverseDuration: fadeOutDuration,
-        child: frame == null
-            ? KeyedSubtree(
-                key: const ValueKey(false),
-                child: _placeholder(context),
-              )
-            : KeyedSubtree(key: ValueKey(imageUrl), child: child),
-      );
-    },
+    frameBuilder: (context, child, frame, synchronouslyLoaded) => _ImageFadeIn(
+      key: ValueKey(imageUrl),
+      ready: frame != null,
+      // 同步命中缓存时直接显示，与原来 `if (synchronouslyLoaded) return child;` 一致。
+      animate: !synchronouslyLoaded,
+      duration: fadeInDuration,
+      fadeOutDuration: fadeOutDuration,
+      placeholder: _placeholder(context),
+      child: child,
+    ),
   );
 
   Widget _placeholder(BuildContext context) => SizedBox(
@@ -365,4 +530,56 @@ class CachedImage extends StatelessWidget {
     height: height,
     child: placeholder?.call(context, imageUrl),
   );
+}
+
+/// 按绘制周期分批交付图片首帧；不限制原生解码或保证 GPU 耗时。
+abstract final class _FrameBudget {
+  /// 每帧首帧交付的字节预算；单张超预算图片独占一批，避免永久等待。
+  static const int _bytesPerFrame = 6 << 20;
+
+  static int _bytes = 0;
+  static bool _resetScheduled = false;
+  static final _pending = Queue<_FrameAdmission>();
+
+  static _FrameAdmission admit(int bytes) {
+    final admission = _FrameAdmission(bytes);
+    _pending.add(admission);
+    _drain();
+    return admission;
+  }
+
+  static void cancel(_FrameAdmission admission) {
+    _pending.remove(admission);
+    if (!admission._ready.isCompleted) admission._ready.complete();
+    _drain();
+  }
+
+  static void _drain() {
+    while (_pending.isNotEmpty &&
+        (_bytes == 0 || _bytes + _pending.first.bytes <= _bytesPerFrame)) {
+      final admission = _pending.removeFirst();
+      _bytes += admission.bytes;
+      admission._ready.complete();
+    }
+    if (_bytes == 0 || _resetScheduled) return;
+    _resetScheduled = true;
+    WidgetsBinding.instance
+      ..addPostFrameCallback((_) {
+        _bytes = 0;
+        _resetScheduled = false;
+        _drain();
+      })
+      ..ensureVisualUpdate();
+  }
+}
+
+class _FrameAdmission {
+  _FrameAdmission(this.bytes);
+
+  final int bytes;
+  final _ready = Completer<void>();
+
+  Future<void> get ready => _ready.future;
+
+  void cancel() => _FrameBudget.cancel(this);
 }

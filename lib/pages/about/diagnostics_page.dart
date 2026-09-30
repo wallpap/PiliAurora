@@ -298,7 +298,12 @@ class _DiagnosticsPageState extends State<DiagnosticsPage> {
                         children: [
                           Padding(
                             padding: const EdgeInsets.all(12),
-                            child: SelectableText(service.snapshotText()),
+                            // 折叠时子树不在树上；用 Builder 把美化 JSON 推迟到展开时再做，
+                            // 否则每 250ms 一次的重绘都会序列化整份采样。
+                            child: Builder(
+                              builder: (_) =>
+                                  SelectableText(service.snapshotText()),
+                            ),
                           ),
                         ],
                       ),
@@ -331,8 +336,11 @@ class _DiagnosticsPageState extends State<DiagnosticsPage> {
                   children: [
                     Padding(
                       padding: const EdgeInsets.all(16),
-                      child: SelectableText(
-                        const JsonEncoder.withIndent('  ').convert(log),
+                      // 同上：折叠时不序列化整条日志。
+                      child: Builder(
+                        builder: (_) => SelectableText(
+                          const JsonEncoder.withIndent('  ').convert(log),
+                        ),
                       ),
                     ),
                   ],

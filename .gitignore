@@ -99,6 +99,8 @@ devtools_options.yaml
 # FVM Version Cache
 .fvm/
 
+/doc/dev/
+
 pili_release.json
 
 dist

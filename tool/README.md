@@ -23,12 +23,9 @@ The script prints peak process memory and writes a CSV with CPU and GPU process 
 
 For short memory spikes, use `-IntervalMilliseconds 250 -SkipGpuCounters`.
 `ProcessPeakWorkingMiB` records the Windows working-set peak since process startup,
-including spikes between samples. See [memory validation](MEMORY_VALIDATION.md)
-for cache budgets, regression tests, and a repeatable browsing/playback sequence.
+including spikes between samples.
 
 For built-in release diagnostics, open **About → Performance tracing**.
-See [内置性能与诊断](DIAGNOSTICS.md) for metrics, log levels, storage limits,
-and ZIP export instructions.
 
 ## Hardware decoder fallback
 
