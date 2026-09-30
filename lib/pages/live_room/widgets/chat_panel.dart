@@ -1,14 +1,12 @@
-import 'package:pili_aurora/common/widgets/flutter/live_list_view.dart';
 import 'package:pili_aurora/common/widgets/flutter/popup_menu.dart';
 import 'package:pili_aurora/common/widgets/gesture/tap_gesture_recognizer.dart';
 import 'package:pili_aurora/common/widgets/image/network_img_layer.dart';
-import 'package:pili_aurora/common/widgets/scroll_physics.dart'
-    show platformClampingPhysics;
 import 'package:pili_aurora/http/live.dart';
 import 'package:pili_aurora/models_new/live/live_danmaku/danmaku_msg.dart';
 import 'package:pili_aurora/models_new/live/live_superchat/item.dart';
 import 'package:pili_aurora/pages/live_room/controller.dart';
 import 'package:pili_aurora/pages/live_room/superchat/superchat_card.dart';
+import 'package:pili_aurora/pages/live_room/widgets/chat_list.dart';
 import 'package:pili_aurora/pages/member/widget/medal_widget.dart';
 import 'package:pili_aurora/pages/video/widgets/header_control.dart';
 import 'package:pili_aurora/utils/extension/theme_ext.dart';
@@ -64,19 +62,12 @@ class LiveRoomChatPanel extends StatelessWidget {
     return Stack(
       children: [
         Obx(
-          () => LiveListView.separated(
-            key: const PageStorageKey(LiveRoomChatPanel),
-            // multiply by 2 to account for separators
-            initialIndex: liveRoomController.trimDmIndex * 2,
-            padding: const .symmetric(horizontal: 12),
+          () => LiveChatList<dynamic>(
+            messages: liveRoomController.messages.value,
+            historyTruncated: liveRoomController.historyTruncated.value,
+            maxHistory: liveRoomController.chatBuffer.maxHistory,
             controller: liveRoomController.scrollController,
-            separatorBuilder: (_, _) => const SizedBox(height: 8),
-            itemCount: liveRoomController.builtLength =
-                liveRoomController.messages.length,
-            physics: platformClampingPhysics,
-            itemBuilder: (_, index) {
-              liveRoomController.chatSimpleIndex = index;
-              final item = liveRoomController.messages[index];
+            itemBuilder: (_, item) {
               if (item is DanmakuMsg) {
                 WidgetSpan? medal;
                 if (item.medalInfo case final medalInfo?) {
@@ -153,7 +144,7 @@ class LiveRoomChatPanel extends StatelessWidget {
                   onReport: () => liveRoomController.reportSC(item),
                 );
               }
-              return null;
+              return const SizedBox.shrink();
             },
           ),
         ),
@@ -236,19 +227,31 @@ class LiveRoomChatPanel extends StatelessWidget {
         Obx(
           () => liveRoomController.disableAutoScroll.value
               ? Positioned(
+                  left: 12,
                   right: 12,
                   bottom: 0,
-                  child: ElevatedButton.icon(
-                    style: const ButtonStyle(visualDensity: .comfortable),
-                    icon: const Icon(Icons.arrow_downward_rounded, size: 20),
-                    label: const Text('回到底部'),
-                    onPressed: liveRoomController.handleJumpToBottom,
+                  child: Align(
+                    alignment: Alignment.centerRight,
+                    child: ElevatedButton.icon(
+                      style: const ButtonStyle(visualDensity: .comfortable),
+                      icon: const Icon(Icons.arrow_downward_rounded, size: 20),
+                      label: Text(_unreadLabel, textAlign: TextAlign.center),
+                      onPressed: liveRoomController.handleJumpToBottom,
+                    ),
                   ),
                 )
               : const SizedBox.shrink(),
         ),
       ],
     );
+  }
+
+  String get _unreadLabel {
+    final (pending, dropped) = liveRoomController.unreadMessages.value;
+    if (dropped > 0) {
+      return '回到底部 · $pending 条新消息\n已略过 $dropped 条';
+    }
+    return pending == 0 ? '回到底部' : '回到底部 · $pending 条新消息';
   }
 
   InlineSpan _buildMsg(double devicePixelRatio, DanmakuMsg obj) {
@@ -393,7 +396,7 @@ class LiveRoomChatPanel extends StatelessWidget {
       if (autoScroll && context.mounted) {
         liveRoomController
           ..autoScroll = true
-          ..scrollToBottom();
+          ..refreshMsgIfNeeded();
       }
     });
   }
