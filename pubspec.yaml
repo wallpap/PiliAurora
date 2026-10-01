@@ -158,10 +158,7 @@ dependencies:
   wakelock_plus: ^1.2.8
   waterfall_flow: ^3.1.0
   web_socket_channel: ^3.0.3
-  webdav_client:
-    git:
-      url: https://github.com/wgh136/webdav_client.git
-      ref: main
+  webdav_client: ^1.2.2
   win32: ^6.3.0
   window_manager:
     git:
