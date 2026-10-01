@@ -840,10 +840,10 @@ packages:
     dependency: "direct main"
     description:
       name: hive_ce
-      sha256: "650b64282b7ea664ea58a08492d2b163ac6dc6d0ef552d0d77aac6678e1518e9"
+      sha256: "2b1bf607ddf852cad8deaf2331cac0e54289d3a3c64079463b26f196008909ce"
       url: "https://pub.dev"
     source: hosted
-    version: "2.20.0"
+    version: "2.20.1"
   hooks:
     dependency: transitive
     description:
@@ -1016,10 +1016,10 @@ packages:
     dependency: "direct main"
     description:
       name: jni
-      sha256: f038e58b4dc2c9037f50e233175086337e0b305e356d28211bf55f21c504cbd3
+      sha256: "6b9ca0602fef0230e83149afbe3f9f8227e94f2bbe84a1da4f14d699742f402d"
       url: "https://pub.dev"
     source: hosted
-    version: "1.0.3"
+    version: "1.1.0"
   jni_flutter:
     dependency: transitive
     description:
@@ -1040,10 +1040,10 @@ packages:
     dependency: "direct dev"
     description:
       name: jnigen
-      sha256: ad5f2aeb5e7fc83643c55adf7a1056748e49687e6d4edaee4b8c360a8fa7870f
+      sha256: "2055cf3b8a9e800af37f1ede3e9f86c02695f7bbb4f3bed3eab0457c14b75580"
       url: "https://pub.dev"
     source: hosted
-    version: "1.0.0"
+    version: "1.0.1"
   js:
     dependency: transitive
     description:
