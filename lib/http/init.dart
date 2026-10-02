@@ -2,11 +2,14 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:pili_aurora/services/diagnostics/http_diagnostics.dart';
+import 'package:pili_aurora/services/download/response_adapter.dart';
 
 import 'package:pili_aurora/http/api.dart';
 import 'package:pili_aurora/http/constants.dart';
 import 'package:pili_aurora/http/loading_state.dart';
 import 'package:pili_aurora/http/retry_interceptor.dart';
+import 'package:pili_aurora/http/response_decoder.dart';
+import 'package:pili_aurora/http/response_transformer.dart';
 import 'package:pili_aurora/http/user.dart';
 import 'package:pili_aurora/utils/accounts.dart';
 import 'package:pili_aurora/utils/accounts/account.dart';
@@ -15,16 +18,11 @@ import 'package:pili_aurora/utils/global_data.dart';
 import 'package:pili_aurora/utils/login_utils.dart';
 import 'package:pili_aurora/utils/storage_pref.dart';
 import 'package:pili_aurora/utils/utils.dart';
-import 'package:archive/archive.dart';
-import 'package:brotli/brotli.dart';
 import 'package:dio/dio.dart';
 import 'package:dio/io.dart';
 import 'package:dio_http2_adapter/dio_http2_adapter.dart';
 
 class Request {
-  static const _gzipDecoder = GZipDecoder();
-  static const _brotliDecoder = BrotliDecoder();
-
   static final Request _instance = Request._internal();
   static late AccountManager accountManager;
   static final _enableHttp2 = Pref.enableHttp2;
@@ -115,7 +113,7 @@ class Request {
     return h11;
   }
 
-  static (IOHttpClientAdapter, ConnectionManager?) _createPool() {
+  static (HttpClientAdapter, ConnectionManager?) _createPool() {
     final bool enableSystemProxy;
     late final String systemProxyHost;
     late final int? systemProxyPort;
@@ -155,7 +153,7 @@ class Request {
                 : null,
           )
         : null;
-    return (http11Adapter, connectionManager);
+    return (DownloadResponseAdapter(http11Adapter), connectionManager);
   }
 
   /*
@@ -176,7 +174,6 @@ class Request {
         if (!_enableHttp2) 'connection': 'keep-alive',
         'accept-encoding': 'br,gzip',
       },
-      responseDecoder: _responseDecoder, // Http2Adapter没有自动解压
       persistentConnection: true,
     );
 
@@ -197,7 +194,7 @@ class Request {
     dio.interceptors.add(DiagnosticHttpInterceptor());
 
     dio
-      ..transformer = BackgroundTransformer()
+      ..transformer = CompressedResponseTransformer()
       ..options.validateStatus = (int? status) {
         return status != null && status >= 200 && status < 300;
       };
@@ -295,18 +292,8 @@ class Request {
   static List<int> responseBytesDecoder(
     List<int> responseBytes,
     Map<String, List<String>> headers,
-  ) => switch (headers['content-encoding']?.firstOrNull) {
-    'gzip' => _gzipDecoder.decodeBytes(responseBytes),
-    'br' => _brotliDecoder.convert(responseBytes),
-    _ => responseBytes,
-  };
-
-  static String _responseDecoder(
-    List<int> responseBytes,
-    RequestOptions options,
-    ResponseBody responseBody,
-  ) => utf8.decode(
-    responseBytesDecoder(responseBytes, responseBody.headers),
-    allowMalformed: true,
+  ) => ResponseBodyDecoder.decompress(
+    responseBytes,
+    headers['content-encoding']?.firstOrNull,
   );
 }

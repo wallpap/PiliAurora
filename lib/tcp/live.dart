@@ -1,79 +1,16 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:pili_aurora/services/logger.dart';
-import 'package:brotli/brotli.dart';
+import 'package:pili_aurora/tcp/live_packet.dart';
+import 'package:pili_aurora/tcp/live_packet_decoder.dart';
 import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 
-class PackageHeader {
-  final int protocolVer;
-  final int operationCode;
-  final int seq;
-
-  @override
-  String toString() {
-    return 'PackageHeader{protocolVer: $protocolVer, operationCode: $operationCode, seq: $seq}';
-  }
-
-  const PackageHeader({
-    required this.protocolVer,
-    required this.operationCode,
-    required this.seq,
-  });
-
-  Uint8List toBytes(int contentSize) {
-    final bytes = ByteData(0x10)
-      ..setInt32(0, 0x10 + contentSize, Endian.big)
-      ..setInt16(4, 0x10, Endian.big)
-      ..setInt16(6, protocolVer, Endian.big)
-      ..setInt32(8, operationCode, Endian.big)
-      ..setInt32(12, seq, Endian.big);
-    return bytes.buffer.asUint8List();
-  }
-}
-
-class PackageHeaderRes extends PackageHeader {
-  PackageHeaderRes({
-    required this.totalSize,
-    required this.headerSize,
-    required super.protocolVer,
-    required super.operationCode,
-    required super.seq,
-  });
-  final int totalSize;
-  final int headerSize;
-
-  static PackageHeaderRes? fromBytesData(Uint8List data) {
-    if (data.length < 10) {
-      logger.w('数据不足以解析PackageHeader');
-      return null;
-    }
-    final byteData = ByteData.sublistView(data);
-
-    final totalSize = byteData.getUint32(0, Endian.big);
-    final headerSize = byteData.getUint16(4, Endian.big);
-    final protocolVer = byteData.getUint16(6, Endian.big);
-    final operationCode = byteData.getUint32(8, Endian.big);
-    final seq = byteData.getUint32(12, Endian.big);
-
-    return PackageHeaderRes(
-      totalSize: totalSize,
-      headerSize: headerSize,
-      protocolVer: protocolVer,
-      operationCode: operationCode,
-      seq: seq,
-    );
-  }
-
-  @override
-  String toString() {
-    return 'PackageHeaderRes{totalSize: $totalSize, headerSize: $headerSize, protocolVer: $protocolVer, operationCode: $operationCode, seq: $seq}';
-  }
-}
+export 'package:pili_aurora/tcp/live_packet.dart'
+    show PackageHeader, PackageHeaderRes;
 
 abstract class Message {
   String toJsonStr();
@@ -151,9 +88,10 @@ class LiveMessageStream {
     required this.roomId,
     required this.uid,
     required this.servers,
+    this.heartbeatInterval = const Duration(seconds: 30),
   });
-
-  static final _zlib = ZLibDecoder();
+  final Duration heartbeatInterval;
+  final _decoder = LivePacketDecoder();
 
   bool _active = true;
   WebSocketChannel? _channel;
@@ -192,53 +130,30 @@ class LiveMessageStream {
         throw Exception("all servers connect failed");
       }
 
-      _channel = await getSocket();
+      final channel = await getSocket();
       if (!_active) {
         if (kDebugMode) logger.i("$logTag init inactive $hashCode");
-        close();
+        await channel.sink.close();
         return;
       }
+      _channel = channel;
       // logger
       //   ..d('$logTag ===> TCP连接建立')
       //   ..d('$logTag ===> 发送认证包');
-      _socketSubscription = _channel?.stream.listen(
-        onData,
-        onDone: close,
-        onError: (_) => close(),
-      );
+      _socketSubscription = channel.stream
+          .asyncMap(onData)
+          .listen(
+            (_) {},
+            onDone: close,
+            onError: (_) => close(),
+          );
       _channel?.sink.add(authPackage.marshal());
     } catch (e) {
-      SmartDialog.showToast("弹幕地址链接失败: $e");
+      if (_active) SmartDialog.showToast("弹幕地址链接失败: $e");
     }
   }
 
-  @pragma('vm:notify-debugger-on-exception')
-  void _processingData(Uint8List data) {
-    try {
-      final subHeader = PackageHeaderRes.fromBytesData(data);
-      if (subHeader != null) {
-        if (_eventListeners.isNotEmpty) {
-          final msgBody = jsonDecode(
-            utf8.decode(
-              Uint8List.sublistView(
-                data,
-                subHeader.headerSize,
-                subHeader.totalSize,
-              ),
-            ),
-          );
-          for (final f in _eventListeners) {
-            f(msgBody);
-          }
-        }
-        if (subHeader.totalSize < data.length) {
-          _processingData(Uint8List.sublistView(data, subHeader.totalSize));
-        }
-      }
-    } catch (_) {}
-  }
-
-  Future<void> _heartBeat() async {
+  void _heartBeat() {
     if (!_active) {
       if (kDebugMode) logger.i("$logTag init heartBeat inactive $hashCode");
       close();
@@ -246,7 +161,7 @@ class LiveMessageStream {
     }
     if (kDebugMode) logger.i("$logTag 直播间信息流认证成功 $hashCode");
     int heartBeatCount = 1;
-    _timer ??= Timer.periodic(const Duration(seconds: 30), (timer) {
+    _timer ??= Timer.periodic(heartbeatInterval, (timer) {
       if (!_active) {
         if (kDebugMode) logger.i("$logTag heartBeat inactive $hashCode");
         timer.cancel();
@@ -275,43 +190,40 @@ class LiveMessageStream {
   }
 
   @pragma('vm:notify-debugger-on-exception')
-  void onData(dynamic data) {
-    final header = PackageHeaderRes.fromBytesData(data as Uint8List);
-    if (header != null) {
-      //心跳包回复不用处理
-      if (header.operationCode == 3) return;
-      if (header.operationCode == 8) {
-        _heartBeat();
-      }
-      final List<int> decompressedData;
-      try {
-        switch (header.protocolVer) {
-          case 0:
-          case 1:
-            _processingData(data);
-            return;
-          case 2:
-            decompressedData = _zlib.convert(Uint8List.sublistView(data, 0x10));
-            break;
-          case 3:
-            decompressedData = const BrotliDecoder().convert(
-              Uint8List.sublistView(data, 0x10),
-            );
-          //debugPrint('Body: ${utf8.decode()}');
-          default:
-            return;
+  Future<void> onData(dynamic data) async {
+    if (!_active || data is! List<int>) return;
+    try {
+      final packets = await _decoder.decode(
+        data is Uint8List ? data : Uint8List.fromList(data),
+      );
+      if (!_active) return;
+      final listeners = List.of(_eventListeners);
+      for (final packet in packets) {
+        if (!_active) break;
+        if (packet.operationCode == 8) _heartBeat();
+        if (packet.body != null) {
+          for (final listener in listeners) {
+            if (!_active) break;
+            try {
+              listener(packet.body);
+            } catch (_) {
+              // 某个业务监听器失败不阻断剩余消息。
+            }
+          }
         }
-        _processingData(
-          decompressedData is Uint8List
-              ? decompressedData
-              : Uint8List.fromList(decompressedData),
-        );
-      } catch (_) {}
+      }
+    } catch (_) {
+      if (_active) {
+        logger.w('直播消息解析失败');
+        close();
+      }
     }
   }
 
   void close() {
+    if (!_active) return;
     _active = false;
+    _decoder.close();
     if (kDebugMode) logger.i("$logTag close $hashCode");
     _timer?.cancel();
     _timer = null;
