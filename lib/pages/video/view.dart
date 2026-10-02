@@ -177,7 +177,7 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
       plPlayerController = videoDetailController.plPlayerController;
       plPlayerController!
         ..addStatusLister(playerListener)
-        ..addPositionListener(positionListener);
+        ..addCoarsePositionListener(positionListener);
     }
   }
 
@@ -204,7 +204,7 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
     if (!isShowing) {
       plPlayerController
         ?..addStatusLister(playerListener)
-        ..addPositionListener(positionListener);
+        ..addCoarsePositionListener(positionListener);
     }
     return plPlayerController?.play();
   }
@@ -311,7 +311,7 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
     videoDetailController.autoPlay = true;
     plPlayerController
       ..addStatusLister(playerListener)
-      ..addPositionListener(positionListener);
+      ..addCoarsePositionListener(positionListener);
     if (plPlayerController.preInitPlayer) {
       if (plPlayerController.autoEnterFullScreen) {
         plPlayerController.triggerFullScreen();
@@ -329,7 +329,7 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
   void dispose() {
     plPlayerController
       ?..removeStatusLister(playerListener)
-      ..removePositionListener(positionListener);
+      ..removeCoarsePositionListener(positionListener);
 
     Get.delete<HorizontalMemberPageController>(
       tag: videoDetailController.heroTag,
@@ -386,7 +386,7 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
       videoDetailController.makeHeartBeat();
       plPlayerController!
         ..removeStatusLister(playerListener)
-        ..removePositionListener(positionListener)
+        ..removeCoarsePositionListener(positionListener)
         ..pause();
     }
   }
@@ -434,7 +434,7 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
 
     plPlayerController
       ?..addStatusLister(playerListener)
-      ..addPositionListener(positionListener);
+      ..addCoarsePositionListener(positionListener);
     if (videoDetailController.autoPlay) {
       videoDetailController.playerInit(
         autoplay: videoDetailController.playerStatus?.isPlaying ?? false,
