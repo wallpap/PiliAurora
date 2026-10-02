@@ -43,6 +43,7 @@ import 'package:pili_aurora/plugin/pl_player/models/fullscreen_mode.dart';
 import 'package:pili_aurora/plugin/pl_player/models/gesture_type.dart';
 import 'package:pili_aurora/plugin/pl_player/models/video_fit_type.dart';
 import 'package:pili_aurora/plugin/pl_player/utils/preview_image_cache.dart';
+import 'package:pili_aurora/plugin/pl_player/utils/video_output_size.dart';
 import 'package:pili_aurora/plugin/pl_player/widgets/app_bar_ani.dart';
 import 'package:pili_aurora/plugin/pl_player/widgets/backward_seek.dart';
 import 'package:pili_aurora/plugin/pl_player/widgets/bottom_control.dart';
@@ -130,6 +131,11 @@ class PLVideoPlayer extends StatefulWidget {
 
 class _PLVideoPlayerState extends State<PLVideoPlayer>
     with WidgetsBindingObserver, TickerProviderStateMixin {
+  static const _fitVideoOutputToViewport = bool.fromEnvironment(
+    'WINDOWS_VIDEO_OUTPUT_SIZE',
+    defaultValue: true,
+  );
+
   late AnimationController _animationController;
   late VideoController videoController;
   late final CommonIntroController introController = widget.introController!;
@@ -153,6 +159,9 @@ class _PLVideoPlayerState extends State<PLVideoPlayer>
   bool _pauseDueToPauseUponEnteringBackgroundMode = false;
 
   StreamSubscription? _brightnessListener;
+  StreamSubscription<(int, int)>? _videoSizeListener;
+  VideoOutputSize? _videoOutputSize;
+  double _devicePixelRatio = 1.0;
   void _onBrightnessChanged(double value) {
     if (mounted && _gestureType != .left) {
       _brightnessValue.value = value;
@@ -253,6 +262,11 @@ class _PLVideoPlayerState extends State<PLVideoPlayer>
       duration: const Duration(milliseconds: 100),
     );
     videoController = plPlayerController.videoController!;
+    if (Platform.isWindows && _fitVideoOutputToViewport) {
+      _videoSizeListener = videoController.player.stream.size.listen((_) {
+        _updateVideoOutputSize();
+      });
+    }
 
     if (PlatformUtils.isMobile) {
       Future.microtask(() {
@@ -368,6 +382,7 @@ class _PLVideoPlayerState extends State<PLVideoPlayer>
     _doubleTapGestureRecognizer.dispose();
     _scaleGestureRecognizer.dispose();
     _brightnessListener?.cancel();
+    _videoSizeListener?.cancel();
     _controlsListener?.cancel();
     _animationController.dispose();
     _transformationController.dispose();
@@ -910,13 +925,43 @@ class _PLVideoPlayerState extends State<PLVideoPlayer>
   late final TransformationController _transformationController;
 
   late ColorScheme colorScheme;
-  late double maxWidth;
-  late double maxHeight;
+  double maxWidth = 0;
+  double maxHeight = 0;
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
     colorScheme = ColorScheme.of(context);
+    _devicePixelRatio = MediaQuery.devicePixelRatioOf(context);
+    _updateVideoOutputSize();
+  }
+
+  void _updateVideoOutputSize() {
+    if (!Platform.isWindows ||
+        !_fitVideoOutputToViewport ||
+        maxWidth <= 0 ||
+        maxHeight <= 0 ||
+        !mounted) {
+      return;
+    }
+
+    final playerState = videoController.player.state;
+    final size = calculateVideoOutputSize(
+      logicalWidth: maxWidth,
+      logicalHeight: maxHeight,
+      devicePixelRatio: _devicePixelRatio,
+      sourceWidth: playerState.width,
+      sourceHeight: playerState.height,
+    );
+    if (size == null || size == _videoOutputSize) return;
+    _videoOutputSize = size;
+    unawaited(_applyVideoOutputSize(size));
+  }
+
+  Future<void> _applyVideoOutputSize(VideoOutputSize size) async {
+    try {
+      await videoController.setSize(width: size.width, height: size.height);
+    } catch (_) {}
   }
 
   @override
@@ -1335,6 +1380,7 @@ class _PLVideoPlayerState extends State<PLVideoPlayer>
   Widget build(BuildContext context) {
     maxWidth = widget.maxWidth;
     maxHeight = widget.maxHeight;
+    _updateVideoOutputSize();
     final isFullScreen = this.isFullScreen;
     final primary = isFullScreen && colorScheme.isLight
         ? colorScheme.inversePrimary

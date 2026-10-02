@@ -781,6 +781,7 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
   ) async {
     isBuffering.value = false;
     _heartDuration = 0;
+    _lastCoarsePositionBucket = null;
     danmakuController?.clear();
 
     var player = _videoPlayerController;
@@ -878,7 +879,9 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
 
   List<StreamSubscription>? _subscriptions;
   final Set<ValueChanged<Duration>> _positionListeners = {};
+  final Set<ValueChanged<Duration>> _coarsePositionListeners = {};
   final Set<ValueChanged<PlayerStatus>> _statusListeners = {};
+  int? _lastCoarsePositionBucket;
 
   Timer? _wakeLockTimer;
 
@@ -987,6 +990,13 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
 
         for (final element in _positionListeners) {
           element(position);
+        }
+        final positionBucket = position.inMilliseconds ~/ 100;
+        if (positionBucket != _lastCoarsePositionBucket) {
+          _lastCoarsePositionBucket = positionBucket;
+          for (final element in _coarsePositionListeners) {
+            element(position);
+          }
         }
       }),
       stream.duration.listen(updateDuration),
@@ -1465,8 +1475,19 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
     _positionListeners.add(listener);
   }
 
-  void removePositionListener(ValueChanged<Duration> listener) =>
-      _positionListeners.remove(listener);
+  void addCoarsePositionListener(ValueChanged<Duration> listener) {
+    if (_playerCount == 0) return;
+    _coarsePositionListeners.add(listener);
+  }
+
+  void removePositionListener(ValueChanged<Duration> listener) {
+    _positionListeners.remove(listener);
+    _coarsePositionListeners.remove(listener);
+  }
+
+  void removeCoarsePositionListener(ValueChanged<Duration> listener) {
+    _coarsePositionListeners.remove(listener);
+  }
 
   void addStatusLister(ValueChanged<PlayerStatus> listener) {
     if (_playerCount == 0) return;
@@ -1612,7 +1633,9 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
 
     _removeListeners();
     _positionListeners.clear();
+    _coarsePositionListeners.clear();
     _statusListeners.clear();
+    _lastCoarsePositionBucket = null;
     _stopWakeLockTimer();
     WakelockPlus.disable();
     if (kDebugMode) {
