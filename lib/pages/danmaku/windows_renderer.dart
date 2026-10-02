@@ -257,7 +257,8 @@ class WindowsDanmakuRenderer<T> extends ChangeNotifier {
       }
     }
     if (track < 0) return false;
-    final image = rasters.get(content, rasterize: true)!.image!;
+    final image = rasters.rasterize(content, raster);
+    if (image == null) return false;
     final item = DanmakuItem<T>(
       content: content,
       width: raster.width,
@@ -286,8 +287,12 @@ class WindowsDanmakuRenderer<T> extends ChangeNotifier {
           _option.hideWhat(content.type)) {
         continue;
       }
-      if (_pending.length >= maxPendingPrewarm) break;
-      _pending[DanmakuRasterCache.keyOf(content)] = content;
+      if (rasters.isRasterized(content)) continue;
+      final key = DanmakuRasterCache.keyOf(content);
+      if (_pending.length >= maxPendingPrewarm && !_pending.containsKey(key)) {
+        break;
+      }
+      _pending[key] = content;
     }
     _schedulePrewarm();
   }
@@ -307,7 +312,7 @@ class WindowsDanmakuRenderer<T> extends ChangeNotifier {
       prewarmPending();
       _schedulePrewarm();
     }, debugLabel: 'danmaku-prewarm');
-    SchedulerBinding.instance.scheduleFrame();
+    SchedulerBinding.instance.ensureVisualUpdate();
   }
 
   void prewarmPending() {
@@ -316,7 +321,7 @@ class WindowsDanmakuRenderer<T> extends ChangeNotifier {
     var count = 0;
     while (_pending.isNotEmpty &&
         count < 4 &&
-        stopwatch.elapsedMilliseconds < 2) {
+        stopwatch.elapsedMicroseconds < 2000) {
       final content = _pending.remove(_pending.keys.first)!;
       final before = rasters.rasterizations;
       rasters.get(content, rasterize: true);
@@ -334,13 +339,20 @@ class WindowsDanmakuRenderer<T> extends ChangeNotifier {
     final previousCount = _entries.length + specialDanmaku.length;
     _entries.removeWhere((item, entry) {
       if (tick >= entry.trajectory.endMs) {
+        if (entry.scrolling) {
+          if (entry.track < scrollDanmaku.length) {
+            scrollDanmaku[entry.track].remove(item);
+          }
+        } else if (entry.track < staticDanmaku.length &&
+            identical(staticDanmaku[entry.track], item)) {
+          staticDanmaku[entry.track] = null;
+        }
         _disposeItem(item);
         return true;
       }
       item.xPosition = entry.trajectory.xAt(tick.toDouble());
       return false;
     });
-    _removeDisposed();
     specialDanmaku.removeWhere((item) {
       final content = item.content as SpecialDanmakuContentItem<T>;
       if (tick - item.drawTick! >= content.duration) {

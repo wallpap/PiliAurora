@@ -25,6 +25,7 @@ class LiveChatBuffer<T> {
   int _revision = 0;
   int _droppedPending = 0;
   bool _historyTruncated = false;
+  List<LiveChatMessage<T>>? _historySnapshot;
 
   int get historyCount => _history.length;
   int get pendingCount => _pending.length;
@@ -32,7 +33,8 @@ class LiveChatBuffer<T> {
   bool get historyTruncated => _historyTruncated;
   int get revision => _revision;
 
-  List<LiveChatMessage<T>> get history => List.unmodifiable(_history);
+  List<LiveChatMessage<T>> get history =>
+      _historySnapshot ??= List.unmodifiable(_history);
 
   void pause() => _paused = true;
 
@@ -55,6 +57,7 @@ class LiveChatBuffer<T> {
       _historyTruncated = true;
     }
     _history.addLast(message);
+    _historySnapshot = null;
     _revision++;
   }
 
@@ -72,6 +75,7 @@ class LiveChatBuffer<T> {
   void clear() {
     _history.clear();
     _pending.clear();
+    _historySnapshot = null;
     _paused = false;
     _droppedPending = 0;
     _historyTruncated = false;

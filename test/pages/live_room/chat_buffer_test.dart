@@ -95,6 +95,19 @@ void main() {
     expect(snapshot.map((message) => message.content), [1, 2]);
   });
 
+  test('history reuses an immutable snapshot until it changes', () {
+    final buffer = LiveChatBuffer<int>()..add(1);
+    final first = buffer.history;
+    expect(buffer.history, same(first));
+    buffer.add(2);
+    final second = buffer.history;
+    expect(second, isNot(same(first)));
+    expect(first.map((message) => message.content), [1]);
+    expect(second.map((message) => message.content), [1, 2]);
+    buffer.clear();
+    expect(buffer.history, isNot(same(second)));
+  });
+
   test(
     'repeated menu or background pauses do not reorder or duplicate messages',
     () {
