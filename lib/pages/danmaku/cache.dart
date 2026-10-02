@@ -27,6 +27,20 @@ class DanmakuCache {
   int get elementCount => _elementCount;
   bool containsSegment(int segment) => _loadedSegments.contains(segment);
 
+  Iterable<DanmakuElem> peekRange(int start, int end, {int limit = 64}) sync* {
+    var remaining = limit;
+    for (var bucket = start ~/ 100; bucket * 100 < end; bucket++) {
+      final elements = _buckets[bucket];
+      if (elements == null) continue;
+      for (final element in elements) {
+        if (remaining <= 0) return;
+        if (element.progress < start || element.progress >= end) continue;
+        yield element;
+        remaining--;
+      }
+    }
+  }
+
   void clear() {
     _buckets.clear();
     _segmentBuckets.clear();

@@ -155,6 +155,9 @@ class PlDanmakuController {
     return _cache.getAt(progress);
   }
 
+  Iterable<DanmakuElem> peekBufferedDanmaku(int start, int end) =>
+      _cache.peekRange(start, end);
+
   bool _fileDmLoaded = false;
 
   void initFileDmIfNeeded() {

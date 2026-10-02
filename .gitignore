@@ -111,6 +111,9 @@ test*
 !test/pages/danmaku/
 !test/pages/danmaku/cache_test.dart
 !test/pages/danmaku/render_guard_test.dart
+!test/pages/danmaku/trajectory_test.dart
+!test/pages/danmaku/windows_renderer_test.dart
+!test/pages/danmaku/windows_experiment_test.dart
 !test/plugin/
 !test/plugin/pl_player/
 !test/plugin/pl_player/decode_fallback_test.dart
