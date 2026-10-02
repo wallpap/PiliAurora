@@ -93,3 +93,27 @@ This path cannot be enabled in the Flutter player without replacing the
 current external-texture integration: Flutter's Windows texture bridge and the
 bundled media video plugin currently exchange D3D11/DXGI textures, while the
 Vulkan `gpu-next` path renders to a Win32 window.
+
+### Local comparison on October 2, 2026
+
+The probe used the bundled libmpv, the AV1 fixture in `doc/dev`, and one
+20-second run per case. CPU is the probe process share of total machine CPU;
+the numbers are not a full Flutter-page benchmark.
+
+| Output path | Requested hwdec | Active hwdec | Interop | CPU | Result |
+| --- | --- | --- | --- | ---: | --- |
+| `gpu-next + d3d11` | `auto` | `d3d11va` | `d3d11va` | 0.31% | pass |
+| `gpu-next + vulkan` | `auto` | `nvdec` | `cuda` | 0.76% | pass |
+| `gpu-next + vulkan` | `nvdec` | `nvdec` | `cuda` | 0.74% | pass |
+| `gpu-next + d3d11` | `nvdec` | `no` | unavailable | 0.68% | software fallback |
+| `gpu-next + d3d11` | `amf` | `no` | unavailable | 0.50% | software fallback |
+| `gpu-next + d3d11` | `d3d12va` | `no` | unavailable | 0.45% | software fallback |
+| `gpu-next + vulkan` | `vulkan` | `no` | unavailable | 1.05% | software fallback |
+| `gpu-next + vulkan` | `amf` | `no` | unavailable | 1.45% | software fallback |
+
+The direct Vulkan path is therefore technically usable on this machine, but
+this sample does not prove it is faster than native D3D11 output. Both direct
+paths had zero decoder and presentation drops. The D3D11 path selected the AMD
+adapter; the Vulkan path selected the RTX 3060. A Flutter integration must
+benchmark the complete page, including texture publication and danmaku, before
+changing the default backend.
