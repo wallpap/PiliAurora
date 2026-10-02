@@ -187,6 +187,31 @@ class RenderViewPointProgressBar
     }
   }
 
+  // 章节标题的 Paragraph 与进度位置无关。缓存它们，避免播放过程中每次
+  // 重绘都重复创建和销毁原生文本布局对象。
+  final _paragraphCache = <String, ui.Paragraph>{};
+
+  @override
+  set segments(List<ViewPointSegment> value) {
+    if (_paragraphCache.isNotEmpty) {
+      // RxList 可能原地变更。按当前标题清理，而不能只比较 List 引用。
+      final titles = value.map((segment) => segment.title).toSet();
+      _paragraphCache.removeWhere((title, paragraph) {
+        if (titles.contains(title)) return false;
+        paragraph.dispose();
+        return true;
+      });
+    }
+    super.segments = value;
+  }
+
+  void _clearParagraphCache() {
+    for (final paragraph in _paragraphCache.values) {
+      paragraph.dispose();
+    }
+    _paragraphCache.clear();
+  }
+
   @override
   void performLayout() {
     size = constraints.constrainDimensions(constraints.maxWidth, _barHeight);
@@ -249,7 +274,7 @@ class RenderViewPointProgressBar
       final title = segment.title;
       if (title != null && title.isNotEmpty) {
         final segmentWidth = segmentEnd - prevEnd;
-        final paragraph = _getParagraph(title, 10);
+        final paragraph = _paragraphCache[title] ??= _getParagraph(title, 10);
         final textWidth = paragraph.maxIntrinsicWidth;
         final textHeight = paragraph.height;
 
@@ -269,7 +294,6 @@ class RenderViewPointProgressBar
           );
         }
         canvas.drawParagraph(paragraph, offset);
-        paragraph.dispose();
         if (isOverflow) {
           canvas.restore();
         }
@@ -296,6 +320,7 @@ class RenderViewPointProgressBar
       ?..onTapUp = null
       ..dispose();
     _tapGestureRecognizer = null;
+    _clearParagraphCache();
     super.dispose();
   }
 

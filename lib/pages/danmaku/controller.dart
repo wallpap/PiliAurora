@@ -82,7 +82,8 @@ class PlDanmakuController {
 
   void handleDanmaku(List<DanmakuElem> elems, {int? segmentIndex}) {
     if (_disposed) return;
-    final uniques = HashMap<String, DanmakuElem>();
+    // 只有启用合并时才需要按内容去重；普通模式避免为每个分段分配哈希表。
+    final uniques = _mergeDanmaku ? HashMap<String, DanmakuElem>() : null;
     final retained = _isFileSource ? <DanmakuElem>[] : null;
     final segmentBuckets = segmentIndex == null
         ? null
@@ -100,8 +101,8 @@ class PlDanmakuController {
       }
       if (!_isFileSource &&
           (segmentBuckets![bucketIndex]?.length ?? 0) >= maxElementsPerBucket) {
-        if (_mergeDanmaku) {
-          uniques[element.content]?.count++;
+        if (uniques case final uniqueMap?) {
+          uniqueMap[element.content]?.count++;
         }
         continue;
       }
@@ -111,10 +112,10 @@ class PlDanmakuController {
       }
 
       if (!element.isSelf) {
-        if (_mergeDanmaku) {
-          final elem = uniques[element.content];
+        if (uniques case final uniqueMap?) {
+          final elem = uniqueMap[element.content];
           if (elem == null) {
-            uniques[element.content] = element..count = 1;
+            uniqueMap[element.content] = element..count = 1;
           } else {
             elem.count++;
             continue;

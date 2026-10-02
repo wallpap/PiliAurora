@@ -753,11 +753,10 @@ packages:
   flutter_smart_dialog:
     dependency: "direct main"
     description:
-      path: "."
-      ref: main
-      resolved-ref: "5a1be84314e8c53efa3b7324cd8dc535fefe931a"
-      url: "https://github.com/bggRGjQaUbCoE/flutter_smart_dialog.git"
-    source: git
+      name: flutter_smart_dialog
+      sha256: "2f50b6b120da18ceb59df42ee057e2f608a1776267203359b832e469c45a406b"
+      url: "https://pub.dev"
+    source: hosted
     version: "5.3.0"
   flutter_sortable_wrap:
     dependency: "direct main"
@@ -840,10 +839,10 @@ packages:
     dependency: "direct main"
     description:
       name: hive_ce
-      sha256: "650b64282b7ea664ea58a08492d2b163ac6dc6d0ef552d0d77aac6678e1518e9"
+      sha256: "2b1bf607ddf852cad8deaf2331cac0e54289d3a3c64079463b26f196008909ce"
       url: "https://pub.dev"
     source: hosted
-    version: "2.20.0"
+    version: "2.20.1"
   hooks:
     dependency: transitive
     description:
@@ -1016,10 +1015,10 @@ packages:
     dependency: "direct main"
     description:
       name: jni
-      sha256: f038e58b4dc2c9037f50e233175086337e0b305e356d28211bf55f21c504cbd3
+      sha256: "6b9ca0602fef0230e83149afbe3f9f8227e94f2bbe84a1da4f14d699742f402d"
       url: "https://pub.dev"
     source: hosted
-    version: "1.0.3"
+    version: "1.1.0"
   jni_flutter:
     dependency: transitive
     description:
@@ -1040,10 +1039,10 @@ packages:
     dependency: "direct dev"
     description:
       name: jnigen
-      sha256: ad5f2aeb5e7fc83643c55adf7a1056748e49687e6d4edaee4b8c360a8fa7870f
+      sha256: "2055cf3b8a9e800af37f1ede3e9f86c02695f7bbb4f3bed3eab0457c14b75580"
       url: "https://pub.dev"
     source: hosted
-    version: "1.0.0"
+    version: "1.0.1"
   js:
     dependency: transitive
     description:
@@ -1947,11 +1946,10 @@ packages:
   webdav_client:
     dependency: "direct main"
     description:
-      path: "."
-      ref: main
-      resolved-ref: "2f669c98fb81cff1c64fee93466a1475c77e4273"
-      url: "https://github.com/wgh136/webdav_client.git"
-    source: git
+      name: webdav_client
+      sha256: "682fffc50b61dc0e8f46717171db03bf9caaa17347be41c0c91e297553bf86b2"
+      url: "https://pub.dev"
+    source: hosted
     version: "1.2.2"
   win32:
     dependency: "direct main"

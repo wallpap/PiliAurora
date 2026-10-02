@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:pili_aurora/grpc/bilibili/rpc.pb.dart';
+import 'package:pili_aurora/grpc/decode_policy.dart';
 import 'package:pili_aurora/http/constants.dart';
 import 'package:pili_aurora/http/init.dart';
 import 'package:pili_aurora/http/loading_state.dart';
@@ -12,7 +13,6 @@ import 'package:flutter/foundation.dart' show kDebugMode, compute;
 import 'package:protobuf/protobuf.dart' show GeneratedMessage;
 
 abstract final class GrpcReq {
-  static const _isolateSize = 256 * 1024;
   static const _gzipMinLength = 64;
 
   static final options = Options(
@@ -72,7 +72,7 @@ abstract final class GrpcReq {
     if (response.headers.value('Grpc-Status') == '0') {
       final data = response.data;
       if (data is Uint8List) {
-        final background = isolate && data.length > _isolateSize;
+        final background = isolate && GrpcDecodePolicy.shouldUseIsolate(data);
         final operation = Diagnostics.instance.begin(
           'grpcDecode',
           '解析 gRPC 响应',
