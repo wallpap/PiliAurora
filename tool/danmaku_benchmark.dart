@@ -9,6 +9,7 @@ import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
 import 'package:pili_aurora/pages/danmaku/windows_renderer.dart';
 import 'package:pili_aurora/pages/danmaku/windows_screen.dart';
+import 'package:pili_aurora/plugin/pl_player/utils/video_output_size.dart';
 
 const _videoPath = String.fromEnvironment('DANMAKU_BENCH_VIDEO');
 const _outputPath = String.fromEnvironment(
@@ -22,6 +23,14 @@ const _repetitions = int.fromEnvironment(
 const _option = DanmakuOption(fontSize: 24, duration: 6, massiveMode: true);
 const _warmup = Duration(seconds: 3);
 const _measurement = Duration(seconds: 5);
+const _fitVideoOutputToViewport = bool.fromEnvironment(
+  'DANMAKU_BENCH_VIDEO_OUTPUT_SIZE',
+  defaultValue: false,
+);
+const _hwdec = String.fromEnvironment(
+  'DANMAKU_BENCH_HWDEC',
+  defaultValue: 'auto-copy',
+);
 
 Future<void> main(List<String> arguments) async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -35,7 +44,7 @@ Future<void> main(List<String> arguments) async {
     player = await Player.create();
     video = await VideoController.create(
       player,
-      configuration: const VideoControllerConfiguration(hwdec: 'auto-copy'),
+      configuration: const VideoControllerConfiguration(hwdec: _hwdec),
     );
     await player.setVolume(0);
     await player.setPlaylistMode(PlaylistMode.single);
@@ -78,6 +87,7 @@ class _BenchmarkState extends State<_Benchmark> {
   bool _measuring = false;
   double _addMicros = 0;
   int _addCalls = 0;
+  VideoOutputSize? _videoOutputSize;
 
   @override
   void initState() {
@@ -180,6 +190,19 @@ class _BenchmarkState extends State<_Benchmark> {
                   )
                   .length,
               'rssBytes': ProcessInfo.currentRss,
+              'videoSourceSize': widget.video == null
+                  ? null
+                  : {
+                      'width': widget.video!.player.state.width,
+                      'height': widget.video!.player.state.height,
+                    },
+              'videoOutputSize': _videoOutputSize == null
+                  ? null
+                  : {
+                      'width': _videoOutputSize!.width,
+                      'height': _videoOutputSize!.height,
+                    },
+              'activeHwdec': widget.player?.getProperty('hwdec-current'),
               if (prepared) 'statistics': _renderer!.statistics,
             };
             _results.add(result);
@@ -193,6 +216,8 @@ class _BenchmarkState extends State<_Benchmark> {
       await output.writeAsString(
         const JsonEncoder.withIndent('  ').convert({
           'video': _videoPath,
+          'requestedHwdec': _hwdec,
+          'fitVideoOutputToViewport': _fitVideoOutputToViewport,
           'devicePixelRatio': mounted
               ? MediaQuery.devicePixelRatioOf(context)
               : null,
@@ -246,6 +271,7 @@ class _BenchmarkState extends State<_Benchmark> {
     body: LayoutBuilder(
       builder: (context, constraints) {
         final size = constraints.biggest;
+        _updateVideoOutputSize(size);
         return Stack(
           fit: StackFit.expand,
           children: [
@@ -285,6 +311,27 @@ class _BenchmarkState extends State<_Benchmark> {
       },
     ),
   );
+
+  void _updateVideoOutputSize(Size viewport) {
+    final video = widget.video;
+    if (!_fitVideoOutputToViewport ||
+        video == null ||
+        viewport.width <= 0 ||
+        viewport.height <= 0) {
+      return;
+    }
+
+    final size = calculateVideoOutputSize(
+      logicalWidth: viewport.width,
+      logicalHeight: viewport.height,
+      devicePixelRatio: MediaQuery.devicePixelRatioOf(context),
+      sourceWidth: video.player.state.width,
+      sourceHeight: video.player.state.height,
+    );
+    if (size == null || size == _videoOutputSize) return;
+    _videoOutputSize = size;
+    unawaited(video.setSize(width: size.width, height: size.height));
+  }
 
   @override
   void dispose() {

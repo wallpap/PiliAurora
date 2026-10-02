@@ -135,6 +135,7 @@ class _PLVideoPlayerState extends State<PLVideoPlayer>
     'WINDOWS_VIDEO_OUTPUT_SIZE',
     defaultValue: true,
   );
+  static const _videoOutputResizeDelay = Duration(milliseconds: 100);
 
   late AnimationController _animationController;
   late VideoController videoController;
@@ -160,6 +161,8 @@ class _PLVideoPlayerState extends State<PLVideoPlayer>
 
   StreamSubscription? _brightnessListener;
   StreamSubscription<(int, int)>? _videoSizeListener;
+  Timer? _videoOutputResizeTimer;
+  VideoOutputSize? _pendingVideoOutputSize;
   VideoOutputSize? _videoOutputSize;
   double _devicePixelRatio = 1.0;
   void _onBrightnessChanged(double value) {
@@ -383,6 +386,7 @@ class _PLVideoPlayerState extends State<PLVideoPlayer>
     _scaleGestureRecognizer.dispose();
     _brightnessListener?.cancel();
     _videoSizeListener?.cancel();
+    _videoOutputResizeTimer?.cancel();
     _controlsListener?.cancel();
     _animationController.dispose();
     _transformationController.dispose();
@@ -953,9 +957,32 @@ class _PLVideoPlayerState extends State<PLVideoPlayer>
       sourceWidth: playerState.width,
       sourceHeight: playerState.height,
     );
-    if (size == null || size == _videoOutputSize) return;
-    _videoOutputSize = size;
-    unawaited(_applyVideoOutputSize(size));
+    if (size == null) return;
+    _scheduleVideoOutputSize(size);
+  }
+
+  void _scheduleVideoOutputSize(VideoOutputSize size) {
+    if (size == _videoOutputSize && _pendingVideoOutputSize == null) {
+      return;
+    }
+
+    if (_videoOutputSize == null) {
+      _pendingVideoOutputSize = null;
+      _videoOutputSize = size;
+      unawaited(_applyVideoOutputSize(size));
+      return;
+    }
+
+    _pendingVideoOutputSize = size;
+    _videoOutputResizeTimer?.cancel();
+    _videoOutputResizeTimer = Timer(_videoOutputResizeDelay, () {
+      _videoOutputResizeTimer = null;
+      final pending = _pendingVideoOutputSize;
+      _pendingVideoOutputSize = null;
+      if (!mounted || pending == null || pending == _videoOutputSize) return;
+      _videoOutputSize = pending;
+      unawaited(_applyVideoOutputSize(pending));
+    });
   }
 
   Future<void> _applyVideoOutputSize(VideoOutputSize size) async {
