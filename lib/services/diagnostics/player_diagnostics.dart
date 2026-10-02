@@ -8,9 +8,15 @@ import 'package:pili_aurora/services/diagnostics/diagnostics.dart';
 /// 跟随播放器生命周期注册指标和日志；取消注册后不再访问原生句柄。
 class PlayerDiagnostics {
   PlayerDiagnostics(this.player, {Map<String, Object?> Function()? extra}) {
+    // 原生版本在播放器生命周期内固定，无须每个采样窗口重新查询。
+    final versions = {
+      'mpv-version': _property('mpv-version'),
+      'ffmpeg-version': _property('ffmpeg-version'),
+    };
     _unregister = Diagnostics.instance.register(
       'player.${player.hashCode}',
       () => {
+        ...versions,
         'playing': player.state.playing,
         'buffering': player.state.buffering,
         'positionMs': player.state.position.inMilliseconds,
@@ -21,6 +27,7 @@ class PlayerDiagnostics {
         for (final property in [
           'hwdec-current',
           'video-codec',
+          'video-format',
           'estimated-vf-fps',
           'decoder-frame-drop-count',
           'frame-drop-count',

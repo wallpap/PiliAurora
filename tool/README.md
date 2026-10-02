@@ -33,8 +33,26 @@ Windows and Android hardware decoding uses an ordered candidate list. Automatic
 settings first let mpv select a decoder, then try platform-specific decoders in
 efficiency order. Explicit decoder settings keep their configured order.
 
-When an AV1 hardware decoder reports an initialization failure, the player
-records that backend as unavailable for the current process, reopens the media
-at the current position, and tries the next candidate. Software decoding
-(`hwdec=no`) is the final fallback. A normal AV1 packet or sequence-header
-error does not trigger this path by itself.
+The complete list is passed to mpv, which handles initialization and runtime
+fallback for each media. The player reapplies the latest settings before opening
+media. Software decoding (`hwdec=no`) is the final fallback; an explicit `no`
+keeps its configured position. The application does not reopen media on decoder
+errors or cache failed backends across media.
+
+Windows libmpv is pinned to the 20260819 build in
+`third_party/media_kit_libs_windows_video`. It includes the FFmpeg fix for D3D12
+reference-only resource pool exhaustion. CMake verifies the archive and DLL with
+SHA256 and replaces stale build outputs. The AMF and D3D12 non-copy modes still
+require renderer interop support; use a compatible copy mode or automatic
+selection. Performance traces include the loaded mpv/FFmpeg versions and
+`video-format`, alongside the requested and active hardware decoders.
+
+After a Windows build, verify the bundled DLL, stale-cache replacement,
+repeat configuration, and rejection of a corrupt archive:
+
+```powershell
+pwsh -File tool/verify-windows-libmpv.ps1 -Configuration Debug
+```
+
+Use `-Configuration Release` for the release bundle. This check uses the downloaded
+archive in the build directory and discovers CMake from `CMakeCache.txt`.
