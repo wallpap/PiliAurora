@@ -8,6 +8,32 @@ DanmakuElem _element(int progress, int id) => DanmakuElem(
 );
 
 void main() {
+  test(
+    'lookahead respects bounds and limit without changing eviction order',
+    () {
+      final cache = DanmakuCache(maxSegments: 2)
+        ..addSegmentBuckets(0, {
+          0: [_element(0, 0)],
+          1: [_element(100, 1), _element(150, 2)],
+          2: [_element(200, 3)],
+        })
+        ..addSegmentBuckets(1, {
+          3600: [_element(360000, 4)],
+        });
+      expect(cache.peekRange(100, 200).map((element) => element.progress), [
+        100,
+        150,
+      ]);
+      expect(
+        cache.peekRange(100, 201, limit: 1).map((element) => element.progress),
+        [100],
+      );
+      expect(cache.peekRange(0, 100, limit: 0), isEmpty);
+      cache.addSegmentBuckets(2, {});
+      expect(cache.containsSegment(0), isFalse);
+      expect(cache.containsSegment(1), isTrue);
+    },
+  );
   test('high density segment remains cached without repeated reload', () {
     final cache = DanmakuCache(
       maxBuckets: 10,

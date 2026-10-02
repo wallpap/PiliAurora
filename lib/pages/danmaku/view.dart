@@ -4,10 +4,13 @@ import 'package:pili_aurora/grpc/bilibili/community/service/dm/v1.pb.dart';
 import 'package:pili_aurora/pages/danmaku/controller.dart';
 import 'package:pili_aurora/pages/danmaku/danmaku_model.dart';
 import 'package:pili_aurora/pages/danmaku/render_guard.dart';
+import 'package:pili_aurora/pages/danmaku/windows_renderer.dart';
+import 'package:pili_aurora/pages/danmaku/windows_screen.dart';
 import 'package:pili_aurora/plugin/pl_player/controller.dart';
 import 'package:pili_aurora/plugin/pl_player/models/play_status.dart';
 import 'package:pili_aurora/plugin/pl_player/utils/danmaku_options.dart';
 import 'package:pili_aurora/utils/danmaku_utils.dart';
+import 'package:pili_aurora/utils/platform_utils.dart';
 import 'package:canvas_danmaku/canvas_danmaku.dart';
 import 'package:get/get.dart';
 import 'package:material_ui/material_ui.dart';
@@ -38,6 +41,10 @@ class PlDanmaku extends StatefulWidget {
 }
 
 class _PlDanmakuState extends State<PlDanmaku> {
+  static const _windowsPreprocess = bool.fromEnvironment(
+    'WINDOWS_DANMAKU_PREPROCESS',
+    defaultValue: true,
+  );
   static const _maxDanmakuPerTick = 120;
   static const _maxActiveDanmaku = 600;
   static const _maxSpecialPerTick = 4;
@@ -47,6 +54,8 @@ class _PlDanmakuState extends State<PlDanmaku> {
 
   late final PlDanmakuController _plDanmakuController;
   DanmakuController<DanmakuExtra>? _controller;
+  WindowsDanmakuRenderer<DanmakuExtra>? _windowsRenderer;
+  int _lastPreparedPosition = -1;
   int latestAddedPosition = -1;
 
   @override
@@ -126,7 +135,6 @@ class _PlDanmakuState extends State<PlDanmaku> {
     List<DanmakuElem>? currentDanmakuList = _plDanmakuController
         .getCurrentDanmaku(currentPosition);
     if (currentDanmakuList != null) {
-      final blockColorful = DanmakuOptions.blockColorful;
       final danmakuWeight = DanmakuOptions.danmakuWeight;
       var remaining = _maxDanmakuPerTick.clamp(
         0,
@@ -177,25 +185,7 @@ class _PlDanmakuState extends State<PlDanmaku> {
             added = false;
           }
         } else {
-          added = controller.addDanmaku(
-            DanmakuContentItem(
-              e.content,
-              color: blockColorful
-                  ? Colors.white
-                  : DmUtils.decimalToColor(e.color),
-              type: DmUtils.getPosition(e.mode),
-              isColorful:
-                  playerController.showVipDanmaku &&
-                  e.colorful == DmColorfulType.VipGradualColor,
-              count: e.count > 1 ? e.count : null,
-              selfSend: e.isSelf,
-              extra: VideoDanmaku(
-                id: e.id.toInt(),
-                mid: e.midHash,
-                like: e.likeCount.toInt(),
-              ),
-            ),
-          );
+          added = controller.addDanmaku(_normalContent(e));
         }
         if (added) {
           remaining--;
@@ -203,6 +193,49 @@ class _PlDanmakuState extends State<PlDanmaku> {
         }
       }
     }
+    _prepareBuffered(currentPosition);
+  }
+
+  DanmakuContentItem<DanmakuExtra> _normalContent(DanmakuElem element) =>
+      DanmakuContentItem<DanmakuExtra>(
+        element.content,
+        color: DanmakuOptions.blockColorful
+            ? Colors.white
+            : DmUtils.decimalToColor(element.color),
+        type: DmUtils.getPosition(element.mode),
+        isColorful:
+            playerController.showVipDanmaku &&
+            element.colorful == DmColorfulType.VipGradualColor,
+        count: element.count > 1 ? element.count : null,
+        selfSend: element.isSelf,
+        extra: VideoDanmaku(
+          id: element.id.toInt(),
+          mid: element.midHash,
+          like: element.likeCount.toInt(),
+        ),
+      );
+
+  void _prepareBuffered(int position) {
+    final renderer = _windowsRenderer;
+    if (renderer == null || (position - _lastPreparedPosition).abs() < 500) {
+      return;
+    }
+    _lastPreparedPosition = position;
+    final end = (position + 2000).clamp(
+      position,
+      (playerController.buffered.value * 1000).clamp(position, position + 2000),
+    );
+    if (end <= position + 100) return;
+    renderer.queuePrewarm(
+      _plDanmakuController
+          .peekBufferedDanmaku(position + 100, end)
+          .where(
+            (element) =>
+                element.mode != 7 &&
+                element.weight >= DanmakuOptions.danmakuWeight,
+          )
+          .map(_normalContent),
+    );
   }
 
   int _activeDanmakuCount(DanmakuController<DanmakuExtra> controller) {
@@ -221,6 +254,7 @@ class _PlDanmakuState extends State<PlDanmaku> {
       ..removeStatusLister(playerListener);
     _plDanmakuController.dispose();
     _controller = null;
+    _windowsRenderer = null;
     super.dispose();
   }
 
@@ -235,6 +269,19 @@ class _PlDanmakuState extends State<PlDanmaku> {
         final opacity = playerController.enableShowDanmaku.value
             ? playerController.danmakuOpacity.value
             : 0.0;
+        if (PlatformUtils.isDesktop && _windowsPreprocess) {
+          return WindowsDanmakuScreen<DanmakuExtra>(
+            option: option,
+            size: widget.size,
+            opacity: opacity,
+            createdRenderer: (renderer) {
+              _windowsRenderer = renderer;
+              playerController.danmakuController = _controller =
+                  renderer.controller;
+              if (!playerController.playerStatus.isPlaying) renderer.pause();
+            },
+          );
+        }
         final child = DanmakuScreen<DanmakuExtra>(
           createdController: (e) {
             playerController.danmakuController = _controller = e;
