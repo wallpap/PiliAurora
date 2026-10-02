@@ -53,7 +53,7 @@ jobs:
 
       - name: Write version and build info
         shell: pwsh
-        run: lib/scripts/build.ps1
+        run: lib/scripts/build.ps1 -Version '${{ inputs.tag }}'
 
       - name: Apply Flutter patches
         shell: pwsh
