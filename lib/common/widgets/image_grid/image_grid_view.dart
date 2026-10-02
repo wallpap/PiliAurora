@@ -183,7 +183,7 @@ class ImageGridView extends StatelessWidget {
             ),
             child: const Text(
               '保存视频',
-              style: const TextStyle(fontSize: 14),
+              style: TextStyle(fontSize: 14),
             ),
           ),
       ],
