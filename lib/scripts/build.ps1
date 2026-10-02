@@ -1,9 +1,17 @@
 param(
-    [string]$Arg = ''
+    [string]$Arg = '',
+    [string]$Version = ''
 )
 
 try {
     $versionName = $null
+    $requestedVersion = $Version.Trim()
+    if ($requestedVersion.StartsWith('v')) {
+        $requestedVersion = $requestedVersion.Substring(1)
+    }
+    if ($requestedVersion -and $requestedVersion -notmatch '^\d+\.\d+\.\d+$') {
+        throw "invalid version: $Version"
+    }
 
     $versionCode = [int](git rev-list --count HEAD).Trim()
 
@@ -11,8 +19,8 @@ try {
 
     $updatedContent = foreach ($line in (Get-Content -Path 'pubspec.yaml' -Encoding UTF8)) {
         if ($line -match '^\s*version:\s*([\d\.]+)') {
-            $versionName = $matches[1]
-            if ($Arg -eq 'android') {
+            $versionName = if ($requestedVersion) { $requestedVersion } else { $matches[1] }
+            if ($Arg -eq 'android' -and -not $requestedVersion) {
                 $versionName += '-' + $commitHash.Substring(0, 9)
             }
             "version: $versionName+$versionCode"

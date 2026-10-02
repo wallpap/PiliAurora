@@ -78,7 +78,7 @@ jobs:
             - name: Write version and build info
               if: ${{ github.event_name == 'workflow_dispatch' }}
               shell: pwsh
-              run: lib/scripts/build.ps1 android
+              run: lib/scripts/build.ps1 android -Version '${{ github.event.inputs.tag }}'
 
             - name: Build release APK
               if: ${{ github.event_name == 'workflow_dispatch' }}
