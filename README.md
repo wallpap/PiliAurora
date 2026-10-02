@@ -4,7 +4,7 @@
 
 浏览视频与番剧、观看直播、管理收藏和离线缓存，也支持动态、评论和站内消息。
 
-基于 [PiliPlus](https://github.com/bggRGjQaUbCoE/PiliPlus) 进一步开发,做了激进的修改,对部分功能进行了优化,理论上资源使用会更少,主要为自用,欢迎尝试使用.
+基于 [PiliPlus](https://github.com/bggRGjQaUbCoE/PiliPlus) 的2.1.5版本进一步开发,做了激进的修改,对部分功能进行了优化,理论上资源使用会更少,主要为自用,欢迎尝试使用.
 
 [源码](https://github.com/wallpap/PiliAurora) · [发布版本](https://github.com/wallpap/PiliAurora/releases) · [问题反馈](https://github.com/wallpap/PiliAurora/issues) · [许可证](LICENSE)
 
