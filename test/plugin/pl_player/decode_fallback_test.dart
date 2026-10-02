@@ -1,8 +1,22 @@
+import 'dart:io' show Platform;
+
+import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:pili_aurora/plugin/pl_player/models/hwdec_type.dart';
 import 'package:pili_aurora/plugin/pl_player/utils/decode_fallback.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test('uses copy-back hardware decoding by default on Windows only', () {
+    final expected = Platform.isAndroid
+        ? kDebugMode
+              ? 'auto-safe'
+              : 'mediacodec,auto-safe'
+        : Platform.isWindows
+        ? 'auto-copy'
+        : 'auto';
+    expect(HwDecType.kHwdec, expected);
+  });
+
   test('recognizes AV1 hardware decoder failures', () {
     expect(
       isHardwareDecodeFailure(

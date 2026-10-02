@@ -38,6 +38,8 @@ enum HwDecType {
       ? kDebugMode
             ? autoSafe.hwdec
             : [mediacodec.hwdec, autoSafe.hwdec].join(',')
+      : Platform.isWindows
+      ? autoCopy.hwdec
       : auto.hwdec;
 
   /// 按硬件解码效率排列候选项。`auto` 先交给 mpv 选择，失败后再逐个探测。
@@ -60,7 +62,12 @@ enum HwDecType {
       add(value);
     }
 
-    if (result.any(_isAutomaticMode)) {
+    final windowsCopyOnly =
+        Platform.isWindows &&
+        result.contains(autoCopy.hwdec) &&
+        !result.contains(auto.hwdec) &&
+        !result.contains(autoSafe.hwdec);
+    if (result.any(_isAutomaticMode) && !windowsCopyOnly) {
       for (final value in _platformFallbacks) {
         add(value);
       }

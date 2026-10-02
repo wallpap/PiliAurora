@@ -1,7 +1,39 @@
+import 'dart:io' show Platform;
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pili_aurora/plugin/pl_player/utils/hardware_video_configuration.dart';
 
 void main() {
+  test('Windows auto-copy does not append incompatible direct backends', () {
+    final configuration = hardwareVideoConfiguration(
+      enabled: true,
+      configured: 'auto-copy',
+    );
+
+    expect(configuration.hwdec, 'auto-copy,no');
+    expect(configuration.androidAttachSurfaceAfterVideoParameters, isFalse);
+  }, skip: !Platform.isWindows);
+
+  test('Windows auto-copy preserves explicitly configured direct backends', () {
+    final configuration = hardwareVideoConfiguration(
+      enabled: true,
+      configured: 'auto-copy,d3d11va',
+    );
+
+    expect(configuration.hwdec, 'auto-copy,d3d11va,no');
+  }, skip: !Platform.isWindows);
+
+  test('Windows explicit auto still expands the direct backend candidates', () {
+    final configuration = hardwareVideoConfiguration(
+      enabled: true,
+      configured: 'auto-copy,auto',
+    );
+
+    expect(configuration.hwdec!.split(',').take(2), ['auto-copy', 'auto']);
+    expect(configuration.hwdec!.split(','), contains('d3d11va'));
+    expect(configuration.hwdec!.split(',').last, 'no');
+  }, skip: !Platform.isWindows);
+
   test('passes every configured backend to the native video controller', () {
     final configuration = hardwareVideoConfiguration(
       enabled: true,
