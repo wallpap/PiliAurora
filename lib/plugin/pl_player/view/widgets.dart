@@ -273,12 +273,12 @@ class _VideoShotImageState extends State<VideoShotImage> {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.url != widget.url) {
       _loadImg();
-    } else if (oldWidget.x != widget.x ||
-        oldWidget.y != widget.y ||
-        oldWidget.imgXSize != widget.imgXSize ||
+    } else if (oldWidget.imgXSize != widget.imgXSize ||
         oldWidget.imgYSize != widget.imgYSize ||
         oldWidget.height != widget.height) {
       _initSize();
+    } else if (oldWidget.x != widget.x || oldWidget.y != widget.y) {
+      _setSrcRect(_srcRect.width, _srcRect.height);
     }
   }
 

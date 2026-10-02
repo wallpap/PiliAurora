@@ -47,6 +47,9 @@ class DanmakuRasterCache {
 
   int get length => _entries.length;
 
+  bool isRasterized(DanmakuContentItem content) =>
+      _entries[keyOf(content)]?.image != null;
+
   static DanmakuRasterKey keyOf(DanmakuContentItem content) => (
     content.text,
     content.color.toARGB32(),
@@ -54,6 +57,29 @@ class DanmakuRasterCache {
     content.selfSend,
     content.count,
   );
+
+  ui.Image? rasterize(DanmakuContentItem content, DanmakuRaster entry) {
+    if (entry.image == null) {
+      final paragraph = entry.paragraph;
+      if (paragraph == null) return null;
+      canvas_danmaku.DmUtils.devicePixelRatio = devicePixelRatio;
+      canvas_danmaku.DmUtils.fontFamily = fontFamily;
+      canvas_danmaku.DmUtils.updateSelfSendPaint(option.strokeWidth);
+      entry.image = canvas_danmaku.DmUtils.recordDanmakuImage(
+        contentParagraph: paragraph,
+        content: content,
+        fontSize: option.fontSize,
+        fontWeight: option.fontWeight,
+        strokeWidth: option.strokeWidth,
+      );
+      paragraph.dispose();
+      entry.paragraph = null;
+      bytes += entry.bytes;
+      rasterizations++;
+    }
+    _trim();
+    return entry.image;
+  }
 
   DanmakuRaster? get(DanmakuContentItem content, {bool rasterize = false}) {
     canvas_danmaku.DmUtils.devicePixelRatio = devicePixelRatio;
@@ -94,26 +120,21 @@ class DanmakuRasterCache {
       hits++;
     }
     _entries[key] = entry;
-    if (rasterize && entry.image == null) {
-      entry.image = canvas_danmaku.DmUtils.recordDanmakuImage(
-        contentParagraph: entry.paragraph!,
-        content: content,
-        fontSize: option.fontSize,
-        fontWeight: option.fontWeight,
-        strokeWidth: option.strokeWidth,
-      );
-      entry.paragraph!.dispose();
-      entry.paragraph = null;
-      bytes += entry.bytes;
-      rasterizations++;
+    if (rasterize) {
+      this.rasterize(content, entry);
+    } else {
+      _trim();
     }
+    return entry;
+  }
+
+  void _trim() {
     while (_entries.length > maxEntries || bytes > maxBytes) {
       final oldest = _entries.remove(_entries.keys.first)!;
       if (oldest.image != null) bytes -= oldest.bytes;
       oldest.dispose();
       evictions++;
     }
-    return entry;
   }
 
   void clear() {

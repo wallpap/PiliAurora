@@ -83,6 +83,16 @@ void main() {
     renderer.dispose();
   });
 
+  test('prewarm skips content already rasterized', () {
+    final renderer = WindowsDanmakuRenderer<void>(option: _option, size: _size)
+      ..add(_text('cached'));
+    final rasterizations = renderer.rasters.rasterizations;
+    renderer.queuePrewarm([_text('cached')]);
+    expect(renderer.statistics['pendingPrewarm'], 0);
+    expect(renderer.rasters.rasterizations, rasterizations);
+    renderer.dispose();
+  });
+
   test('overlapping self-sent items use group opacity and active count stays bounded', () {
     final renderer = WindowsDanmakuRenderer<void>(
       option: _option.copyWith(area: 0.3, safeArea: false, massiveMode: true),
@@ -174,6 +184,7 @@ void main() {
       ..resume()
       ..advance(const Duration(seconds: 2));
     expect(renderer.isEmpty, isTrue);
+    expect(renderer.scrollDanmaku.every((track) => track.isEmpty), isTrue);
     expect(renderer.activeBytes, 0);
     renderer.dispose();
   });

@@ -87,20 +87,24 @@ class DownloadManager {
       onReceiveProgress?.call(0, contentLength);
     }
 
-    int? last;
     try {
-      await writeDownloadStream(
-        data.stream,
-        sink,
-        initialBytes: received,
-        onProgress: (received) {
-          final now = DateTime.now().millisecondsSinceEpoch ~/ 1000;
-          if (last != now) {
-            last = now;
-            onReceiveProgress?.call(received, contentLength);
-          }
-        },
-      );
+      if (onReceiveProgress == null) {
+        await sink.addStream(data.stream);
+      } else {
+        int? last;
+        await writeDownloadStream(
+          data.stream,
+          sink,
+          initialBytes: received,
+          onProgress: (received) {
+            final now = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+            if (last != now) {
+              last = now;
+              onReceiveProgress!(received, contentLength);
+            }
+          },
+        );
+      }
       await sink.close();
       if (_cancelToken.isCancelled) {
         onDone(
