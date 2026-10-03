@@ -117,3 +117,31 @@ paths had zero decoder and presentation drops. The D3D11 path selected the AMD
 adapter; the Vulkan path selected the RTX 3060. A Flutter integration must
 benchmark the complete page, including texture publication and danmaku, before
 changing the default backend.
+
+## 真实弹幕播放实验
+
+`tool/danmaku_playback_benchmark.dart` 接受运行时 `--name=value` 参数：
+
+- 必填：`video`、`danmaku`。文件必须在本地。
+- 可选：`audio`、`output`、`cache-mib`、`cache-entries`、`renderer`。
+- `renderer`：`prepared`（默认）、`baseline` 或 `both`。
+- `kind`：`stress`（默认）或 `lifecycle`。后者仅支持 prepared。
+- 控制项：`start-ms`、`warmup-seconds`、`measurement-seconds`、`repetitions`、`telemetry-ms`、`prewarm`、`hwdec`、`label`。
+- `telemetry-ms=0` 关闭周期遥测；其他取值必须不低于 100 ms。读取是同步操作，不保证零扰动。
+
+只构建工具：
+
+```powershell
+flutter build windows --profile --no-pub --target tool/danmaku_playback_benchmark.dart
+```
+
+**当前 Windows 原生退出故障未解决，暂不自动启动批量基准。** 工具写出
+`PLAYBACK_BENCH_READY` 后保持引擎运行。该标记只表示测量和媒体释放完成，
+不是进程退出成功。不要在工具中调用 `exit()` 或 `exitApplication()`。
+关闭窗口也不应被假定已经通过稳定性验证。
+
+`lifecycle` 的 small-viewport 仅改变应用内内容尺寸，不改变系统 DPI。
+最终输出使用真实 DPR、播放器时间和匿名数量统计，不包含弹幕正文或媒体路径。
+原始数据留在 `build/`；不提交媒体、账号数据或完整崩溃转储。
+
+接手记录、故障边界和遥测语义见 `tool/reports/` 的 20261003 报告。
