@@ -1,17 +1,8 @@
-import 'dart:io';
-
 import 'package:canvas_danmaku/canvas_danmaku.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pili_aurora/pages/danmaku/windows_renderer.dart';
 import 'package:pili_aurora/pages/danmaku/windows_screen.dart';
-
-import '../../../tool/danmaku_playback_benchmark.dart'
-    show
-        PlaybackBenchmarkConfig,
-        playbackFixtureUri,
-        playbackProgressDelta,
-        PlaybackProgressAccumulator;
 
 const _size = Size(960, 540);
 const _option = DanmakuOption(
@@ -31,92 +22,6 @@ Widget _host(Widget child) => Directionality(
 );
 
 void main() {
-  test('local audio/video EDL uses UTF-8 path byte lengths', () {
-    expect(playbackFixtureUri('v.m4s', ''), 'v.m4s');
-    expect(
-      playbackFixtureUri('视频.m4s', '音频.m4s'),
-      'edl://!no_chapters;%10%视频.m4s;!new_stream;!no_chapters;%10%音频.m4s',
-    );
-  });
-
-  test('playback benchmark cannot force native engine shutdown', () {
-    final source = File('tool/danmaku_playback_benchmark.dart')
-        .readAsStringSync();
-    expect(RegExp(r'\b(exit|exitApplication)\s*\(').hasMatch(source), isFalse);
-  });
-
-  test(
-    'media progress distinguishes looping from backward seeks and jitter',
-    () {
-      expect(playbackProgressDelta(1000, 1500, 300000), (
-        milliseconds: 500,
-        wrapped: false,
-        unexpectedBackwards: false,
-      ));
-      expect(playbackProgressDelta(299500, 500, 300000), (
-        milliseconds: 1000,
-        wrapped: true,
-        unexpectedBackwards: false,
-      ));
-      expect(
-        playbackProgressDelta(10000, 5000, 300000).unexpectedBackwards,
-        isTrue,
-      );
-      expect(playbackProgressDelta(299500, 500, 0).unexpectedBackwards, isTrue);
-      expect(playbackProgressDelta(10000, 9800, 300000), (
-        milliseconds: 0,
-        wrapped: false,
-        unexpectedBackwards: false,
-      ));
-    },
-  );
-
-  test('notification jitter cannot double-count playback progress', () {
-    final progress = PlaybackProgressAccumulator(10000)
-      ..observe(9800, 300000)
-      ..observe(10000, 300000);
-    expect(progress.milliseconds, 0);
-    progress.observe(10500, 300000);
-    expect(progress.milliseconds, 500);
-    progress
-      ..setPosition(299500)
-      ..observe(500, 300000);
-    expect(progress.milliseconds, 1500);
-    expect(progress.wraps, 1);
-    progress
-      ..observe(10000, 300000)
-      ..observe(5000, 300000);
-    expect(progress.unexpectedBackwards, 1);
-  });
-
-  test('composition and endurance controls are explicit and bounded', () {
-    final config = PlaybackBenchmarkConfig([
-      '--kind=endurance',
-      '--telemetry-ms=0',
-      '--opacity=1',
-      '--composition=reference-group',
-      '--include-special=false',
-      '--overlay=false',
-    ]);
-    expect(config.opacity, 1);
-    expect(config.includeSpecial, isFalse);
-    expect(config.overlay, isFalse);
-    expect(config.toJson()['frameTimingsRecorded'], isFalse);
-    for (final arguments in [
-      ['--opacity=0'],
-      ['--opacity=1.1'],
-      ['--opacity=NaN'],
-      ['--opacity=Infinity'],
-      ['--composition=force-direct'],
-      ['--include-special=maybe'],
-      ['--overlay=maybe'],
-      ['--kind=endurance'],
-      ['--kind=endurance', '--telemetry-ms=0', '--renderer=both'],
-    ]) {
-      expect(() => PlaybackBenchmarkConfig(arguments), throwsArgumentError);
-    }
-  });
-
   testWidgets('screen passes creation-time cache limits to renderer', (
     tester,
   ) async {
@@ -136,31 +41,6 @@ void main() {
     expect(renderer.statistics['cacheEntryLimit'], 128);
     await tester.pumpWidget(const SizedBox.shrink());
   });
-
-  test(
-    'playback benchmark parameters are bounded and reject unknown options',
-    () {
-      final config = PlaybackBenchmarkConfig([
-        '--cache-mib=24',
-        '--telemetry-ms=0',
-      ]);
-      expect(config.cacheMiB, 24);
-      expect(config.telemetryMs, 0);
-      expect(config.toJson().containsKey('video'), isFalse);
-      for (final arguments in [
-        ['--cache-mib=0'],
-        ['--telemetry-ms=20'],
-        ['--repetitions=0'],
-        ['--renderer=unknown'],
-        ['--unknown=value'],
-        ['--prewarm=maybe'],
-        ['--cache-mib=16', '--cache-mib=24'],
-        ['--kind=lifecycle', '--renderer=both'],
-      ]) {
-        expect(() => PlaybackBenchmarkConfig(arguments), throwsArgumentError);
-      }
-    },
-  );
 
   testWidgets(
     'hidden and ancestor-muted screens freeze then resume without a time jump',

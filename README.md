@@ -55,7 +55,7 @@ pwsh -File tool/build.ps1 -Platform android -Mode debug
 
 发布构建将 `-Mode debug` 改为 `-Mode release`。脚本会获取依赖、应用项目所需的 Flutter 补丁，再执行构建。
 
-构建流程与播放诊断方法见 [工具说明](tool/README.md)。
+构建流程见 [工具说明](tool/README.md)。
 
 ## 问题反馈
 
