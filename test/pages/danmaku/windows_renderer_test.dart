@@ -344,4 +344,91 @@ void main() {
       renderer.dispose();
     });
   }
+
+  WindowsDanmakuRenderer<void> singleTrack({
+    bool static2Scroll = false,
+    bool hideScroll = false,
+    bool massiveMode = false,
+  }) => WindowsDanmakuRenderer<void>(
+    option: _option.copyWith(
+      area: 0.3,
+      safeArea: false,
+      static2Scroll: static2Scroll,
+      hideScroll: hideScroll,
+      massiveMode: massiveMode,
+    ),
+    size: _size,
+  );
+
+  test('massive mode does not bypass the shared top/bottom static pool', () {
+    final renderer = singleTrack(massiveMode: true);
+    addTearDown(renderer.dispose);
+    expect(renderer.controller.trackCount, 1);
+    expect(renderer.add(_text('top', type: DanmakuItemType.top)), isTrue);
+    expect(
+      renderer.add(_text('bottom', type: DanmakuItemType.bottom)),
+      isFalse,
+    );
+    expect(renderer.statistics['rejectedByTrack'], 1);
+    expect(renderer.scrollDanmaku.single, isEmpty);
+    renderer.advance(const Duration(milliseconds: 999));
+    expect(renderer.add(_text('top2', type: DanmakuItemType.top)), isFalse);
+    renderer.advance(const Duration(milliseconds: 1));
+    expect(
+      renderer.add(_text('bottom2', type: DanmakuItemType.bottom)),
+      isTrue,
+    );
+    expect(renderer.statistics['rejectedByTrack'], 2);
+    renderer.clear();
+    expect(renderer.statistics['rejectedByTrack'], 2);
+  });
+
+  for (final hideScroll in [true, false]) {
+    for (final oversized in [false, true]) {
+      test(
+        'static fallback respects hideScroll=$hideScroll, oversized=$oversized',
+        () {
+          final renderer = singleTrack(
+            static2Scroll: true,
+            hideScroll: hideScroll,
+          );
+          addTearDown(renderer.dispose);
+          expect(renderer.controller.trackCount, 1);
+          if (!oversized) {
+            expect(
+              renderer.add(_text('occupied', type: DanmakuItemType.top)),
+              isTrue,
+            );
+          }
+          final content = _text(
+            oversized ? 'x' * 70 : 'fallback',
+            type: DanmakuItemType.bottom,
+          );
+          expect(renderer.add(content), !hideScroll);
+          expect(renderer.scrollDanmaku.single.length, hideScroll ? 0 : 1);
+          expect(renderer.statistics['rejectedByTrack'], hideScroll ? 1 : 0);
+          expect(renderer.statistics['rejectedByRaster'], 0);
+          expect(renderer.statistics['rejectedByMemoryBudget'], 0);
+        },
+      );
+    }
+  }
+
+  test('normal scrolling rejects a same-tick burst without counting it as raster failure', () {
+    final renderer = singleTrack();
+    addTearDown(renderer.dispose);
+    expect(renderer.add(_text('burst')), isTrue);
+    expect(renderer.add(_text('burst')), isFalse);
+    expect(renderer.statistics['rejectedByTrack'], 1);
+    expect(renderer.statistics['rejectedByRaster'], 0);
+    final tail = renderer.scrollDanmaku.single.single;
+    renderer.advance(
+      Duration(
+        milliseconds: ((tail.width + 1) * 2000 / (_size.width + tail.width))
+            .ceil(),
+      ),
+    );
+    expect(renderer.add(_text('burst')), isTrue);
+    expect(renderer.statistics['rejectedByTrack'], 1);
+  });
 }
