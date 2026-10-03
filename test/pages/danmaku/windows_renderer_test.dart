@@ -44,6 +44,51 @@ Future<List<int>> _pixels(void Function(Canvas) paint) async {
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
+  test('cache budgets are injectable without changing production defaults', () {
+    final defaults = WindowsDanmakuRenderer<void>(option: _option, size: _size);
+    expect(defaults.statistics['cacheImageLimitBytes'], 16 * 1024 * 1024);
+    expect(defaults.statistics['cacheEntryLimit'], 512);
+    final custom = WindowsDanmakuRenderer<void>(
+      option: _option,
+      size: _size,
+      rasterCacheMaxBytes: 24 * 1024 * 1024,
+      rasterCacheMaxEntries: 128,
+    );
+    expect(custom.statistics['cacheImageLimitBytes'], 24 * 1024 * 1024);
+    expect(custom.statistics['cacheEntryLimit'], 128);
+    defaults.dispose();
+    custom.dispose();
+  });
+
+  test('cache attributes evictions to bytes or entry pressure', () {
+    final entryLimited =
+        DanmakuRasterCache(
+            option: _option,
+            devicePixelRatio: 1,
+            maxEntries: 1,
+          )
+          ..get(_text('aa'), rasterize: true)
+          ..get(_text('bb'), rasterize: true);
+    expect(entryLimited.evictions, 1);
+    expect(entryLimited.evictionsByEntries, 1);
+    expect(entryLimited.evictionsByBytes, 0);
+    final bytes = entryLimited.bytes;
+    entryLimited.clear();
+    final byteLimited =
+        DanmakuRasterCache(
+            option: _option,
+            devicePixelRatio: 1,
+            maxBytes: bytes,
+          )
+          ..get(_text('aa'), rasterize: true)
+          ..get(_text('bb'), rasterize: true);
+    expect(byteLimited.evictions, 1);
+    expect(byteLimited.evictionsByBytes, 1);
+    expect(byteLimited.evictionsByEntries, 0);
+    expect(byteLimited.bytes, lessThanOrEqualTo(bytes));
+    byteLimited.clear();
+  });
+
   test('trajectory clock retains sub-millisecond frame time', () {
     final first = WindowsDanmakuRenderer<void>(option: _option, size: _size)
       ..add(_text('moving'));

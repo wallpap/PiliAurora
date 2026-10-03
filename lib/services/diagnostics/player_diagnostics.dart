@@ -61,26 +61,8 @@ class PlayerDiagnostics {
   DiagnosticLogLevel? _level;
   bool _disposed = false;
 
-  String? _property(String name) {
-    if (_disposed || player.disposed) return null;
-    final property = name.toNativeUtf8();
-    try {
-      final value = NativePlayer.mpv.mpv_get_property_string(
-        player.ctx,
-        property.cast(),
-      );
-      try {
-        return value == nullptr ? null : value.cast<Utf8>().toDartString();
-      } finally {
-        if (value != nullptr) NativePlayer.mpv.mpv_free(value.cast());
-      }
-    } catch (_) {
-      return null;
-    } finally {
-      // 当前 media_kit 的 getProperty 在属性不存在时会漏释放名称。
-      calloc.free(property);
-    }
-  }
+  String? _property(String name) =>
+      _disposed ? null : readMpvProperty(player, name);
 
   void _updateLevel() {
     final level = Diagnostics.instance.level;
@@ -107,5 +89,29 @@ class PlayerDiagnostics {
     _unregister();
     Diagnostics.instance.removeListener(_updateLevel);
     unawaited(_subscription.cancel());
+  }
+}
+
+/// 同步读取 mpv 属性；不可用时保留 null，并在成功和失败路径释放原生内存。
+///
+/// 只在播放器所属 isolate、仍存活时调用；采样方必须把同步耗时计入扰动预算。
+String? readMpvProperty(NativePlayer player, String name) {
+  if (player.disposed) return null;
+  final property = name.toNativeUtf8();
+  try {
+    final value = NativePlayer.mpv.mpv_get_property_string(
+      player.ctx,
+      property.cast(),
+    );
+    try {
+      return value == nullptr ? null : value.cast<Utf8>().toDartString();
+    } finally {
+      if (value != nullptr) NativePlayer.mpv.mpv_free(value.cast());
+    }
+  } catch (_) {
+    return null;
+  } finally {
+    // 当前 media_kit 的 getProperty 在属性不存在时会漏释放名称。
+    calloc.free(property);
   }
 }

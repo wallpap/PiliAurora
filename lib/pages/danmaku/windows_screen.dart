@@ -11,11 +11,17 @@ class WindowsDanmakuScreen<T> extends StatefulWidget {
     required this.size,
     required this.createdRenderer,
     this.opacity = 1,
+    this.rasterCacheMaxBytes = 16 * 1024 * 1024,
+    this.rasterCacheMaxEntries = 512,
   });
 
   final DanmakuOption option;
   final Size size;
   final double opacity;
+
+  /// 创建时固定；实验更换预算时使用不同的 widget key。
+  final int rasterCacheMaxBytes;
+  final int rasterCacheMaxEntries;
   final ValueChanged<WindowsDanmakuRenderer<T>> createdRenderer;
 
   @override
@@ -60,6 +66,8 @@ class _WindowsDanmakuScreenState<T> extends State<WindowsDanmakuScreen<T>>
         size: widget.size,
         devicePixelRatio: ratio,
         fontFamily: family,
+        rasterCacheMaxBytes: widget.rasterCacheMaxBytes,
+        rasterCacheMaxEntries: widget.rasterCacheMaxEntries,
       );
       _painter = _WindowsDanmakuPainter<T>(renderer, _opacity);
       renderer.addListener(_syncTicker);

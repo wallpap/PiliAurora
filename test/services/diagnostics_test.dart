@@ -6,9 +6,11 @@ import 'package:archive/archive.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:material_ui/material_ui.dart';
+import 'package:media_kit/media_kit.dart';
 import 'package:pili_aurora/pages/about/diagnostics_page.dart';
 import 'package:pili_aurora/services/diagnostics/diagnostics.dart';
 import 'package:pili_aurora/services/diagnostics/http_diagnostics.dart';
+import 'package:pili_aurora/services/diagnostics/player_diagnostics.dart';
 import 'package:pili_aurora/services/diagnostics/process_metrics.dart';
 import 'package:pili_aurora/services/diagnostics/record_store.dart';
 import 'package:pili_aurora/services/diagnostics/redact.dart';
@@ -33,6 +35,10 @@ void main() {
     diagnostics.dispose();
     await diagnostics.flush();
     await directory.delete(recursive: true);
+  });
+
+  test('disposed players never enter native property reads', () {
+    expect(readMpvProperty(_DisposedNativePlayer(), 'hwdec-current'), isNull);
   });
 
   test('redacts credentials in maps, headers, URLs and quoted text', () {
@@ -375,4 +381,13 @@ class _TestHttpAdapter implements HttpClientAdapter {
 
   @override
   void close({bool force = false}) {}
+}
+
+class _DisposedNativePlayer implements NativePlayer {
+  @override
+  bool get disposed => true;
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) =>
+      throw StateError('Disposed player must not access native state');
 }

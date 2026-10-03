@@ -1,8 +1,13 @@
+import 'dart:io';
+
 import 'package:canvas_danmaku/canvas_danmaku.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pili_aurora/pages/danmaku/windows_renderer.dart';
 import 'package:pili_aurora/pages/danmaku/windows_screen.dart';
+
+import '../../../tool/danmaku_playback_benchmark.dart'
+    show PlaybackBenchmarkConfig, playbackFixtureUri;
 
 const _size = Size(960, 540);
 const _option = DanmakuOption(
@@ -22,6 +27,65 @@ Widget _host(Widget child) => Directionality(
 );
 
 void main() {
+  test('local audio/video EDL uses UTF-8 path byte lengths', () {
+    expect(playbackFixtureUri('v.m4s', ''), 'v.m4s');
+    expect(
+      playbackFixtureUri('视频.m4s', '音频.m4s'),
+      'edl://!no_chapters;%10%视频.m4s;!new_stream;!no_chapters;%10%音频.m4s',
+    );
+  });
+
+  test('playback benchmark cannot force native engine shutdown', () {
+    final source = File('tool/danmaku_playback_benchmark.dart')
+        .readAsStringSync();
+    expect(RegExp(r'\b(exit|exitApplication)\s*\(').hasMatch(source), isFalse);
+  });
+
+  testWidgets('screen passes creation-time cache limits to renderer', (
+    tester,
+  ) async {
+    late WindowsDanmakuRenderer<void> renderer;
+    await tester.pumpWidget(
+      _host(
+        WindowsDanmakuScreen<void>(
+          option: _option,
+          size: _size,
+          rasterCacheMaxBytes: 24 * 1024 * 1024,
+          rasterCacheMaxEntries: 128,
+          createdRenderer: (value) => renderer = value,
+        ),
+      ),
+    );
+    expect(renderer.statistics['cacheImageLimitBytes'], 24 * 1024 * 1024);
+    expect(renderer.statistics['cacheEntryLimit'], 128);
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
+
+  test(
+    'playback benchmark parameters are bounded and reject unknown options',
+    () {
+      final config = PlaybackBenchmarkConfig([
+        '--cache-mib=24',
+        '--telemetry-ms=0',
+      ]);
+      expect(config.cacheMiB, 24);
+      expect(config.telemetryMs, 0);
+      expect(config.toJson().containsKey('video'), isFalse);
+      for (final arguments in [
+        ['--cache-mib=0'],
+        ['--telemetry-ms=20'],
+        ['--repetitions=0'],
+        ['--renderer=unknown'],
+        ['--unknown=value'],
+        ['--prewarm=maybe'],
+        ['--cache-mib=16', '--cache-mib=24'],
+        ['--kind=lifecycle', '--renderer=both'],
+      ]) {
+        expect(() => PlaybackBenchmarkConfig(arguments), throwsArgumentError);
+      }
+    },
+  );
+
   testWidgets(
     'hidden and ancestor-muted screens freeze then resume without a time jump',
     (tester) async {
