@@ -730,7 +730,7 @@ class _StressBenchmarkState extends State<_StressBenchmark> {
     await Future<void>.delayed(const Duration(seconds: 6));
     stdout.writeln('PLAYBACK_BENCH_READY code=$code close the window manually');
     // READY 只表示测量和媒体释放完成，不表示 Windows 已成功退出。
-    // 当前原生退出问题未解决；不得在这里调用 exit 或 exitApplication。
+    // 生命周期回归通过后由测试脚本关闭窗口；不在此调用 exit 或 exitApplication。
   }
 
   Map<String, double> _summary(Iterable<Duration> durations) {
