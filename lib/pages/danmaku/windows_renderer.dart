@@ -23,11 +23,15 @@ class WindowsDanmakuRenderer<T> extends ChangeNotifier {
     required this._size,
     double devicePixelRatio = 1,
     String? fontFamily,
+    int rasterCacheMaxBytes = 16 * 1024 * 1024,
+    int rasterCacheMaxEntries = 512,
   }) : _option = option,
        rasters = DanmakuRasterCache(
          option: option,
          devicePixelRatio: devicePixelRatio,
          fontFamily: fontFamily,
+         maxBytes: rasterCacheMaxBytes,
+         maxEntries: rasterCacheMaxEntries,
        ) {
     _layoutTracks();
     controller = DanmakuController<T>(
@@ -101,11 +105,15 @@ class WindowsDanmakuRenderer<T> extends ChangeNotifier {
     'activeImageLimitBytes': maxActiveBytes,
     'activeItemLimit': maxActiveItems,
     'cacheEntries': rasters.length,
+    'cacheEntryLimit': rasters.maxEntries,
+    'cacheImageLimitBytes': rasters.maxBytes,
     'cacheImageBytes': rasters.bytes,
     'cacheHits': rasters.hits,
     'layouts': rasters.layouts,
     'rasterizations': rasters.rasterizations,
     'evictions': rasters.evictions,
+    'evictionsByBytes': rasters.evictionsByBytes,
+    'evictionsByEntries': rasters.evictionsByEntries,
     'pendingPrewarm': _pending.length,
     'prewarmed': prewarmed,
     'directPaints': directPaints,

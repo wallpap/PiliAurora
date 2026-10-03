@@ -30,7 +30,9 @@ class DanmakuRasterCache {
     this.maxEntries = 512,
     this.maxBytes = 16 * 1024 * 1024,
     this.maxItemBytes = 2 * 1024 * 1024,
-  });
+  }) : assert(maxEntries > 0),
+       assert(maxBytes > 0),
+       assert(maxItemBytes > 0);
 
   DanmakuOption option;
   double devicePixelRatio;
@@ -44,6 +46,8 @@ class DanmakuRasterCache {
   int layouts = 0;
   int rasterizations = 0;
   int evictions = 0;
+  int evictionsByBytes = 0;
+  int evictionsByEntries = 0;
 
   int get length => _entries.length;
 
@@ -130,6 +134,9 @@ class DanmakuRasterCache {
 
   void _trim() {
     while (_entries.length > maxEntries || bytes > maxBytes) {
+      // 两个条件同时超限时分别记录，原因计数不要求互斥。
+      if (bytes > maxBytes) evictionsByBytes++;
+      if (_entries.length > maxEntries) evictionsByEntries++;
       final oldest = _entries.remove(_entries.keys.first)!;
       if (oldest.image != null) bytes -= oldest.bytes;
       oldest.dispose();
