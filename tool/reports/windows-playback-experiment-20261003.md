@@ -1,5 +1,7 @@
 # Windows 播放实验接手记录（2026-10-03）
 
+> 本文记录上一轮结束时的状态。后续 runner 隔离修复及轨道拒绝研究见 [接手修复记录](windows-runner-repair-and-track-followup-20261003.md)；完整插件集的退出故障仍未验证解决。
+
 ## 状态
 
 - 分支：`codex/windows-playback-experiments-20261003`。
