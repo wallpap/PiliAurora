@@ -44,6 +44,158 @@ Future<List<int>> _pixels(void Function(Canvas) paint) async {
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
+  Future<List<int>> groupOracle(
+    WindowsDanmakuRenderer<void> renderer,
+    double opacity,
+  ) => _pixels((canvas) {
+    canvas.saveLayer(
+      Offset.zero & _size,
+      Paint()..color = Color.fromRGBO(255, 255, 255, opacity),
+    );
+    renderer.paint(canvas, _size);
+    canvas.restore();
+  });
+
+  int maxDifference(List<int> a, List<int> b) {
+    var result = 0;
+    for (var index = 0; index < a.length; index++) {
+      final difference = (a[index] - b[index]).abs();
+      if (difference > result) result = difference;
+    }
+    return result;
+  }
+
+  test(
+    'identical overlapping text needs group alpha, with endpoint coverage',
+    () async {
+      final renderer = WindowsDanmakuRenderer<void>(
+        option: _option.copyWith(area: 0.3, safeArea: false, massiveMode: true),
+        size: _size,
+      );
+      addTearDown(renderer.dispose);
+      expect(renderer.add(_text('MMMM', selfSend: true)), isTrue);
+      expect(renderer.add(_text('MMMM', selfSend: true)), isTrue);
+      renderer.advance(const Duration(milliseconds: 500));
+      final items = renderer.scrollDanmaku.single;
+      expect(items.length, 2);
+      expect(items[0].xPosition, items[1].xPosition);
+      expect(items[0].width, items[1].width);
+      for (final opacity in [0.0, 0.25, 0.5, 1.0]) {
+        final groupBefore = renderer.groupPaints;
+        final directBefore = renderer.directPaints;
+        final actual = await _pixels(
+          (canvas) => renderer.paint(canvas, _size, opacity: opacity),
+        );
+        expect(
+          renderer.groupPaints - groupBefore,
+          opacity > 0 && opacity < 1 ? 1 : 0,
+        );
+        expect(renderer.directPaints - directBefore, opacity == 1 ? 1 : 0);
+        expect(
+          maxDifference(actual, await groupOracle(renderer, opacity)),
+          lessThanOrEqualTo(1),
+          reason: 'opacity=$opacity',
+        );
+      }
+      final expected = await groupOracle(renderer, 0.5);
+      final individuallyTransparent = await _pixels((canvas) {
+        for (final item in items) {
+          canvas.drawImage(
+            item.image!,
+            Offset(item.xPosition, 0),
+            Paint()..color = const Color.fromRGBO(255, 255, 255, 0.5),
+          );
+        }
+      });
+      expect(maxDifference(individuallyTransparent, expected), greaterThan(1));
+    },
+  );
+
+  for (final ratio in [1.0, 2.0]) {
+    test('separated tracks match group alpha at DPR $ratio', () async {
+      final renderer = WindowsDanmakuRenderer<void>(
+        option: _option,
+        size: _size,
+        devicePixelRatio: ratio,
+      );
+      addTearDown(renderer.dispose);
+      expect(renderer.add(_text('top', type: DanmakuItemType.top)), isTrue);
+      expect(
+        renderer.add(_text('bottom', type: DanmakuItemType.bottom)),
+        isTrue,
+      );
+      expect(renderer.canPaintDirectly, isTrue);
+      if (ratio == 2) {
+        final item = renderer.staticDanmaku
+            .whereType<DanmakuItem<void>>()
+            .first;
+        expect(item.image!.width, isNot(item.width.ceil()));
+      }
+      for (final opacity in [0.25, 0.5, 1.0]) {
+        final groupBefore = renderer.groupPaints;
+        final directBefore = renderer.directPaints;
+        final actual = await _pixels(
+          (canvas) => renderer.paint(canvas, _size, opacity: opacity),
+        );
+        expect(renderer.groupPaints, groupBefore);
+        expect(renderer.directPaints, directBefore + 1);
+        expect(
+          maxDifference(actual, await groupOracle(renderer, opacity)),
+          lessThanOrEqualTo(1),
+        );
+      }
+    });
+  }
+
+  test('special alpha is multiplied by whole-overlay opacity', () async {
+    final renderer = WindowsDanmakuRenderer<void>(option: _option, size: _size);
+    addTearDown(renderer.dispose);
+    expect(
+      renderer.add(
+        SpecialDanmakuContentItem<void>(
+          'MMMM',
+          duration: 2000,
+          color: const Color(0xFFFFFFFF),
+          fontSize: 20,
+          alphaTween: ConstantTween<double>(0.5),
+          translateXTween: ConstantTween<double>(0.25),
+          translateYTween: ConstantTween<double>(0.25),
+        ),
+      ),
+      isTrue,
+    );
+    renderer.advance(const Duration(milliseconds: 500));
+    final background = await _pixels((_) {});
+    for (final opacity in [0.0, 0.25, 0.5, 1.0]) {
+      final before = renderer.groupPaints;
+      final actual = await _pixels(
+        (canvas) => renderer.paint(canvas, _size, opacity: opacity),
+      );
+      expect(renderer.groupPaints - before, opacity > 0 && opacity < 1 ? 1 : 0);
+      expect(
+        maxDifference(actual, await groupOracle(renderer, opacity)),
+        lessThanOrEqualTo(1),
+      );
+      if (opacity > 0) {
+        expect(maxDifference(actual, background), greaterThan(1));
+      }
+    }
+    final half = await _pixels(
+      (canvas) => renderer.paint(canvas, _size, opacity: 0.5),
+    );
+    final opaque = await _pixels((canvas) => renderer.paint(canvas, _size));
+    // 对所有有贡献的像素检查外部透明度的折半效应，避免只检查分支。
+    for (var index = 0; index < half.length; index++) {
+      if (index % 4 == 3) continue;
+      expect(
+        ((half[index] - background[index]) * 2 -
+                (opaque[index] - background[index]))
+            .abs(),
+        lessThanOrEqualTo(2),
+      );
+    }
+  });
+
   test('cache budgets are injectable without changing production defaults', () {
     final defaults = WindowsDanmakuRenderer<void>(option: _option, size: _size);
     expect(defaults.statistics['cacheImageLimitBytes'], 16 * 1024 * 1024);
