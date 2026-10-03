@@ -48,6 +48,10 @@ class DanmakuRasterCache {
   int evictions = 0;
   int evictionsByBytes = 0;
   int evictionsByEntries = 0;
+  int evictedLayouts = 0;
+  int evictedImages = 0;
+  // 淘汰图片的账面字节，不代表共享 backing 已释放的实际内存。
+  int evictedImageBytes = 0;
 
   int get length => _entries.length;
 
@@ -138,7 +142,13 @@ class DanmakuRasterCache {
       if (bytes > maxBytes) evictionsByBytes++;
       if (_entries.length > maxEntries) evictionsByEntries++;
       final oldest = _entries.remove(_entries.keys.first)!;
-      if (oldest.image != null) bytes -= oldest.bytes;
+      if (oldest.image != null) {
+        bytes -= oldest.bytes;
+        evictedImages++;
+        evictedImageBytes += oldest.bytes;
+      } else {
+        evictedLayouts++;
+      }
       oldest.dispose();
       evictions++;
     }
