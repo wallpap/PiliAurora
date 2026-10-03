@@ -191,3 +191,38 @@ python tool/windows_playback_cache_matrix.py --video <本地视频> --audio <本
 工具只发送 WM_CLOSE 给自身 PID 的窗口，超时仅清理自身进程并判失败。
 默认缓存仍为 16 MiB；新增 `evictedLayouts` / `evictedImages` / `evictedImageBytes`
 区分淘汰负载，账面字节不代表已经释放的实际内存。
+
+
+## Group 合成与长时间 Private Bytes 对照
+
+先构建同一个 Profile 入口，再运行独立进程矩阵：
+
+```powershell
+flutter build windows --profile --no-pub --target tool/danmaku_playback_benchmark.dart
+python tool/windows_playback_composition_memory.py --self-test
+python tool/windows_playback_composition_memory.py --video <本地视频> --audio <本地音频> --danmaku <本地弹幕> --output build/composition-memory-new-run --matrix all --memory-seconds 600
+```
+
+`--matrix smoke` 验证普通测量与长测入口的释放阶段，不能算作长时间证据。
+`group` 执行两轮反转顺序：自动合成、外层整体 Opacity 参考、不透明，以及
+过滤高级弹幕、仅静态弹幕的自动／参考对照。`memory` 执行仅视频、
+不透明弹幕、半透明弹幕，各自使用新进程。三组仍加载相同弹幕夹具，控制加载成本。
+默认缓存、预热、活动预算保持不变。仅静态场景的入场和预热使用相同过滤器。
+
+运行时参数 `--opacity` 必须在 `(0,1]`，`--composition=auto|reference-group`，
+`--include-special=true|false`、`--static-only=true|false`、`--overlay=true|false`。
+没有“重叠场景强制 Direct”的选项，因为它不保持整体透明度语义。
+
+`--kind=endurance --telemetry-ms=0` 每分钟记录一个小结果，不保留逐帧
+FrameTiming 或逐样本遥测。进程外 Windows 计数器每秒采样，保存 `memory.jsonl`。
+长测保持播放和同一个 renderer，允许本地视频自然循环；单调高水位累计媒体进度、循环次数和
+非预期回退用于分钟与全程墙钟校验。长测不等待 FrameTiming 尾批次。之后分别观察活动清空、缓存清空、renderer dispose、
+媒体 dispose 各 20 秒。进程退出必须满足 READY code=0、自身窗口 WM_CLOSE 和退出码 0。
+Private Bytes 后半段斜率只是趋势指标，不是泄漏判定；缓存账面字节不是实际释放量。
+
+输出不复写现有目录。失败后立即停止矩阵，只清理该工具自己创建的进程。
+每个 DUT 默认设 2048 MiB Private Bytes 安全上限，可通过 `--max-private-mib` 调整；
+超限即判失败并停止，不能把被终止的数据记为成功长测。
+原始日志可能含本地路径和 Dart VM service 地址，只保留在被忽略的 `build/`，不要提交。
+公开聚合结果不得包含视频路径、弹幕正文或 VM service 地址。
+完成实验后必须重建 `lib/main.dart`，恢复正常 Profile 应用入口。
