@@ -1,0 +1,671 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-10-03",
+  "note": "Anonymous short replay results; no media paths or danmaku text; not a long-term memory or cross-device benchmark.",
+  "measurementSeconds": 10,
+  "warmupSeconds": 3,
+  "entryLimit": 512,
+  "activeLimitBytes": 100663296,
+  "rows": [
+    {
+      "label": "pass0-cache16-prewarm1",
+      "cacheMiB": 16,
+      "prewarm": true,
+      "devicePixelRatio": 1.5,
+      "durationSeconds": 10,
+      "accepted": 319,
+      "rejected": 888,
+      "positionStartMs": 43042,
+      "positionEndMs": 53042,
+      "cacheDelta": {
+        "layouts": 1140,
+        "cacheHits": 634,
+        "rasterizations": 889,
+        "evictions": 1117,
+        "evictionsByBytes": 1117,
+        "evictionsByEntries": 0,
+        "evictedLayouts": 235,
+        "evictedImages": 882,
+        "evictedImageBytes": 321643632
+      },
+      "frames": 1644,
+      "replayWindowValid": true,
+      "warmupSeconds": 3,
+      "videoSourceSize": {
+        "width": 1280,
+        "height": 720
+      },
+      "videoOutputSize": {
+        "width": 1280,
+        "height": 691
+      },
+      "activeHwdec": "d3d11va-copy",
+      "meanAddMicros": 34.04450757575758,
+      "rasterP95Ms": 3.284,
+      "totalP95Ms": 5.06,
+      "over16ms": 0,
+      "prewarmed": 737,
+      "demandRasterizations": 152,
+      "cacheImageBytesAtEnd": 16135812,
+      "privateBytesAtEnd": 652423168,
+      "rssBytesAtEnd": 547500032,
+      "rejectedByTrack": 628,
+      "rejectedByMemoryBudget": 109,
+      "dropCounters": {
+        "decoder-frame-drop-count": {
+          "first": "0",
+          "last": "0"
+        },
+        "frame-drop-count": {
+          "first": "0",
+          "last": "0"
+        }
+      }
+    },
+    {
+      "label": "pass0-cache24-prewarm1",
+      "cacheMiB": 24,
+      "prewarm": true,
+      "devicePixelRatio": 1.5,
+      "durationSeconds": 10,
+      "accepted": 322,
+      "rejected": 885,
+      "positionStartMs": 43042,
+      "positionEndMs": 53042,
+      "cacheDelta": {
+        "layouts": 934,
+        "cacheHits": 816,
+        "rasterizations": 793,
+        "evictions": 928,
+        "evictionsByBytes": 928,
+        "evictionsByEntries": 0,
+        "evictedLayouts": 142,
+        "evictedImages": 786,
+        "evictedImageBytes": 282651432
+      },
+      "frames": 1644,
+      "replayWindowValid": true,
+      "warmupSeconds": 3,
+      "videoSourceSize": {
+        "width": 1280,
+        "height": 720
+      },
+      "videoOutputSize": {
+        "width": 1280,
+        "height": 691
+      },
+      "activeHwdec": "d3d11va-copy",
+      "meanAddMicros": 26.267992424242426,
+      "rasterP95Ms": 3.692,
+      "totalP95Ms": 5.789,
+      "over16ms": 0,
+      "prewarmed": 713,
+      "demandRasterizations": 80,
+      "cacheImageBytesAtEnd": 25156164,
+      "privateBytesAtEnd": 657186816,
+      "rssBytesAtEnd": 561471488,
+      "rejectedByTrack": 632,
+      "rejectedByMemoryBudget": 102,
+      "dropCounters": {
+        "decoder-frame-drop-count": {
+          "first": "0",
+          "last": "0"
+        },
+        "frame-drop-count": {
+          "first": "0",
+          "last": "0"
+        }
+      }
+    },
+    {
+      "label": "pass0-cache32-prewarm1",
+      "cacheMiB": 32,
+      "prewarm": true,
+      "devicePixelRatio": 1.5,
+      "durationSeconds": 10,
+      "accepted": 302,
+      "rejected": 905,
+      "positionStartMs": 43042,
+      "positionEndMs": 53042,
+      "cacheDelta": {
+        "layouts": 806,
+        "cacheHits": 936,
+        "rasterizations": 736,
+        "evictions": 806,
+        "evictionsByBytes": 806,
+        "evictionsByEntries": 0,
+        "evictedLayouts": 72,
+        "evictedImages": 734,
+        "evictedImageBytes": 263019336
+      },
+      "frames": 1643,
+      "replayWindowValid": true,
+      "warmupSeconds": 3,
+      "videoSourceSize": {
+        "width": 1280,
+        "height": 720
+      },
+      "videoOutputSize": {
+        "width": 1280,
+        "height": 691
+      },
+      "activeHwdec": "d3d11va-copy",
+      "meanAddMicros": 16.48843930635838,
+      "rasterP95Ms": 4.022,
+      "totalP95Ms": 6.361,
+      "over16ms": 0,
+      "prewarmed": 706,
+      "demandRasterizations": 30,
+      "cacheImageBytesAtEnd": 33538308,
+      "privateBytesAtEnd": 665829376,
+      "rssBytesAtEnd": 568713216,
+      "rejectedByTrack": 628,
+      "rejectedByMemoryBudget": 108,
+      "dropCounters": {
+        "decoder-frame-drop-count": {
+          "first": "0",
+          "last": "0"
+        },
+        "frame-drop-count": {
+          "first": "0",
+          "last": "0"
+        }
+      }
+    },
+    {
+      "label": "pass0-cache32-prewarm0",
+      "cacheMiB": 32,
+      "prewarm": false,
+      "devicePixelRatio": 1.5,
+      "durationSeconds": 10,
+      "accepted": 302,
+      "rejected": 905,
+      "positionStartMs": 43042,
+      "positionEndMs": 53042,
+      "cacheDelta": {
+        "layouts": 742,
+        "cacheHits": 294,
+        "rasterizations": 240,
+        "evictions": 536,
+        "evictionsByBytes": 536,
+        "evictionsByEntries": 0,
+        "evictedLayouts": 355,
+        "evictedImages": 181,
+        "evictedImageBytes": 63351840
+      },
+      "frames": 1644,
+      "replayWindowValid": true,
+      "warmupSeconds": 3,
+      "videoSourceSize": {
+        "width": 1280,
+        "height": 720
+      },
+      "videoOutputSize": {
+        "width": 1280,
+        "height": 691
+      },
+      "activeHwdec": "d3d11va-copy",
+      "meanAddMicros": 88.11464354527938,
+      "rasterP95Ms": 2.611,
+      "totalP95Ms": 4.688,
+      "over16ms": 0,
+      "prewarmed": 0,
+      "demandRasterizations": 240,
+      "cacheImageBytesAtEnd": 33530340,
+      "privateBytesAtEnd": 596557824,
+      "rssBytesAtEnd": 486035456,
+      "rejectedByTrack": 625,
+      "rejectedByMemoryBudget": 111,
+      "dropCounters": {
+        "decoder-frame-drop-count": {
+          "first": "0",
+          "last": "0"
+        },
+        "frame-drop-count": {
+          "first": "0",
+          "last": "0"
+        }
+      }
+    },
+    {
+      "label": "pass0-cache24-prewarm0",
+      "cacheMiB": 24,
+      "prewarm": false,
+      "devicePixelRatio": 1.5,
+      "durationSeconds": 10,
+      "accepted": 318,
+      "rejected": 889,
+      "positionStartMs": 43042,
+      "positionEndMs": 53042,
+      "cacheDelta": {
+        "layouts": 761,
+        "cacheHits": 275,
+        "rasterizations": 244,
+        "evictions": 700,
+        "evictionsByBytes": 700,
+        "evictionsByEntries": 0,
+        "evictedLayouts": 483,
+        "evictedImages": 217,
+        "evictedImageBytes": 73680036
+      },
+      "frames": 1650,
+      "replayWindowValid": true,
+      "warmupSeconds": 3,
+      "videoSourceSize": {
+        "width": 1280,
+        "height": 720
+      },
+      "videoOutputSize": {
+        "width": 1280,
+        "height": 691
+      },
+      "activeHwdec": "d3d11va-copy",
+      "meanAddMicros": 81.02556818181819,
+      "rasterP95Ms": 2.583,
+      "totalP95Ms": 4.574,
+      "over16ms": 0,
+      "prewarmed": 0,
+      "demandRasterizations": 244,
+      "cacheImageBytesAtEnd": 25112160,
+      "privateBytesAtEnd": 597610496,
+      "rssBytesAtEnd": 498782208,
+      "rejectedByTrack": 628,
+      "rejectedByMemoryBudget": 110,
+      "dropCounters": {
+        "decoder-frame-drop-count": {
+          "first": "0",
+          "last": "0"
+        },
+        "frame-drop-count": {
+          "first": "0",
+          "last": "0"
+        }
+      }
+    },
+    {
+      "label": "pass0-cache16-prewarm0",
+      "cacheMiB": 16,
+      "prewarm": false,
+      "devicePixelRatio": 1.5,
+      "durationSeconds": 10,
+      "accepted": 319,
+      "rejected": 888,
+      "positionStartMs": 43042,
+      "positionEndMs": 53042,
+      "cacheDelta": {
+        "layouts": 779,
+        "cacheHits": 257,
+        "rasterizations": 256,
+        "evictions": 772,
+        "evictionsByBytes": 772,
+        "evictionsByEntries": 0,
+        "evictedLayouts": 520,
+        "evictedImages": 252,
+        "evictedImageBytes": 82333248
+      },
+      "frames": 1649,
+      "replayWindowValid": true,
+      "warmupSeconds": 3,
+      "videoSourceSize": {
+        "width": 1280,
+        "height": 720
+      },
+      "videoOutputSize": {
+        "width": 1280,
+        "height": 691
+      },
+      "activeHwdec": "d3d11va-copy",
+      "meanAddMicros": 85.31439393939394,
+      "rasterP95Ms": 2.505,
+      "totalP95Ms": 4.494,
+      "over16ms": 0,
+      "prewarmed": 0,
+      "demandRasterizations": 256,
+      "cacheImageBytesAtEnd": 16692768,
+      "privateBytesAtEnd": 595988480,
+      "rssBytesAtEnd": 501563392,
+      "rejectedByTrack": 630,
+      "rejectedByMemoryBudget": 107,
+      "dropCounters": {
+        "decoder-frame-drop-count": {
+          "first": "0",
+          "last": "0"
+        },
+        "frame-drop-count": {
+          "first": "0",
+          "last": "0"
+        }
+      }
+    },
+    {
+      "label": "pass1-cache32-prewarm0",
+      "cacheMiB": 32,
+      "prewarm": false,
+      "devicePixelRatio": 1.5,
+      "durationSeconds": 10,
+      "accepted": 320,
+      "rejected": 887,
+      "positionStartMs": 43042,
+      "positionEndMs": 53042,
+      "cacheDelta": {
+        "layouts": 742,
+        "cacheHits": 294,
+        "rasterizations": 240,
+        "evictions": 531,
+        "evictionsByBytes": 531,
+        "evictionsByEntries": 0,
+        "evictedLayouts": 355,
+        "evictedImages": 176,
+        "evictedImageBytes": 62796000
+      },
+      "frames": 1657,
+      "replayWindowValid": true,
+      "warmupSeconds": 3,
+      "videoSourceSize": {
+        "width": 1280,
+        "height": 720
+      },
+      "videoOutputSize": {
+        "width": 1280,
+        "height": 691
+      },
+      "activeHwdec": "d3d11va-copy",
+      "meanAddMicros": 80.79545454545455,
+      "rasterP95Ms": 2.572,
+      "totalP95Ms": 4.667,
+      "over16ms": 0,
+      "prewarmed": 0,
+      "demandRasterizations": 240,
+      "cacheImageBytesAtEnd": 33484836,
+      "privateBytesAtEnd": 599756800,
+      "rssBytesAtEnd": 498524160,
+      "rejectedByTrack": 629,
+      "rejectedByMemoryBudget": 107,
+      "dropCounters": {
+        "decoder-frame-drop-count": {
+          "first": "0",
+          "last": "0"
+        },
+        "frame-drop-count": {
+          "first": "0",
+          "last": "0"
+        }
+      }
+    },
+    {
+      "label": "pass1-cache24-prewarm0",
+      "cacheMiB": 24,
+      "prewarm": false,
+      "devicePixelRatio": 1.5,
+      "durationSeconds": 10,
+      "accepted": 319,
+      "rejected": 888,
+      "positionStartMs": 43042,
+      "positionEndMs": 53042,
+      "cacheDelta": {
+        "layouts": 761,
+        "cacheHits": 275,
+        "rasterizations": 247,
+        "evictions": 700,
+        "evictionsByBytes": 700,
+        "evictionsByEntries": 0,
+        "evictedLayouts": 480,
+        "evictedImages": 220,
+        "evictedImageBytes": 74594148
+      },
+      "frames": 1657,
+      "replayWindowValid": true,
+      "warmupSeconds": 3,
+      "videoSourceSize": {
+        "width": 1280,
+        "height": 720
+      },
+      "videoOutputSize": {
+        "width": 1280,
+        "height": 691
+      },
+      "activeHwdec": "d3d11va-copy",
+      "meanAddMicros": 82.0028409090909,
+      "rasterP95Ms": 2.735,
+      "totalP95Ms": 4.693,
+      "over16ms": 0,
+      "prewarmed": 0,
+      "demandRasterizations": 247,
+      "cacheImageBytesAtEnd": 24953184,
+      "privateBytesAtEnd": 598990848,
+      "rssBytesAtEnd": 498171904,
+      "rejectedByTrack": 628,
+      "rejectedByMemoryBudget": 109,
+      "dropCounters": {
+        "decoder-frame-drop-count": {
+          "first": "0",
+          "last": "0"
+        },
+        "frame-drop-count": {
+          "first": "0",
+          "last": "0"
+        }
+      }
+    },
+    {
+      "label": "pass1-cache16-prewarm0",
+      "cacheMiB": 16,
+      "prewarm": false,
+      "devicePixelRatio": 1.5,
+      "durationSeconds": 10,
+      "accepted": 320,
+      "rejected": 887,
+      "positionStartMs": 43042,
+      "positionEndMs": 53042,
+      "cacheDelta": {
+        "layouts": 779,
+        "cacheHits": 257,
+        "rasterizations": 257,
+        "evictions": 772,
+        "evictionsByBytes": 772,
+        "evictionsByEntries": 0,
+        "evictedLayouts": 519,
+        "evictedImages": 253,
+        "evictedImageBytes": 82430592
+      },
+      "frames": 1662,
+      "replayWindowValid": true,
+      "warmupSeconds": 3,
+      "videoSourceSize": {
+        "width": 1280,
+        "height": 720
+      },
+      "videoOutputSize": {
+        "width": 1280,
+        "height": 691
+      },
+      "activeHwdec": "d3d11va-copy",
+      "meanAddMicros": 83.60606060606061,
+      "rasterP95Ms": 2.822,
+      "totalP95Ms": 4.788,
+      "over16ms": 0,
+      "prewarmed": 0,
+      "demandRasterizations": 257,
+      "cacheImageBytesAtEnd": 16692768,
+      "privateBytesAtEnd": 600592384,
+      "rssBytesAtEnd": 501874688,
+      "rejectedByTrack": 629,
+      "rejectedByMemoryBudget": 107,
+      "dropCounters": {
+        "decoder-frame-drop-count": {
+          "first": "0",
+          "last": "0"
+        },
+        "frame-drop-count": {
+          "first": "0",
+          "last": "0"
+        }
+      }
+    },
+    {
+      "label": "pass1-cache16-prewarm1",
+      "cacheMiB": 16,
+      "prewarm": true,
+      "devicePixelRatio": 1.5,
+      "durationSeconds": 10,
+      "accepted": 320,
+      "rejected": 887,
+      "positionStartMs": 43042,
+      "positionEndMs": 53042,
+      "cacheDelta": {
+        "layouts": 1141,
+        "cacheHits": 634,
+        "rasterizations": 891,
+        "evictions": 1118,
+        "evictionsByBytes": 1118,
+        "evictionsByEntries": 0,
+        "evictedLayouts": 234,
+        "evictedImages": 884,
+        "evictedImageBytes": 322968636
+      },
+      "frames": 1663,
+      "replayWindowValid": true,
+      "warmupSeconds": 3,
+      "videoSourceSize": {
+        "width": 1280,
+        "height": 720
+      },
+      "videoOutputSize": {
+        "width": 1280,
+        "height": 691
+      },
+      "activeHwdec": "d3d11va-copy",
+      "meanAddMicros": 36.23106060606061,
+      "rasterP95Ms": 3.449,
+      "totalP95Ms": 5.387,
+      "over16ms": 0,
+      "prewarmed": 739,
+      "demandRasterizations": 152,
+      "cacheImageBytesAtEnd": 16135812,
+      "privateBytesAtEnd": 651730944,
+      "rssBytesAtEnd": 547614720,
+      "rejectedByTrack": 629,
+      "rejectedByMemoryBudget": 107,
+      "dropCounters": {
+        "decoder-frame-drop-count": {
+          "first": "0",
+          "last": "0"
+        },
+        "frame-drop-count": {
+          "first": "0",
+          "last": "0"
+        }
+      }
+    },
+    {
+      "label": "pass1-cache24-prewarm1",
+      "cacheMiB": 24,
+      "prewarm": true,
+      "devicePixelRatio": 1.5,
+      "durationSeconds": 10,
+      "accepted": 320,
+      "rejected": 887,
+      "positionStartMs": 43042,
+      "positionEndMs": 53042,
+      "cacheDelta": {
+        "layouts": 929,
+        "cacheHits": 820,
+        "rasterizations": 784,
+        "evictions": 923,
+        "evictionsByBytes": 923,
+        "evictionsByEntries": 0,
+        "evictedLayouts": 146,
+        "evictedImages": 777,
+        "evictedImageBytes": 276172800
+      },
+      "frames": 1658,
+      "replayWindowValid": true,
+      "warmupSeconds": 3,
+      "videoSourceSize": {
+        "width": 1280,
+        "height": 720
+      },
+      "videoOutputSize": {
+        "width": 1280,
+        "height": 691
+      },
+      "activeHwdec": "d3d11va-copy",
+      "meanAddMicros": 23.395833333333332,
+      "rasterP95Ms": 3.469,
+      "totalP95Ms": 5.389,
+      "over16ms": 0,
+      "prewarmed": 713,
+      "demandRasterizations": 71,
+      "cacheImageBytesAtEnd": 25156164,
+      "privateBytesAtEnd": 660389888,
+      "rssBytesAtEnd": 556822528,
+      "rejectedByTrack": 629,
+      "rejectedByMemoryBudget": 107,
+      "dropCounters": {
+        "decoder-frame-drop-count": {
+          "first": "0",
+          "last": "0"
+        },
+        "frame-drop-count": {
+          "first": "0",
+          "last": "0"
+        }
+      }
+    },
+    {
+      "label": "pass1-cache32-prewarm1",
+      "cacheMiB": 32,
+      "prewarm": true,
+      "devicePixelRatio": 1.5,
+      "durationSeconds": 10,
+      "accepted": 320,
+      "rejected": 887,
+      "positionStartMs": 43042,
+      "positionEndMs": 53042,
+      "cacheDelta": {
+        "layouts": 807,
+        "cacheHits": 935,
+        "rasterizations": 736,
+        "evictions": 807,
+        "evictionsByBytes": 807,
+        "evictionsByEntries": 0,
+        "evictedLayouts": 73,
+        "evictedImages": 734,
+        "evictedImageBytes": 263019336
+      },
+      "frames": 1662,
+      "replayWindowValid": true,
+      "warmupSeconds": 3,
+      "videoSourceSize": {
+        "width": 1280,
+        "height": 720
+      },
+      "videoOutputSize": {
+        "width": 1280,
+        "height": 691
+      },
+      "activeHwdec": "d3d11va-copy",
+      "meanAddMicros": 17.106060606060606,
+      "rasterP95Ms": 3.44,
+      "totalP95Ms": 5.498,
+      "over16ms": 0,
+      "prewarmed": 705,
+      "demandRasterizations": 31,
+      "cacheImageBytesAtEnd": 33538308,
+      "privateBytesAtEnd": 675422208,
+      "rssBytesAtEnd": 558993408,
+      "rejectedByTrack": 629,
+      "rejectedByMemoryBudget": 107,
+      "dropCounters": {
+        "decoder-frame-drop-count": {
+          "first": "0",
+          "last": "0"
+        },
+        "frame-drop-count": {
+          "first": "0",
+          "last": "0"
+        }
+      }
+    }
+  ]
+}
