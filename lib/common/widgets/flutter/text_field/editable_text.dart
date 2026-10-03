@@ -2371,7 +2371,7 @@ class EditableTextState extends State<EditableText>
 
   Color get _cursorColor {
     final double effectiveOpacity = math.min(
-      widget.cursorColor.alpha / 255.0,
+      widget.cursorColor.a,
       _cursorBlinkOpacityController.value,
     );
     return widget.cursorColor.withValues(alpha: effectiveOpacity);
@@ -3161,7 +3161,7 @@ class EditableTextState extends State<EditableText>
       ..addAll(await _processTextService.queryTextActions());
   }
 
-  // Whether `TickerMode.of(context)` is true and animations (like blinking the
+  // Whether `TickerMode.valuesOf(context).enabled` is true and animations (like blinking the
   // cursor) are supposed to run.
   bool _tickersEnabled = true;
 
@@ -3192,7 +3192,7 @@ class EditableTextState extends State<EditableText>
     }
 
     // Restart or stop the blinking cursor when TickerMode changes.
-    final bool newTickerEnabled = TickerMode.of(context);
+    final bool newTickerEnabled = TickerMode.valuesOf(context).enabled;
     if (_tickersEnabled != newTickerEnabled) {
       _tickersEnabled = newTickerEnabled;
       if (_showBlinkingCursor) {
@@ -4836,7 +4836,7 @@ class EditableTextState extends State<EditableText>
 
   void _onCursorColorTick() {
     final double effectiveOpacity = math.min(
-      widget.cursorColor.alpha / 255.0,
+      widget.cursorColor.a,
       _cursorBlinkOpacityController.value,
     );
     renderEditable.cursorColor = widget.cursorColor.withValues(

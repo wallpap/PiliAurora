@@ -771,7 +771,7 @@ class ListTile extends StatelessWidget {
         ? selectedBackgroundColor
         : backgroundColor;
     final bool hasOpaqueBackground =
-        backgroundColor.alpha > 0 || selectedBackgroundColor.alpha > 0;
+        backgroundColor.a > 0 || selectedBackgroundColor.a > 0;
     if (onTap != null || onLongPress != null || hasOpaqueBackground) {
       assert(_debugCheckBackgroundIsHidden(context));
     }
