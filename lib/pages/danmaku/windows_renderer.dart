@@ -270,7 +270,7 @@ class WindowsDanmakuRenderer<T> extends ChangeNotifier {
       }
       if (_option.static2Scroll && (track < 0 || raster.width > _size.width)) {
         track = -1;
-        scrolling = true;
+        scrolling = !_option.hideScroll;
       }
     }
     if (scrolling) {
