@@ -145,3 +145,25 @@ flutter build windows --profile --no-pub --target tool/danmaku_playback_benchmar
 原始数据留在 `build/`；不提交媒体、账号数据或完整崩溃转储。
 
 接手记录、故障边界和遥测语义见 `tool/reports/` 的 20261003 报告。
+
+
+## Windows runner 生命周期回归
+
+```powershell
+pwsh -File tool/windows-runner-lifecycle.ps1
+```
+
+该命令构建空的 Dart fixture，再将真实 runner 与 Flutter 引擎连接到专用测试程序。
+它不加载生产插件 DLL，不启动媒体或 WebView。覆盖字体通知、析构重入和 COM 清理顺序。
+首次构建后，若 Profile 入口未改变，可使用 `-SkipFlutterBuild` 快速重复测试。
+CMake 可通过 `-CMake` 指定；默认复用 Flutter 构建中记录的路径。
+
+**fixture 会替换标准 Profile 输出。** 使用正常应用前重新构建：
+
+```powershell
+flutter build windows --profile --no-pub --target lib/main.dart
+```
+
+runner 的隔离回归通过不代表完整插件集的 `0xE0464645` 已解决。
+修复证据、轨道研究及授权边界见
+`tool/reports/windows-runner-repair-and-track-followup-20261003.md`。

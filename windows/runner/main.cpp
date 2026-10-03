@@ -6,8 +6,25 @@
 #include "flutter_window.h"
 #include "utils.h"
 
+namespace {
+// 必须晚于窗口和插件析构；S_FALSE 也需要配对一次 CoUninitialize。
+class ScopedCOM {
+ public:
+  ScopedCOM() : result_(::CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED)) {}
+  ~ScopedCOM() {
+    if (SUCCEEDED(result_)) ::CoUninitialize();
+  }
+  ScopedCOM(const ScopedCOM&) = delete;
+  ScopedCOM& operator=(const ScopedCOM&) = delete;
+  bool initialized() const { return SUCCEEDED(result_); }
+
+ private:
+  const HRESULT result_;
+};
+}  // namespace
+
 int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
-                      _In_ wchar_t *command_line, _In_ int show_command) {
+                      _In_ wchar_t* command_line, _In_ int show_command) {
   if (SendAppLinkToInstance()) {
     return EXIT_SUCCESS;
   }
@@ -20,7 +37,10 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
 
   // Initialize COM, so that it is available for use in the library and/or
   // plugins.
-  ::CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
+  const ScopedCOM com;
+  if (!com.initialized()) {
+    return EXIT_FAILURE;
+  }
 
   flutter::DartProject project(L"data");
 
@@ -48,6 +68,5 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
     ::DispatchMessage(&msg);
   }
 
-  ::CoUninitialize();
   return EXIT_SUCCESS;
 }

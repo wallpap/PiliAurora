@@ -1,13 +1,14 @@
 #include "flutter_window.h"
 
 #include <optional>
+#include <utility>
 
 #include "flutter/generated_plugin_registrant.h"
 
 FlutterWindow::FlutterWindow(const flutter::DartProject& project)
     : project_(project) {}
 
-FlutterWindow::~FlutterWindow() {}
+FlutterWindow::~FlutterWindow() { OnDestroy(); }
 
 bool FlutterWindow::OnCreate() {
   if (!Win32Window::OnCreate()) {
@@ -41,9 +42,9 @@ bool FlutterWindow::OnCreate() {
 }
 
 void FlutterWindow::OnDestroy() {
-  if (flutter_controller_) {
-    flutter_controller_ = nullptr;
-  }
+  // 先摘除成员指针，避免销毁视图/插件时的重入消息访问半析构控制器。
+  auto controller = std::move(flutter_controller_);
+  controller.reset();
 
   Win32Window::OnDestroy();
 }
@@ -64,7 +65,9 @@ FlutterWindow::MessageHandler(HWND hwnd, UINT const message,
 
   switch (message) {
     case WM_FONTCHANGE:
-      flutter_controller_->engine()->ReloadSystemFonts();
+      if (flutter_controller_) {
+        flutter_controller_->engine()->ReloadSystemFonts();
+      }
       break;
   }
 
