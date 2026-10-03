@@ -1,4 +1,4 @@
-param([string]$CMake = 'cmake', [switch]$SkipFlutterBuild)
+param([string]$CMake = 'cmake', [switch]$SkipFlutterBuild, [switch]$WithWebView)
 $ErrorActionPreference = 'Stop'
 $root = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..')).Path
 $build = Join-Path $root 'build/runner-lifecycle-tests'
@@ -47,6 +47,23 @@ try {
     foreach ($case in @('font-after-destroy', 'scope-destroy', 'main-return')) {
         & $exe (Join-Path $profile 'data') $case
         if ($LASTEXITCODE -ne 0) { throw "Runner lifecycle regression failed: $case ($LASTEXITCODE)" }
+    }
+    if ($WithWebView) {
+        # 高风险插件测试只在进程本地 fail-fast / hard-error 拦截器内运行。
+        $probe = Join-Path $root 'tool/windows_shutdown_probe.py'
+        $stamp = Get-Date -Format 'yyyyMMdd-HHmmss-fff'
+        $selfTest = Join-Path $build "guard-selftest-$stamp"
+        & python $probe --exe $exe --profile $profile --output $selfTest --mode guard-selftest
+        if ($LASTEXITCODE -ne 1) { throw 'Expected guard self-test interception was not reported.' }
+        $guard = Get-Content -LiteralPath (Join-Path $selfTest 'result.json') -Raw | ConvertFrom-Json
+        if (-not $guard.guardReady -or $guard.failure.function -ne 'RaiseFailFastException' -or $guard.failure.code -ne '0xe0464645') {
+            throw 'Guard self-test failed; refusing to load WebView.'
+        }
+        foreach ($case in @('scope-destroy', 'webview-recreate', 'main-return')) {
+            $output = Join-Path $build "webview-$case-$stamp"
+            & python $probe --exe $exe --profile $profile --output $output --mode $case --webview
+            if ($LASTEXITCODE -ne 0) { throw "WebView lifecycle failed: $case. See $output" }
+        }
     }
 } finally {
     $env:PATH = $previousPath

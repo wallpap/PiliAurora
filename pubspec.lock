@@ -707,11 +707,9 @@ packages:
   flutter_inappwebview_windows:
     dependency: "direct overridden"
     description:
-      path: flutter_inappwebview_windows
-      ref: "v6.1.5"
-      resolved-ref: "0bfa46dfff87f0d9e9d5e13cbd5c4a7c7310f8c9"
-      url: "https://github.com/bggRGjQaUbCoE/flutter_inappwebview.git"
-    source: git
+      path: "third_party/flutter_inappwebview_windows"
+      relative: true
+    source: path
     version: "0.6.0"
   flutter_launcher_icons:
     dependency: "direct dev"

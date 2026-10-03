@@ -135,10 +135,10 @@ changing the default backend.
 flutter build windows --profile --no-pub --target tool/danmaku_playback_benchmark.dart
 ```
 
-**当前 Windows 原生退出故障未解决，暂不自动启动批量基准。** 工具写出
+**完整插件集的短烟雾已正常退出；长时间及真实 WebView 页面仍未覆盖。** 工具写出
 `PLAYBACK_BENCH_READY` 后保持引擎运行。该标记只表示测量和媒体释放完成，
 不是进程退出成功。不要在工具中调用 `exit()` 或 `exitApplication()`。
-关闭窗口也不应被假定已经通过稳定性验证。
+批量工具必须验证 READY code=0、有效媒体窗口和进程退出码，不能仅以输出文件存在为成功。
 
 `lifecycle` 的 small-viewport 仅改变应用内内容尺寸，不改变系统 DPI。
 最终输出使用真实 DPR、播放器时间和匿名数量统计，不包含弹幕正文或媒体路径。
@@ -167,3 +167,14 @@ flutter build windows --profile --no-pub --target lib/main.dart
 runner 的隔离回归通过不代表完整插件集的 `0xE0464645` 已解决。
 修复证据、轨道研究及授权边界见
 `tool/reports/windows-runner-repair-and-track-followup-20261003.md`。
+
+
+### WebView 退出隔离与缓存对照
+
+```powershell
+pwsh -File tool/windows-runner-lifecycle.ps1 -WithWebView
+```
+
+启用生产 WebView DLL 前先测试进程本地 fail-fast 拦截器。故障时会停止该测试进程，
+返回失败；不会修改 WER、注册表或终止其他应用。`webview-recreate` 覆盖三次顺序重建，
+不代表跨线程或并发多 engine 已验证。
