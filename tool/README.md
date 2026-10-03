@@ -178,3 +178,16 @@ pwsh -File tool/windows-runner-lifecycle.ps1 -WithWebView
 启用生产 WebView DLL 前先测试进程本地 fail-fast 拦截器。故障时会停止该测试进程，
 返回失败；不会修改 WER、注册表或终止其他应用。`webview-recreate` 覆盖三次顺序重建，
 不代表跨线程或并发多 engine 已验证。
+
+缓存对照先构建 `tool/danmaku_playback_benchmark.dart`，再运行：
+
+```powershell
+python tool/windows_playback_cache_matrix.py --video <本地视频> --audio <本地音频> --danmaku <本地弹幕> --output build/cache-matrix-new-run
+```
+
+该工具不附加调试器，先运行短烟雾，再执行 16/24/32 MiB × 预热开/关的反转顺序对照。
+附加本地调试器的媒体位置曾停滞，故调试器数据只用于退出诊断，不用于性能结论。
+每轮要求媒体窗口有效、READY code=0 与进程正常退出；失败立即停止。
+工具只发送 WM_CLOSE 给自身 PID 的窗口，超时仅清理自身进程并判失败。
+默认缓存仍为 16 MiB；新增 `evictedLayouts` / `evictedImages` / `evictedImageBytes`
+区分淘汰负载，账面字节不代表已经释放的实际内存。

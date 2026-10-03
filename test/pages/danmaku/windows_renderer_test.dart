@@ -431,4 +431,103 @@ void main() {
     expect(renderer.add(_text('burst')), isTrue);
     expect(renderer.statistics['rejectedByTrack'], 1);
   });
+
+  test('eviction pressure reasons differ from payload counts and clones keep pixels', () async {
+    final a = _text('same');
+    final b = DanmakuContentItem<void>('same', color: const Color(0xFFFF0000));
+    final layoutOnly = DanmakuContentItem<void>(
+      'same',
+      color: const Color(0xFF00FF00),
+    );
+    final probe = DanmakuRasterCache(option: _option, devicePixelRatio: 1);
+    final itemBytes = probe.get(a)!.bytes;
+    probe.clear();
+    final cache = DanmakuRasterCache(
+      option: _option,
+      devicePixelRatio: 1,
+      maxEntries: 2,
+      maxBytes: itemBytes,
+    );
+    addTearDown(cache.clear);
+    cache.get(layoutOnly);
+    final original = cache.get(a, rasterize: true)!.image!;
+    final clone = original.clone();
+    addTearDown(clone.dispose);
+    final before = await clone.toByteData(format: ui.ImageByteFormat.rawRgba);
+    cache.get(b, rasterize: true);
+    expect(cache.evictions, 2);
+    expect(cache.evictionsByBytes, 2);
+    expect(cache.evictionsByEntries, 1);
+    expect(cache.evictedLayouts, 1);
+    expect(cache.evictedImages, 1);
+    expect(cache.evictedImageBytes, itemBytes);
+    expect(cache.bytes, itemBytes);
+    final after = await clone.toByteData(format: ui.ImageByteFormat.rawRgba);
+    expect(after!.buffer.asUint8List(), before!.buffer.asUint8List());
+    cache.clear();
+    expect(cache.bytes, 0);
+    expect(cache.evictions, 2);
+    expect(cache.evictedImages, 1);
+    final afterClear = await clone.toByteData(
+      format: ui.ImageByteFormat.rawRgba,
+    );
+    expect(afterClear!.buffer.asUint8List(), before.buffer.asUint8List());
+  });
+
+  test(
+    'rejected layouts can evict images without invalidating active pixels',
+    () async {
+      final renderer = WindowsDanmakuRenderer<void>(
+        option: _option.copyWith(area: 0.3, safeArea: false),
+        size: _size,
+        rasterCacheMaxEntries: 1,
+      );
+      addTearDown(renderer.dispose);
+      final a = _text('same', type: DanmakuItemType.top);
+      final b = DanmakuContentItem<void>(
+        'same',
+        color: const Color(0xFFFF0000),
+        type: DanmakuItemType.top,
+      );
+      expect(renderer.add(a), isTrue);
+      final active = renderer.staticDanmaku.single!.image!;
+      final before = await active.toByteData(
+        format: ui.ImageByteFormat.rawRgba,
+      );
+      final activeBytes = renderer.activeBytes;
+      expect(renderer.add(b), isFalse);
+      expect(renderer.rejectedByTrack, 1);
+      expect(renderer.rasters.isRasterized(a), isFalse);
+      expect(renderer.rasters.rasterizations, 1);
+      expect(renderer.statistics['evictedImages'], 1);
+      expect(renderer.statistics['evictedLayouts'], 0);
+      expect(renderer.rasters.bytes, 0);
+      expect(renderer.activeBytes, activeBytes);
+      final after = await active.toByteData(format: ui.ImageByteFormat.rawRgba);
+      expect(after!.buffer.asUint8List(), before!.buffer.asUint8List());
+    },
+  );
+
+  test('standalone rasterization of an old layout can evict its own image', () {
+    final a = _text('same');
+    final b = DanmakuContentItem<void>('same', color: const Color(0xFFFF0000));
+    final probe = DanmakuRasterCache(option: _option, devicePixelRatio: 1);
+    final itemBytes = probe.get(a)!.bytes;
+    probe.clear();
+    final cache = DanmakuRasterCache(
+      option: _option,
+      devicePixelRatio: 1,
+      maxEntries: 2,
+      maxBytes: itemBytes,
+    );
+    addTearDown(cache.clear);
+    final old = cache.get(a)!;
+    cache.get(b, rasterize: true);
+    expect(cache.rasterize(a, old), isNull);
+    expect(cache.isRasterized(b), isTrue);
+    expect(cache.evictions, 1);
+    expect(cache.evictedImages, 1);
+    expect(cache.evictedLayouts, 0);
+    expect(cache.bytes, itemBytes);
+  });
 }
