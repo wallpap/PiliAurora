@@ -7,7 +7,11 @@ import 'package:pili_aurora/pages/danmaku/windows_renderer.dart';
 import 'package:pili_aurora/pages/danmaku/windows_screen.dart';
 
 import '../../../tool/danmaku_playback_benchmark.dart'
-    show PlaybackBenchmarkConfig, playbackFixtureUri;
+    show
+        PlaybackBenchmarkConfig,
+        playbackFixtureUri,
+        playbackProgressDelta,
+        PlaybackProgressAccumulator;
 
 const _size = Size(960, 540);
 const _option = DanmakuOption(
@@ -39,6 +43,78 @@ void main() {
     final source = File('tool/danmaku_playback_benchmark.dart')
         .readAsStringSync();
     expect(RegExp(r'\b(exit|exitApplication)\s*\(').hasMatch(source), isFalse);
+  });
+
+  test(
+    'media progress distinguishes looping from backward seeks and jitter',
+    () {
+      expect(playbackProgressDelta(1000, 1500, 300000), (
+        milliseconds: 500,
+        wrapped: false,
+        unexpectedBackwards: false,
+      ));
+      expect(playbackProgressDelta(299500, 500, 300000), (
+        milliseconds: 1000,
+        wrapped: true,
+        unexpectedBackwards: false,
+      ));
+      expect(
+        playbackProgressDelta(10000, 5000, 300000).unexpectedBackwards,
+        isTrue,
+      );
+      expect(playbackProgressDelta(299500, 500, 0).unexpectedBackwards, isTrue);
+      expect(playbackProgressDelta(10000, 9800, 300000), (
+        milliseconds: 0,
+        wrapped: false,
+        unexpectedBackwards: false,
+      ));
+    },
+  );
+
+  test('notification jitter cannot double-count playback progress', () {
+    final progress = PlaybackProgressAccumulator(10000)
+      ..observe(9800, 300000)
+      ..observe(10000, 300000);
+    expect(progress.milliseconds, 0);
+    progress.observe(10500, 300000);
+    expect(progress.milliseconds, 500);
+    progress
+      ..setPosition(299500)
+      ..observe(500, 300000);
+    expect(progress.milliseconds, 1500);
+    expect(progress.wraps, 1);
+    progress
+      ..observe(10000, 300000)
+      ..observe(5000, 300000);
+    expect(progress.unexpectedBackwards, 1);
+  });
+
+  test('composition and endurance controls are explicit and bounded', () {
+    final config = PlaybackBenchmarkConfig([
+      '--kind=endurance',
+      '--telemetry-ms=0',
+      '--opacity=1',
+      '--composition=reference-group',
+      '--include-special=false',
+      '--overlay=false',
+    ]);
+    expect(config.opacity, 1);
+    expect(config.includeSpecial, isFalse);
+    expect(config.overlay, isFalse);
+    expect(config.toJson()['frameTimingsRecorded'], isFalse);
+    for (final arguments in [
+      ['--opacity=0'],
+      ['--opacity=1.1'],
+      ['--opacity=NaN'],
+      ['--opacity=Infinity'],
+      ['--composition=force-direct'],
+      ['--include-special=maybe'],
+      ['--overlay=maybe'],
+      ['--kind=endurance'],
+      ['--kind=endurance', '--telemetry-ms=0', '--renderer=both'],
+    ]) {
+      expect(() => PlaybackBenchmarkConfig(arguments), throwsArgumentError);
+    }
   });
 
   testWidgets('screen passes creation-time cache limits to renderer', (

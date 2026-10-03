@@ -50,6 +50,11 @@ class PlaybackBenchmarkConfig {
       'hwdec',
       'prewarm',
       'label',
+      'opacity',
+      'composition',
+      'include-special',
+      'overlay',
+      'static-only',
     };
     for (final argument in arguments) {
       final split = argument.indexOf('=');
@@ -71,11 +76,11 @@ class PlaybackBenchmarkConfig {
     renderer = values['renderer'] ?? 'prepared';
     kind = values['kind'] ?? 'stress';
     if (!{'prepared', 'baseline', 'both'}.contains(renderer) ||
-        !{'stress', 'lifecycle'}.contains(kind)) {
+        !{'stress', 'lifecycle', 'endurance'}.contains(kind)) {
       throw ArgumentError('Invalid renderer or experiment kind');
     }
-    if (kind == 'lifecycle' && renderer != 'prepared') {
-      throw ArgumentError('Lifecycle requires the prepared renderer');
+    if (kind != 'stress' && renderer != 'prepared') {
+      throw ArgumentError('Lifecycle/endurance requires the prepared renderer');
     }
     int number(String key, int fallback, int min, int max) {
       final value = int.tryParse(values[key] ?? '$fallback');
@@ -100,12 +105,38 @@ class PlaybackBenchmarkConfig {
       throw ArgumentError('prewarm must be true or false');
     }
     prewarm = prewarmValue == 'true';
+    opacity = double.tryParse(values['opacity'] ?? '0.5') ?? double.nan;
+    if (!opacity.isFinite || opacity <= 0 || opacity > 1) {
+      throw ArgumentError('opacity must be in (0, 1]');
+    }
+    composition = values['composition'] ?? 'auto';
+    if (!{'auto', 'reference-group'}.contains(composition)) {
+      throw ArgumentError('Invalid composition');
+    }
+    bool flag(String name, {bool fallback = true}) {
+      final value = values[name] ?? '$fallback';
+      if (!{'true', 'false'}.contains(value)) {
+        throw ArgumentError('$name must be true or false');
+      }
+      return value == 'true';
+    }
+
+    includeSpecial = flag('include-special');
+    overlay = flag('overlay');
+    staticOnly = flag('static-only', fallback: false);
+    if (kind == 'endurance' && telemetryMs != 0) {
+      throw ArgumentError(
+        'Endurance requires telemetry-ms=0: sample externally',
+      );
+    }
   }
 
   late final String video, danmaku, audio, output, label, hwdec, renderer, kind;
   late final int startMs, warmupSeconds, measurementSeconds, repetitions;
   late final int cacheMiB, cacheEntries, telemetryMs;
-  late final bool prewarm;
+  late final bool prewarm, includeSpecial, overlay, staticOnly;
+  late final double opacity;
+  late final String composition;
 
   Map<String, Object?> toJson() => {
     'label': label,
@@ -115,6 +146,12 @@ class PlaybackBenchmarkConfig {
     'cacheEntries': cacheEntries,
     'telemetryMs': telemetryMs,
     'prewarm': prewarm,
+    'opacity': opacity,
+    'composition': composition,
+    'includeSpecial': includeSpecial,
+    'overlay': overlay,
+    'staticOnly': staticOnly,
+    'frameTimingsRecorded': kind != 'endurance',
     'requestedHwdec': hwdec,
     'startMs': startMs,
     'warmupSeconds': warmupSeconds,
@@ -122,6 +159,50 @@ class PlaybackBenchmarkConfig {
     'repetitions': repetitions,
     'audioIncluded': audio.isNotEmpty,
   };
+}
+
+/// 将自然循环折算为累计媒体进度；小幅通知抖动不作为回退 seek。
+({int milliseconds, bool wrapped, bool unexpectedBackwards})
+playbackProgressDelta(
+  int previous,
+  int current,
+  int duration,
+) {
+  final delta = current - previous;
+  if (delta >= 0) {
+    return (milliseconds: delta, wrapped: false, unexpectedBackwards: false);
+  }
+  if (delta >= -500) {
+    return (milliseconds: 0, wrapped: false, unexpectedBackwards: false);
+  }
+  if (duration > 0 && previous >= duration - 2000 && current <= 2000) {
+    return (
+      milliseconds: duration - previous + current,
+      wrapped: true,
+      unexpectedBackwards: false,
+    );
+  }
+  return (milliseconds: 0, wrapped: false, unexpectedBackwards: true);
+}
+
+/// 累计进度使用单调高水位，避免回退通知恢复时重复计数。
+class PlaybackProgressAccumulator {
+  PlaybackProgressAccumulator(this._position);
+  int _position;
+  int milliseconds = 0;
+  int wraps = 0;
+  int unexpectedBackwards = 0;
+
+  void setPosition(int position) => _position = position;
+
+  void observe(int position, int duration) {
+    if (position < _position && _position - position <= 500) return;
+    final delta = playbackProgressDelta(_position, position, duration);
+    milliseconds += delta.milliseconds;
+    if (delta.wrapped) wraps++;
+    if (delta.unexpectedBackwards) unexpectedBackwards++;
+    _position = position;
+  }
 }
 
 const _option = DanmakuOption(fontSize: 24, duration: 6, massiveMode: true);
@@ -276,6 +357,11 @@ class _StressBenchmarkState extends State<_StressBenchmark> {
   final _wallClock = Stopwatch()..start();
   int _mediaStartMs = 0;
   int _lastPositionMs = 0;
+  final _mediaProgress = PlaybackProgressAccumulator(0);
+  int get _mediaProgressMs => _mediaProgress.milliseconds;
+  int get _mediaWraps => _mediaProgress.wraps;
+  int get _unexpectedBackwards => _mediaProgress.unexpectedBackwards;
+  bool _playerDisposed = false;
   int _outerActiveRejections = 0;
   int _outerSpecialRejections = 0;
   int _addMicros = 0;
@@ -307,7 +393,7 @@ class _StressBenchmarkState extends State<_StressBenchmark> {
   }
 
   void _onTimings(List<FrameTiming> timings) {
-    if (_measuring) {
+    if (_measuring && _config.kind != 'endurance') {
       _frames.addAll(
         timings.where(
           (frame) =>
@@ -408,7 +494,9 @@ class _StressBenchmarkState extends State<_StressBenchmark> {
       index++
     ) {
       final entry = widget.entries[index];
-      if (entry.progress > position && entry.mode != 7) {
+      if (entry.progress > position &&
+          entry.mode != 7 &&
+          (!_config.staticOnly || entry.mode == 4 || entry.mode == 5)) {
         contents.add(entry.content);
       }
     }
@@ -423,7 +511,11 @@ class _StressBenchmarkState extends State<_StressBenchmark> {
     while (_cursor < widget.entries.length &&
         widget.entries[_cursor].progress <= position) {
       final entry = widget.entries[_cursor++];
-      if (entry.progress < _mediaStartMs) continue;
+      if (entry.progress < _mediaStartMs ||
+          (!_config.includeSpecial && entry.mode == 7) ||
+          (_config.staticOnly && entry.mode != 4 && entry.mode != 5)) {
+        continue;
+      }
       if (_activeBaseline >= _maxActiveDanmaku) {
         _outerActiveRejections++;
         _rejected++;
@@ -455,17 +547,18 @@ class _StressBenchmarkState extends State<_StressBenchmark> {
     _mediaStartMs = startMs;
     _cursor = _lowerBound(startMs);
     _lastPositionMs = startMs;
+    _mediaProgress.setPosition(startMs);
     _lastPrewarmPosition = -1;
     _admission = Timer.periodic(const Duration(milliseconds: 20), (_) {
       final state = widget.player.state;
       final controller = _controller;
       if (controller == null) return;
-      if (!state.playing || state.buffering || !_overlayEnabled) {
+      if (!state.playing || state.buffering) {
         if (controller.isRunning()) controller.pause();
         return;
       }
-      if (!controller.isRunning()) controller.resume();
       final position = state.position.inMilliseconds;
+      _mediaProgress.observe(position, state.duration.inMilliseconds);
       if (position < _lastPositionMs - 500) {
         // 循环/回退 seek 不重放积压弹幕。
         controller.clear();
@@ -474,6 +567,11 @@ class _StressBenchmarkState extends State<_StressBenchmark> {
         _lastPrewarmPosition = -1;
       }
       _lastPositionMs = position;
+      if (!_overlayEnabled) {
+        if (controller.isRunning()) controller.pause();
+        return;
+      }
+      if (!controller.isRunning()) controller.resume();
       _admitUntil(position);
     });
   }
@@ -507,7 +605,7 @@ class _StressBenchmarkState extends State<_StressBenchmark> {
     _accepted = _rejected = _specialAccepted = _prewarmQueued = 0;
     _outerActiveRejections = _outerSpecialRejections = 0;
     _viewportScale = 1;
-    _overlayEnabled = true;
+    _overlayEnabled = _config.overlay;
     setState(() {
       _prepared = prepared;
       _case++;
@@ -519,6 +617,7 @@ class _StressBenchmarkState extends State<_StressBenchmark> {
 
   Future<void> _measure(String phase, int seconds, {int? repetition}) async {
     setState(() => _phase = phase);
+    stdout.writeln('PLAYBACK_BENCH_BEGIN $phase');
     await WidgetsBinding.instance.endOfFrame;
     _measurementStartMicros =
         SchedulerBinding.instance.currentSystemFrameTimeStamp.inMicroseconds;
@@ -536,6 +635,9 @@ class _StressBenchmarkState extends State<_StressBenchmark> {
     final statsBefore = _renderer?.statistics;
     final positionBefore = widget.player.state.position.inMilliseconds;
     final expectedPlaying = widget.player.state.playing;
+    final progressBefore = _mediaProgressMs;
+    final wrapsBefore = _mediaWraps;
+    final backwardsBefore = _unexpectedBackwards;
     _measuring = true;
     if (_config.telemetryMs > 0) {
       _captureTelemetry();
@@ -548,6 +650,9 @@ class _StressBenchmarkState extends State<_StressBenchmark> {
     _telemetryTimer?.cancel();
     _telemetryTimer = null;
     final positionAfter = widget.player.state.position.inMilliseconds;
+    final progressAfter = _mediaProgressMs;
+    final wrapsAfter = _mediaWraps;
+    final backwardsAfter = _unexpectedBackwards;
     final statsAfter = _renderer?.statistics;
     final acceptedAfter = _accepted;
     final rejectedAfter = _rejected;
@@ -560,7 +665,9 @@ class _StressBenchmarkState extends State<_StressBenchmark> {
     _measurementEndMicros =
         SchedulerBinding.instance.currentSystemFrameTimeStamp.inMicroseconds;
     // FrameTiming 按批次送达。等尾批次，并按引擎时间戳裁剪，避免混入下一阶段。
-    await Future<void>.delayed(const Duration(milliseconds: 500));
+    if (_config.kind != 'endurance') {
+      await Future<void>.delayed(const Duration(milliseconds: 500));
+    }
     _measuring = false;
     _frames.removeWhere(
       (frame) =>
@@ -572,11 +679,23 @@ class _StressBenchmarkState extends State<_StressBenchmark> {
       'repetition': repetition,
       'renderer': _prepared ? 'prepared' : 'baseline',
       'frames': _frames.length,
+      'frameTimingsRecorded': _config.kind != 'endurance',
+      'mediaProgressMs': progressAfter - progressBefore,
+      'mediaWraps': wrapsAfter - wrapsBefore,
+      'unexpectedBackwards': backwardsAfter - backwardsBefore,
       'durationSeconds': seconds,
       'positionStartMs': positionBefore,
       'expectedPlaying': expectedPlaying,
-      'replayWindowValid': expectedPlaying
-          ? (positionAfter - positionBefore - seconds * 1000).abs() <= 600
+      'replayWindowValid':
+          _config.kind == 'endurance' && !phase.startsWith('endurance-')
+          ? null
+          : expectedPlaying
+          ? (_config.kind == 'endurance' && phase.startsWith('endurance-')
+                ? (progressAfter - progressBefore - seconds * 1000).abs() <=
+                          1000 &&
+                      backwardsAfter == backwardsBefore
+                : (positionAfter - positionBefore - seconds * 1000).abs() <=
+                      600)
           : (positionAfter - positionBefore).abs() <= 300,
       'positionEndMs': positionAfter,
       'accepted': acceptedAfter - acceptedBefore,
@@ -676,13 +795,83 @@ class _StressBenchmarkState extends State<_StressBenchmark> {
     _renderer = null;
   }
 
+  Future<void> _runEndurance() async {
+    await _newCase(true);
+    final overallWatch = Stopwatch()..start();
+    final progressBefore = _mediaProgressMs;
+    final wrapsBefore = _mediaWraps;
+    final backwardsBefore = _unexpectedBackwards;
+    final statisticsBefore = _renderer!.statistics;
+    var remaining = _measurementSeconds;
+    var checkpoint = 0;
+    while (remaining > 0) {
+      final seconds = remaining > 60 ? 60 : remaining;
+      await _measure('endurance-$checkpoint', seconds);
+      remaining -= seconds;
+      checkpoint++;
+      if (_results.last['expectedPlaying'] != true ||
+          _results.last['replayWindowValid'] != true) {
+        throw StateError('Invalid endurance playback window');
+      }
+    }
+    overallWatch.stop();
+    final progress = _mediaProgressMs - progressBefore;
+    final backwards = _unexpectedBackwards - backwardsBefore;
+    final valid =
+        widget.player.state.playing &&
+        backwards == 0 &&
+        (progress - overallWatch.elapsedMilliseconds).abs() <= 1000;
+    _results.add({
+      'phase': 'endurance-overall',
+      'durationSeconds': overallWatch.elapsedMicroseconds / 1000000,
+      'mediaProgressMs': progress,
+      'mediaWraps': _mediaWraps - wrapsBefore,
+      'unexpectedBackwards': backwards,
+      'expectedPlaying': widget.player.state.playing,
+      'replayWindowValid': valid,
+      'frames': 0,
+      'frameTimingsRecorded': false,
+      'telemetrySamples': <Object?>[],
+      'statisticsBefore': statisticsBefore,
+      'statistics': _renderer!.statistics,
+      'processAtEnd': _processMetrics.sample(),
+    });
+    if (!valid) throw StateError('Invalid overall endurance playback');
+    _admission?.cancel();
+    _controller!.pause();
+    _controller!.clear();
+    await _measure('cleared-with-cache', 20);
+    _renderer!.rasters.clear();
+    await _measure('cache-cleared', 20);
+    final retired = _renderer!;
+    setState(() => _case = -1);
+    await WidgetsBinding.instance.endOfFrame;
+    _controller = null;
+    _renderer = null;
+    await _measure('renderer-disposed', 20);
+    _results.last['retiredRenderer'] = retired.statistics;
+    await widget.player.pause();
+    await widget.player.dispose();
+    _playerDisposed = true;
+    stdout.writeln('PLAYBACK_BENCH_BEGIN media-disposed');
+    await Future<void>.delayed(const Duration(seconds: 20));
+    _results.add({
+      'phase': 'media-disposed',
+      'processAtEnd': _processMetrics.sample(),
+    });
+  }
+
   Future<void> _run() async {
     var code = 0;
+    final mpvVersion = _property('mpv-version');
+    final ffmpegVersion = _property('ffmpeg-version');
     try {
       await widget.video.waitUntilFirstFrameRendered.timeout(
         const Duration(seconds: 15),
       );
-      if (_config.kind == 'lifecycle') {
+      if (_config.kind == 'endurance') {
+        await _runEndurance();
+      } else if (_config.kind == 'lifecycle') {
         await _runLifecycle();
       } else {
         for (var repetition = 0; repetition < _repetitions; repetition++) {
@@ -712,8 +901,8 @@ class _StressBenchmarkState extends State<_StressBenchmark> {
               ? MediaQuery.devicePixelRatioOf(context)
               : null,
           'fixture': widget.fixture,
-          'mpvVersion': _property('mpv-version'),
-          'ffmpegVersion': _property('ffmpeg-version'),
+          'mpvVersion': mpvVersion,
+          'ffmpegVersion': ffmpegVersion,
           'results': _results,
         }),
       );
@@ -726,7 +915,7 @@ class _StressBenchmarkState extends State<_StressBenchmark> {
     _telemetryTimer?.cancel();
     setState(() => _case = -1);
     await WidgetsBinding.instance.endOfFrame;
-    await widget.player.dispose();
+    if (!_playerDisposed) await widget.player.dispose();
     await Future<void>.delayed(const Duration(seconds: 6));
     stdout.writeln('PLAYBACK_BENCH_READY code=$code close the window manually');
     // READY 只表示测量和媒体释放完成，不表示 Windows 已成功退出。
@@ -769,21 +958,30 @@ class _StressBenchmarkState extends State<_StressBenchmark> {
                 RepaintBoundary(child: SimpleVideo(controller: widget.video)),
                 if (_case >= 0)
                   if (_prepared)
-                    WindowsDanmakuScreen<void>(
-                      key: ValueKey(_case),
-                      option: _option,
-                      size: size,
-                      opacity: _overlayEnabled ? 0.5 : 0,
-                      rasterCacheMaxBytes: _config.cacheMiB * 1024 * 1024,
-                      rasterCacheMaxEntries: _config.cacheEntries,
-                      createdRenderer: (renderer) {
-                        _renderer = renderer;
-                        _created(renderer.controller);
-                      },
+                    Opacity(
+                      opacity: _config.composition == 'reference-group'
+                          ? _config.opacity
+                          : 1,
+                      child: WindowsDanmakuScreen<void>(
+                        key: ValueKey(_case),
+                        option: _option,
+                        size: size,
+                        opacity: _overlayEnabled
+                            ? (_config.composition == 'reference-group'
+                                  ? 1
+                                  : _config.opacity)
+                            : 0,
+                        rasterCacheMaxBytes: _config.cacheMiB * 1024 * 1024,
+                        rasterCacheMaxEntries: _config.cacheEntries,
+                        createdRenderer: (renderer) {
+                          _renderer = renderer;
+                          _created(renderer.controller);
+                        },
+                      ),
                     )
                   else
                     Opacity(
-                      opacity: 0.5,
+                      opacity: _config.opacity,
                       child: DanmakuScreen<void>(
                         key: ValueKey(_case),
                         option: _option,
