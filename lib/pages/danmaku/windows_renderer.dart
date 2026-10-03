@@ -47,7 +47,15 @@ class WindowsDanmakuRenderer<T> extends ChangeNotifier {
     );
   }
 
-  static const maxActiveBytes = 64 * 1024 * 1024;
+  /// 活动弹幕图片的账面内存预算。
+  ///
+  /// 高密度真实弹幕下，64 MiB 容易在短时间内触发大量拒绝。默认提升到
+  /// 96 MiB；仍可使用 dart-define 针对设备或基准覆盖。
+  static const maxActiveBytesMiB = int.fromEnvironment(
+    'WINDOWS_DANMAKU_MAX_ACTIVE_BYTES_MIB',
+    defaultValue: 96,
+  );
+  static const maxActiveBytes = maxActiveBytesMiB * 1024 * 1024;
   static const maxActiveItems = 600;
   static const maxPendingPrewarm = 64;
   static const prewarmEnabled = bool.fromEnvironment(
@@ -78,6 +86,10 @@ class WindowsDanmakuRenderer<T> extends ChangeNotifier {
   int directPaints = 0;
   int groupPaints = 0;
   int prewarmed = 0;
+  int rejectedByMemoryBudget = 0;
+  int rejectedByActiveItemLimit = 0;
+  int rejectedByTrack = 0;
+  int rejectedByRaster = 0;
 
   bool get isEmpty => _entries.isEmpty && specialDanmaku.isEmpty;
   bool get canPaintDirectly => specialDanmaku.isEmpty && tick >= _unsafeUntilMs;
@@ -86,6 +98,8 @@ class WindowsDanmakuRenderer<T> extends ChangeNotifier {
     'renderer': 'windows-preprocess',
     'active': _entries.length + specialDanmaku.length,
     'activeImageBytes': activeBytes,
+    'activeImageLimitBytes': maxActiveBytes,
+    'activeItemLimit': maxActiveItems,
     'cacheEntries': rasters.length,
     'cacheImageBytes': rasters.bytes,
     'cacheHits': rasters.hits,
@@ -97,6 +111,10 @@ class WindowsDanmakuRenderer<T> extends ChangeNotifier {
     'directPaints': directPaints,
     'groupPaints': groupPaints,
     'overlapSafe': canPaintDirectly,
+    'rejectedByMemoryBudget': rejectedByMemoryBudget,
+    'rejectedByActiveItemLimit': rejectedByActiveItemLimit,
+    'rejectedByTrack': rejectedByTrack,
+    'rejectedByRaster': rejectedByRaster,
   };
 
   void _layoutTracks() {
@@ -180,6 +198,9 @@ class WindowsDanmakuRenderer<T> extends ChangeNotifier {
         _entries.length + specialDanmaku.length >= maxActiveItems ||
         _option.durationInMilliseconds <= 0 ||
         _option.staticDurationInMilliseconds <= 0) {
+      if (_entries.length + specialDanmaku.length >= maxActiveItems) {
+        rejectedByActiveItemLimit++;
+      }
       return false;
     }
     if (content is SpecialDanmakuContentItem<T>) {
@@ -189,6 +210,7 @@ class WindowsDanmakuRenderer<T> extends ChangeNotifier {
         _option.strokeWidth,
         _option.fontWeight,
       )) {
+        rejectedByRaster++;
         return false;
       }
       canvas_danmaku.DmUtils.devicePixelRatio = rasters.devicePixelRatio;
@@ -201,6 +223,7 @@ class WindowsDanmakuRenderer<T> extends ChangeNotifier {
       final bytes = image.width * image.height * 4;
       if (activeBytes + bytes > maxActiveBytes) {
         image.dispose();
+        rejectedByMemoryBudget++;
         return false;
       }
       specialDanmaku.add(
@@ -217,7 +240,12 @@ class WindowsDanmakuRenderer<T> extends ChangeNotifier {
       return true;
     }
     final raster = rasters.get(content);
-    if (raster == null || activeBytes + raster.bytes > maxActiveBytes) {
+    if (raster == null) {
+      rejectedByRaster++;
+      return false;
+    }
+    if (activeBytes + raster.bytes > maxActiveBytes) {
+      rejectedByMemoryBudget++;
       return false;
     }
     var scrolling = content.type == DanmakuItemType.scroll;
@@ -256,7 +284,10 @@ class WindowsDanmakuRenderer<T> extends ChangeNotifier {
         track = content.selfSend ? 0 : _random.nextInt(scrollDanmaku.length);
       }
     }
-    if (track < 0) return false;
+    if (track < 0) {
+      rejectedByTrack++;
+      return false;
+    }
     final image = rasters.rasterize(content, raster);
     if (image == null) return false;
     final item = DanmakuItem<T>(
