@@ -1,7 +1,7 @@
 import 'package:pili_aurora/models/common/video/cdn_type.dart';
 import 'package:pili_aurora/services/logger.dart';
 import 'package:pili_aurora/models/common/video/video_decode_type.dart';
-import 'package:pili_aurora/models_new/live/live_room_play_info/codec.dart';
+import 'package:pili_aurora/models/remote/live/live_room_play_info/codec.dart';
 import 'package:pili_aurora/utils/extension/iterable_ext.dart';
 import 'package:pili_aurora/utils/storage_pref.dart';
 

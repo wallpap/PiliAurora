@@ -5,7 +5,7 @@ import 'package:pili_aurora/common/widgets/flutter/refresh_indicator.dart';
 import 'package:pili_aurora/common/widgets/loading_widget/http_error.dart';
 import 'package:pili_aurora/common/widgets/scaffold/simple_scaffold.dart';
 import 'package:pili_aurora/http/loading_state.dart';
-import 'package:pili_aurora/models_new/live/live_follow/item.dart';
+import 'package:pili_aurora/models/remote/live/live_follow/item.dart';
 import 'package:pili_aurora/pages/live_follow/controller.dart';
 import 'package:pili_aurora/pages/live_follow/widgets/live_item_follow.dart';
 import 'package:pili_aurora/utils/grid.dart';

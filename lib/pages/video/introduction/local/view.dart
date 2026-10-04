@@ -5,7 +5,7 @@ import 'package:pili_aurora/common/widgets/badge.dart';
 import 'package:pili_aurora/common/widgets/image/network_img_layer.dart';
 import 'package:pili_aurora/models/common/badge_type.dart';
 import 'package:pili_aurora/models/common/video/video_quality.dart';
-import 'package:pili_aurora/models_new/download/bili_download_entry_info.dart';
+import 'package:pili_aurora/models/remote/download/bili_download_entry_info.dart';
 import 'package:pili_aurora/pages/video/introduction/local/controller.dart';
 import 'package:pili_aurora/utils/duration_utils.dart';
 import 'package:pili_aurora/utils/extension/num_ext.dart';

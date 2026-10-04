@@ -9,7 +9,7 @@ import 'package:pili_aurora/http/sponsor_block.dart';
 import 'package:pili_aurora/models/common/sponsor_block/segment_model.dart';
 import 'package:pili_aurora/models/common/sponsor_block/segment_type.dart';
 import 'package:pili_aurora/models/common/sponsor_block/skip_type.dart';
-import 'package:pili_aurora/models_new/sponsor_block/segment_item.dart';
+import 'package:pili_aurora/models/remote/sponsor_block/segment_item.dart';
 import 'package:pili_aurora/utils/duration_utils.dart';
 import 'package:pili_aurora/utils/storage_pref.dart';
 import 'package:easy_debounce/easy_throttle.dart';

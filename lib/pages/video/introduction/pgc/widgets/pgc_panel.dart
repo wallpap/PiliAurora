@@ -1,9 +1,9 @@
 import 'dart:async';
 
 import 'package:pili_aurora/common/assets.dart';
-import 'package:pili_aurora/models_new/pgc/pgc_info_model/episode.dart';
-import 'package:pili_aurora/models_new/pgc/pgc_info_model/new_ep.dart';
-import 'package:pili_aurora/models_new/video/video_detail/episode.dart'
+import 'package:pili_aurora/models/remote/pgc/pgc_info_model/episode.dart';
+import 'package:pili_aurora/models/remote/pgc/pgc_info_model/new_ep.dart';
+import 'package:pili_aurora/models/remote/video/video_detail/episode.dart'
     hide EpisodeItem;
 import 'package:pili_aurora/pages/video/controller.dart';
 import 'package:pili_aurora/utils/accounts.dart';

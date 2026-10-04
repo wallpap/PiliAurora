@@ -3,8 +3,8 @@ import 'package:pili_aurora/http/loading_state.dart';
 import 'package:pili_aurora/http/user.dart';
 import 'package:pili_aurora/models/common/later_view_type.dart';
 import 'package:pili_aurora/models/common/video/source_type.dart';
-import 'package:pili_aurora/models_new/later/data.dart';
-import 'package:pili_aurora/models_new/later/list.dart';
+import 'package:pili_aurora/models/remote/later/data.dart';
+import 'package:pili_aurora/models/remote/later/list.dart';
 import 'package:pili_aurora/pages/common/common_list_controller.dart'
     show CommonListController;
 import 'package:pili_aurora/pages/common/multi_select/base.dart';

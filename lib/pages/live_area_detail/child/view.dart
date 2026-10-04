@@ -5,7 +5,7 @@ import 'package:pili_aurora/common/widgets/flutter/refresh_indicator.dart';
 import 'package:pili_aurora/common/widgets/loading_widget/http_error.dart';
 import 'package:pili_aurora/common/widgets/self_sized_horizontal_list.dart';
 import 'package:pili_aurora/http/loading_state.dart';
-import 'package:pili_aurora/models_new/live/live_feed_index/card_data_list_item.dart';
+import 'package:pili_aurora/models/remote/live/live_feed_index/card_data_list_item.dart';
 import 'package:pili_aurora/pages/live/widgets/live_item_app.dart';
 import 'package:pili_aurora/pages/live_area_detail/child/controller.dart';
 import 'package:pili_aurora/pages/search/widgets/search_text.dart';

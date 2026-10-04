@@ -11,7 +11,7 @@ import 'package:pili_aurora/common/widgets/loading_widget/http_error.dart';
 import 'package:pili_aurora/common/widgets/scaffold/simple_scaffold.dart';
 import 'package:pili_aurora/common/widgets/select_mask.dart';
 import 'package:pili_aurora/models/common/badge_type.dart';
-import 'package:pili_aurora/models_new/download/download_info.dart';
+import 'package:pili_aurora/models/remote/download/download_info.dart';
 import 'package:pili_aurora/pages/download/controller.dart';
 import 'package:pili_aurora/pages/download/detail/view.dart';
 import 'package:pili_aurora/pages/download/detail/widgets/item.dart';

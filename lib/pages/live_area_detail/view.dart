@@ -4,7 +4,7 @@ import 'package:pili_aurora/common/widgets/scaffold/simple_scaffold.dart';
 import 'package:pili_aurora/common/widgets/scroll_physics.dart' show tabBarView;
 import 'package:pili_aurora/http/loading_state.dart';
 import 'package:pili_aurora/models/common/image_type.dart';
-import 'package:pili_aurora/models_new/live/live_area_list/area_item.dart';
+import 'package:pili_aurora/models/remote/live/live_area_list/area_item.dart';
 import 'package:pili_aurora/pages/live_area_detail/child/controller.dart';
 import 'package:pili_aurora/pages/live_area_detail/child/view.dart';
 import 'package:pili_aurora/pages/live_area_detail/controller.dart';

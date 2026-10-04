@@ -1,6 +1,6 @@
 import 'package:pili_aurora/models/common/video/source_type.dart';
-import 'package:pili_aurora/models_new/later/data.dart';
-import 'package:pili_aurora/models_new/later/list.dart';
+import 'package:pili_aurora/models/remote/later/data.dart';
+import 'package:pili_aurora/models/remote/later/list.dart';
 import 'package:pili_aurora/pages/common/search/common_search_page.dart';
 import 'package:pili_aurora/pages/later/widgets/video_card_h_later.dart';
 import 'package:pili_aurora/pages/later_search/controller.dart';

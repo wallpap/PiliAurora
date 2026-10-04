@@ -5,7 +5,7 @@ import 'package:pili_aurora/common/widgets/flutter/refresh_indicator.dart';
 import 'package:pili_aurora/common/widgets/loading_widget/http_error.dart';
 import 'package:pili_aurora/common/widgets/scaffold/simple_scaffold.dart';
 import 'package:pili_aurora/http/loading_state.dart';
-import 'package:pili_aurora/models_new/space/space_opus/item.dart';
+import 'package:pili_aurora/models/remote/space/space_opus/item.dart';
 import 'package:pili_aurora/pages/common/fab_mixin.dart';
 import 'package:pili_aurora/pages/member_opus/controller.dart';
 import 'package:pili_aurora/pages/member_opus/widgets/space_opus_item.dart';

@@ -3,7 +3,7 @@ import 'dart:math';
 
 import 'package:pili_aurora/common/widgets/loading_widget/loading_widget.dart';
 import 'package:pili_aurora/http/loading_state.dart';
-import 'package:pili_aurora/models_new/dynamic/dyn_topic_top/topic_item.dart';
+import 'package:pili_aurora/models/remote/dynamic/dyn_topic_top/topic_item.dart';
 import 'package:pili_aurora/pages/dynamics_select_topic/controller.dart';
 import 'package:pili_aurora/pages/dynamics_select_topic/widgets/item.dart';
 import 'package:pili_aurora/pages/search/controller.dart' show DebounceStreamState;

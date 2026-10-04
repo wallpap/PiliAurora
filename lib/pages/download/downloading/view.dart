@@ -4,7 +4,7 @@ import 'package:pili_aurora/common/widgets/flutter/pop_scope.dart';
 import 'package:pili_aurora/common/widgets/loading_widget/http_error.dart';
 import 'package:pili_aurora/common/widgets/scaffold/simple_scaffold.dart';
 import 'package:pili_aurora/common/widgets/view_sliver_safe_area.dart';
-import 'package:pili_aurora/models_new/download/bili_download_entry_info.dart';
+import 'package:pili_aurora/models/remote/download/bili_download_entry_info.dart';
 import 'package:pili_aurora/pages/common/multi_select/base.dart'
     show BaseMultiSelectMixin;
 import 'package:pili_aurora/pages/download/detail/widgets/item.dart';

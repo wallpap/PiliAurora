@@ -4,7 +4,7 @@ import 'dart:typed_data';
 
 import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:pili_aurora/models_new/download/bili_download_entry_info.dart';
+import 'package:pili_aurora/models/remote/download/bili_download_entry_info.dart';
 import 'package:pili_aurora/services/download/download_manager.dart';
 import 'package:pili_aurora/services/download/response_adapter.dart';
 

@@ -1,9 +1,9 @@
 import 'package:pili_aurora/http/dynamics.dart';
 import 'package:pili_aurora/http/loading_state.dart';
-import 'package:pili_aurora/models_new/bubble/category_list.dart';
-import 'package:pili_aurora/models_new/bubble/data.dart';
-import 'package:pili_aurora/models_new/bubble/dyn_list.dart';
-import 'package:pili_aurora/models_new/bubble/sort_info.dart';
+import 'package:pili_aurora/models/remote/bubble/category_list.dart';
+import 'package:pili_aurora/models/remote/bubble/data.dart';
+import 'package:pili_aurora/models/remote/bubble/dyn_list.dart';
+import 'package:pili_aurora/models/remote/bubble/sort_info.dart';
 import 'package:pili_aurora/pages/common/common_list_controller.dart';
 import 'package:get/get.dart';
 import 'package:material_ui/material_ui.dart' show TabController;

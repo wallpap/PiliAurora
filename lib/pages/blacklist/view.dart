@@ -6,7 +6,7 @@ import 'package:pili_aurora/common/widgets/loading_widget/http_error.dart';
 import 'package:pili_aurora/common/widgets/scaffold/simple_scaffold.dart';
 import 'package:pili_aurora/http/loading_state.dart';
 import 'package:pili_aurora/models/common/image_type.dart';
-import 'package:pili_aurora/models_new/blacklist/list.dart';
+import 'package:pili_aurora/models/remote/blacklist/list.dart';
 import 'package:pili_aurora/pages/blacklist/controller.dart';
 import 'package:pili_aurora/utils/date_utils.dart';
 import 'package:pili_aurora/utils/global_data.dart';

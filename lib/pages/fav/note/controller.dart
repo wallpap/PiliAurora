@@ -1,6 +1,6 @@
 import 'package:pili_aurora/http/fav.dart';
 import 'package:pili_aurora/http/loading_state.dart';
-import 'package:pili_aurora/models_new/fav/fav_note/list.dart';
+import 'package:pili_aurora/models/remote/fav/fav_note/list.dart';
 import 'package:pili_aurora/pages/common/multi_select/multi_select_controller.dart';
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:get/get.dart';

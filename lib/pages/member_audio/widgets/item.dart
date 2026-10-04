@@ -5,7 +5,7 @@ import 'package:pili_aurora/common/widgets/stat/stat.dart';
 import 'package:pili_aurora/grpc/bilibili/app/listener/v1.pbenum.dart'
     show PlaylistSource;
 import 'package:pili_aurora/models/common/stat_type.dart';
-import 'package:pili_aurora/models_new/space/space_audio/item.dart';
+import 'package:pili_aurora/models/remote/space/space_audio/item.dart';
 import 'package:pili_aurora/pages/audio/view.dart';
 import 'package:pili_aurora/utils/date_utils.dart';
 import 'package:pili_aurora/utils/platform_utils.dart';

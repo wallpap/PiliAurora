@@ -1,11 +1,11 @@
 import 'package:pili_aurora/common/widgets/pair.dart';
 import 'package:pili_aurora/http/live.dart';
 import 'package:pili_aurora/http/loading_state.dart';
-import 'package:pili_aurora/models_new/live/live_feed_index/card_data_list_item.dart';
-import 'package:pili_aurora/models_new/live/live_feed_index/card_list.dart';
-import 'package:pili_aurora/models_new/live/live_feed_index/data.dart';
-import 'package:pili_aurora/models_new/live/live_second_list/data.dart';
-import 'package:pili_aurora/models_new/live/live_second_list/tag.dart';
+import 'package:pili_aurora/models/remote/live/live_feed_index/card_data_list_item.dart';
+import 'package:pili_aurora/models/remote/live/live_feed_index/card_list.dart';
+import 'package:pili_aurora/models/remote/live/live_feed_index/data.dart';
+import 'package:pili_aurora/models/remote/live/live_second_list/data.dart';
+import 'package:pili_aurora/models/remote/live/live_second_list/tag.dart';
 import 'package:pili_aurora/pages/common/common_list_controller.dart';
 import 'package:pili_aurora/services/account_service.dart';
 import 'package:pili_aurora/utils/extension/scroll_controller_ext.dart';

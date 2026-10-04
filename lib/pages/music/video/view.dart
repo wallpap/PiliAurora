@@ -3,7 +3,7 @@ import 'package:pili_aurora/common/widgets/image/network_img_layer.dart';
 import 'package:pili_aurora/common/widgets/loading_widget/http_error.dart';
 import 'package:pili_aurora/http/loading_state.dart';
 import 'package:pili_aurora/models/common/image_type.dart';
-import 'package:pili_aurora/models_new/music/bgm_recommend_list.dart';
+import 'package:pili_aurora/models/remote/music/bgm_recommend_list.dart';
 import 'package:pili_aurora/pages/music/video/controller.dart';
 import 'package:pili_aurora/pages/music/widget/music_video_card_h.dart';
 import 'package:pili_aurora/utils/extension/get_ext.dart';

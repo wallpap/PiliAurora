@@ -6,7 +6,7 @@ import 'package:pili_aurora/common/widgets/scroll_physics.dart' show tabBarView;
 import 'package:pili_aurora/common/widgets/view_sliver_safe_area.dart';
 import 'package:pili_aurora/http/loading_state.dart';
 import 'package:pili_aurora/models/common/live/live_contribution_rank_type.dart';
-import 'package:pili_aurora/models_new/live/live_contribution_rank/item.dart';
+import 'package:pili_aurora/models/remote/live/live_contribution_rank/item.dart';
 import 'package:pili_aurora/pages/live_room/contribution_rank/controller.dart';
 import 'package:pili_aurora/pages/member/widget/medal_widget.dart';
 import 'package:pili_aurora/utils/color_utils.dart';

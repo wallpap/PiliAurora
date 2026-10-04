@@ -1,6 +1,6 @@
 import 'package:pili_aurora/common/widgets/loading_widget/http_error.dart';
 import 'package:pili_aurora/http/loading_state.dart';
-import 'package:pili_aurora/models_new/download/bili_download_entry_info.dart';
+import 'package:pili_aurora/models/remote/download/bili_download_entry_info.dart';
 import 'package:pili_aurora/pages/common/search/common_search_page.dart';
 import 'package:pili_aurora/pages/download/detail/widgets/item.dart';
 import 'package:pili_aurora/pages/download/search/controller.dart';

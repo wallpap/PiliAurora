@@ -7,7 +7,7 @@ import 'package:pili_aurora/models/dynamics/article_content_model.dart'
     show ArticleContentModel;
 import 'package:pili_aurora/models/dynamics/result.dart';
 import 'package:pili_aurora/models/model_avatar.dart';
-import 'package:pili_aurora/models_new/article/article_view/data.dart';
+import 'package:pili_aurora/models/remote/article/article_view/data.dart';
 import 'package:pili_aurora/pages/common/dyn/common_dyn_controller.dart';
 import 'package:pili_aurora/utils/accounts.dart';
 import 'package:pili_aurora/utils/app_scheme.dart';

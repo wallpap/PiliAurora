@@ -1,7 +1,7 @@
 import 'package:pili_aurora/http/live.dart';
 import 'package:pili_aurora/http/loading_state.dart';
-import 'package:pili_aurora/models_new/live/live_area_list/area_item.dart';
-import 'package:pili_aurora/models_new/live/live_area_list/area_list.dart';
+import 'package:pili_aurora/models/remote/live/live_area_list/area_item.dart';
+import 'package:pili_aurora/models/remote/live/live_area_list/area_list.dart';
 import 'package:pili_aurora/pages/common/common_list_controller.dart';
 import 'package:pili_aurora/utils/accounts.dart';
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';

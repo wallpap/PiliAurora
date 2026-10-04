@@ -1,8 +1,8 @@
 import 'package:pili_aurora/http/api.dart';
 import 'package:pili_aurora/http/init.dart';
 import 'package:pili_aurora/http/loading_state.dart';
-import 'package:pili_aurora/models_new/match/match_info/contest.dart';
-import 'package:pili_aurora/models_new/match/match_info/data.dart';
+import 'package:pili_aurora/models/remote/match/match_info/contest.dart';
+import 'package:pili_aurora/models/remote/match/match_info/data.dart';
 
 abstract final class MatchHttp {
   static Future<LoadingState<MatchContest?>> matchInfo(Object cid) async {

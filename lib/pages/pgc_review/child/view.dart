@@ -12,7 +12,7 @@ import 'package:pili_aurora/common/widgets/sliver/sliver_floating_header.dart';
 import 'package:pili_aurora/http/loading_state.dart';
 import 'package:pili_aurora/models/common/image_type.dart';
 import 'package:pili_aurora/models/common/pgc_review_type.dart';
-import 'package:pili_aurora/models_new/pgc/pgc_review/list.dart';
+import 'package:pili_aurora/models/remote/pgc/pgc_review/list.dart';
 import 'package:pili_aurora/pages/pgc_review/child/controller.dart';
 import 'package:pili_aurora/pages/pgc_review/post/view.dart';
 import 'package:pili_aurora/utils/accounts.dart';

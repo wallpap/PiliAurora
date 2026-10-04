@@ -1,8 +1,8 @@
 import 'package:pili_aurora/http/loading_state.dart';
 import 'package:pili_aurora/http/msg.dart';
-import 'package:pili_aurora/models_new/msg/msg_like_detail/card.dart';
-import 'package:pili_aurora/models_new/msg/msg_like_detail/data.dart';
-import 'package:pili_aurora/models_new/msg/msg_like_detail/item.dart';
+import 'package:pili_aurora/models/remote/msg/msg_like_detail/card.dart';
+import 'package:pili_aurora/models/remote/msg/msg_like_detail/data.dart';
+import 'package:pili_aurora/models/remote/msg/msg_like_detail/item.dart';
 import 'package:pili_aurora/pages/common/common_list_controller.dart';
 import 'package:get/get.dart';
 

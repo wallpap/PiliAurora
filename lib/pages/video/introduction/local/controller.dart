@@ -1,5 +1,5 @@
-import 'package:pili_aurora/models_new/download/bili_download_entry_info.dart';
-import 'package:pili_aurora/models_new/video/video_detail/stat_detail.dart';
+import 'package:pili_aurora/models/remote/download/bili_download_entry_info.dart';
+import 'package:pili_aurora/models/remote/video/video_detail/stat_detail.dart';
 import 'package:pili_aurora/pages/common/common_intro_controller.dart';
 import 'package:pili_aurora/pages/download/controller.dart';
 import 'package:pili_aurora/plugin/pl_player/models/play_repeat.dart';

@@ -5,7 +5,7 @@ import 'package:pili_aurora/http/loading_state.dart';
 import 'package:pili_aurora/http/sponsor_block.dart';
 import 'package:pili_aurora/models/common/sponsor_block/segment_type.dart';
 import 'package:pili_aurora/models/common/sponsor_block/skip_type.dart';
-import 'package:pili_aurora/models_new/sponsor_block/user_info.dart';
+import 'package:pili_aurora/models/remote/sponsor_block/user_info.dart';
 import 'package:pili_aurora/pages/setting/slide_color_picker.dart';
 import 'package:pili_aurora/utils/accounts/account_manager/account_mgr.dart';
 import 'package:pili_aurora/utils/filtering_text.dart';

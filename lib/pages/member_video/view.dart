@@ -8,7 +8,7 @@ import 'package:pili_aurora/common/widgets/scroll_physics.dart'
 import 'package:pili_aurora/common/widgets/sliver/sliver_floating_header.dart';
 import 'package:pili_aurora/http/loading_state.dart';
 import 'package:pili_aurora/models/common/member/contribute_type.dart';
-import 'package:pili_aurora/models_new/space/space_archive/item.dart';
+import 'package:pili_aurora/models/remote/space/space_archive/item.dart';
 import 'package:pili_aurora/pages/common/fab_mixin.dart';
 import 'package:pili_aurora/pages/member/controller.dart';
 import 'package:pili_aurora/pages/member_video/controller.dart';
