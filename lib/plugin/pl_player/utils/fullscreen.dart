@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io' show Platform;
 
+import 'package:pili_aurora/services/logger.dart';
 import 'package:pili_aurora/utils/device_utils.dart';
 import 'package:flutter/services.dart'
     show SystemChrome, MethodChannel, SystemUiOverlay, DeviceOrientation;
@@ -15,19 +16,32 @@ Future<void> enterDesktopFullScreen({bool inAppFullScreen = false}) async {
       await const MethodChannel(
         'com.alexmercerind/media_kit_video',
       ).invokeMethod('Utils.EnterNativeFullscreen');
-    } catch (_) {}
+    } catch (error, stackTrace) {
+      _isDesktopFullScreen = false;
+      logger.w(
+        '进入原生全屏失败',
+        error: error,
+        stackTrace: stackTrace,
+      );
+    }
   }
 }
 
 @pragma('vm:notify-debugger-on-exception')
 Future<void> exitDesktopFullScreen() async {
   if (_isDesktopFullScreen) {
-    _isDesktopFullScreen = false;
     try {
       await const MethodChannel(
         'com.alexmercerind/media_kit_video',
       ).invokeMethod('Utils.ExitNativeFullscreen');
-    } catch (_) {}
+      _isDesktopFullScreen = false;
+    } catch (error, stackTrace) {
+      logger.w(
+        '退出原生全屏失败',
+        error: error,
+        stackTrace: stackTrace,
+      );
+    }
   }
 }
 
