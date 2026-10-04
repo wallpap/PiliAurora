@@ -14,6 +14,7 @@ import 'package:pili_aurora/models_new/video/video_detail/data.dart';
 import 'package:pili_aurora/models_new/video/video_detail/episode.dart' as ugc;
 import 'package:pili_aurora/models_new/video/video_detail/page.dart';
 import 'package:pili_aurora/services/download/download_manager.dart';
+import 'package:pili_aurora/services/logger.dart';
 import 'package:pili_aurora/utils/cache_manager.dart';
 import 'package:pili_aurora/utils/danmaku_utils.dart';
 import 'package:pili_aurora/utils/extension/file_ext.dart';
@@ -100,7 +101,13 @@ class DownloadService extends GetxService {
             } else {
               waitDownloadQueue.add(entry..status = DownloadStatus.wait);
             }
-          } catch (_) {}
+          } catch (error, stackTrace) {
+            logger.w(
+              '忽略损坏的下载记录: ${entryFile.path}',
+              error: error,
+              stackTrace: stackTrace,
+            );
+          }
         }
       }
     }
