@@ -185,6 +185,32 @@ void main() {
     expect(interrupted.reads, 1);
     expect(previous.reads, 1);
   });
+  test(
+    'large single chunks yield to the event queue during recovery',
+    () async {
+      final file = await logFile('runtime.jsonl', records(0, 1000));
+      final chunk = _SingleChunkFile(
+        file.source,
+        utf8.encode('${records(0, 1000).join('\n')}\n'),
+      );
+      final completed = <String>[];
+      final event = Future<void>.delayed(
+        Duration.zero,
+        () => completed.add('event'),
+      );
+
+      final history = await readDiagnosticHistory([chunk]);
+      completed.add('history');
+      await event;
+
+      expect(completed, orderedEquals(['event', 'history']));
+      expect(history, hasLength(200));
+      expect(history.first['index'], 800);
+      expect(history.last['index'], 999);
+      expect(chunk.reads, 1);
+    },
+  );
+
   test('handles empty files and an empty file list', () async {
     final current = await logFile('runtime.jsonl', []);
 
@@ -229,5 +255,19 @@ class _InterruptedFile extends _CountingFile {
     bytesRead += prefix.length;
     yield prefix;
     throw FileSystemException('Synthetic interrupted read', source.path);
+  }
+}
+
+// 重现一次磁盘回调交付很多完整行的情况，避免真实 I/O 提前让出事件队列。
+class _SingleChunkFile extends _CountingFile {
+  _SingleChunkFile(super.source, this.bytes);
+
+  final List<int> bytes;
+
+  @override
+  Stream<List<int>> openRead([int? start, int? end]) {
+    reads++;
+    bytesRead += bytes.length;
+    return Stream<List<int>>.value(bytes);
   }
 }

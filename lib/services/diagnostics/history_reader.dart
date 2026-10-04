@@ -16,11 +16,17 @@ Future<List<Map<String, Object?>>> readDiagnosticHistory(
       final length = file.lengthSync();
       final offset = length > 262144 ? length - 262144 : 0;
       var skipPartialLine = offset > 0;
+      var linesSinceYield = 0;
       await for (final line
           in file
               .openRead(offset)
               .transform(const Utf8Decoder(allowMalformed: true))
               .transform(const LineSplitter())) {
+        if (++linesSinceYield == 64) {
+          linesSinceYield = 0;
+          // 一个磁盘数据块可能包含很多行；微任务不足以让定时器与 UI 事件继续处理。
+          await Future<void>.delayed(Duration.zero);
+        }
         if (skipPartialLine) {
           skipPartialLine = false;
           continue;
