@@ -4,7 +4,7 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:pili_aurora/tcp/live.dart';
+import 'package:pili_aurora/services/live_stream/live.dart';
 
 Uint8List _packet(String json, {int version = 0, int operation = 5}) {
   final body = utf8.encode(json);

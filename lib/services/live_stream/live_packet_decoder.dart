@@ -2,7 +2,7 @@ import 'dart:async';
 import 'dart:isolate';
 import 'dart:typed_data';
 
-import 'package:pili_aurora/tcp/live_packet.dart';
+import 'package:pili_aurora/services/live_stream/live_packet.dart';
 
 /// 每个连接复用一个 worker。关闭时终止 worker，并结束所有在途任务。
 class LivePacketDecoder {

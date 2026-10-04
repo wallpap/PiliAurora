@@ -3,13 +3,13 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:pili_aurora/services/logger.dart';
-import 'package:pili_aurora/tcp/live_packet.dart';
-import 'package:pili_aurora/tcp/live_packet_decoder.dart';
+import 'package:pili_aurora/services/live_stream/live_packet.dart';
+import 'package:pili_aurora/services/live_stream/live_packet_decoder.dart';
 import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 
-export 'package:pili_aurora/tcp/live_packet.dart'
+export 'package:pili_aurora/services/live_stream/live_packet.dart'
     show PackageHeader, PackageHeaderRes;
 
 abstract class Message {
