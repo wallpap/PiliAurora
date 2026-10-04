@@ -33,6 +33,7 @@ import 'package:pili_aurora/plugin/pl_player/utils/preview_image_cache.dart';
 import 'package:pili_aurora/services/service_locator.dart';
 import 'package:pili_aurora/services/diagnostics/diagnostics.dart';
 import 'package:pili_aurora/services/diagnostics/player_diagnostics.dart';
+import 'package:pili_aurora/services/logger.dart';
 import 'package:pili_aurora/utils/accounts.dart';
 import 'package:pili_aurora/utils/android/android_helper.dart';
 import 'package:pili_aurora/utils/android/bindings.g.dart';
@@ -1148,7 +1149,13 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
           staticDuration: defaultStaticDuration / speed,
         );
         danmakuController!.updateOption(updatedOption);
-      } catch (_) {}
+      } catch (error, stackTrace) {
+        logger.w(
+          '同步弹幕播放速度失败: $lastPlaybackSpeed -> $speed',
+          error: error,
+          stackTrace: stackTrace,
+        );
+      }
     }
   }
 
