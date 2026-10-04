@@ -125,7 +125,17 @@ class LiveMessageStream {
             final channel = WebSocketChannel.connect(Uri.parse(server));
             await channel.ready;
             return channel;
-          } catch (_) {}
+          } catch (error, stackTrace) {
+            final uri = Uri.tryParse(server);
+            final endpoint = uri == null || uri.host.isEmpty
+                ? '<invalid endpoint>'
+                : '${uri.host}:${uri.port == 0 ? 'default' : uri.port}';
+            logger.w(
+              '$logTag websocket connection failed: $endpoint',
+              error: error,
+              stackTrace: stackTrace,
+            );
+          }
         }
         throw Exception("all servers connect failed");
       }
