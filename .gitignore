@@ -1,30 +1,84 @@
-# Miscellaneous
-*.class
-*.log
-*.pyc
-*.swp
+# OS / editor
 .DS_Store
-.atom/
-.build/
-.buildlog/
-.history
-.svn/
-.swiftpm/
-migrate_working_dir/
-Package.resolved
-
-# IntelliJ related
+Thumbs.db
+*.swp
+*.swo
+*.swn
+.idea/
 *.iml
 *.ipr
 *.iws
-.idea/
+.vscode/*
+!.vscode/settings.json
+!.vscode/launch.json
+!.vscode/tasks.json
 
-# The .vscode folder contains launch configuration and tasks you configure in
-# VS Code which you may wish to be included in version control, so this line
-# is commented out by default.
-.vscode/
+# Logs and temporary files
+*.log
+*.tmp
+*.temp
+*.bak
+*.pyc
+*.class
+.history/
+.atom/
+.build/
+.buildlog/
+.svn/
+migrate_working_dir/
 
-# Flutter repo-specific
+# Flutter / Dart / Pub generated files
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+.packages.generated
+.pub/
+.pub-cache/
+**/doc/api/
+/build/
+coverage/
+flutter_*.png
+linked_*.ds
+unlinked.ds
+unlinked_spec.ds
+
+# FVM
+.fvm/
+
+# Android / Gradle generated files and local configuration
+.gradle/
+/.gradle-tmp/
+**/android/**/gradle-wrapper.jar
+**/android/captures/
+**/android/gradlew
+**/android/gradlew.bat
+**/android/local.properties
+**/android/**/GeneratedPluginRegistrant.java
+**/android/key.properties
+*.jks
+
+# Windows / Flutter generated files
+**/windows/flutter/generated_plugin_registrant.cc
+**/windows/flutter/generated_plugin_registrant.h
+**/windows/flutter/generated_plugins.cmake
+
+# Build outputs and release artifacts
+/dist/
+app.*.map.json
+app.*.symbols
+pili_release.json
+
+# Local development documents and experimental data
+/doc/dev/*
+/doc/dev/local/
+
+# Local scripts / dependency resolution artifacts
+Package.resolved
+devtools_options.yaml
+tool/setup-android-signing.ps1
+
+# Flutter SDK repository-specific files (kept for compatibility if this repo is vendored)
 /bin/cache/
 /bin/internal/bootstrap.bat
 /bin/internal/bootstrap.sh
@@ -44,70 +98,8 @@ Package.resolved
 version
 analysis_benchmark.json
 
-# packages file containing multi-root paths
-.packages.generated
-
-# Flutter/Dart/Pub related
-**/doc/api/
-.dart_tool/
-.flutter-plugins
-.flutter-plugins-dependencies
-.packages
-.pub-cache/
-.pub/
-/build/
-flutter_*.png
-linked_*.ds
-unlinked.ds
-unlinked_spec.ds
-
-# Obfuscation related
-app.*.map.json
-
-# Android related
-**/android/**/gradle-wrapper.jar
-.gradle/
-/.gradle-tmp/
-**/android/captures/
-**/android/gradlew
-**/android/gradlew.bat
-**/android/local.properties
-**/android/**/GeneratedPluginRegistrant.java
-**/android/key.properties
-*.jks
-
-# Windows
-**/windows/flutter/generated_plugin_registrant.cc
-**/windows/flutter/generated_plugin_registrant.h
-**/windows/flutter/generated_plugins.cmake
-
-# Coverage
-coverage/
-
-# Symbols
-app.*.symbols
-
-# Exceptions to above rules.
+# Exceptions
 !/packages/flutter_tools/test/data/dart_dependencies_test/**/.packages
 !/dev/ci/**/Gemfile.lock
-!.vscode/settings.json
-!.vscode/launch.json
-!.vscode/tasks.json
 
-devtools_options.yaml
-
-# FVM Version Cache
-.fvm/
-
-# 开发过程文档和实验数据
-/doc/dev/*
-/doc/dev/local/
-
-pili_release.json
-
-dist
-
-test*
-!test/
-
-tool/setup-android-signing.ps1
+.swiftpm/
