@@ -5,34 +5,40 @@ import 'dart:io';
 import 'package:pili_aurora/services/diagnostics/redact.dart';
 
 /// [files] 由当前日志到最旧轮转文件排列，结果按时间正序返回。
-Future<List<Map<String, Object?>>> readDiagnosticHistory(List<File> files) async {
+Future<List<Map<String, Object?>>> readDiagnosticHistory(
+  List<File> files,
+) async {
   final recent = <Map<String, Object?>>[];
   for (final file in files) {
     final records = Queue<Map<String, Object?>>();
-    // 每个轮转文件仅扫描末尾，避免加载完整日志到内存。
-    final length = file.lengthSync();
-    final offset = length > 262144 ? length - 262144 : 0;
-    var skipPartialLine = offset > 0;
-    await for (final line
-        in file
-            .openRead(offset)
-            .transform(const Utf8Decoder(allowMalformed: true))
-            .transform(const LineSplitter())) {
-      if (skipPartialLine) {
-        skipPartialLine = false;
-        continue;
-      }
-      try {
-        final record = Map<String, Object?>.from(
-          DiagnosticRedactor.clean(jsonDecode(line)) as Map,
-        );
-        records.add(record);
-        while (records.length > 200) {
-          records.removeFirst();
+    try {
+      // 每个轮转文件仅扫描末尾，避免加载完整日志到内存。
+      final length = file.lengthSync();
+      final offset = length > 262144 ? length - 262144 : 0;
+      var skipPartialLine = offset > 0;
+      await for (final line
+          in file
+              .openRead(offset)
+              .transform(const Utf8Decoder(allowMalformed: true))
+              .transform(const LineSplitter())) {
+        if (skipPartialLine) {
+          skipPartialLine = false;
+          continue;
         }
-      } catch (_) {
-        /* 忽略中断写入留下的不完整行。 */
+        try {
+          final record = Map<String, Object?>.from(
+            DiagnosticRedactor.clean(jsonDecode(line)) as Map,
+          );
+          records.add(record);
+          while (records.length > 200) {
+            records.removeFirst();
+          }
+        } catch (_) {
+          /* 忽略中断写入留下的不完整行。 */
+        }
       }
+    } catch (_) {
+      // 文件可能在轮转期间消失或读取中断；保留已读完整记录，并继续向旧文件补齐。
     }
     if (records.isEmpty) continue;
 
