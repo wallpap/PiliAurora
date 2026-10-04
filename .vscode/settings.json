@@ -7,5 +7,13 @@
     "source.organizeImports": "explicit"
     // "source.fixAll": "explicit",
   },
-  "cmake.sourceDirectory": "${workspaceFolder}/windows"
+  "cmake.sourceDirectory": "${workspaceFolder}/windows",
+  "cSpell.words": [
+    "armeabi",
+    "piliaurora",
+    "pipefail",
+    "pubspec",
+    "softprops",
+    "subosito"
+  ]
 }

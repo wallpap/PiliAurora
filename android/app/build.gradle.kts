@@ -60,11 +60,23 @@ android {
         }
     }
 
+    val releaseTaskRequested = gradle.startParameter.taskNames.any { taskName ->
+        taskName.substringAfterLast(":").contains("release", ignoreCase = true)
+    }
+    if (releaseTaskRequested && config == null) {
+        throw GradleException(
+            "Release signing configuration is missing. " +
+                "Provide android/key.properties and the referenced keystore."
+        )
+    }
+
     buildTypes {
-        all {
-            signingConfig = config ?: signingConfigs["debug"]
+        debug {
+            signingConfig = signingConfigs["debug"]
+            applicationIdSuffix = ".debug"
         }
         release {
+            signingConfig = config
             if (project.hasProperty("dev")) {
                 applicationIdSuffix = ".dev"
                 resValue(
@@ -77,9 +89,6 @@ android {
 //                getDefaultProguardFile("proguard-android-optimize.txt"),
 //                "proguard-rules.pro"
 //            )
-        }
-        debug {
-            applicationIdSuffix = ".debug"
         }
     }
 

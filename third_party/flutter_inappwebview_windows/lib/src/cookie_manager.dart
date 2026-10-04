@@ -55,9 +55,7 @@ class WindowsCookieManager extends PlatformCookieManager
   static WindowsCookieManager instance(
       {WindowsWebViewEnvironment? webViewEnvironment}) {
     if (webViewEnvironment == null) {
-      if (_instance == null) {
-        _instance = _init();
-      }
+      _instance ??= _init();
       return _instance!;
     } else {
       return WindowsCookieManager(WindowsCookieManagerCreationParams(
@@ -66,7 +64,7 @@ class WindowsCookieManager extends PlatformCookieManager
   }
 
   static WindowsCookieManager _init() {
-    _instance = WindowsCookieManager(WindowsCookieManagerCreationParams());
+    _instance = WindowsCookieManager(const WindowsCookieManagerCreationParams());
     return _instance!;
   }
 
@@ -127,7 +125,7 @@ class WindowsCookieManager extends PlatformCookieManager
         await channel?.invokeMethod<List>('getCookies', args) ?? [];
     cookieListMap = cookieListMap.cast<Map<dynamic, dynamic>>();
 
-    cookieListMap.forEach((cookieMap) {
+    for (var cookieMap in cookieListMap) {
       cookies.add(Cookie(
           name: cookieMap["name"],
           value: cookieMap["value"],
@@ -139,7 +137,7 @@ class WindowsCookieManager extends PlatformCookieManager
           isSecure: cookieMap["isSecure"],
           isHttpOnly: cookieMap["isHttpOnly"],
           path: cookieMap["path"]));
-    });
+    }
     return cookies;
   }
 
@@ -162,7 +160,7 @@ class WindowsCookieManager extends PlatformCookieManager
     cookies = cookies.cast<Map<dynamic, dynamic>>();
     for (var i = 0; i < cookies.length; i++) {
       cookies[i] = cookies[i].cast<String, dynamic>();
-      if (cookies[i]["name"] == name)
+      if (cookies[i]["name"] == name) {
         return Cookie(
             name: cookies[i]["name"],
             value: cookies[i]["value"],
@@ -174,6 +172,7 @@ class WindowsCookieManager extends PlatformCookieManager
             isSecure: cookies[i]["isSecure"],
             isHttpOnly: cookies[i]["isHttpOnly"],
             path: cookies[i]["path"]);
+      }
     }
     return null;
   }

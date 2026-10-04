@@ -48,7 +48,7 @@ class WindowsWebMessagePort extends PlatformWebMessagePort {
     args.putIfAbsent('index', () => params.index);
     await _webMessageChannel.internalChannel
         ?.invokeMethod('setWebMessageCallback', args);
-    this._onMessage = onMessage;
+    _onMessage = onMessage;
   }
 
   @override
@@ -70,7 +70,7 @@ class WindowsWebMessagePort extends PlatformWebMessagePort {
   Map<String, dynamic> toMap() {
     return {
       "index": params.index,
-      "webMessageChannelId": this._webMessageChannel.params.id
+      "webMessageChannelId": _webMessageChannel.params.id
     };
   }
 
@@ -87,9 +87,9 @@ class WindowsWebMessagePort extends PlatformWebMessagePort {
 
 extension InternalWebMessagePort on WindowsWebMessagePort {
   WebMessageCallback? get onMessage => _onMessage;
-  void set onMessage(WebMessageCallback? value) => _onMessage = value;
+  set onMessage(WebMessageCallback? value) => _onMessage = value;
 
   WindowsWebMessageChannel get webMessageChannel => _webMessageChannel;
-  void set webMessageChannel(WindowsWebMessageChannel value) =>
+  set webMessageChannel(WindowsWebMessageChannel value) =>
       _webMessageChannel = value;
 }
