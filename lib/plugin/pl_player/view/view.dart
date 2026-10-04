@@ -2348,6 +2348,10 @@ class _PLVideoPlayerState extends State<PLVideoPlayer>
     }
 
     final extra = item.content.extra;
+    if (extra == null) {
+      _removeDmAction();
+      return const SizedBox.shrink();
+    }
 
     return Positioned(
       right: right,
@@ -2358,7 +2362,6 @@ class _PLVideoPlayerState extends State<PLVideoPlayer>
           mainAxisSize: MainAxisSize.min,
           mainAxisAlignment: MainAxisAlignment.spaceEvenly,
           children: switch (extra) {
-            null => throw UnimplementedError(),
             VideoDanmaku() => [
               Stack(
                 clipBehavior: Clip.none,
