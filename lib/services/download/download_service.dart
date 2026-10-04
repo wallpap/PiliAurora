@@ -446,9 +446,7 @@ class DownloadService extends GetxService {
       }
     } catch (e) {
       _updateCurStatus(DownloadStatus.failPlayUrl);
-      if (kDebugMode) {
-        debugPrint('get download url error: $e');
-      }
+      logger.w('get download url error', error: e);
     }
   }
 

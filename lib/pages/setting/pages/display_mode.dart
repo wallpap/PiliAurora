@@ -1,10 +1,10 @@
 import 'dart:async';
 
 import 'package:pili_aurora/common/widgets/scaffold/simple_scaffold.dart';
+import 'package:pili_aurora/services/logger.dart';
 import 'package:pili_aurora/utils/storage.dart';
 import 'package:pili_aurora/utils/storage_key.dart';
 import 'package:collection/collection.dart';
-import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/services.dart' show PlatformException;
 import 'package:flutter_displaymode/flutter_displaymode.dart';
 import 'package:hive_ce/hive.dart';
@@ -45,7 +45,7 @@ class _SetDisplayModeState extends State<SetDisplayMode> {
     try {
       modes = await FlutterDisplayMode.supported;
     } on PlatformException catch (e) {
-      if (kDebugMode) debugPrint(e.toString());
+      logger.d(e.toString());
     }
 
     final value = setting.get(SettingBoxKey.displayMode);

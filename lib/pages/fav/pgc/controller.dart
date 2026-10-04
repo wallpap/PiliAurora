@@ -1,13 +1,12 @@
 import 'package:pili_aurora/http/fav.dart';
+import 'package:pili_aurora/services/logger.dart';
 import 'package:pili_aurora/http/loading_state.dart';
 import 'package:pili_aurora/http/video.dart';
 import 'package:pili_aurora/models_new/fav/fav_pgc/data.dart';
 import 'package:pili_aurora/models_new/fav/fav_pgc/list.dart';
 import 'package:pili_aurora/pages/common/multi_select/multi_select_controller.dart';
-import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:get/get.dart';
-import 'package:material_ui/material_ui.dart';
 
 class FavPgcController
     extends MultiSelectController<FavPgcData, FavPgcItemModel> {
@@ -87,7 +86,7 @@ class FavPgcController
             ..allSelected.value = false;
         }
       } catch (e) {
-        if (kDebugMode) debugPrint('fav pgc onUpdate: $e');
+        logger.d('fav pgc onUpdate: $e');
       }
       afterDelete(removeList);
       SmartDialog.showToast(response);
@@ -114,7 +113,7 @@ class FavPgcController
             ..allSelected.value = false;
         }
       } catch (e) {
-        if (kDebugMode) debugPrint('fav pgc pgcUpdate: $e');
+        logger.d('fav pgc pgcUpdate: $e');
       }
       SmartDialog.showToast(response);
     } else {

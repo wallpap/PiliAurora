@@ -2,6 +2,7 @@ import 'dart:io' show Platform;
 import 'dart:math';
 
 import 'package:pili_aurora/common/assets.dart';
+import 'package:pili_aurora/services/logger.dart';
 import 'package:pili_aurora/common/style.dart';
 import 'package:pili_aurora/common/widgets/custom_icon.dart';
 import 'package:pili_aurora/common/widgets/flutter/pop_scope.dart';
@@ -69,7 +70,7 @@ import 'package:pili_aurora/utils/storage.dart';
 import 'package:pili_aurora/utils/storage_key.dart';
 import 'package:pili_aurora/utils/theme_utils.dart';
 import 'package:extended_nested_scroll_view/extended_nested_scroll_view.dart';
-import 'package:flutter/foundation.dart' show kDebugMode, clampDouble;
+import 'package:flutter/foundation.dart' show clampDouble;
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:get/get.dart';
@@ -233,7 +234,7 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
         }
       }
     } catch (e) {
-      if (kDebugMode) debugPrint('handle player status: $e');
+      logger.d('handle player status: $e');
     }
 
     if (status.isCompleted) {
@@ -294,14 +295,12 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
   Future<void>? handlePlay() {
     if (!videoDetailController.isFileSource) {
       if (videoDetailController.isQuerying) {
-        if (kDebugMode) debugPrint('handlePlay: querying');
+        logger.d('handlePlay: querying');
         return null;
       }
       if (videoDetailController.videoUrl == null ||
           videoDetailController.audioUrl == null) {
-        if (kDebugMode) {
-          debugPrint('handlePlay: videoUrl/audioUrl not initialized');
-        }
+        logger.w('handlePlay: videoUrl/audioUrl not initialized');
         videoDetailController.queryVideoUrl();
         return null;
       }
@@ -720,16 +719,12 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
             onTap: () {
               if (!videoDetailController.isFileSource) {
                 if (videoDetailController.isQuerying) {
-                  if (kDebugMode) {
-                    debugPrint('handlePlay: querying');
-                  }
+                  logger.d('handlePlay: querying');
                   return;
                 }
                 if (videoDetailController.videoUrl == null ||
                     videoDetailController.audioUrl == null) {
-                  if (kDebugMode) {
-                    debugPrint('handlePlay: videoUrl/audioUrl not initialized');
-                  }
+                  logger.w('handlePlay: videoUrl/audioUrl not initialized');
                   videoDetailController.queryVideoUrl();
                   return;
                 }
@@ -1590,7 +1585,7 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
                   ),
                 );
               } catch (e) {
-                if (kDebugMode) debugPrint('build stein edges: $e');
+                logger.d('build stein edges: $e');
                 return const SizedBox.shrink();
               }
             }

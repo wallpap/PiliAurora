@@ -1,6 +1,7 @@
 import 'dart:io' show Platform;
 
 import 'package:pili_aurora/common/widgets/selection_text.dart';
+import 'package:pili_aurora/services/logger.dart';
 import 'package:pili_aurora/grpc/bilibili/main/community/reply/v1.pb.dart'
     show ReplyInfo;
 import 'package:pili_aurora/http/loading_state.dart';
@@ -14,7 +15,6 @@ import 'package:pili_aurora/utils/extension/theme_ext.dart';
 import 'package:pili_aurora/utils/id_utils.dart';
 import 'package:pili_aurora/utils/theme_utils.dart';
 import 'package:pili_aurora/utils/utils.dart';
-import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:get/get.dart';
 import 'package:material_ui/material_ui.dart';
@@ -88,7 +88,7 @@ abstract final class ReplyUtils {
           cookieString,
         );
       } catch (e) {
-        if (kDebugMode) debugPrint('biliSendCommAntifraud: $e');
+        logger.d('biliSendCommAntifraud: $e');
       }
       return;
     }

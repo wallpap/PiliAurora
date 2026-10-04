@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:math' show max;
 
 import 'package:pili_aurora/common/widgets/dialog/simple_dialog_option.dart';
+import 'package:pili_aurora/services/logger.dart';
 import 'package:pili_aurora/http/constants.dart';
 import 'package:pili_aurora/http/fav.dart';
 import 'package:pili_aurora/http/loading_state.dart';
@@ -29,7 +30,6 @@ import 'package:pili_aurora/utils/platform_utils.dart';
 import 'package:pili_aurora/utils/share_utils.dart';
 import 'package:pili_aurora/utils/utils.dart';
 import 'package:collection/collection.dart';
-import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:get/get.dart';
 import 'package:material_ui/material_ui.dart';
@@ -293,7 +293,7 @@ class PgcIntroController extends CommonIntroController {
       queryVideoIntro(episode as EpisodeItem);
       return true;
     } catch (e) {
-      if (kDebugMode) debugPrint('pgc onChangeEpisode: $e');
+      logger.d('pgc onChangeEpisode: $e');
       return false;
     }
   }

@@ -2,6 +2,7 @@ import 'dart:async' show StreamSubscription, Timer;
 import 'dart:math' as math;
 
 import 'package:pili_aurora/common/widgets/dialog/simple_dialog_option.dart';
+import 'package:pili_aurora/services/logger.dart';
 import 'package:pili_aurora/common/widgets/progress_bar/segment_progress_bar.dart';
 import 'package:pili_aurora/http/loading_state.dart';
 import 'package:pili_aurora/http/sponsor_block.dart';
@@ -195,7 +196,7 @@ mixin BlockMixin on GetxController {
           initSkip();
         }
       } catch (e) {
-        if (kDebugMode) debugPrint('failed to parse sponsorblock: $e');
+        logger.d('failed to parse sponsorblock: $e');
       }
     }
   }
@@ -267,7 +268,7 @@ mixin BlockMixin on GetxController {
         _showBlockToast('已跳至${item.segmentType.shortTitle}');
       }
     } catch (e) {
-      if (kDebugMode) debugPrint('failed to skip: $e');
+      logger.d('failed to skip: $e');
       if (isSkip) {
         _showBlockToast('${item.segmentType.shortTitle}片段跳过失败');
       } else {

@@ -2,7 +2,9 @@ import 'dart:async';
 import 'dart:math';
 
 import 'package:pili_aurora/common/widgets/button/icon_button.dart';
-import 'package:pili_aurora/common/widgets/scroll_physics.dart' show ReloadMixin;
+import 'package:pili_aurora/services/logger.dart';
+import 'package:pili_aurora/common/widgets/scroll_physics.dart'
+    show ReloadMixin;
 import 'package:pili_aurora/http/api.dart';
 import 'package:pili_aurora/http/constants.dart';
 import 'package:pili_aurora/http/init.dart';
@@ -42,7 +44,6 @@ import 'package:pili_aurora/utils/request_utils.dart';
 import 'package:pili_aurora/utils/share_utils.dart';
 import 'package:pili_aurora/utils/storage_pref.dart';
 import 'package:pili_aurora/utils/utils.dart';
-import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:get/get.dart';
 import 'package:material_ui/material_ui.dart';
@@ -554,7 +555,7 @@ class UgcIntroController extends CommonIntroController with ReloadMixin {
       queryOnlineTotal();
       return true;
     } catch (e) {
-      if (kDebugMode) debugPrint('ugc onChangeEpisode: $e');
+      logger.d('ugc onChangeEpisode: $e');
       return false;
     }
   }

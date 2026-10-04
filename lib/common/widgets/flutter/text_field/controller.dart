@@ -18,8 +18,8 @@
 import 'dart:math';
 
 import 'package:pili_aurora/common/widgets/image/network_img_layer.dart';
+import 'package:pili_aurora/services/logger.dart';
 import 'package:pili_aurora/models/common/image_type.dart';
-import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/services.dart';
 import 'package:material_ui/material_ui.dart';
 
@@ -1051,7 +1051,7 @@ class RichTextEditingController extends TextEditingController {
       }
       return text;
     } catch (e) {
-      if (kDebugMode) debugPrint('err getSelectionText: $e');
+      logger.d('err getSelectionText: $e');
       return null;
     }
   }

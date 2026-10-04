@@ -1,4 +1,5 @@
 import 'package:pili_aurora/common/assets.dart';
+import 'package:pili_aurora/services/logger.dart';
 import 'package:pili_aurora/common/constants.dart';
 import 'package:pili_aurora/common/style.dart';
 import 'package:pili_aurora/common/widgets/button/icon_button.dart';
@@ -20,7 +21,6 @@ import 'package:pili_aurora/utils/image_utils.dart';
 import 'package:pili_aurora/utils/platform_utils.dart';
 import 'package:pili_aurora/utils/share_utils.dart';
 import 'package:pili_aurora/utils/utils.dart';
-import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/rendering.dart';
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:get/get.dart';
@@ -89,7 +89,7 @@ class _SavePanelState extends State<SavePanel> {
       _parseReply(i);
     } else if (_item case final DynamicItemModel i) {
       uri = _parseDyn(i);
-      if (kDebugMode) debugPrint(uri);
+      logger.d(uri);
     }
   }
 
@@ -220,7 +220,7 @@ class _SavePanelState extends State<SavePanel> {
       uri = 'bilibili://comment/detail/$type/$oid/$rootId/?$anchor$enterUri';
     }
 
-    if (kDebugMode) debugPrint(uri);
+    logger.d(uri);
   }
 
   String _parseDyn(DynamicItemModel item) {
@@ -329,7 +329,7 @@ class _SavePanelState extends State<SavePanel> {
         }
       }
     } catch (e) {
-      if (kDebugMode) debugPrint('on save/share reply: $e');
+      logger.d('on save/share reply: $e');
       SmartDialog.dismiss();
     }
   }

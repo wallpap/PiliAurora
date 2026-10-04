@@ -1,11 +1,11 @@
 import 'package:pili_aurora/common/assets.dart';
+import 'package:pili_aurora/services/logger.dart';
 import 'package:pili_aurora/common/widgets/image/cached_image.dart';
 import 'package:pili_aurora/common/widgets/image_viewer/hero.dart';
 import 'package:pili_aurora/models/common/image_preview_type.dart';
 import 'package:pili_aurora/utils/extension/num_ext.dart';
 import 'package:pili_aurora/utils/image_utils.dart';
 import 'package:pili_aurora/utils/page_utils.dart';
-import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter_html/flutter_html.dart';
 import 'package:html/dom.dart' as dom;
 import 'package:material_ui/material_ui.dart';
@@ -70,7 +70,7 @@ Widget htmlRender({
             ),
           );
         } catch (err) {
-          if (kDebugMode) debugPrint('错误的HTML: $element');
+          logger.d('错误的HTML: $element');
           return const SizedBox.shrink();
         }
       },
