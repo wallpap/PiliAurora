@@ -3,7 +3,7 @@ import 'package:pili_aurora/common/widgets/keep_alive_wrapper.dart';
 import 'package:pili_aurora/common/widgets/loading_widget/loading_widget.dart';
 import 'package:pili_aurora/common/widgets/scaffold/simple_scaffold.dart';
 import 'package:pili_aurora/common/widgets/scroll_physics.dart' show tabBarView;
-import 'package:pili_aurora/models_new/live/live_dm_block/shield_user_list.dart';
+import 'package:pili_aurora/models/remote/live/live_dm_block/shield_user_list.dart';
 import 'package:pili_aurora/pages/live_dm_block/controller.dart';
 import 'package:pili_aurora/pages/search/widgets/search_text.dart';
 import 'package:pili_aurora/utils/utils.dart';

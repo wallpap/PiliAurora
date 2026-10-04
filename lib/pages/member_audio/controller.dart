@@ -2,8 +2,8 @@ import 'package:pili_aurora/grpc/bilibili/app/listener/v1.pbenum.dart'
     show PlaylistSource;
 import 'package:pili_aurora/http/loading_state.dart';
 import 'package:pili_aurora/http/member.dart';
-import 'package:pili_aurora/models_new/space/space_audio/data.dart';
-import 'package:pili_aurora/models_new/space/space_audio/item.dart';
+import 'package:pili_aurora/models/remote/space/space_audio/data.dart';
+import 'package:pili_aurora/models/remote/space/space_audio/item.dart';
 import 'package:pili_aurora/pages/audio/view.dart';
 import 'package:pili_aurora/pages/common/common_list_controller.dart';
 

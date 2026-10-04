@@ -7,7 +7,7 @@ import 'package:pili_aurora/common/widgets/scaffold/simple_scaffold.dart';
 import 'package:pili_aurora/common/widgets/sliver_wrap.dart';
 import 'package:pili_aurora/common/widgets/view_insets_safe_area.dart';
 import 'package:pili_aurora/http/loading_state.dart';
-import 'package:pili_aurora/models_new/search/search_rcmd/data.dart';
+import 'package:pili_aurora/models/remote/search/search_rcmd/data.dart';
 import 'package:pili_aurora/pages/search/controller.dart';
 import 'package:pili_aurora/pages/search/widgets/hot_keyword.dart';
 import 'package:pili_aurora/pages/search/widgets/search_text.dart';

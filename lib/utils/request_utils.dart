@@ -18,9 +18,9 @@ import 'package:pili_aurora/http/validate.dart';
 import 'package:pili_aurora/http/video.dart';
 import 'package:pili_aurora/models/dynamics/result.dart';
 import 'package:pili_aurora/models/login/model.dart';
-import 'package:pili_aurora/models_new/fav/fav_detail/media.dart';
-import 'package:pili_aurora/models_new/later/list.dart';
-import 'package:pili_aurora/models_new/relation/data.dart';
+import 'package:pili_aurora/models/remote/fav/fav_detail/media.dart';
+import 'package:pili_aurora/models/remote/later/list.dart';
+import 'package:pili_aurora/models/remote/relation/data.dart';
 import 'package:pili_aurora/pages/common/multi_select/base.dart';
 import 'package:pili_aurora/pages/dynamics_tab/controller.dart';
 import 'package:pili_aurora/pages/fav_detail/controller.dart'

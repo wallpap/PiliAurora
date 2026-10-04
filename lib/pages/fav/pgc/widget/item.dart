@@ -4,7 +4,7 @@ import 'package:pili_aurora/common/widgets/button/icon_button.dart';
 import 'package:pili_aurora/common/widgets/image/network_img_layer.dart';
 import 'package:pili_aurora/common/widgets/select_mask.dart';
 import 'package:pili_aurora/models/common/badge_type.dart';
-import 'package:pili_aurora/models_new/fav/fav_pgc/list.dart';
+import 'package:pili_aurora/models/remote/fav/fav_pgc/list.dart';
 import 'package:pili_aurora/pages/common/multi_select/base.dart';
 import 'package:pili_aurora/utils/page_utils.dart';
 import 'package:pili_aurora/utils/platform_utils.dart';

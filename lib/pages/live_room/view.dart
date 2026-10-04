@@ -17,8 +17,8 @@ import 'package:pili_aurora/common/widgets/scaffold/simple_scaffold.dart';
 import 'package:pili_aurora/common/widgets/scroll_physics.dart'
     show tabBarScrollPhysics;
 import 'package:pili_aurora/models/common/live/live_contribution_rank_type.dart';
-import 'package:pili_aurora/models_new/live/live_room_info_h5/data.dart';
-import 'package:pili_aurora/models_new/live/live_superchat/item.dart';
+import 'package:pili_aurora/models/remote/live/live_room_info_h5/data.dart';
+import 'package:pili_aurora/models/remote/live/live_superchat/item.dart';
 import 'package:pili_aurora/pages/danmaku/danmaku_model.dart';
 import 'package:pili_aurora/pages/live_room/contribution_rank/controller.dart';
 import 'package:pili_aurora/pages/live_room/contribution_rank/view.dart';

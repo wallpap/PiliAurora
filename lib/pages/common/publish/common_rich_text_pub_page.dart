@@ -11,9 +11,9 @@ import 'package:pili_aurora/models/common/image_preview_type.dart';
 import 'package:pili_aurora/models/common/publish_panel_type.dart';
 import 'package:pili_aurora/models/dynamics/result.dart'
     show PicModel, FilePicModel, OpusPicModel;
-import 'package:pili_aurora/models_new/dynamic/dyn_mention/item.dart';
-import 'package:pili_aurora/models_new/emote/emote.dart' as e;
-import 'package:pili_aurora/models_new/live/live_emote/emoticon.dart';
+import 'package:pili_aurora/models/remote/dynamic/dyn_mention/item.dart';
+import 'package:pili_aurora/models/remote/emote/emote.dart' as e;
+import 'package:pili_aurora/models/remote/live/live_emote/emoticon.dart';
 import 'package:pili_aurora/pages/common/publish/common_publish_page.dart';
 import 'package:pili_aurora/pages/dynamics_mention/view.dart';
 import 'package:pili_aurora/utils/cache_manager.dart';

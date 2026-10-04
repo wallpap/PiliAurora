@@ -6,7 +6,7 @@ import 'package:pili_aurora/models/common/account_type.dart';
 import 'package:pili_aurora/models/common/theme/theme_type.dart';
 import 'package:pili_aurora/models/user/info.dart';
 import 'package:pili_aurora/models/user/stat.dart';
-import 'package:pili_aurora/models_new/fav/fav_folder/data.dart';
+import 'package:pili_aurora/models/remote/fav/fav_folder/data.dart';
 import 'package:pili_aurora/pages/common/common_data_controller.dart';
 import 'package:pili_aurora/services/account_service.dart';
 import 'package:pili_aurora/utils/accounts.dart';

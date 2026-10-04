@@ -1,6 +1,6 @@
 import 'dart:math';
 
-import 'package:pili_aurora/models_new/space/space/tab2.dart';
+import 'package:pili_aurora/models/remote/space/space/tab2.dart';
 import 'package:pili_aurora/pages/member/controller.dart';
 import 'package:get/get.dart';
 import 'package:material_ui/material_ui.dart';

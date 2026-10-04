@@ -14,7 +14,7 @@ import 'package:pili_aurora/models/common/super_resolution_type.dart';
 import 'package:pili_aurora/models/common/video/video_type.dart';
 import 'package:pili_aurora/models/user/danmaku_rule.dart';
 import 'package:pili_aurora/models/video/play/url.dart';
-import 'package:pili_aurora/models_new/video/video_shot/data.dart';
+import 'package:pili_aurora/models/remote/video/video_shot/data.dart';
 import 'package:pili_aurora/pages/danmaku/danmaku_model.dart';
 import 'package:pili_aurora/pages/sponsor_block/block_mixin.dart';
 import 'package:pili_aurora/plugin/pl_player/models/data_source.dart';

@@ -5,7 +5,7 @@ import 'package:pili_aurora/common/widgets/loading_widget/http_error.dart';
 import 'package:pili_aurora/common/widgets/loading_widget/loading_widget.dart'
     show m3eLoading;
 import 'package:pili_aurora/http/loading_state.dart';
-import 'package:pili_aurora/models_new/fav/fav_topic/topic_item.dart';
+import 'package:pili_aurora/models/remote/fav/fav_topic/topic_item.dart';
 import 'package:pili_aurora/pages/fav/topic/controller.dart';
 import 'package:pili_aurora/utils/grid.dart';
 import 'package:pili_aurora/utils/platform_utils.dart';

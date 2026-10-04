@@ -1,7 +1,7 @@
 import 'package:pili_aurora/http/loading_state.dart';
 import 'package:pili_aurora/http/member.dart';
-import 'package:pili_aurora/models_new/space/space_season_series/item.dart';
-import 'package:pili_aurora/models_new/space/space_season_series/season.dart';
+import 'package:pili_aurora/models/remote/space/space_season_series/item.dart';
+import 'package:pili_aurora/models/remote/space/space_season_series/season.dart';
 import 'package:pili_aurora/pages/common/common_list_controller.dart';
 
 class SeasonSeriesController

@@ -1,4 +1,4 @@
-import 'package:pili_aurora/models_new/follow/list.dart';
+import 'package:pili_aurora/models/remote/follow/list.dart';
 import 'package:pili_aurora/utils/parse_int.dart';
 
 class FollowUpModel {

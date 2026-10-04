@@ -1,9 +1,9 @@
 import 'package:pili_aurora/common/widgets/dialog/dialog.dart';
 import 'package:pili_aurora/http/loading_state.dart';
 import 'package:pili_aurora/http/user.dart';
-import 'package:pili_aurora/models_new/history/data.dart';
-import 'package:pili_aurora/models_new/history/list.dart';
-import 'package:pili_aurora/models_new/history/tab.dart';
+import 'package:pili_aurora/models/remote/history/data.dart';
+import 'package:pili_aurora/models/remote/history/list.dart';
+import 'package:pili_aurora/models/remote/history/tab.dart';
 import 'package:pili_aurora/pages/common/multi_select/multi_select_controller.dart';
 import 'package:pili_aurora/pages/history/base_controller.dart';
 import 'package:pili_aurora/utils/accounts/account.dart';

@@ -1,6 +1,6 @@
 import 'package:pili_aurora/models/common/sponsor_block/segment_type.dart';
 import 'package:pili_aurora/models/common/sponsor_block/skip_type.dart';
-import 'package:pili_aurora/models_new/sponsor_block/segment_item.dart';
+import 'package:pili_aurora/models/remote/sponsor_block/segment_item.dart';
 import 'package:pili_aurora/pages/sponsor_block/block_mixin.dart';
 import 'package:pili_aurora/utils/storage_pref.dart';
 

@@ -7,7 +7,7 @@ import 'package:pili_aurora/common/widgets/gesture/tap_gesture_recognizer.dart';
 import 'package:pili_aurora/common/widgets/loading_widget/http_error.dart';
 import 'package:pili_aurora/common/widgets/scaffold/simple_scaffold.dart';
 import 'package:pili_aurora/http/loading_state.dart';
-import 'package:pili_aurora/models_new/msg/msg_sys/data.dart';
+import 'package:pili_aurora/models/remote/msg/msg_sys/data.dart';
 import 'package:pili_aurora/pages/msg_feed_top/sys_msg/controller.dart';
 import 'package:pili_aurora/utils/app_scheme.dart';
 import 'package:pili_aurora/utils/id_utils.dart';

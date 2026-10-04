@@ -2,7 +2,7 @@ import 'dart:math' as math;
 
 import 'package:pili_aurora/common/style.dart';
 import 'package:pili_aurora/common/widgets/image/cached_image.dart';
-import 'package:pili_aurora/models_new/article/article_view/ops.dart';
+import 'package:pili_aurora/models/remote/article/article_view/ops.dart';
 import 'package:pili_aurora/pages/dynamics/widgets/vote.dart';
 import 'package:pili_aurora/utils/app_scheme.dart';
 import 'package:pili_aurora/utils/extension/num_ext.dart';

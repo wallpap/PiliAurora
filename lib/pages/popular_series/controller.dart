@@ -2,9 +2,9 @@ import 'package:pili_aurora/common/widgets/scroll_physics.dart' show ReloadMixin
 import 'package:pili_aurora/http/loading_state.dart';
 import 'package:pili_aurora/http/video.dart';
 import 'package:pili_aurora/models/model_hot_video_item.dart';
-import 'package:pili_aurora/models_new/popular/popular_series_list/list.dart';
-import 'package:pili_aurora/models_new/popular/popular_series_one/config.dart';
-import 'package:pili_aurora/models_new/popular/popular_series_one/data.dart';
+import 'package:pili_aurora/models/remote/popular/popular_series_list/list.dart';
+import 'package:pili_aurora/models/remote/popular/popular_series_one/config.dart';
+import 'package:pili_aurora/models/remote/popular/popular_series_one/data.dart';
 import 'package:pili_aurora/pages/common/common_list_controller.dart';
 import 'package:pili_aurora/utils/extension/iterable_ext.dart';
 import 'package:get/get.dart';

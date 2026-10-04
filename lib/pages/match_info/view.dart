@@ -6,8 +6,8 @@ import 'package:pili_aurora/grpc/bilibili/main/community/reply/v1.pb.dart'
     show ReplyInfo;
 import 'package:pili_aurora/http/loading_state.dart';
 import 'package:pili_aurora/models/common/image_type.dart';
-import 'package:pili_aurora/models_new/match/match_info/contest.dart';
-import 'package:pili_aurora/models_new/match/match_info/team.dart';
+import 'package:pili_aurora/models/remote/match/match_info/contest.dart';
+import 'package:pili_aurora/models/remote/match/match_info/team.dart';
 import 'package:pili_aurora/pages/common/dyn/common_dyn_page.dart';
 import 'package:pili_aurora/pages/match_info/controller.dart';
 import 'package:pili_aurora/pages/video/reply_reply/view.dart';

@@ -11,11 +11,11 @@ import 'package:pili_aurora/http/search.dart';
 import 'package:pili_aurora/http/video.dart';
 import 'package:pili_aurora/models/common/video/source_type.dart';
 import 'package:pili_aurora/models/common/video/video_type.dart';
-import 'package:pili_aurora/models_new/pgc/pgc_info_model/episode.dart';
-import 'package:pili_aurora/models_new/pgc/pgc_info_model/result.dart';
-import 'package:pili_aurora/models_new/video/video_detail/episode.dart'
+import 'package:pili_aurora/models/remote/pgc/pgc_info_model/episode.dart';
+import 'package:pili_aurora/models/remote/pgc/pgc_info_model/result.dart';
+import 'package:pili_aurora/models/remote/video/video_detail/episode.dart'
     hide EpisodeItem;
-import 'package:pili_aurora/models_new/video/video_detail/stat_detail.dart';
+import 'package:pili_aurora/models/remote/video/video_detail/stat_detail.dart';
 import 'package:pili_aurora/pages/common/common_intro_controller.dart';
 import 'package:pili_aurora/pages/dynamics_repost/view.dart';
 import 'package:pili_aurora/pages/video/reply/controller.dart';

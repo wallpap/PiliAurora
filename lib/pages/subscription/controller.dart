@@ -1,8 +1,8 @@
 import 'package:pili_aurora/http/fav.dart';
 import 'package:pili_aurora/http/loading_state.dart';
 import 'package:pili_aurora/http/user.dart';
-import 'package:pili_aurora/models_new/sub/sub/data.dart';
-import 'package:pili_aurora/models_new/sub/sub/list.dart';
+import 'package:pili_aurora/models/remote/sub/sub/data.dart';
+import 'package:pili_aurora/models/remote/sub/sub/list.dart';
 import 'package:pili_aurora/pages/common/common_list_controller.dart';
 import 'package:pili_aurora/utils/accounts.dart';
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';

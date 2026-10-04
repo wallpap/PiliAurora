@@ -8,7 +8,7 @@ import 'package:pili_aurora/common/widgets/scaffold/simple_scaffold.dart';
 import 'package:pili_aurora/common/widgets/scroll_physics.dart' show tabBarView;
 import 'package:pili_aurora/http/loading_state.dart';
 import 'package:pili_aurora/models/common/image_type.dart';
-import 'package:pili_aurora/models_new/upower_rank/rank_info.dart';
+import 'package:pili_aurora/models/remote/upower_rank/rank_info.dart';
 import 'package:pili_aurora/pages/member_upower_rank/controller.dart';
 import 'package:pili_aurora/utils/extension/widget_ext.dart';
 import 'package:get/get.dart';

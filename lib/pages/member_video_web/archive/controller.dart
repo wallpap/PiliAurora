@@ -1,9 +1,9 @@
 import 'package:pili_aurora/http/loading_state.dart';
 import 'package:pili_aurora/http/member.dart';
 import 'package:pili_aurora/models/common/member/archive_order_type_web.dart';
-import 'package:pili_aurora/models_new/member/search_archive/data.dart';
-import 'package:pili_aurora/models_new/member/search_archive/slist.dart';
-import 'package:pili_aurora/models_new/member/search_archive/vlist.dart';
+import 'package:pili_aurora/models/remote/member/search_archive/data.dart';
+import 'package:pili_aurora/models/remote/member/search_archive/slist.dart';
+import 'package:pili_aurora/models/remote/member/search_archive/vlist.dart';
 import 'package:pili_aurora/pages/member_video_web/base/controller.dart';
 import 'package:get/get.dart';
 

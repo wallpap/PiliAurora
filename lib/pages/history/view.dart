@@ -8,7 +8,7 @@ import 'package:pili_aurora/common/widgets/scaffold/simple_scaffold.dart';
 import 'package:pili_aurora/common/widgets/scroll_physics.dart'
     show tabBarScrollPhysics;
 import 'package:pili_aurora/http/loading_state.dart';
-import 'package:pili_aurora/models_new/history/list.dart';
+import 'package:pili_aurora/models/remote/history/list.dart';
 import 'package:pili_aurora/pages/history/base_controller.dart';
 import 'package:pili_aurora/pages/history/controller.dart';
 import 'package:pili_aurora/pages/history/widgets/item.dart';

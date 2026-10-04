@@ -1,7 +1,7 @@
 import 'package:pili_aurora/models/common/member/archive_sort_type_app.dart';
 import 'package:pili_aurora/models/common/member/web_ss_type.dart';
-import 'package:pili_aurora/models_new/member/season_web/archive.dart';
-import 'package:pili_aurora/models_new/member/season_web/data.dart';
+import 'package:pili_aurora/models/remote/member/season_web/archive.dart';
+import 'package:pili_aurora/models/remote/member/season_web/data.dart';
 import 'package:pili_aurora/pages/member_video_web/base/view.dart';
 import 'package:pili_aurora/pages/member_video_web/season_series/controller.dart';
 import 'package:get/get.dart';

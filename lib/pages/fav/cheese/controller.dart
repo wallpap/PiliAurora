@@ -1,7 +1,7 @@
 import 'package:pili_aurora/http/fav.dart';
 import 'package:pili_aurora/http/loading_state.dart';
-import 'package:pili_aurora/models_new/space/space_cheese/data.dart';
-import 'package:pili_aurora/models_new/space/space_cheese/item.dart';
+import 'package:pili_aurora/models/remote/space/space_cheese/data.dart';
+import 'package:pili_aurora/models/remote/space/space_cheese/item.dart';
 import 'package:pili_aurora/pages/common/common_list_controller.dart';
 import 'package:pili_aurora/utils/accounts.dart';
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';

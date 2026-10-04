@@ -24,8 +24,8 @@ import 'package:pili_aurora/models/common/sponsor_block/segment_type.dart';
 import 'package:pili_aurora/models/common/super_resolution_type.dart';
 import 'package:pili_aurora/models/common/video/video_quality.dart';
 import 'package:pili_aurora/models/video/play/url.dart';
-import 'package:pili_aurora/models_new/video/video_detail/episode.dart' as ugc;
-import 'package:pili_aurora/models_new/video/video_detail/ugc_season.dart';
+import 'package:pili_aurora/models/remote/video/video_detail/episode.dart' as ugc;
+import 'package:pili_aurora/models/remote/video/video_detail/ugc_season.dart';
 import 'package:pili_aurora/pages/common/common_intro_controller.dart';
 import 'package:pili_aurora/pages/danmaku/danmaku_model.dart';
 import 'package:pili_aurora/pages/live_room/widgets/bottom_control.dart'

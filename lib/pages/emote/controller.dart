@@ -1,6 +1,6 @@
 import 'package:pili_aurora/http/loading_state.dart';
 import 'package:pili_aurora/http/reply.dart';
-import 'package:pili_aurora/models_new/emote/package.dart';
+import 'package:pili_aurora/models/remote/emote/package.dart';
 import 'package:pili_aurora/pages/common/common_list_controller.dart';
 import 'package:get/get.dart';
 import 'package:material_ui/material_ui.dart';

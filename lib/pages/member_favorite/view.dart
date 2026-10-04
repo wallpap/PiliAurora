@@ -4,7 +4,7 @@ import 'package:pili_aurora/common/widgets/flutter/refresh_indicator.dart';
 import 'package:pili_aurora/common/widgets/loading_widget/http_error.dart';
 import 'package:pili_aurora/common/widgets/sliver/sliver_pinned_header.dart';
 import 'package:pili_aurora/http/loading_state.dart';
-import 'package:pili_aurora/models_new/space/space_fav/data.dart';
+import 'package:pili_aurora/models/remote/space/space_fav/data.dart';
 import 'package:pili_aurora/pages/member_favorite/controller.dart';
 import 'package:pili_aurora/pages/member_favorite/widget/item.dart';
 import 'package:pili_aurora/utils/grid.dart';

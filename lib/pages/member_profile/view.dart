@@ -10,7 +10,7 @@ import 'package:pili_aurora/http/init.dart';
 import 'package:pili_aurora/http/loading_state.dart';
 import 'package:pili_aurora/models/common/member/profile_type.dart';
 import 'package:pili_aurora/models/user/info.dart';
-import 'package:pili_aurora/models_new/account_myinfo/data.dart';
+import 'package:pili_aurora/models/remote/account_myinfo/data.dart';
 import 'package:pili_aurora/pages/mine/controller.dart';
 import 'package:pili_aurora/services/account_service.dart';
 import 'package:pili_aurora/utils/accounts.dart';
