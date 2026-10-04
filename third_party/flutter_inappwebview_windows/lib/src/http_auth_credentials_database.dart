@@ -52,8 +52,8 @@ class WindowsHttpAuthCredentialDatabase
 
   static WindowsHttpAuthCredentialDatabase _init() {
     _instance = WindowsHttpAuthCredentialDatabase(
-        WindowsHttpAuthCredentialDatabaseCreationParams(
-            const PlatformHttpAuthCredentialDatabaseCreationParams()));
+        const WindowsHttpAuthCredentialDatabaseCreationParams(
+            PlatformHttpAuthCredentialDatabaseCreationParams()));
     return _instance!;
   }
 

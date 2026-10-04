@@ -109,3 +109,5 @@ dist
 
 test*
 !test/
+
+tool/setup-android-signing.ps1

@@ -27,7 +27,7 @@ class WindowsWebViewEnvironmentCreationParams
 ///- Windows
 class WindowsWebViewEnvironment extends PlatformWebViewEnvironment
     with ChannelController {
-  static final MethodChannel _staticChannel =
+  static const MethodChannel _staticChannel =
       MethodChannel('com.pichillilorenzo/flutter_webview_environment');
 
   @override
@@ -40,7 +40,7 @@ class WindowsWebViewEnvironment extends PlatformWebViewEnvironment
                 .fromPlatformWebViewEnvironmentCreationParams(params));
 
   static final WindowsWebViewEnvironment _staticValue =
-      WindowsWebViewEnvironment(WindowsWebViewEnvironmentCreationParams());
+      WindowsWebViewEnvironment(const WindowsWebViewEnvironmentCreationParams());
 
   factory WindowsWebViewEnvironment.static() {
     return _staticValue;
@@ -48,7 +48,7 @@ class WindowsWebViewEnvironment extends PlatformWebViewEnvironment
 
   _debugLog(String method, dynamic args) {
     debugLog(
-        className: this.runtimeType.toString(),
+        className: runtimeType.toString(),
         id: id,
         debugLoggingSettings: PlatformWebViewEnvironment.debugLoggingSettings,
         method: method,

@@ -16,7 +16,7 @@ import 'in_app_webview_controller.dart';
 class WindowsHeadlessInAppWebViewCreationParams
     extends PlatformHeadlessInAppWebViewCreationParams {
   /// Creates a new [WindowsHeadlessInAppWebViewCreationParams] instance.
-  WindowsHeadlessInAppWebViewCreationParams(
+  const WindowsHeadlessInAppWebViewCreationParams(
       {super.controllerFromPlatform,
       super.initialSize,
       this.webViewEnvironment,
@@ -261,7 +261,7 @@ class WindowsHeadlessInAppWebView extends PlatformHeadlessInAppWebView
   bool _running = false;
 
   static const MethodChannel _sharedChannel =
-      const MethodChannel('com.pichillilorenzo/flutter_headless_inappwebview');
+      MethodChannel('com.pichillilorenzo/flutter_headless_inappwebview');
 
   WindowsInAppWebViewController? _webViewController;
 
@@ -312,6 +312,7 @@ class WindowsHeadlessInAppWebView extends PlatformHeadlessInAppWebView
     return null;
   }
 
+  @override
   Future<void> run() async {
     if (_started) {
       return;
@@ -356,7 +357,7 @@ class WindowsHeadlessInAppWebView extends PlatformHeadlessInAppWebView
     } catch (e) {
       _running = false;
       _started = false;
-      throw e;
+      rethrow;
     }
   }
 

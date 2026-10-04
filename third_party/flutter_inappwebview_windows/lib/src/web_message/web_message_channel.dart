@@ -51,9 +51,9 @@ class WindowsWebMessageChannel extends PlatformWebMessageChannel
       WindowsWebMessageChannelCreationParams(
           id: '',
           port1: WindowsWebMessagePort(
-              WindowsWebMessagePortCreationParams(index: 0)),
+              const WindowsWebMessagePortCreationParams(index: 0)),
           port2: WindowsWebMessagePort(
-              WindowsWebMessagePortCreationParams(index: 1))));
+              const WindowsWebMessagePortCreationParams(index: 1))));
 
   /// Provide static access.
   factory WindowsWebMessageChannel.static() {
@@ -72,9 +72,9 @@ class WindowsWebMessageChannel extends PlatformWebMessageChannel
         WindowsWebMessageChannelCreationParams(
             id: map["id"],
             port1: WindowsWebMessagePort(
-                WindowsWebMessagePortCreationParams(index: 0)),
+                const WindowsWebMessagePortCreationParams(index: 0)),
             port2: WindowsWebMessagePort(
-                WindowsWebMessagePortCreationParams(index: 1))));
+                const WindowsWebMessagePortCreationParams(index: 1))));
     webMessageChannel._macosPort1.webMessageChannel = webMessageChannel;
     webMessageChannel._macosPort2.webMessageChannel = webMessageChannel;
     return webMessageChannel;

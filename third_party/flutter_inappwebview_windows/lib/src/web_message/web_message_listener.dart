@@ -22,7 +22,7 @@ class WindowsWebMessageListenerCreationParams
       // ignore: avoid_unused_constructor_parameters
       PlatformWebMessageListenerCreationParams params) {
     return WindowsWebMessageListenerCreationParams(
-        allowedOriginRules: params.allowedOriginRules ?? Set.from(["*"]),
+        allowedOriginRules: params.allowedOriginRules ?? {"*"},
         jsObjectName: params.jsObjectName,
         onPostMessage: params.onPostMessage);
   }
@@ -47,7 +47,7 @@ class WindowsWebMessageListener extends PlatformWebMessageListener
               : WindowsWebMessageListenerCreationParams
                   .fromPlatformWebMessageListenerCreationParams(params),
         ) {
-    assert(!this._macosParams.allowedOriginRules.contains(""),
+    assert(!_macosParams.allowedOriginRules.contains(""),
         "allowedOriginRules cannot contain empty strings");
     channel = MethodChannel(
         'com.pichillilorenzo/flutter_inappwebview_web_message_listener_${_id}_${params.jsObjectName}');
@@ -66,11 +66,9 @@ class WindowsWebMessageListener extends PlatformWebMessageListener
   Future<dynamic> _handleMethod(MethodCall call) async {
     switch (call.method) {
       case "onPostMessage":
-        if (_replyProxy == null) {
-          _replyProxy = MacOSJavaScriptReplyProxy(
+        _replyProxy ??= MacOSJavaScriptReplyProxy(
               PlatformJavaScriptReplyProxyCreationParams(
                   webMessageListener: this));
-        }
         if (onPostMessage != null) {
           WebMessage? message = call.arguments["message"] != null
               ? WebMessage.fromMap(
@@ -105,12 +103,12 @@ class WindowsWebMessageListener extends PlatformWebMessageListener
 
   @override
   Map<String, dynamic> toJson() {
-    return this.toMap();
+    return toMap();
   }
 
   @override
   String toString() {
-    return 'MacOSWebMessageListener{id: ${_id}, jsObjectName: ${params.jsObjectName}, allowedOriginRules: ${params.allowedOriginRules}, replyProxy: $_replyProxy}';
+    return 'MacOSWebMessageListener{id: $_id, jsObjectName: ${params.jsObjectName}, allowedOriginRules: ${params.allowedOriginRules}, replyProxy: $_replyProxy}';
   }
 }
 
