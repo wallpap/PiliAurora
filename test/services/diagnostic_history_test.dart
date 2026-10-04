@@ -26,18 +26,24 @@ void main() {
     (index) => jsonEncode({'index': start + index, 'message': '合成日志'}),
   );
 
-  test('does not read older files after recovering 200 current records', () async {
-    final current = await logFile('runtime.jsonl', records(600, 600));
-    final previous = await logFile('runtime.jsonl.1', records(0, 600));
+  test(
+    'does not read older files after recovering 200 current records',
+    () async {
+      final current = await logFile('runtime.jsonl', records(600, 600));
+      final previous = await logFile('runtime.jsonl.1', records(0, 600));
 
-    final history = await readDiagnosticHistory([current, previous]);
+      final history = await readDiagnosticHistory([current, previous]);
 
-    expect(history.map((record) => record['index']), orderedEquals(
-      Iterable.generate(200, (index) => 1000 + index),
-    ));
-    expect(current.reads, 1);
-    expect(previous.reads, 0, reason: '最新文件已足够，不应扫描即将被丢弃的历史。');
-  });
+      expect(
+        history.map((record) => record['index']),
+        orderedEquals(
+          Iterable.generate(200, (index) => 1000 + index),
+        ),
+      );
+      expect(current.reads, 1);
+      expect(previous.reads, 0, reason: '最新文件已足够，不应扫描即将被丢弃的历史。');
+    },
+  );
 
   test('fills from rotated files and returns oldest to newest', () async {
     final current = await logFile('runtime.jsonl', [
@@ -51,54 +57,72 @@ void main() {
 
     final history = await readDiagnosticHistory([current, previous, oldest]);
 
-    expect(history.map((record) => record['index']), orderedEquals(
-      Iterable.generate(200, (index) => 100 + index),
-    ));
+    expect(
+      history.map((record) => record['index']),
+      orderedEquals(
+        Iterable.generate(200, (index) => 100 + index),
+      ),
+    );
     expect(current.reads, 1);
     expect(previous.reads, 1);
     expect(oldest.reads, 0);
   });
 
-  test('skips invalid recent lines without losing valid older records', () async {
-    final current = await logFile('runtime.jsonl', [
-      ...records(0, 201),
-      for (var index = 0; index < 210; index++) 'broken-$index',
-    ]);
+  test(
+    'skips invalid recent lines without losing valid older records',
+    () async {
+      final current = await logFile('runtime.jsonl', [
+        ...records(0, 201),
+        for (var index = 0; index < 210; index++) 'broken-$index',
+      ]);
 
-    final history = await readDiagnosticHistory([current]);
+      final history = await readDiagnosticHistory([current]);
 
-    expect(history.map((record) => record['index']), orderedEquals(
-      Iterable.generate(200, (index) => 1 + index),
-    ));
-  });
+      expect(
+        history.map((record) => record['index']),
+        orderedEquals(
+          Iterable.generate(200, (index) => 1 + index),
+        ),
+      );
+    },
+  );
 
-  test('keeps a bounded tail and ignores its incomplete leading line', () async {
-    final current = await logFile('runtime.jsonl', [
-      jsonEncode({'message': 'x' * 300000}),
-      ...records(0, 30),
-    ]);
+  test(
+    'keeps a bounded tail and ignores its incomplete leading line',
+    () async {
+      final current = await logFile('runtime.jsonl', [
+        jsonEncode({'message': 'x' * 300000}),
+        ...records(0, 30),
+      ]);
 
-    final history = await readDiagnosticHistory([current]);
+      final history = await readDiagnosticHistory([current]);
 
-    expect(history.map((record) => record['index']), orderedEquals(
-      Iterable.generate(30),
-    ));
-    expect(current.bytesRead, lessThanOrEqualTo(262144));
-  });
+      expect(
+        history.map((record) => record['index']),
+        orderedEquals(
+          Iterable.generate(30),
+        ),
+      );
+      expect(current.bytesRead, lessThanOrEqualTo(262144));
+    },
+  );
 
-  test('accepts CRLF, a missing trailing newline and malformed UTF-8', () async {
-    final file = File('${directory.path}/runtime.jsonl');
-    await file.writeAsBytes([
-      ...utf8.encode('{"index":0}\r\n'),
-      0xff,
-      0x0a,
-      ...utf8.encode('{"index":1}'),
-    ]);
+  test(
+    'accepts CRLF, a missing trailing newline and malformed UTF-8',
+    () async {
+      final file = File('${directory.path}/runtime.jsonl');
+      await file.writeAsBytes([
+        ...utf8.encode('{"index":0}\r\n'),
+        0xff,
+        0x0a,
+        ...utf8.encode('{"index":1}'),
+      ]);
 
-    final history = await readDiagnosticHistory([_CountingFile(file)]);
+      final history = await readDiagnosticHistory([_CountingFile(file)]);
 
-    expect(history.map((record) => record['index']), orderedEquals([0, 1]));
-  });
+      expect(history.map((record) => record['index']), orderedEquals([0, 1]));
+    },
+  );
 
   test('historical records still pass through bounded redaction', () async {
     final current = await logFile('runtime.jsonl', [
@@ -110,6 +134,57 @@ void main() {
     expect((history.single['message'] as String).length, lessThan(6000));
   });
 
+  test('falls back when the current file disappears before reading', () async {
+    final missing = File('${directory.path}/runtime.jsonl');
+    final previous = await logFile('runtime.jsonl.1', records(0, 30));
+
+    final history = await readDiagnosticHistory([missing, previous]);
+
+    expect(
+      history.map((record) => record['index']),
+      orderedEquals(
+        Iterable.generate(30),
+      ),
+    );
+    expect(previous.reads, 1);
+  });
+
+  test('keeps recovered records when an older file is unavailable', () async {
+    final current = await logFile('runtime.jsonl', records(20, 10));
+    final missing = File('${directory.path}/runtime.jsonl.1');
+    final oldest = await logFile('runtime.jsonl.2', records(0, 20));
+
+    final history = await readDiagnosticHistory([current, missing, oldest]);
+
+    expect(
+      history.map((record) => record['index']),
+      orderedEquals(
+        Iterable.generate(30),
+      ),
+    );
+    expect(current.reads, 1);
+    expect(oldest.reads, 1);
+  });
+
+  test('retains complete lines before a file read is interrupted', () async {
+    final file = await logFile('runtime.jsonl', records(20, 20));
+    final interrupted = _InterruptedFile(
+      file.source,
+      utf8.encode('${records(20, 10).join('\n')}\n'),
+    );
+    final previous = await logFile('runtime.jsonl.1', records(0, 20));
+
+    final history = await readDiagnosticHistory([interrupted, previous]);
+
+    expect(
+      history.map((record) => record['index']),
+      orderedEquals(
+        Iterable.generate(30),
+      ),
+    );
+    expect(interrupted.reads, 1);
+    expect(previous.reads, 1);
+  });
   test('handles empty files and an empty file list', () async {
     final current = await logFile('runtime.jsonl', []);
 
@@ -138,6 +213,21 @@ class _CountingFile implements File {
   }
 
   @override
-  dynamic noSuchMethod(Invocation invocation) =>
-      throw UnsupportedError('Unexpected file operation: ${invocation.memberName}');
+  dynamic noSuchMethod(Invocation invocation) => throw UnsupportedError(
+    'Unexpected file operation: ${invocation.memberName}',
+  );
+}
+
+class _InterruptedFile extends _CountingFile {
+  _InterruptedFile(super.source, this.prefix);
+
+  final List<int> prefix;
+
+  @override
+  Stream<List<int>> openRead([int? start, int? end]) async* {
+    reads++;
+    bytesRead += prefix.length;
+    yield prefix;
+    throw FileSystemException('Synthetic interrupted read', source.path);
+  }
 }
