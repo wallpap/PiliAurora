@@ -7,6 +7,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/widgets.dart';
 import 'package:archive/archive_io.dart';
+import 'package:pili_aurora/services/diagnostics/history_reader.dart';
 import 'package:pili_aurora/services/diagnostics/process_metrics.dart';
 import 'package:pili_aurora/services/diagnostics/record_store.dart';
 import 'package:pili_aurora/services/diagnostics/redact.dart';
@@ -83,33 +84,9 @@ class Diagnostics extends ChangeNotifier {
 
   Future<void> _loadHistory() async {
     try {
-      final files = await _logs!.files();
-      for (final file in files.reversed) {
-        // 每个轮转文件仅扫描末尾，避免诊断页面加载完整日志到内存。
-        final length = file.lengthSync();
-        final offset = length > 262144 ? length - 262144 : 0;
-        var skipPartialLine = offset > 0;
-        await for (final line
-            in file
-                .openRead(offset)
-                .transform(const Utf8Decoder(allowMalformed: true))
-                .transform(const LineSplitter())) {
-          if (skipPartialLine) {
-            skipPartialLine = false;
-            continue;
-          }
-          try {
-            final record = Map<String, Object?>.from(
-              DiagnosticRedactor.clean(jsonDecode(line)) as Map,
-            );
-            _recent.add(record);
-            while (_recent.length > 200) {
-              _recent.removeFirst();
-            }
-          } catch (_) {
-            /* 忽略中断写入留下的不完整行。 */
-          }
-        }
+      _recent.addAll(await readDiagnosticHistory(await _logs!.files()));
+      while (_recent.length > 200) {
+        _recent.removeFirst();
       }
     } catch (_) {
       /* 日志读取失败不影响应用启动。 */
