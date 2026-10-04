@@ -3,8 +3,8 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:pili_aurora/tcp/live_packet.dart';
-import 'package:pili_aurora/tcp/live_packet_decoder.dart';
+import 'package:pili_aurora/services/live_stream/live_packet.dart';
+import 'package:pili_aurora/services/live_stream/live_packet_decoder.dart';
 
 Uint8List _packet(List<int> body, {int version = 0, int operation = 5}) =>
     Uint8List.fromList([

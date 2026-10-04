@@ -28,7 +28,7 @@ import 'package:pili_aurora/plugin/pl_player/controller.dart';
 import 'package:pili_aurora/plugin/pl_player/models/data_source.dart';
 import 'package:pili_aurora/plugin/pl_player/utils/danmaku_options.dart';
 import 'package:pili_aurora/services/service_locator.dart';
-import 'package:pili_aurora/tcp/live.dart';
+import 'package:pili_aurora/services/live_stream/live.dart';
 import 'package:pili_aurora/utils/accounts.dart';
 import 'package:pili_aurora/utils/android/bindings.g.dart';
 import 'package:pili_aurora/utils/connectivity_utils.dart';
