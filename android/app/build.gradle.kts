@@ -75,6 +75,10 @@ android {
             signingConfig = signingConfigs["debug"]
             applicationIdSuffix = ".debug"
         }
+        named("profile") {
+            // 性能测试包必须与 GitHub 正式包并存，避免覆盖或卸载正式安装。
+            applicationIdSuffix = ".profile"
+        }
         release {
             signingConfig = config
             if (project.hasProperty("dev")) {
