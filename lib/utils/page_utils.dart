@@ -1,6 +1,7 @@
 import 'dart:math';
 
 import 'package:pili_aurora/common/widgets/fractionally_sized_box.dart';
+import 'package:pili_aurora/services/logger.dart';
 import 'package:pili_aurora/common/widgets/image_viewer/gallery_viewer.dart';
 import 'package:pili_aurora/common/widgets/image_viewer/hero_dialog_route.dart';
 import 'package:pili_aurora/grpc/im.dart';
@@ -32,7 +33,6 @@ import 'package:pili_aurora/utils/storage_pref.dart';
 import 'package:pili_aurora/utils/url_utils.dart';
 import 'package:pili_aurora/utils/utils.dart';
 import 'package:collection/collection.dart';
-import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:get/get.dart';
 import 'package:material_ui/material_ui.dart';
@@ -699,7 +699,7 @@ abstract final class PageUtils {
     } catch (e) {
       SmartDialog.dismiss();
       SmartDialog.showToast('$e');
-      if (kDebugMode) debugPrint('$e');
+      logger.d('$e');
     }
   }
 

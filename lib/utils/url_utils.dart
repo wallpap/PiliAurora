@@ -5,7 +5,6 @@ import 'package:pili_aurora/utils/accounts/account.dart';
 import 'package:pili_aurora/utils/id_utils.dart';
 import 'package:pili_aurora/utils/page_utils.dart';
 import 'package:dio/dio.dart';
-import 'package:flutter/foundation.dart' show kDebugMode, debugPrint;
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 
 abstract final class UrlUtils {
@@ -27,7 +26,7 @@ abstract final class UrlUtils {
         ),
       );
       redirectUrl = response.headers['location']?.firstOrNull;
-      if (kDebugMode) debugPrint('redirectUrl: $redirectUrl');
+      logger.d('redirectUrl: $redirectUrl');
       if (redirectUrl != null && !redirectUrl.startsWith('http')) {
         redirectUrl = Uri.parse(url).resolve(redirectUrl).toString();
       }

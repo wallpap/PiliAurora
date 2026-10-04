@@ -1,6 +1,7 @@
 import 'dart:io' show Platform;
 
 import 'package:pili_aurora/common/widgets/emote_tooltip.dart';
+import 'package:pili_aurora/services/logger.dart';
 import 'package:pili_aurora/common/widgets/gesture/tap_gesture_recognizer.dart';
 import 'package:pili_aurora/common/widgets/image/network_img_layer.dart';
 import 'package:pili_aurora/common/widgets/image_grid/image_grid_view.dart';
@@ -13,7 +14,6 @@ import 'package:pili_aurora/models/dynamics/result.dart';
 import 'package:pili_aurora/pages/dynamics/widgets/vote.dart';
 import 'package:pili_aurora/utils/page_utils.dart';
 import 'package:pili_aurora/utils/parse_string.dart';
-import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:get/get.dart';
 import 'package:material_ui/material_ui.dart';
@@ -380,7 +380,7 @@ TextSpan? richNode(
       );
     }
   } catch (err) {
-    if (kDebugMode) debugPrint('❌rich_node_panel err: $err');
+    logger.d('❌rich_node_panel err: $err');
     return null;
   }
 }

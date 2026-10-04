@@ -65,9 +65,7 @@ Future<void> _initDownPath() async {
       } catch (e) {
         downloadPath = defDownloadPath;
         await GStorage.setting.delete(SettingBoxKey.downloadPath);
-        if (kDebugMode) {
-          debugPrint('download path error: $e');
-        }
+        logger.w('download path error', error: e);
       }
     } else {
       downloadPath = defDownloadPath;
@@ -98,7 +96,7 @@ void main() async {
     await GStorage.init();
   } catch (e) {
     await Utils.copyText(e.toString(), needToast: false);
-    if (kDebugMode) debugPrint('GStorage init error: $e');
+    logger.e('GStorage init error', error: e);
     exit(0);
   }
   ScaledWidgetsFlutterBinding.instance.scaleFactor = Pref.uiScale;
@@ -354,39 +352,29 @@ class MyApp extends StatelessWidget {
 
       if (colors != null) {
         final corePalettes = CorePalettesExt.fromList(colors.toList());
-        if (kDebugMode) {
-          debugPrint('dynamic_color: Core palette detected.');
-        }
+        logger.d('dynamic_color: Core palette detected.');
         _light = corePalettes.toColorScheme();
         _dark = corePalettes.toColorScheme(brightness: Brightness.dark);
         return true;
       }
-    } on PlatformException {
-      if (kDebugMode) {
-        debugPrint('dynamic_color: Failed to obtain core palette.');
-      }
+    } on PlatformException catch (e) {
+      logger.w('dynamic_color: Failed to obtain core palette.', error: e);
     }
 
     try {
       final Color? accentColor = await DynamicColorPlugin.getAccentColor();
 
       if (accentColor != null) {
-        if (kDebugMode) {
-          debugPrint('dynamic_color: Accent color detected.');
-        }
+        logger.d('dynamic_color: Accent color detected.');
         final variant = Pref.schemeVariant;
         _light = accentColor.asColorSchemeSeed(variant, .light);
         _dark = accentColor.asColorSchemeSeed(variant, .dark);
         return true;
       }
-    } on PlatformException {
-      if (kDebugMode) {
-        debugPrint('dynamic_color: Failed to obtain accent color.');
-      }
+    } on PlatformException catch (e) {
+      logger.w('dynamic_color: Failed to obtain accent color.', error: e);
     }
-    if (kDebugMode) {
-      debugPrint('dynamic_color: Dynamic color not detected on this device.');
-    }
+    logger.i('dynamic_color: Dynamic color not detected on this device.');
     GStorage.setting.put(SettingBoxKey.dynamicColor, false);
     return false;
   }

@@ -4,11 +4,11 @@ import 'dart:async';
 import 'dart:ffi';
 
 import 'package:pili_aurora/http/browser_ua.dart';
+import 'package:pili_aurora/services/logger.dart';
 import 'package:pili_aurora/http/constants.dart';
 import 'package:pili_aurora/utils/storage_pref.dart';
 import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:get/get_rx/get_rx.dart';
-import 'package:material_ui/material_ui.dart';
 import 'package:media_kit/ffi/src/allocation.dart';
 import 'package:media_kit/ffi/src/utf8.dart';
 import 'package:media_kit/generated/libmpv/bindings.dart' as generated;
@@ -104,7 +104,7 @@ class MpvConvertWebp {
         final prefix = log.prefix.toDartString().trim();
         final level = log.level.toDartString().trim();
         final text = log.text.toDartString().trim();
-        debugPrint('WebpConvert: $level $prefix : $text');
+        logger.d('WebpConvert: $level $prefix : $text');
         if (kDebugMode) {
           if (level == 'error' || level == 'fatal') _success = false;
         } else {

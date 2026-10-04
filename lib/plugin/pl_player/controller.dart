@@ -1101,7 +1101,7 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
     try {
       await _videoPlayerController?.seek(position);
     } catch (e) {
-      if (kDebugMode) debugPrint('seek failed: $e');
+      logger.d('seek failed: $e');
     }
   }
 
@@ -1237,7 +1237,7 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
           await FlutterVolumeController.setVolume(volume);
         }
       } catch (err) {
-        if (kDebugMode) debugPrint(err.toString());
+        logger.d(err.toString());
       }
     }
     if (showIndicator) {
@@ -1645,9 +1645,7 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
     _lastCoarsePositionBucket = null;
     _stopWakeLockTimer();
     WakelockPlus.disable();
-    if (kDebugMode) {
-      debugPrint('dispose player');
-    }
+    logger.d('dispose player');
     _videoPlayerController?.dispose();
     _videoPlayerController = null;
     _videoController = null;

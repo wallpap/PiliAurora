@@ -1,4 +1,5 @@
 import 'package:pili_aurora/http/browser_ua.dart';
+import 'package:pili_aurora/services/logger.dart';
 import 'package:pili_aurora/main.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:get/get.dart';
@@ -101,13 +102,13 @@ class _GeetestWebviewDialogState extends State<GeetestWebviewDialog> {
                       return;
                     }
                   }
-                  debugPrint('geetest invalid result: $args');
+                  logger.d('geetest invalid result: $args');
                 },
               )
               ..addJavaScriptHandler(
                 handlerName: 'error',
                 callback: (args) {
-                  debugPrint('geetest error: $args');
+                  logger.d('geetest error: $args');
                 },
               )
               ..addJavaScriptHandler(

@@ -1,6 +1,7 @@
 import 'dart:io' show Platform;
 
 import 'package:pili_aurora/build_config.dart';
+import 'package:pili_aurora/services/logger.dart';
 import 'package:pili_aurora/common/constants.dart';
 import 'package:pili_aurora/http/api.dart';
 import 'package:pili_aurora/http/browser_ua.dart';
@@ -114,7 +115,7 @@ abstract final class Update {
         );
       }
     } catch (e) {
-      if (kDebugMode) debugPrint('failed to check update: $e');
+      logger.d('failed to check update: $e');
     }
   }
 
@@ -145,7 +146,7 @@ abstract final class Update {
         download(Platform.operatingSystem);
       }
     } catch (e) {
-      if (kDebugMode) debugPrint('download error: $e');
+      logger.d('download error: $e');
       PageUtils.launchURL('${Constants.sourceCodeUrl}/releases/latest');
     }
   }
