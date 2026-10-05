@@ -7,7 +7,7 @@ import 'package:pili_aurora/common/widgets/video_card/video_card_v.dart';
 import 'package:pili_aurora/http/search.dart';
 import 'package:pili_aurora/models/common/badge_type.dart';
 import 'package:pili_aurora/models/common/stat_type.dart';
-import 'package:pili_aurora/models_new/member/coin_like_arc/item.dart';
+import 'package:pili_aurora/models/remote/member/coin_like_arc/item.dart';
 import 'package:pili_aurora/utils/date_utils.dart';
 import 'package:pili_aurora/utils/duration_utils.dart';
 import 'package:pili_aurora/utils/page_utils.dart';

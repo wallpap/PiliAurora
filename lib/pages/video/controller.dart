@@ -3,6 +3,7 @@ import 'dart:math' show min;
 import 'dart:ui';
 
 import 'package:pili_aurora/common/style.dart';
+import 'package:pili_aurora/services/logger.dart';
 import 'package:pili_aurora/common/widgets/pair.dart';
 import 'package:pili_aurora/common/widgets/progress_bar/segment_progress_bar.dart';
 import 'package:pili_aurora/common/widgets/scaffold/mini_scaffold.dart';
@@ -26,15 +27,15 @@ import 'package:pili_aurora/models/common/video/video_decode_type.dart';
 import 'package:pili_aurora/models/common/video/video_quality.dart';
 import 'package:pili_aurora/models/common/video/video_type.dart';
 import 'package:pili_aurora/models/video/play/url.dart';
-import 'package:pili_aurora/models_new/download/bili_download_entry_info.dart';
-import 'package:pili_aurora/models_new/media_list/media_list.dart';
-import 'package:pili_aurora/models_new/pgc/pgc_info_model/result.dart';
-import 'package:pili_aurora/models_new/video/video_detail/data.dart';
-import 'package:pili_aurora/models_new/video/video_detail/episode.dart' as ugc;
-import 'package:pili_aurora/models_new/video/video_detail/page.dart';
-import 'package:pili_aurora/models_new/video/video_pbp/data.dart';
-import 'package:pili_aurora/models_new/video/video_play_info/subtitle.dart';
-import 'package:pili_aurora/models_new/video/video_stein_edgeinfo/data.dart';
+import 'package:pili_aurora/models/remote/download/bili_download_entry_info.dart';
+import 'package:pili_aurora/models/remote/media_list/media_list.dart';
+import 'package:pili_aurora/models/remote/pgc/pgc_info_model/result.dart';
+import 'package:pili_aurora/models/remote/video/video_detail/data.dart';
+import 'package:pili_aurora/models/remote/video/video_detail/episode.dart' as ugc;
+import 'package:pili_aurora/models/remote/video/video_detail/page.dart';
+import 'package:pili_aurora/models/remote/video/video_pbp/data.dart';
+import 'package:pili_aurora/models/remote/video/video_play_info/subtitle.dart';
+import 'package:pili_aurora/models/remote/video/video_stein_edgeinfo/data.dart';
 import 'package:pili_aurora/pages/audio/view.dart';
 import 'package:pili_aurora/pages/common/publish/publish_route.dart';
 import 'package:pili_aurora/pages/search/widgets/search_text.dart';
@@ -70,7 +71,6 @@ import 'package:collection/collection.dart';
 import 'package:dio/dio.dart' show Options;
 import 'package:extended_nested_scroll_view/extended_nested_scroll_view.dart'
     show ExtendedNestedScrollViewState;
-import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:flutter_volume_controller/flutter_volume_controller.dart';
 import 'package:get/get.dart';
@@ -588,7 +588,7 @@ class VideoDetailController extends GetxController
                     ugcIntroController.onChangeEpisode(part);
                     SmartDialog.showToast('已跳至第${item + 1}P');
                   } catch (e) {
-                    if (kDebugMode) debugPrint('$e');
+                    logger.d('$e');
                     SmartDialog.showToast('跳转失败');
                   }
                   onRemoveItem(listData.indexOf(item), item);
@@ -1093,12 +1093,10 @@ class VideoDetailController extends GetxController
       if (res.data['code'] == 0) {
         steinEdgeInfo = EdgeInfoData.fromJson(res.data['data']);
       } else {
-        if (kDebugMode) {
-          debugPrint('getSteinEdgeInfo error: ${res.data['message']}');
-        }
+        logger.w('getSteinEdgeInfo error: ${res.data['message']}');
       }
-    } catch (e) {
-      if (kDebugMode) debugPrint('getSteinEdgeInfo: $e');
+    } catch (e, stackTrace) {
+      logger.w('getSteinEdgeInfo failed', error: e, stackTrace: stackTrace);
     }
   }
 
@@ -1125,8 +1123,8 @@ class VideoDetailController extends GetxController
             graphVersion = response.interaction?.graphVersion;
             getSteinEdgeInfo();
           }
-        } catch (e) {
-          if (kDebugMode) debugPrint('handle stein: $e');
+        } catch (e, stackTrace) {
+          logger.w('handle stein failed', error: e, stackTrace: stackTrace);
         }
       }
 
@@ -1347,7 +1345,7 @@ class VideoDetailController extends GetxController
       dmTrend.value = const Error(null);
     } catch (e) {
       dmTrend.value = const Error(null);
-      if (kDebugMode) debugPrint('_getDmTrend: $e');
+      logger.d('_getDmTrend: $e');
     }
   }
 
@@ -1452,18 +1450,14 @@ class VideoDetailController extends GetxController
           episodes = videoDetail.pages;
         }
       } catch (e, s) {
-        if (kDebugMode) {
-          debugPrint('download ugc: $e\n\n$s');
-        }
+        logger.w('download ugc failed', error: e, stackTrace: s);
       }
     } else {
       try {
         pgcItem = Get.find<PgcIntroController>(tag: heroTag).pgcItem;
         episodes = pgcItem.episodes;
       } catch (e, s) {
-        if (kDebugMode) {
-          debugPrint('download pgc: $e\n\n$s');
-        }
+        logger.w('download pgc failed', error: e, stackTrace: s);
       }
     }
     if (episodes != null && episodes.isNotEmpty) {
@@ -1600,9 +1594,7 @@ class VideoDetailController extends GetxController
           ).videoDetail.value.title;
         }
       } catch (_) {}
-      if (kDebugMode) {
-        debugPrint(title);
-      }
+      logger.d(title);
       Get.toNamed(
         '/dlna',
         parameters: {

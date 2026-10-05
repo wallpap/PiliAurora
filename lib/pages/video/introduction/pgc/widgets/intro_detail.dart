@@ -4,8 +4,8 @@ import 'package:pili_aurora/common/widgets/scroll_physics.dart'
 import 'package:pili_aurora/common/widgets/selection_text.dart';
 import 'package:pili_aurora/common/widgets/stat/stat.dart';
 import 'package:pili_aurora/models/common/stat_type.dart';
-import 'package:pili_aurora/models_new/pgc/pgc_info_model/result.dart';
-import 'package:pili_aurora/models_new/video/video_tag/data.dart';
+import 'package:pili_aurora/models/remote/pgc/pgc_info_model/result.dart';
+import 'package:pili_aurora/models/remote/video/video_tag/data.dart';
 import 'package:pili_aurora/pages/common/slide/common_slide_page.dart';
 import 'package:pili_aurora/pages/pgc_review/view.dart';
 import 'package:pili_aurora/pages/search/widgets/search_text.dart';

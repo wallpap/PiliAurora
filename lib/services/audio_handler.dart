@@ -4,11 +4,11 @@ import 'dart:ui' show PlatformDispatcher;
 import 'package:pili_aurora/common/constants.dart';
 import 'package:pili_aurora/grpc/bilibili/app/listener/v1.pb.dart'
     show DetailItem;
-import 'package:pili_aurora/models_new/download/bili_download_entry_info.dart';
-import 'package:pili_aurora/models_new/live/live_room_info_h5/data.dart';
-import 'package:pili_aurora/models_new/pgc/pgc_info_model/episode.dart';
-import 'package:pili_aurora/models_new/video/video_detail/data.dart';
-import 'package:pili_aurora/models_new/video/video_detail/page.dart';
+import 'package:pili_aurora/models/remote/download/bili_download_entry_info.dart';
+import 'package:pili_aurora/models/remote/live/live_room_info_h5/data.dart';
+import 'package:pili_aurora/models/remote/pgc/pgc_info_model/episode.dart';
+import 'package:pili_aurora/models/remote/video/video_detail/data.dart';
+import 'package:pili_aurora/models/remote/video/video_detail/page.dart';
 import 'package:pili_aurora/plugin/pl_player/controller.dart';
 import 'package:pili_aurora/plugin/pl_player/models/play_status.dart';
 import 'package:pili_aurora/utils/android/bindings.g.dart';

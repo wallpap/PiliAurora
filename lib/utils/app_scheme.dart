@@ -3,6 +3,7 @@
 import 'dart:async' show StreamSubscription;
 
 import 'package:pili_aurora/common/widgets/scaffold/simple_scaffold.dart';
+import 'package:pili_aurora/services/logger.dart';
 import 'package:pili_aurora/common/widgets/view_safe_area.dart';
 import 'package:pili_aurora/grpc/bilibili/app/listener/v1.pbenum.dart'
     show PlaylistSource;
@@ -26,7 +27,6 @@ import 'package:pili_aurora/utils/request_utils.dart';
 import 'package:pili_aurora/utils/url_utils.dart';
 import 'package:pili_aurora/utils/utils.dart';
 import 'package:app_links/app_links.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:get/get.dart';
 import 'package:material_ui/material_ui.dart';
@@ -369,7 +369,7 @@ abstract final class PiliScheme {
                 try {
                   index = FavTabType.values.byName(tab).index;
                 } catch (e) {
-                  if (kDebugMode) debugPrint('favorite jump: $e');
+                  logger.d('favorite jump: $e');
                 }
               }
               Get.toNamed('/fav', arguments: index);

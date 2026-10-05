@@ -1,6 +1,7 @@
 import 'dart:math';
 
 import 'package:pili_aurora/common/assets.dart';
+import 'package:pili_aurora/services/logger.dart';
 import 'package:pili_aurora/common/constants.dart';
 import 'package:pili_aurora/common/style.dart';
 import 'package:pili_aurora/common/widgets/badge.dart';
@@ -884,7 +885,7 @@ class ReplyItemGrpc extends StatelessWidget {
                 DurationUtils.parseDuration(matchStr) * 1000 <=
                 ctr.data.timeLength!;
           } catch (e) {
-            if (kDebugMode) debugPrint('failed to validate: $e');
+            logger.d('failed to validate: $e');
           }
           spanChildren.add(
             TextSpan(

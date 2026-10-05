@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:pili_aurora/common/dial_prefix.dart';
+import 'package:pili_aurora/services/logger.dart';
 import 'package:pili_aurora/common/widgets/button/icon_button.dart';
 import 'package:pili_aurora/common/widgets/radio_widget.dart';
 import 'package:pili_aurora/http/init.dart';
@@ -15,7 +16,6 @@ import 'package:pili_aurora/utils/accounts/account.dart';
 import 'package:pili_aurora/utils/platform_utils.dart';
 import 'package:pili_aurora/utils/theme_utils.dart';
 import 'package:dio/dio.dart';
-import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:get/get.dart';
 import 'package:material_ui/material_ui.dart';
@@ -580,11 +580,9 @@ class LoginPageController extends GetxController
           }
 
           if (!isGeeArgumentValid(geeGt, geeChallenge)) {
-            if (kDebugMode) {
-              debugPrint(
-                '验证信息错误：${res["msg"]}\n返回内容：${res["data"]}，尝试另一个验证码接口',
-              );
-            }
+            logger.w(
+              '验证信息错误：${res["msg"]}\n返回内容：${res["data"]}，尝试另一个验证码接口',
+            );
             final preCaptureRes = await LoginHttp.preCapture();
             if (!preCaptureRes['status'] || preCaptureRes['data'] == null) {
               SmartDialog.showToast(

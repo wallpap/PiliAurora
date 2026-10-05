@@ -1,8 +1,8 @@
 import 'package:pili_aurora/http/loading_state.dart';
 import 'package:pili_aurora/http/member.dart';
-import 'package:pili_aurora/models_new/space/space/tab2.dart';
-import 'package:pili_aurora/models_new/space/space_opus/data.dart';
-import 'package:pili_aurora/models_new/space/space_opus/item.dart';
+import 'package:pili_aurora/models/remote/space/space/tab2.dart';
+import 'package:pili_aurora/models/remote/space/space_opus/data.dart';
+import 'package:pili_aurora/models/remote/space/space_opus/item.dart';
 import 'package:pili_aurora/pages/common/common_list_controller.dart';
 import 'package:pili_aurora/pages/member/controller.dart';
 import 'package:collection/collection.dart';

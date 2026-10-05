@@ -6,7 +6,7 @@ import 'package:pili_aurora/common/widgets/scroll_physics.dart'
     show tabBarScrollPhysics;
 import 'package:pili_aurora/common/widgets/view_safe_area.dart';
 import 'package:pili_aurora/models/common/later_view_type.dart';
-import 'package:pili_aurora/models_new/later/list.dart';
+import 'package:pili_aurora/models/remote/later/list.dart';
 import 'package:pili_aurora/pages/later/base_controller.dart';
 import 'package:pili_aurora/pages/later/controller.dart';
 import 'package:pili_aurora/utils/accounts.dart';

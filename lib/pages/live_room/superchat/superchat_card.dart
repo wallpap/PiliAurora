@@ -3,7 +3,7 @@ import 'dart:async' show Timer;
 import 'package:pili_aurora/common/widgets/image/cached_image.dart';
 import 'package:pili_aurora/common/widgets/image/network_img_layer.dart';
 import 'package:pili_aurora/common/widgets/selection_text.dart';
-import 'package:pili_aurora/models_new/live/live_superchat/item.dart';
+import 'package:pili_aurora/models/remote/live/live_superchat/item.dart';
 import 'package:pili_aurora/pages/member/widget/medal_widget.dart';
 import 'package:pili_aurora/utils/app_scheme.dart';
 import 'package:pili_aurora/utils/color_utils.dart';

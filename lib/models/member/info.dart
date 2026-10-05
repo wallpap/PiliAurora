@@ -1,5 +1,5 @@
 import 'package:pili_aurora/models/model_avatar.dart';
-import 'package:pili_aurora/models_new/live/live_feed_index/watched_show.dart';
+import 'package:pili_aurora/models/remote/live/live_feed_index/watched_show.dart';
 
 class MemberInfoModel {
   MemberInfoModel({

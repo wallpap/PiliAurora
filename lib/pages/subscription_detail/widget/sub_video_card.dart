@@ -6,7 +6,7 @@ import 'package:pili_aurora/common/widgets/stat/stat.dart';
 import 'package:pili_aurora/http/search.dart';
 import 'package:pili_aurora/models/common/badge_type.dart';
 import 'package:pili_aurora/models/common/stat_type.dart';
-import 'package:pili_aurora/models_new/sub/sub_detail/media.dart';
+import 'package:pili_aurora/models/remote/sub/sub_detail/media.dart';
 import 'package:pili_aurora/utils/date_utils.dart';
 import 'package:pili_aurora/utils/duration_utils.dart';
 import 'package:pili_aurora/utils/page_utils.dart';

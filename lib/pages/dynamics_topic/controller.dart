@@ -1,10 +1,10 @@
 import 'package:pili_aurora/http/dynamics.dart';
 import 'package:pili_aurora/http/fav.dart';
 import 'package:pili_aurora/http/loading_state.dart';
-import 'package:pili_aurora/models_new/dynamic/dyn_topic_feed/item.dart';
-import 'package:pili_aurora/models_new/dynamic/dyn_topic_feed/topic_card_list.dart';
-import 'package:pili_aurora/models_new/dynamic/dyn_topic_feed/topic_sort_by_conf.dart';
-import 'package:pili_aurora/models_new/dynamic/dyn_topic_top/top_details.dart';
+import 'package:pili_aurora/models/remote/dynamic/dyn_topic_feed/item.dart';
+import 'package:pili_aurora/models/remote/dynamic/dyn_topic_feed/topic_card_list.dart';
+import 'package:pili_aurora/models/remote/dynamic/dyn_topic_feed/topic_sort_by_conf.dart';
+import 'package:pili_aurora/models/remote/dynamic/dyn_topic_top/top_details.dart';
 import 'package:pili_aurora/pages/common/common_list_controller.dart';
 import 'package:pili_aurora/utils/accounts.dart';
 import 'package:pili_aurora/utils/extension/scroll_controller_ext.dart';

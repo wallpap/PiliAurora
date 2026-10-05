@@ -2,6 +2,7 @@ import 'dart:convert' show jsonEncode;
 import 'dart:math';
 
 import 'package:pili_aurora/common/widgets/dialog/dialog.dart';
+import 'package:pili_aurora/services/logger.dart';
 import 'package:pili_aurora/common/widgets/dialog/simple_dialog_option.dart';
 import 'package:pili_aurora/common/widgets/selection_text.dart';
 import 'package:pili_aurora/grpc/bilibili/im/type.pbenum.dart';
@@ -17,9 +18,9 @@ import 'package:pili_aurora/http/validate.dart';
 import 'package:pili_aurora/http/video.dart';
 import 'package:pili_aurora/models/dynamics/result.dart';
 import 'package:pili_aurora/models/login/model.dart';
-import 'package:pili_aurora/models_new/fav/fav_detail/media.dart';
-import 'package:pili_aurora/models_new/later/list.dart';
-import 'package:pili_aurora/models_new/relation/data.dart';
+import 'package:pili_aurora/models/remote/fav/fav_detail/media.dart';
+import 'package:pili_aurora/models/remote/later/list.dart';
+import 'package:pili_aurora/models/remote/relation/data.dart';
 import 'package:pili_aurora/pages/common/multi_select/base.dart';
 import 'package:pili_aurora/pages/dynamics_tab/controller.dart';
 import 'package:pili_aurora/pages/fav_detail/controller.dart'
@@ -38,7 +39,6 @@ import 'package:pili_aurora/utils/storage_key.dart';
 import 'package:pili_aurora/utils/storage_pref.dart';
 import 'package:pili_aurora/utils/theme_utils.dart';
 import 'package:pili_aurora/utils/utils.dart';
-import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/services.dart' show LengthLimitingTextInputFormatter;
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:get/get.dart';
@@ -309,7 +309,7 @@ abstract final class RequestUtils {
           ctr.loadingState.value = Success([e.response]);
         }
       } catch (e) {
-        if (kDebugMode) debugPrint('create dyn $e');
+        logger.d('create dyn $e');
       }
     }
   }
@@ -395,7 +395,7 @@ abstract final class RequestUtils {
           );
         }
       } catch (e) {
-        if (kDebugMode) debugPrint('check dyn error: $e');
+        logger.d('check dyn error: $e');
       }
     }
   }

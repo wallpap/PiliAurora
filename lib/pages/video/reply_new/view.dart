@@ -3,6 +3,7 @@ import 'dart:io';
 import 'dart:math' show max;
 
 import 'package:pili_aurora/common/widgets/button/toolbar_icon_button.dart';
+import 'package:pili_aurora/services/logger.dart';
 import 'package:pili_aurora/common/widgets/custom_icon.dart';
 import 'package:pili_aurora/common/widgets/flutter/text_field/controller.dart'
     show RichTextType, RichTextEditingDeltaReplacement;
@@ -325,7 +326,7 @@ class _ReplyPageState extends CommonRichTextPubPageState<ReplyPage> {
                     RichTextType.common,
                   );
                 } catch (e) {
-                  debugPrint(e.toString());
+                  logger.d(e.toString());
                 }
               },
               icon: Icon(Icons.my_location, size: 28, color: color),
@@ -356,10 +357,10 @@ class _ReplyPageState extends CommonRichTextPubPageState<ReplyPage> {
                       }
                       res.dispose();
                     } else {
-                      debugPrint('null screenshot');
+                      logger.d('null screenshot');
                     }
                   } catch (e) {
-                    debugPrint(e.toString());
+                    logger.d(e.toString());
                   }
                 },
                 icon: Icon(

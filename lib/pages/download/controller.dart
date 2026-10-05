@@ -1,7 +1,7 @@
 import 'dart:async';
 
 import 'package:pili_aurora/common/widgets/dialog/dialog.dart';
-import 'package:pili_aurora/models_new/download/download_info.dart';
+import 'package:pili_aurora/models/remote/download/download_info.dart';
 import 'package:pili_aurora/pages/common/multi_select/base.dart'
     show BaseMultiSelectMixin;
 import 'package:pili_aurora/services/download/download_service.dart';

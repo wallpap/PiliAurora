@@ -1,6 +1,6 @@
 import 'package:pili_aurora/common/assets.dart';
 import 'package:pili_aurora/common/widgets/image/cached_image.dart';
-import 'package:pili_aurora/models_new/search/search_trending/list.dart';
+import 'package:pili_aurora/models/remote/search/search_trending/list.dart';
 import 'package:pili_aurora/utils/extension/string_ext.dart';
 import 'package:pili_aurora/utils/image_utils.dart';
 import 'package:flutter/rendering.dart'

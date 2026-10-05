@@ -11,7 +11,7 @@ import 'package:pili_aurora/common/widgets/view_sliver_safe_area.dart';
 import 'package:pili_aurora/http/loading_state.dart';
 import 'package:pili_aurora/models/common/video/source_type.dart';
 import 'package:pili_aurora/models/model_hot_video_item.dart';
-import 'package:pili_aurora/models_new/popular/popular_series_one/config.dart';
+import 'package:pili_aurora/models/remote/popular/popular_series_one/config.dart';
 import 'package:pili_aurora/pages/popular_series/controller.dart';
 import 'package:pili_aurora/utils/grid.dart';
 import 'package:pili_aurora/utils/page_utils.dart';

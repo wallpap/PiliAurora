@@ -72,12 +72,14 @@ class MainController extends GetxController
   static const _period = 5 * 60 * 1000;
   late int _lastSelectTime = 0;
 
+  late bool _shouldCheckUpdate;
+  late bool _shouldCheckDynamic;
+  late bool _shouldCheckMessages;
+
   @override
   void onInit() {
     super.onInit();
-    if (Pref.autoUpdate) {
-      Update.checkUpdate();
-    }
+    _shouldCheckUpdate = Pref.autoUpdate;
 
     setNavBarConfig();
 
@@ -103,22 +105,31 @@ class MainController extends GetxController
     dynamicBadgeMode = Pref.dynamicBadgeMode;
 
     hasDyn = navigationBars.contains(NavigationBarType.dynamics);
-    if (dynamicBadgeMode != DynamicBadgeMode.hidden) {
-      if (hasDyn && navigationBars[selectedIndex.value] != .dynamics) {
-        if (checkDynamic) {
-          _lastCheckDynamicAt = DateTime.now().millisecondsSinceEpoch;
-        }
-        getUnreadDynamic();
-      }
+    _shouldCheckDynamic =
+        dynamicBadgeMode != DynamicBadgeMode.hidden &&
+        hasDyn &&
+        navigationBars[selectedIndex.value] != .dynamics;
+    if (_shouldCheckDynamic && checkDynamic) {
+      _lastCheckDynamicAt = DateTime.now().millisecondsSinceEpoch;
     }
 
     hasHome = navigationBars.contains(NavigationBarType.home);
-    if (msgBadgeMode != DynamicBadgeMode.hidden) {
-      if (hasHome) {
-        lastCheckUnreadAt = DateTime.now().millisecondsSinceEpoch;
-        queryUnreadMsg();
-      }
+    _shouldCheckMessages = msgBadgeMode != DynamicBadgeMode.hidden && hasHome;
+    if (_shouldCheckMessages) {
+      lastCheckUnreadAt = DateTime.now().millisecondsSinceEpoch;
     }
+  }
+
+  @override
+  void onReady() {
+    super.onReady();
+    if (isClosed) return;
+
+    // 未读数与更新提示不参与首屏布局，改在 GetX 的首帧后生命周期中发起，
+    // 避免启动阶段争用 Dart/UI 线程和网络资源。
+    if (_shouldCheckUpdate) unawaited(Update.checkUpdate());
+    if (_shouldCheckDynamic) getUnreadDynamic();
+    if (_shouldCheckMessages) unawaited(queryUnreadMsg());
   }
 
   Future<int> _msgUnread() async {

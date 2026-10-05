@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 
 import 'package:pili_aurora/common/assets.dart';
+import 'package:pili_aurora/services/logger.dart';
 import 'package:pili_aurora/common/widgets/dialog/simple_dialog_option.dart';
 import 'package:pili_aurora/common/widgets/emote_tooltip.dart';
 import 'package:pili_aurora/common/widgets/gesture/tap_gesture_recognizer.dart';
@@ -729,7 +730,7 @@ class OpusContent extends StatelessWidget {
                 ),
               );
             default:
-              if (kDebugMode) debugPrint('unknown type ${element.paraType}');
+              logger.d('unknown type ${element.paraType}');
               if (element.text?.nodes?.isNotEmpty == true) {
                 return Text.rich(
                   textAlign: element.align == 1 ? TextAlign.center : null,

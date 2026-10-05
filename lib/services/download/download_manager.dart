@@ -2,7 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:pili_aurora/http/init.dart';
-import 'package:pili_aurora/models_new/download/bili_download_entry_info.dart';
+import 'package:pili_aurora/models/remote/download/bili_download_entry_info.dart';
 import 'package:pili_aurora/services/download/response_adapter.dart';
 import 'package:pili_aurora/services/download/stream_writer.dart';
 import 'package:pili_aurora/utils/extension/file_ext.dart';

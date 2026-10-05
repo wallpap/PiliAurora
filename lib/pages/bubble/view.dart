@@ -6,7 +6,7 @@ import 'package:pili_aurora/common/widgets/loading_widget/loading_widget.dart';
 import 'package:pili_aurora/common/widgets/scaffold/simple_scaffold.dart';
 import 'package:pili_aurora/common/widgets/scroll_physics.dart' show tabBarView;
 import 'package:pili_aurora/http/loading_state.dart';
-import 'package:pili_aurora/models_new/bubble/dyn_list.dart';
+import 'package:pili_aurora/models/remote/bubble/dyn_list.dart';
 import 'package:pili_aurora/pages/bubble/controller.dart';
 import 'package:pili_aurora/utils/extension/scroll_controller_ext.dart';
 import 'package:pili_aurora/utils/grid.dart';

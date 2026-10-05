@@ -1,7 +1,7 @@
 import 'package:pili_aurora/http/loading_state.dart';
 import 'package:pili_aurora/http/video.dart';
 import 'package:pili_aurora/models/model_hot_video_item.dart';
-import 'package:pili_aurora/models_new/popular/popular_precious/data.dart';
+import 'package:pili_aurora/models/remote/popular/popular_precious/data.dart';
 import 'package:pili_aurora/pages/common/common_list_controller.dart';
 
 class PopularPreciousController

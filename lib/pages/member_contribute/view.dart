@@ -1,6 +1,6 @@
 import 'package:pili_aurora/common/widgets/loading_widget/loading_widget.dart';
 import 'package:pili_aurora/models/common/member/contribute_type.dart';
-import 'package:pili_aurora/models_new/space/space/tab2.dart';
+import 'package:pili_aurora/models/remote/space/space/tab2.dart';
 import 'package:pili_aurora/pages/member_article/view.dart';
 import 'package:pili_aurora/pages/member_audio/view.dart';
 import 'package:pili_aurora/pages/member_comic/view.dart';

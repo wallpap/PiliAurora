@@ -1,7 +1,7 @@
 import 'package:pili_aurora/http/loading_state.dart';
 import 'package:pili_aurora/http/user.dart';
-import 'package:pili_aurora/models_new/later/data.dart';
-import 'package:pili_aurora/models_new/later/list.dart';
+import 'package:pili_aurora/models/remote/later/data.dart';
+import 'package:pili_aurora/models/remote/later/list.dart';
 import 'package:pili_aurora/pages/common/multi_select/base.dart';
 import 'package:pili_aurora/pages/common/search/common_search_controller.dart';
 import 'package:pili_aurora/pages/later/controller.dart' show BaseLaterController;

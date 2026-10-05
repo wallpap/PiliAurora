@@ -3,7 +3,7 @@ import 'package:pili_aurora/http/user.dart';
 import 'package:pili_aurora/http/video.dart';
 import 'package:pili_aurora/models/home/rcmd/result.dart';
 import 'package:pili_aurora/models/model_video.dart';
-import 'package:pili_aurora/models_new/space/space_archive/item.dart';
+import 'package:pili_aurora/models/remote/space/space_archive/item.dart';
 import 'package:pili_aurora/pages/mine/controller.dart';
 import 'package:pili_aurora/pages/search/widgets/search_text.dart';
 import 'package:pili_aurora/pages/video/ai_conclusion/view.dart';

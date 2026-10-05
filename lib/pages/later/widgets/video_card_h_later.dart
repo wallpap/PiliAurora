@@ -8,7 +8,7 @@ import 'package:pili_aurora/common/widgets/stat/stat.dart';
 import 'package:pili_aurora/http/search.dart';
 import 'package:pili_aurora/models/common/badge_type.dart';
 import 'package:pili_aurora/models/common/stat_type.dart';
-import 'package:pili_aurora/models_new/later/list.dart';
+import 'package:pili_aurora/models/remote/later/list.dart';
 import 'package:pili_aurora/pages/later/controller.dart';
 import 'package:pili_aurora/utils/duration_utils.dart';
 import 'package:pili_aurora/utils/page_utils.dart';

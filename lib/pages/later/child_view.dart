@@ -3,7 +3,7 @@ import 'package:pili_aurora/common/widgets/loading_widget/http_error.dart';
 import 'package:pili_aurora/http/loading_state.dart';
 import 'package:pili_aurora/models/common/later_view_type.dart';
 import 'package:pili_aurora/models/common/video/source_type.dart';
-import 'package:pili_aurora/models_new/later/list.dart';
+import 'package:pili_aurora/models/remote/later/list.dart';
 import 'package:pili_aurora/pages/later/base_controller.dart';
 import 'package:pili_aurora/pages/later/controller.dart';
 import 'package:pili_aurora/pages/later/widgets/video_card_h_later.dart';

@@ -5,7 +5,7 @@ import 'package:pili_aurora/common/widgets/dialog/dialog.dart';
 import 'package:pili_aurora/common/widgets/flutter/refresh_indicator.dart';
 import 'package:pili_aurora/common/widgets/loading_widget/http_error.dart';
 import 'package:pili_aurora/http/loading_state.dart';
-import 'package:pili_aurora/models_new/fav/fav_pgc/list.dart';
+import 'package:pili_aurora/models/remote/fav/fav_pgc/list.dart';
 import 'package:pili_aurora/pages/fav/pgc/controller.dart';
 import 'package:pili_aurora/pages/fav/pgc/pgc_layout.dart';
 import 'package:pili_aurora/pages/fav/pgc/widget/item.dart';

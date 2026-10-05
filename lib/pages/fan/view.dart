@@ -1,5 +1,5 @@
 import 'package:pili_aurora/common/widgets/dialog/dialog.dart';
-import 'package:pili_aurora/models_new/follow/list.dart';
+import 'package:pili_aurora/models/remote/follow/list.dart';
 import 'package:pili_aurora/pages/fan/controller.dart';
 import 'package:pili_aurora/pages/follow_type/view.dart';
 import 'package:pili_aurora/pages/follow_type/widgets/item.dart';

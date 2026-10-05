@@ -2,7 +2,7 @@ import 'dart:async';
 import 'dart:math';
 
 import 'package:pili_aurora/common/assets.dart';
-import 'package:pili_aurora/models_new/video/video_detail/page.dart';
+import 'package:pili_aurora/models/remote/video/video_detail/page.dart';
 import 'package:pili_aurora/pages/video/controller.dart';
 import 'package:pili_aurora/pages/video/introduction/ugc/controller.dart';
 import 'package:pili_aurora/utils/extension/num_ext.dart';

@@ -1,7 +1,7 @@
 import 'package:pili_aurora/http/loading_state.dart';
 import 'package:pili_aurora/http/video.dart';
-import 'package:pili_aurora/models_new/video/video_note_list/data.dart';
-import 'package:pili_aurora/models_new/video/video_note_list/list.dart';
+import 'package:pili_aurora/models/remote/video/video_note_list/data.dart';
+import 'package:pili_aurora/models/remote/video/video_note_list/list.dart';
 import 'package:pili_aurora/pages/common/common_list_controller.dart';
 import 'package:get/get.dart';
 

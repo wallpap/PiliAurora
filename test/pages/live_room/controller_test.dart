@@ -1,5 +1,5 @@
 import 'package:pili_aurora/models/common/super_chat_type.dart';
-import 'package:pili_aurora/models_new/live/live_danmaku/danmaku_msg.dart';
+import 'package:pili_aurora/models/remote/live/live_danmaku/danmaku_msg.dart';
 import 'package:pili_aurora/pages/danmaku/danmaku_model.dart';
 import 'package:pili_aurora/pages/live_room/controller.dart';
 import 'package:pili_aurora/pages/live_room/widgets/chat_panel.dart';

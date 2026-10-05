@@ -1,10 +1,10 @@
 import 'package:pili_aurora/http/init.dart';
 import 'package:pili_aurora/http/search.dart';
+import 'package:pili_aurora/services/logger.dart';
 import 'package:pili_aurora/utils/accounts/account.dart';
 import 'package:pili_aurora/utils/id_utils.dart';
 import 'package:pili_aurora/utils/page_utils.dart';
 import 'package:dio/dio.dart';
-import 'package:flutter/foundation.dart' show kDebugMode, debugPrint;
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 
 abstract final class UrlUtils {
@@ -26,11 +26,19 @@ abstract final class UrlUtils {
         ),
       );
       redirectUrl = response.headers['location']?.firstOrNull;
-      if (kDebugMode) debugPrint('redirectUrl: $redirectUrl');
+      logger.d('redirectUrl: $redirectUrl');
       if (redirectUrl != null && !redirectUrl.startsWith('http')) {
         redirectUrl = Uri.parse(url).resolve(redirectUrl).toString();
       }
-    } catch (_) {}
+    } catch (error, stackTrace) {
+      final uri = Uri.tryParse(url);
+      final host = uri?.host;
+      logger.w(
+        '解析重定向失败: ${host == null || host.isEmpty ? '<invalid url>' : host}',
+        error: error,
+        stackTrace: stackTrace,
+      );
+    }
     if (returnOri && redirectUrl == null) redirectUrl = url;
     if (redirectUrl != null && redirectUrl.endsWith('/')) {
       redirectUrl = redirectUrl.substring(0, redirectUrl.length - 1);

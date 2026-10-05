@@ -1,9 +1,9 @@
 import 'package:pili_aurora/models/common/video/cdn_type.dart';
+import 'package:pili_aurora/services/logger.dart';
 import 'package:pili_aurora/models/common/video/video_decode_type.dart';
-import 'package:pili_aurora/models_new/live/live_room_play_info/codec.dart';
+import 'package:pili_aurora/models/remote/live/live_room_play_info/codec.dart';
 import 'package:pili_aurora/utils/extension/iterable_ext.dart';
 import 'package:pili_aurora/utils/storage_pref.dart';
-import 'package:flutter/foundation.dart' show kDebugMode, debugPrint;
 
 abstract final class VideoUtils {
   static CDNService cdnService = Pref.defaultCDNService;
@@ -72,9 +72,7 @@ abstract final class VideoUtils {
             .toString();
       }
 
-      if (kDebugMode) {
-        debugPrint('unknown cdn type: $url');
-      }
+      logger.w('unknown cdn type: $url');
     }
 
     return mcdnUpgcxcode == null

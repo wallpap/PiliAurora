@@ -1,9 +1,9 @@
 import 'package:pili_aurora/http/dynamics.dart';
 import 'package:pili_aurora/http/loading_state.dart';
 import 'package:pili_aurora/models/model_owner.dart';
-import 'package:pili_aurora/models_new/article/article_list/article.dart';
-import 'package:pili_aurora/models_new/article/article_list/data.dart';
-import 'package:pili_aurora/models_new/article/article_list/list.dart';
+import 'package:pili_aurora/models/remote/article/article_list/article.dart';
+import 'package:pili_aurora/models/remote/article/article_list/data.dart';
+import 'package:pili_aurora/models/remote/article/article_list/list.dart';
 import 'package:pili_aurora/pages/common/common_list_controller.dart';
 import 'package:get/get.dart';
 

@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:math';
 
 import 'package:pili_aurora/common/widgets/button/icon_button.dart';
+import 'package:pili_aurora/services/logger.dart';
 import 'package:pili_aurora/common/widgets/loading_widget/loading_widget.dart';
 import 'package:pili_aurora/common/widgets/pair.dart';
 import 'package:pili_aurora/common/widgets/scaffold/simple_scaffold.dart';
@@ -18,7 +19,6 @@ import 'package:pili_aurora/plugin/pl_player/controller.dart';
 import 'package:pili_aurora/utils/duration_utils.dart';
 import 'package:pili_aurora/utils/extension/context_ext.dart';
 import 'package:pili_aurora/utils/platform_utils.dart';
-import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/services.dart' show FilteringTextInputFormatter;
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:get/get.dart';
@@ -217,7 +217,7 @@ class PostPanel extends CommonSlidePage {
                       (context as Element).markNeedsBuild();
                     }
                   } catch (e) {
-                    if (kDebugMode) debugPrint(e.toString());
+                    logger.d(e.toString());
                   }
                 }
               },

@@ -2,7 +2,9 @@ import 'dart:async';
 import 'dart:math';
 
 import 'package:pili_aurora/common/widgets/button/icon_button.dart';
-import 'package:pili_aurora/common/widgets/scroll_physics.dart' show ReloadMixin;
+import 'package:pili_aurora/services/logger.dart';
+import 'package:pili_aurora/common/widgets/scroll_physics.dart'
+    show ReloadMixin;
 import 'package:pili_aurora/http/api.dart';
 import 'package:pili_aurora/http/constants.dart';
 import 'package:pili_aurora/http/init.dart';
@@ -12,16 +14,16 @@ import 'package:pili_aurora/http/search.dart';
 import 'package:pili_aurora/http/user.dart';
 import 'package:pili_aurora/http/video.dart';
 import 'package:pili_aurora/models/common/video/source_type.dart';
-import 'package:pili_aurora/models_new/member_card_info/data.dart';
-import 'package:pili_aurora/models_new/relation/data.dart';
-import 'package:pili_aurora/models_new/video/video_ai_conclusion/model_result.dart';
-import 'package:pili_aurora/models_new/video/video_detail/dimension.dart';
-import 'package:pili_aurora/models_new/video/video_detail/episode.dart';
-import 'package:pili_aurora/models_new/video/video_detail/page.dart';
-import 'package:pili_aurora/models_new/video/video_detail/section.dart';
-import 'package:pili_aurora/models_new/video/video_detail/staff.dart';
-import 'package:pili_aurora/models_new/video/video_detail/stat_detail.dart';
-import 'package:pili_aurora/models_new/video/video_detail/ugc_season.dart';
+import 'package:pili_aurora/models/remote/member_card_info/data.dart';
+import 'package:pili_aurora/models/remote/relation/data.dart';
+import 'package:pili_aurora/models/remote/video/video_ai_conclusion/model_result.dart';
+import 'package:pili_aurora/models/remote/video/video_detail/dimension.dart';
+import 'package:pili_aurora/models/remote/video/video_detail/episode.dart';
+import 'package:pili_aurora/models/remote/video/video_detail/page.dart';
+import 'package:pili_aurora/models/remote/video/video_detail/section.dart';
+import 'package:pili_aurora/models/remote/video/video_detail/staff.dart';
+import 'package:pili_aurora/models/remote/video/video_detail/stat_detail.dart';
+import 'package:pili_aurora/models/remote/video/video_detail/ugc_season.dart';
 import 'package:pili_aurora/pages/common/common_intro_controller.dart';
 import 'package:pili_aurora/pages/dynamics_repost/view.dart';
 import 'package:pili_aurora/pages/video/related/controller.dart';
@@ -42,7 +44,6 @@ import 'package:pili_aurora/utils/request_utils.dart';
 import 'package:pili_aurora/utils/share_utils.dart';
 import 'package:pili_aurora/utils/storage_pref.dart';
 import 'package:pili_aurora/utils/utils.dart';
-import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:get/get.dart';
 import 'package:material_ui/material_ui.dart';
@@ -554,7 +555,7 @@ class UgcIntroController extends CommonIntroController with ReloadMixin {
       queryOnlineTotal();
       return true;
     } catch (e) {
-      if (kDebugMode) debugPrint('ugc onChangeEpisode: $e');
+      logger.d('ugc onChangeEpisode: $e');
       return false;
     }
   }

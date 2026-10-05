@@ -6,7 +6,7 @@ import 'package:pili_aurora/common/widgets/loading_widget/http_error.dart';
 import 'package:pili_aurora/common/widgets/scaffold/mini_scaffold.dart';
 import 'package:pili_aurora/http/loading_state.dart';
 import 'package:pili_aurora/models/common/image_type.dart';
-import 'package:pili_aurora/models_new/video/video_note_list/list.dart';
+import 'package:pili_aurora/models/remote/video/video_note_list/list.dart';
 import 'package:pili_aurora/pages/common/slide/common_slide_page.dart';
 import 'package:pili_aurora/pages/video/note/controller.dart';
 import 'package:pili_aurora/pages/webview/view.dart';

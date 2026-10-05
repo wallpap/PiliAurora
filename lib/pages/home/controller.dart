@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:math';
 
 import 'package:pili_aurora/http/api.dart';
+import 'package:pili_aurora/services/logger.dart';
 import 'package:pili_aurora/http/init.dart';
 import 'package:pili_aurora/models/common/home_tab_type.dart';
 import 'package:pili_aurora/pages/common/common_controller.dart';
@@ -11,7 +12,6 @@ import 'package:pili_aurora/utils/storage.dart';
 import 'package:pili_aurora/utils/storage_key.dart';
 import 'package:pili_aurora/utils/storage_pref.dart';
 import 'package:pili_aurora/utils/wbi_sign.dart';
-import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:get/get.dart';
 import 'package:material_ui/material_ui.dart';
 
@@ -60,7 +60,7 @@ class HomeController extends GetxController
   @override
   Future<void> onRefresh() {
     return controller.onRefresh().catchError((e) {
-      if (kDebugMode) debugPrint(e.toString());
+      logger.d(e.toString());
     });
   }
 
