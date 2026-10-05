@@ -6,6 +6,7 @@ import android.app.PendingIntent;
 import android.app.PictureInPictureParams;
 import android.app.RemoteAction;
 import android.app.SearchManager;
+import android.content.ActivityNotFoundException;
 import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
@@ -28,6 +29,7 @@ import android.provider.MediaStore;
 import android.provider.Settings;
 import android.util.Rational;
 import android.view.WindowManager;
+import android.widget.Toast;
 
 import androidx.annotation.DrawableRes;
 import androidx.annotation.Keep;
@@ -99,7 +101,14 @@ public final class AndroidHelper {
         ArrayList<String> cookiesList = new ArrayList<>(1);
         cookiesList.add(cookie);
         intent.putStringArrayListExtra("cookies", cookiesList);
-        getContext().startActivity(intent);
+        Context context = getContext();
+        // Android 的包可见性过滤可能令 resolveActivity 返回空，即使目标可以启动。
+        // 直接尝试启动并处理可选扩展缺失，不新增包查询权限，也不静默吞掉失败。
+        try {
+            context.startActivity(intent);
+        } catch (ActivityNotFoundException | SecurityException unavailable) {
+            Toast.makeText(context, "无法启动哔哩发评反诈，请检查是否已安装兼容版本", Toast.LENGTH_LONG).show();
+        }
     }
 
     public static void openLinkVerifySettings() {
