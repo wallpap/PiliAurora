@@ -106,7 +106,7 @@ public final class AndroidHelper {
         // 直接尝试启动并处理可选扩展缺失，不新增包查询权限，也不静默吞掉失败。
         try {
             context.startActivity(intent);
-        } catch (ActivityNotFoundException | SecurityException unavailable) {
+        } catch (ActivityNotFoundException | SecurityException _) {
             Toast.makeText(context, "无法启动哔哩发评反诈，请检查是否已安装兼容版本", Toast.LENGTH_LONG).show();
         }
     }
@@ -127,7 +127,7 @@ public final class AndroidHelper {
             }
             intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
             context.startActivity(intent);
-        } catch (Exception ignored) {
+        } catch (Exception _) {
             Intent intent = new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, uri);
             intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
             context.startActivity(intent);
@@ -155,7 +155,7 @@ public final class AndroidHelper {
                 context.startActivity(intent);
                 return true;
             }
-        } catch (Exception ignored) {
+        } catch (Exception _) {
         }
 
         try {
@@ -164,7 +164,7 @@ public final class AndroidHelper {
                 context.startActivity(intent);
                 return true;
             }
-        } catch (Exception ignored) {
+        } catch (Exception _) {
         }
 
         return false;
@@ -251,7 +251,7 @@ public final class AndroidHelper {
                 wm.getDefaultDisplay().getRealSize(realSize);
                 return new int[]{Math.round(realSize.x / density), Math.round(realSize.y / density)};
             }
-        } catch (Exception ignored) {
+        } catch (Exception _) {
             return null;
         }
     }
@@ -279,23 +279,22 @@ public final class AndroidHelper {
 
     @SuppressLint("BlockedPrivateApi")
     public static String[] fontFamilies() {
-        Map<String, Typeface> systemFontMap = null;
+        Map<?, ?> systemFontMap = null;
         try {
             Method method = Typeface.class.getDeclaredMethod("getSystemFontMap");
             method.setAccessible(true);
-            systemFontMap = (Map<String, Typeface>) method.invoke(null);
-        } catch (Exception ignored) {
+            systemFontMap = (Map<?, ?>) method.invoke(null);
+        } catch (Exception _) {
             try {
                 @SuppressLint("DiscouragedPrivateApi") Field field = Typeface.class.getDeclaredField("sSystemFontMap");
                 field.setAccessible(true);
-                systemFontMap = (Map<String, Typeface>) field.get(null);
-            } catch (Exception ignored0) {
+                systemFontMap = (Map<?, ?>) field.get(null);
+            } catch (Exception _) {
             }
         }
-        if (null != systemFontMap) {
-            return systemFontMap.keySet().toArray(new String[0]);
-        }
-        return null;
+        return systemFontMap == null
+                ? null
+                : systemFontMap.keySet().toArray(new String[0]);
     }
 
     public static void updateDocProvider(boolean enabled) {
@@ -315,12 +314,13 @@ public final class AndroidHelper {
             DomainVerificationUserState userState =
                     manager.getDomainVerificationUserState(context.getPackageName());
             if (userState == null) return false;
-            Map<String, Integer> hostToStateMap = userState.getHostToStateMap();
-            Integer stateValue = hostToStateMap.get(domain);
-            if (stateValue == null) return false;
-            return stateValue == DomainVerificationUserState.DOMAIN_STATE_VERIFIED ||
-                    stateValue == DomainVerificationUserState.DOMAIN_STATE_SELECTED;
-        } catch (Exception ignored) {
+            return switch (userState.getHostToStateMap().get(domain)) {
+                case null -> false;
+                case DomainVerificationUserState.DOMAIN_STATE_VERIFIED,
+                     DomainVerificationUserState.DOMAIN_STATE_SELECTED -> true;
+                default -> false;
+            };
+        } catch (Exception _) {
         }
         return false;
     }
@@ -334,8 +334,9 @@ public final class AndroidHelper {
             Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
             intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
 
-            ArrayList<Intent> external = new ArrayList<>();
-            for (ResolveInfo info : pm.queryIntentActivities(intent, 0)) {
+            var candidates = pm.queryIntentActivities(intent, 0);
+            ArrayList<Intent> external = new ArrayList<>(candidates.size());
+            for (ResolveInfo info : candidates) {
                 String packageName = info.activityInfo.packageName;
                 if (!packageName.equals(pkg)) {
                     external.add(new Intent(intent).setComponent(new ComponentName(packageName, info.activityInfo.name)));
@@ -347,7 +348,7 @@ public final class AndroidHelper {
                 intent = external.get(0);
             } else {
                 intent = Intent.createChooser(external.remove(0), null);
-                intent.putExtra(Intent.EXTRA_INITIAL_INTENTS, external.toArray(new Intent[0]));
+                intent.putExtra(Intent.EXTRA_INITIAL_INTENTS, external.toArray(new Intent[external.size()]));
                 intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
             }
             context.startActivity(intent);
