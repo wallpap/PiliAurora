@@ -28,14 +28,17 @@ subprojects {
                 androidExtension.namespace = project.group.toString()
             }
 
-            androidExtension.compileOptions {
-                sourceCompatibility = JavaVersion.VERSION_17
-                targetCompatibility = JavaVersion.VERSION_17
-            }
+            // 应用使用 Java 25；第三方 Flutter 插件保留原有的 Java/Kotlin 17 目标。
+            if (project.path != ":app") {
+                androidExtension.compileOptions {
+                    sourceCompatibility = JavaVersion.VERSION_17
+                    targetCompatibility = JavaVersion.VERSION_17
+                }
 
-            project.tasks.withType<KotlinCompile>().configureEach {
-                compilerOptions {
-                    jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
+                project.tasks.withType<KotlinCompile>().configureEach {
+                    compilerOptions {
+                        jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
+                    }
                 }
             }
 

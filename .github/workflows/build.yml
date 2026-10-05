@@ -46,11 +46,12 @@ jobs:
               uses: actions/setup-java@v5
               with:
                   distribution: "zulu"
-                  java-version: "17"
+                  java-version: "25"
                   cache: "gradle"
                   cache-dependency-path: |
                       android/*.gradle*
                       android/**/gradle-wrapper.properties
+                      android/gradle/gradle-daemon-jvm.properties
 
             - name: Set up Flutter
               uses: subosito/flutter-action@v2
