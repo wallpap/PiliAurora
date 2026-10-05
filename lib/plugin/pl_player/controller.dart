@@ -28,6 +28,7 @@ import 'package:pili_aurora/plugin/pl_player/models/play_status.dart';
 import 'package:pili_aurora/plugin/pl_player/models/video_fit_type.dart';
 import 'package:pili_aurora/plugin/pl_player/utils/fullscreen.dart';
 import 'package:pili_aurora/plugin/pl_player/utils/decode_fallback.dart';
+import 'package:pili_aurora/plugin/pl_player/utils/android_decode_recovery.dart';
 import 'package:pili_aurora/plugin/pl_player/utils/hardware_video_configuration.dart';
 import 'package:pili_aurora/plugin/pl_player/utils/preview_image_cache.dart';
 import 'package:pili_aurora/services/service_locator.dart';
@@ -372,6 +373,7 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
   late int cacheAudioQa = Pref.defaultAudioQa;
   bool enableHeart = true;
   bool _av1DecodeErrorObserved = false;
+  AndroidDecodeRecovery? _androidDecodeRecovery;
 
   late final progressType = Pref.btmProgressBehavior;
   late final enableQuickDouble = Pref.enableQuickDouble;
@@ -616,6 +618,7 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
       _videoType = videoType ?? VideoType.ugc;
       this.width = width;
       this.height = height;
+      _androidDecodeRecovery?.reset();
       this.dataSource = dataSource;
       _av1DecodeErrorObserved = false;
       _autoPlay = autoplay;
@@ -781,6 +784,7 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
     Volume? volume,
   ) async {
     isBuffering.value = false;
+    _androidDecodeRecovery?.reset();
     _heartDuration = 0;
     _lastCoarsePositionBucket = null;
     danmakuController?.clear();
@@ -929,7 +933,32 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
       },
     );
     final stream = player.stream;
+    if (Platform.isAndroid) {
+      _androidDecodeRecovery = AndroidDecodeRecovery(
+        activeDecoder: () => player.disposed || player.current.isEmpty
+            ? null
+            : player.getProperty('hwdec-current'),
+        applyDecoder: (decoder) {
+          player.setProperty('hwdec', decoder);
+          Diagnostics.instance.log(
+            DiagnosticLogLevel.warning,
+            'player',
+            'Android video output recovery: hwdec=$decoder',
+          );
+        },
+        onError: Utils.reportError,
+      );
+    }
     _subscriptions = [
+      if (Platform.isAndroid)
+        stream.log.listen((event) {
+          _androidDecodeRecovery?.onLog(
+            prefix: event.prefix,
+            level: event.level,
+            message: event.text,
+          );
+        }),
+
       /// playing
       stream.playing.listen((bool playing) {
         if (playing) {
@@ -1078,6 +1107,8 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
 
   /// 移除事件监听
   void _removeListeners() {
+    _androidDecodeRecovery?.dispose();
+    _androidDecodeRecovery = null;
     _diagnostics?.dispose();
     _diagnostics = null;
     _subscriptions?.forEach((e) => e.cancel());
