@@ -4,7 +4,7 @@ import 'package:pili_aurora/common/widgets/scroll_physics.dart';
 import 'package:pili_aurora/common/widgets/view_safe_area.dart';
 import 'package:pili_aurora/http/loading_state.dart';
 import 'package:pili_aurora/models/common/member/contribute_type.dart';
-import 'package:pili_aurora/models_new/space/space_season_series/season.dart'
+import 'package:pili_aurora/models/remote/space/space_season_series/season.dart'
     show SpaceSsModel;
 import 'package:pili_aurora/pages/member_season_series/controller.dart';
 import 'package:pili_aurora/pages/member_season_series/widget/season_series_card.dart';

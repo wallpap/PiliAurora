@@ -9,7 +9,7 @@ import 'package:pili_aurora/grpc/bilibili/app/listener/v1.pbenum.dart'
     show PlaylistSource;
 import 'package:pili_aurora/models/common/badge_type.dart';
 import 'package:pili_aurora/models/common/stat_type.dart';
-import 'package:pili_aurora/models_new/fav/fav_detail/media.dart';
+import 'package:pili_aurora/models/remote/fav/fav_detail/media.dart';
 import 'package:pili_aurora/pages/audio/view.dart';
 import 'package:pili_aurora/pages/fav_detail/controller.dart';
 import 'package:pili_aurora/utils/date_utils.dart';

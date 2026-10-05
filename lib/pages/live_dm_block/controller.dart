@@ -1,6 +1,6 @@
 import 'package:pili_aurora/http/live.dart';
 import 'package:pili_aurora/http/loading_state.dart';
-import 'package:pili_aurora/models_new/live/live_dm_block/shield_user_list.dart';
+import 'package:pili_aurora/models/remote/live/live_dm_block/shield_user_list.dart';
 import 'package:pili_aurora/pages/live_room/controller.dart';
 import 'package:get/get.dart';
 import 'package:material_ui/material_ui.dart';

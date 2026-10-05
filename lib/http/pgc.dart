@@ -2,12 +2,12 @@ import 'package:pili_aurora/http/api.dart';
 import 'package:pili_aurora/http/init.dart';
 import 'package:pili_aurora/http/loading_state.dart';
 import 'package:pili_aurora/models/common/pgc_review_type.dart';
-import 'package:pili_aurora/models_new/pgc/pgc_index_condition/data.dart';
-import 'package:pili_aurora/models_new/pgc/pgc_index_result/data.dart';
-import 'package:pili_aurora/models_new/pgc/pgc_index_result/list.dart';
-import 'package:pili_aurora/models_new/pgc/pgc_review/data.dart';
-import 'package:pili_aurora/models_new/pgc/pgc_timeline/pgc_timeline.dart';
-import 'package:pili_aurora/models_new/pgc/pgc_timeline/result.dart';
+import 'package:pili_aurora/models/remote/pgc/pgc_index_condition/data.dart';
+import 'package:pili_aurora/models/remote/pgc/pgc_index_result/data.dart';
+import 'package:pili_aurora/models/remote/pgc/pgc_index_result/list.dart';
+import 'package:pili_aurora/models/remote/pgc/pgc_review/data.dart';
+import 'package:pili_aurora/models/remote/pgc/pgc_timeline/pgc_timeline.dart';
+import 'package:pili_aurora/models/remote/pgc/pgc_timeline/result.dart';
 import 'package:pili_aurora/utils/accounts.dart';
 import 'package:dio/dio.dart';
 

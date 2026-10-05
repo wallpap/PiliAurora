@@ -15,7 +15,7 @@ import 'package:pili_aurora/http/loading_state.dart';
 import 'package:pili_aurora/http/music.dart';
 import 'package:pili_aurora/models/common/image_preview_type.dart';
 import 'package:pili_aurora/models/common/image_type.dart';
-import 'package:pili_aurora/models_new/music/bgm_detail.dart';
+import 'package:pili_aurora/models/remote/music/bgm_detail.dart';
 import 'package:pili_aurora/pages/common/dyn/common_dyn_page.dart';
 import 'package:pili_aurora/pages/music/controller.dart';
 import 'package:pili_aurora/pages/music/video/view.dart';

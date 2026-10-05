@@ -1,5 +1,5 @@
 import 'package:pili_aurora/utils/extension/num_ext.dart';
-import 'package:flutter/foundation.dart' show kDebugMode, debugPrint;
+import 'package:pili_aurora/services/logger.dart';
 
 abstract final class NumUtils {
   static final _numRegExp = RegExp(r'([\d\.]+)([千万亿])?');
@@ -25,7 +25,7 @@ abstract final class NumUtils {
       number *= _getUnit(match.group(2));
       return number.toInt();
     } catch (e) {
-      if (kDebugMode) debugPrint('parse failed: "$numberStr" : $e');
+      logger.d('parse failed: "$numberStr" : $e');
       return 0;
     }
   }

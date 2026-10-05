@@ -1,6 +1,6 @@
 import 'package:pili_aurora/common/widgets/loading_widget/loading_widget.dart';
 import 'package:pili_aurora/http/loading_state.dart';
-import 'package:pili_aurora/models_new/fav/fav_folder/list.dart';
+import 'package:pili_aurora/models/remote/fav/fav_folder/list.dart';
 import 'package:pili_aurora/pages/common/common_intro_controller.dart';
 import 'package:pili_aurora/utils/bili_utils.dart';
 import 'package:pili_aurora/utils/feed_back.dart';

@@ -11,7 +11,7 @@ import 'package:pili_aurora/common/widgets/select_mask.dart';
 import 'package:pili_aurora/models/common/badge_type.dart';
 import 'package:pili_aurora/models/common/video/source_type.dart';
 import 'package:pili_aurora/models/common/video/video_quality.dart';
-import 'package:pili_aurora/models_new/download/bili_download_entry_info.dart';
+import 'package:pili_aurora/models/remote/download/bili_download_entry_info.dart';
 import 'package:pili_aurora/pages/common/multi_select/base.dart';
 import 'package:pili_aurora/pages/download/downloading/view.dart';
 import 'package:pili_aurora/services/download/download_service.dart';

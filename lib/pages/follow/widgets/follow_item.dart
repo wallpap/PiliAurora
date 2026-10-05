@@ -1,5 +1,5 @@
 import 'package:pili_aurora/common/widgets/pendant_avatar.dart';
-import 'package:pili_aurora/models_new/follow/list.dart';
+import 'package:pili_aurora/models/remote/follow/list.dart';
 import 'package:pili_aurora/pages/share/view.dart' show UserModel;
 import 'package:pili_aurora/utils/feed_back.dart';
 import 'package:pili_aurora/utils/request_utils.dart';

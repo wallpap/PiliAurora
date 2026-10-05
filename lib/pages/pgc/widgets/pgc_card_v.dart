@@ -3,7 +3,7 @@ import 'package:pili_aurora/common/widgets/badge.dart';
 import 'package:pili_aurora/common/widgets/image/image_save.dart';
 import 'package:pili_aurora/common/widgets/image/network_img_layer.dart';
 import 'package:pili_aurora/models/common/badge_type.dart';
-import 'package:pili_aurora/models_new/fav/fav_pgc/list.dart';
+import 'package:pili_aurora/models/remote/fav/fav_pgc/list.dart';
 import 'package:pili_aurora/utils/page_utils.dart';
 import 'package:pili_aurora/utils/platform_utils.dart';
 import 'package:material_ui/material_ui.dart';

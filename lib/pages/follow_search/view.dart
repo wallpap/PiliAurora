@@ -1,5 +1,5 @@
-import 'package:pili_aurora/models_new/follow/data.dart';
-import 'package:pili_aurora/models_new/follow/list.dart';
+import 'package:pili_aurora/models/remote/follow/data.dart';
+import 'package:pili_aurora/models/remote/follow/list.dart';
 import 'package:pili_aurora/pages/common/search/common_search_page.dart';
 import 'package:pili_aurora/pages/follow/widgets/follow_item.dart';
 import 'package:pili_aurora/pages/follow_search/controller.dart';

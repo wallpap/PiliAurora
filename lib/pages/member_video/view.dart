@@ -1,4 +1,5 @@
 import 'package:pili_aurora/common/style.dart';
+import 'package:pili_aurora/services/logger.dart';
 import 'package:pili_aurora/common/widgets/flutter/refresh_indicator.dart';
 import 'package:pili_aurora/common/widgets/loading_widget/http_error.dart';
 import 'package:pili_aurora/common/widgets/scaffold/simple_scaffold.dart';
@@ -7,13 +8,12 @@ import 'package:pili_aurora/common/widgets/scroll_physics.dart'
 import 'package:pili_aurora/common/widgets/sliver/sliver_floating_header.dart';
 import 'package:pili_aurora/http/loading_state.dart';
 import 'package:pili_aurora/models/common/member/contribute_type.dart';
-import 'package:pili_aurora/models_new/space/space_archive/item.dart';
+import 'package:pili_aurora/models/remote/space/space_archive/item.dart';
 import 'package:pili_aurora/pages/common/fab_mixin.dart';
 import 'package:pili_aurora/pages/member/controller.dart';
 import 'package:pili_aurora/pages/member_video/controller.dart';
 import 'package:pili_aurora/pages/member_video/widgets/video_card_h_member_video.dart';
 import 'package:pili_aurora/utils/grid.dart';
-import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:get/get.dart';
 import 'package:material_ui/material_ui.dart';
 
@@ -65,7 +65,7 @@ class _MemberVideoState extends State<MemberVideo>
         state.innerNestedPositions.first.localJumpTo(scrollOffset);
       }
     } catch (e) {
-      if (kDebugMode) debugPrint('jump error: $e');
+      logger.d('jump error: $e');
     }
   }
 

@@ -2,7 +2,7 @@ import 'package:pili_aurora/common/style.dart';
 import 'package:pili_aurora/common/widgets/badge.dart';
 import 'package:pili_aurora/common/widgets/image/image_save.dart';
 import 'package:pili_aurora/common/widgets/image/network_img_layer.dart';
-import 'package:pili_aurora/models_new/space/space_season_series/season.dart';
+import 'package:pili_aurora/models/remote/space/space_season_series/season.dart';
 import 'package:pili_aurora/utils/date_utils.dart';
 import 'package:pili_aurora/utils/platform_utils.dart';
 import 'package:material_ui/material_ui.dart';

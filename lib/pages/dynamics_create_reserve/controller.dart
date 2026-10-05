@@ -1,6 +1,6 @@
 import 'package:pili_aurora/http/dynamics.dart';
 import 'package:pili_aurora/http/loading_state.dart';
-import 'package:pili_aurora/models_new/dynamic/dyn_reserve_info/data.dart';
+import 'package:pili_aurora/models/remote/dynamic/dyn_reserve_info/data.dart';
 import 'package:pili_aurora/utils/utils.dart';
 import 'package:get/get.dart';
 

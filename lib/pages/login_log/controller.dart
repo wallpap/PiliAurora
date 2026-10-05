@@ -1,7 +1,7 @@
 import 'package:pili_aurora/http/loading_state.dart';
 import 'package:pili_aurora/http/user.dart';
-import 'package:pili_aurora/models_new/login_log/data.dart';
-import 'package:pili_aurora/models_new/login_log/list.dart';
+import 'package:pili_aurora/models/remote/login_log/data.dart';
+import 'package:pili_aurora/models/remote/login_log/list.dart';
 import 'package:pili_aurora/pages/log_table/controller.dart';
 
 class LoginLogController extends LogController<LoginLogData, LoginLogItem> {

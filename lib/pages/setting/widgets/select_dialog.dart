@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:pili_aurora/http/browser_ua.dart';
+import 'package:pili_aurora/services/logger.dart';
 import 'package:pili_aurora/http/constants.dart';
 import 'package:pili_aurora/http/video.dart';
 import 'package:pili_aurora/models/common/video/cdn_type.dart';
@@ -10,7 +11,6 @@ import 'package:pili_aurora/models/video/play/url.dart';
 import 'package:pili_aurora/utils/storage_pref.dart';
 import 'package:pili_aurora/utils/video_utils.dart';
 import 'package:dio/dio.dart';
-import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:material_ui/material_ui.dart';
 
 class SelectDialog<T> extends StatelessWidget {
@@ -146,7 +146,7 @@ class _CdnSelectDialogState extends State<CdnSelectDialog> {
       final videoItem = widget.sample ?? await _getSampleUrl();
       await _testAllCdnServices(videoItem);
     } catch (e) {
-      if (kDebugMode) debugPrint('CDN speed test failed: $e');
+      logger.d('CDN speed test failed: $e');
     }
   }
 
@@ -224,7 +224,7 @@ class _CdnSelectDialogState extends State<CdnSelectDialog> {
     final item = _cdnResList[index];
     if (item.value != null) return;
 
-    if (kDebugMode) debugPrint('CDN speed test error: $error');
+    logger.d('CDN speed test error: $error');
     if (!mounted) return;
     String message;
     if (error is DioException) {

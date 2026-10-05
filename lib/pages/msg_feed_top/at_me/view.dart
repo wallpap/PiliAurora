@@ -10,7 +10,7 @@ import 'package:pili_aurora/grpc/bilibili/app/im/v1.pbenum.dart'
     show IMSettingType;
 import 'package:pili_aurora/http/loading_state.dart';
 import 'package:pili_aurora/models/common/image_type.dart';
-import 'package:pili_aurora/models_new/msg/msg_at/item.dart';
+import 'package:pili_aurora/models/remote/msg/msg_at/item.dart';
 import 'package:pili_aurora/pages/msg_feed_top/at_me/controller.dart';
 import 'package:pili_aurora/pages/whisper_settings/view.dart';
 import 'package:pili_aurora/utils/app_scheme.dart';

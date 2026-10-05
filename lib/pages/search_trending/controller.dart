@@ -1,7 +1,7 @@
 import 'package:pili_aurora/http/loading_state.dart';
 import 'package:pili_aurora/http/search.dart';
-import 'package:pili_aurora/models_new/search/search_trending/data.dart';
-import 'package:pili_aurora/models_new/search/search_trending/list.dart';
+import 'package:pili_aurora/models/remote/search/search_trending/data.dart';
+import 'package:pili_aurora/models/remote/search/search_trending/list.dart';
 import 'package:pili_aurora/pages/common/common_list_controller.dart';
 
 class SearchTrendingController

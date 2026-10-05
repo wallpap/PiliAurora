@@ -7,8 +7,8 @@ import 'package:pili_aurora/common/widgets/scroll_physics.dart'
     show tabBarView, platformClampingPhysics;
 import 'package:pili_aurora/http/loading_state.dart';
 import 'package:pili_aurora/models/common/image_type.dart';
-import 'package:pili_aurora/models_new/live/live_emote/datum.dart';
-import 'package:pili_aurora/models_new/live/live_emote/emoticon.dart';
+import 'package:pili_aurora/models/remote/live/live_emote/datum.dart';
+import 'package:pili_aurora/models/remote/live/live_emote/emoticon.dart';
 import 'package:pili_aurora/pages/live_emote/controller.dart';
 import 'package:get/get.dart';
 import 'package:material_ui/material_ui.dart';

@@ -1,6 +1,6 @@
 import 'package:pili_aurora/common/widgets/image/network_img_layer.dart';
 import 'package:pili_aurora/models/common/image_type.dart';
-import 'package:pili_aurora/models_new/follow/list.dart';
+import 'package:pili_aurora/models/remote/follow/list.dart';
 import 'package:get/get.dart';
 import 'package:material_ui/material_ui.dart';
 

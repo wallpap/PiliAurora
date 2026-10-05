@@ -5,7 +5,7 @@ import 'package:pili_aurora/common/widgets/flutter/refresh_indicator.dart';
 import 'package:pili_aurora/common/widgets/loading_widget/http_error.dart';
 import 'package:pili_aurora/common/widgets/scaffold/simple_scaffold.dart';
 import 'package:pili_aurora/http/loading_state.dart';
-import 'package:pili_aurora/models_new/member/coin_like_arc/item.dart';
+import 'package:pili_aurora/models/remote/member/coin_like_arc/item.dart';
 import 'package:pili_aurora/pages/member_coin_arc/widgets/item.dart';
 import 'package:pili_aurora/pages/member_like_arc/controller.dart';
 import 'package:pili_aurora/utils/accounts.dart';

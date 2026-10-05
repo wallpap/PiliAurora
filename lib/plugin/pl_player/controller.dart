@@ -14,7 +14,7 @@ import 'package:pili_aurora/models/common/super_resolution_type.dart';
 import 'package:pili_aurora/models/common/video/video_type.dart';
 import 'package:pili_aurora/models/user/danmaku_rule.dart';
 import 'package:pili_aurora/models/video/play/url.dart';
-import 'package:pili_aurora/models_new/video/video_shot/data.dart';
+import 'package:pili_aurora/models/remote/video/video_shot/data.dart';
 import 'package:pili_aurora/pages/danmaku/danmaku_model.dart';
 import 'package:pili_aurora/pages/sponsor_block/block_mixin.dart';
 import 'package:pili_aurora/plugin/pl_player/models/data_source.dart';
@@ -28,11 +28,13 @@ import 'package:pili_aurora/plugin/pl_player/models/play_status.dart';
 import 'package:pili_aurora/plugin/pl_player/models/video_fit_type.dart';
 import 'package:pili_aurora/plugin/pl_player/utils/fullscreen.dart';
 import 'package:pili_aurora/plugin/pl_player/utils/decode_fallback.dart';
+import 'package:pili_aurora/plugin/pl_player/utils/android_decode_recovery.dart';
 import 'package:pili_aurora/plugin/pl_player/utils/hardware_video_configuration.dart';
 import 'package:pili_aurora/plugin/pl_player/utils/preview_image_cache.dart';
 import 'package:pili_aurora/services/service_locator.dart';
 import 'package:pili_aurora/services/diagnostics/diagnostics.dart';
 import 'package:pili_aurora/services/diagnostics/player_diagnostics.dart';
+import 'package:pili_aurora/services/logger.dart';
 import 'package:pili_aurora/utils/accounts.dart';
 import 'package:pili_aurora/utils/android/android_helper.dart';
 import 'package:pili_aurora/utils/android/bindings.g.dart';
@@ -371,6 +373,7 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
   late int cacheAudioQa = Pref.defaultAudioQa;
   bool enableHeart = true;
   bool _av1DecodeErrorObserved = false;
+  AndroidDecodeRecovery? _androidDecodeRecovery;
 
   late final progressType = Pref.btmProgressBehavior;
   late final enableQuickDouble = Pref.enableQuickDouble;
@@ -615,6 +618,7 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
       _videoType = videoType ?? VideoType.ugc;
       this.width = width;
       this.height = height;
+      _androidDecodeRecovery?.reset();
       this.dataSource = dataSource;
       _av1DecodeErrorObserved = false;
       _autoPlay = autoplay;
@@ -780,6 +784,7 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
     Volume? volume,
   ) async {
     isBuffering.value = false;
+    _androidDecodeRecovery?.reset();
     _heartDuration = 0;
     _lastCoarsePositionBucket = null;
     danmakuController?.clear();
@@ -928,7 +933,32 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
       },
     );
     final stream = player.stream;
+    if (Platform.isAndroid) {
+      _androidDecodeRecovery = AndroidDecodeRecovery(
+        activeDecoder: () => player.disposed || player.current.isEmpty
+            ? null
+            : player.getProperty('hwdec-current'),
+        applyDecoder: (decoder) {
+          player.setProperty('hwdec', decoder);
+          Diagnostics.instance.log(
+            DiagnosticLogLevel.warning,
+            'player',
+            'Android video output recovery: hwdec=$decoder',
+          );
+        },
+        onError: Utils.reportError,
+      );
+    }
     _subscriptions = [
+      if (Platform.isAndroid)
+        stream.log.listen((event) {
+          _androidDecodeRecovery?.onLog(
+            prefix: event.prefix,
+            level: event.level,
+            message: event.text,
+          );
+        }),
+
       /// playing
       stream.playing.listen((bool playing) {
         if (playing) {
@@ -1077,6 +1107,8 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
 
   /// 移除事件监听
   void _removeListeners() {
+    _androidDecodeRecovery?.dispose();
+    _androidDecodeRecovery = null;
     _diagnostics?.dispose();
     _diagnostics = null;
     _subscriptions?.forEach((e) => e.cancel());
@@ -1100,7 +1132,7 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
     try {
       await _videoPlayerController?.seek(position);
     } catch (e) {
-      if (kDebugMode) debugPrint('seek failed: $e');
+      logger.d('seek failed: $e');
     }
   }
 
@@ -1148,7 +1180,13 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
           staticDuration: defaultStaticDuration / speed,
         );
         danmakuController!.updateOption(updatedOption);
-      } catch (_) {}
+      } catch (error, stackTrace) {
+        logger.w(
+          '同步弹幕播放速度失败: $lastPlaybackSpeed -> $speed',
+          error: error,
+          stackTrace: stackTrace,
+        );
+      }
     }
   }
 
@@ -1230,7 +1268,7 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
           await FlutterVolumeController.setVolume(volume);
         }
       } catch (err) {
-        if (kDebugMode) debugPrint(err.toString());
+        logger.d(err.toString());
       }
     }
     if (showIndicator) {
@@ -1638,9 +1676,7 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
     _lastCoarsePositionBucket = null;
     _stopWakeLockTimer();
     WakelockPlus.disable();
-    if (kDebugMode) {
-      debugPrint('dispose player');
-    }
+    logger.d('dispose player');
     _videoPlayerController?.dispose();
     _videoPlayerController = null;
     _videoController = null;

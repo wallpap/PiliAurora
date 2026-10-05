@@ -3,6 +3,7 @@ import 'dart:io' show Platform;
 import 'package:pili_aurora/common/widgets/route_aware_mixin.dart'
     show routeObserver;
 import 'package:pili_aurora/common/widgets/selection_text.dart';
+import 'package:pili_aurora/services/logger.dart';
 import 'package:pili_aurora/http/browser_ua.dart';
 import 'package:pili_aurora/main.dart' show webViewEnvironment;
 import 'package:pili_aurora/models/common/webview_menu_type.dart';
@@ -12,7 +13,6 @@ import 'package:pili_aurora/utils/extension/string_ext.dart';
 import 'package:pili_aurora/utils/login_utils.dart';
 import 'package:pili_aurora/utils/page_utils.dart';
 import 'package:pili_aurora/utils/utils.dart';
-import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:get/get.dart';
@@ -266,7 +266,7 @@ document.styleSheets[0].insertRule('#app__display-area > div.control-panel {disp
                                 suggestedFilename,
                               );
                             } catch (e) {
-                              if (kDebugMode) debugPrint(e.toString());
+                              logger.d(e.toString());
                             }
                             final url = request.url.toString();
                             return AlertDialog(

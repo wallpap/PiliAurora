@@ -4,7 +4,7 @@ import 'package:pili_aurora/common/constants.dart';
 import 'package:pili_aurora/http/api.dart';
 import 'package:pili_aurora/http/init.dart';
 import 'package:pili_aurora/http/loading_state.dart';
-import 'package:pili_aurora/models_new/login_devices/data.dart';
+import 'package:pili_aurora/models/remote/login_devices/data.dart';
 import 'package:pili_aurora/utils/accounts.dart';
 import 'package:pili_aurora/utils/accounts/account.dart';
 import 'package:pili_aurora/utils/app_sign.dart';

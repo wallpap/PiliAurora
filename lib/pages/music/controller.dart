@@ -1,6 +1,6 @@
 import 'package:pili_aurora/http/loading_state.dart';
 import 'package:pili_aurora/http/music.dart';
-import 'package:pili_aurora/models_new/music/bgm_detail.dart';
+import 'package:pili_aurora/models/remote/music/bgm_detail.dart';
 import 'package:pili_aurora/pages/common/dyn/common_dyn_controller.dart';
 import 'package:get/get.dart';
 

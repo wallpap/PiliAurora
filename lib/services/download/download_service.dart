@@ -6,14 +6,15 @@ import 'package:pili_aurora/grpc/dm.dart';
 import 'package:pili_aurora/http/download.dart';
 import 'package:pili_aurora/http/init.dart';
 import 'package:pili_aurora/models/common/video/video_quality.dart';
-import 'package:pili_aurora/models_new/download/bili_download_entry_info.dart';
-import 'package:pili_aurora/models_new/download/bili_download_media_file_info.dart';
-import 'package:pili_aurora/models_new/pgc/pgc_info_model/episode.dart' as pgc;
-import 'package:pili_aurora/models_new/pgc/pgc_info_model/result.dart';
-import 'package:pili_aurora/models_new/video/video_detail/data.dart';
-import 'package:pili_aurora/models_new/video/video_detail/episode.dart' as ugc;
-import 'package:pili_aurora/models_new/video/video_detail/page.dart';
+import 'package:pili_aurora/models/remote/download/bili_download_entry_info.dart';
+import 'package:pili_aurora/models/remote/download/bili_download_media_file_info.dart';
+import 'package:pili_aurora/models/remote/pgc/pgc_info_model/episode.dart' as pgc;
+import 'package:pili_aurora/models/remote/pgc/pgc_info_model/result.dart';
+import 'package:pili_aurora/models/remote/video/video_detail/data.dart';
+import 'package:pili_aurora/models/remote/video/video_detail/episode.dart' as ugc;
+import 'package:pili_aurora/models/remote/video/video_detail/page.dart';
 import 'package:pili_aurora/services/download/download_manager.dart';
+import 'package:pili_aurora/services/logger.dart';
 import 'package:pili_aurora/utils/cache_manager.dart';
 import 'package:pili_aurora/utils/danmaku_utils.dart';
 import 'package:pili_aurora/utils/extension/file_ext.dart';
@@ -100,7 +101,13 @@ class DownloadService extends GetxService {
             } else {
               waitDownloadQueue.add(entry..status = DownloadStatus.wait);
             }
-          } catch (_) {}
+          } catch (error, stackTrace) {
+            logger.w(
+              '忽略损坏的下载记录: ${entryFile.path}',
+              error: error,
+              stackTrace: stackTrace,
+            );
+          }
         }
       }
     }
@@ -439,9 +446,7 @@ class DownloadService extends GetxService {
       }
     } catch (e) {
       _updateCurStatus(DownloadStatus.failPlayUrl);
-      if (kDebugMode) {
-        debugPrint('get download url error: $e');
-      }
+      logger.w('get download url error', error: e);
     }
   }
 

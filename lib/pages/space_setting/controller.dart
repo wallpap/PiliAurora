@@ -1,7 +1,7 @@
 import 'package:pili_aurora/http/loading_state.dart';
 import 'package:pili_aurora/http/user.dart';
-import 'package:pili_aurora/models_new/space_setting/data.dart';
-import 'package:pili_aurora/models_new/space_setting/privacy.dart';
+import 'package:pili_aurora/models/remote/space_setting/data.dart';
+import 'package:pili_aurora/models/remote/space_setting/privacy.dart';
 import 'package:pili_aurora/pages/common/common_data_controller.dart';
 
 class SpaceSettingController

@@ -2,6 +2,7 @@
 import 'dart:io';
 
 import 'package:pili_aurora/http/api.dart';
+import 'package:pili_aurora/services/logger.dart';
 import 'package:pili_aurora/http/constants.dart';
 import 'package:pili_aurora/models/common/account_type.dart';
 import 'package:pili_aurora/utils/accounts.dart';
@@ -13,9 +14,7 @@ import 'package:pili_aurora/utils/platform_utils.dart';
 import 'package:pili_aurora/utils/storage_pref.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:dio/dio.dart';
-import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
-import 'package:material_ui/material_ui.dart';
 
 final _setCookieReg = RegExp('(?<=)(,)(?=[^;]+?=)');
 
@@ -173,7 +172,7 @@ class AccountManager extends Interceptor {
       'site/getCoin',
     ];
     String url = err.requestOptions.uri.toString();
-    if (kDebugMode) debugPrint('🌹🌹ApiInterceptor: $url\n$err');
+    logger.d('🌹🌹ApiInterceptor: $url\n$err');
     if (skipShow.any(url.contains) ||
         (url.contains('skipSegments') && err.requestOptions.method == 'GET')) {
       // skip

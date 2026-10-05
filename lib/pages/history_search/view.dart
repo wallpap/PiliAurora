@@ -1,5 +1,5 @@
-import 'package:pili_aurora/models_new/history/data.dart';
-import 'package:pili_aurora/models_new/history/list.dart';
+import 'package:pili_aurora/models/remote/history/data.dart';
+import 'package:pili_aurora/models/remote/history/list.dart';
 import 'package:pili_aurora/pages/common/search/common_search_page.dart';
 import 'package:pili_aurora/pages/history/widgets/item.dart';
 import 'package:pili_aurora/pages/history_search/controller.dart';

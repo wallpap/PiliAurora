@@ -7,7 +7,7 @@ import 'package:pili_aurora/common/widgets/video_popup_menu.dart';
 import 'package:pili_aurora/http/search.dart';
 import 'package:pili_aurora/models/home/rcmd/result.dart';
 import 'package:pili_aurora/models/model_rec_video_item.dart';
-import 'package:pili_aurora/models_new/video/video_detail/dimension.dart';
+import 'package:pili_aurora/models/remote/video/video_detail/dimension.dart';
 import 'package:pili_aurora/utils/app_scheme.dart';
 import 'package:pili_aurora/utils/date_utils.dart';
 import 'package:pili_aurora/utils/duration_utils.dart';

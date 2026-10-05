@@ -1,8 +1,8 @@
 import 'package:pili_aurora/common/widgets/pair.dart';
 import 'package:pili_aurora/http/loading_state.dart';
 import 'package:pili_aurora/http/msg.dart';
-import 'package:pili_aurora/models_new/msg/msg_like/data.dart';
-import 'package:pili_aurora/models_new/msg/msg_like/item.dart';
+import 'package:pili_aurora/models/remote/msg/msg_like/data.dart';
+import 'package:pili_aurora/models/remote/msg/msg_like/item.dart';
 import 'package:pili_aurora/pages/common/common_data_controller.dart';
 import 'package:pili_aurora/utils/extension/iterable_ext.dart';
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';

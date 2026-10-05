@@ -1,6 +1,6 @@
 import 'package:pili_aurora/http/loading_state.dart';
 import 'package:pili_aurora/http/match.dart';
-import 'package:pili_aurora/models_new/match/match_info/contest.dart';
+import 'package:pili_aurora/models/remote/match/match_info/contest.dart';
 import 'package:pili_aurora/pages/common/dyn/common_dyn_controller.dart';
 import 'package:get/get.dart';
 

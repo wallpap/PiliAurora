@@ -1,14 +1,15 @@
 import 'dart:async' show FutureOr, Timer;
 
 import 'package:pili_aurora/http/fav.dart';
+import 'package:pili_aurora/services/logger.dart';
 import 'package:pili_aurora/http/loading_state.dart';
 import 'package:pili_aurora/http/user.dart';
 import 'package:pili_aurora/http/video.dart';
 import 'package:pili_aurora/models/common/video/source_type.dart';
-import 'package:pili_aurora/models_new/fav/fav_folder/data.dart';
-import 'package:pili_aurora/models_new/video/video_detail/data.dart';
-import 'package:pili_aurora/models_new/video/video_detail/stat_detail.dart';
-import 'package:pili_aurora/models_new/video/video_tag/data.dart';
+import 'package:pili_aurora/models/remote/fav/fav_folder/data.dart';
+import 'package:pili_aurora/models/remote/video/video_detail/data.dart';
+import 'package:pili_aurora/models/remote/video/video_detail/stat_detail.dart';
+import 'package:pili_aurora/models/remote/video/video_tag/data.dart';
 import 'package:pili_aurora/pages/video/controller.dart';
 import 'package:pili_aurora/pages/video/introduction/ugc/widgets/triple_mixin.dart';
 import 'package:pili_aurora/utils/accounts.dart';
@@ -19,7 +20,6 @@ import 'package:pili_aurora/utils/storage.dart';
 import 'package:pili_aurora/utils/storage_key.dart';
 import 'package:pili_aurora/utils/storage_pref.dart';
 import 'package:collection/collection.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:get/get.dart';
 import 'package:material_ui/material_ui.dart';
@@ -269,7 +269,7 @@ mixin FavMixin on TripleMixin {
         }
       }
     } catch (e) {
-      if (kDebugMode) debugPrint(e.toString());
+      logger.d(e.toString());
     }
     SmartDialog.showLoading(msg: '请求中');
     final result = await FavHttp.favVideo(

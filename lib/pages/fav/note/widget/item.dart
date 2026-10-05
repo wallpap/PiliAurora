@@ -1,7 +1,7 @@
 import 'package:pili_aurora/common/style.dart';
 import 'package:pili_aurora/common/widgets/image/network_img_layer.dart';
 import 'package:pili_aurora/common/widgets/select_mask.dart';
-import 'package:pili_aurora/models_new/fav/fav_note/list.dart';
+import 'package:pili_aurora/models/remote/fav/fav_note/list.dart';
 import 'package:pili_aurora/pages/fav/note/controller.dart';
 import 'package:pili_aurora/utils/page_utils.dart';
 import 'package:pili_aurora/utils/platform_utils.dart';

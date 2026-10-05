@@ -1,7 +1,7 @@
 import 'package:pili_aurora/common/style.dart';
 import 'package:pili_aurora/common/widgets/image/image_save.dart';
 import 'package:pili_aurora/common/widgets/image/network_img_layer.dart';
-import 'package:pili_aurora/models_new/space/space_fav/list.dart';
+import 'package:pili_aurora/models/remote/space/space_fav/list.dart';
 import 'package:pili_aurora/utils/platform_utils.dart';
 import 'package:pili_aurora/utils/utils.dart';
 import 'package:get/get.dart';

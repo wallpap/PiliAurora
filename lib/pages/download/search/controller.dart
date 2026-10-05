@@ -1,6 +1,6 @@
 import 'package:pili_aurora/common/widgets/dialog/dialog.dart';
 import 'package:pili_aurora/http/loading_state.dart';
-import 'package:pili_aurora/models_new/download/bili_download_entry_info.dart';
+import 'package:pili_aurora/models/remote/download/bili_download_entry_info.dart';
 import 'package:pili_aurora/pages/common/multi_select/base.dart'
     show BaseMultiSelectMixin;
 import 'package:pili_aurora/pages/common/search/common_search_controller.dart';

@@ -1,7 +1,7 @@
 import 'package:pili_aurora/http/fan.dart';
 import 'package:pili_aurora/http/loading_state.dart';
 import 'package:pili_aurora/http/video.dart';
-import 'package:pili_aurora/models_new/follow/data.dart';
+import 'package:pili_aurora/models/remote/follow/data.dart';
 import 'package:pili_aurora/pages/follow_type/controller.dart';
 import 'package:pili_aurora/utils/accounts.dart';
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';

@@ -6,7 +6,7 @@ import 'package:pili_aurora/common/widgets/loading_widget/loading_widget.dart';
 import 'package:pili_aurora/common/widgets/scaffold/simple_scaffold.dart';
 import 'package:pili_aurora/common/widgets/view_sliver_safe_area.dart';
 import 'package:pili_aurora/http/loading_state.dart';
-import 'package:pili_aurora/models_new/member_guard/guard_top_list.dart';
+import 'package:pili_aurora/models/remote/member_guard/guard_top_list.dart';
 import 'package:pili_aurora/pages/member_guard/controller.dart';
 import 'package:pili_aurora/utils/bili_utils.dart';
 import 'package:pili_aurora/utils/extension/widget_ext.dart';

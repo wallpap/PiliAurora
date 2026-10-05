@@ -8,7 +8,7 @@ import 'package:pili_aurora/common/widgets/loading_widget/http_error.dart';
 import 'package:pili_aurora/common/widgets/loading_widget/loading_widget.dart';
 import 'package:pili_aurora/common/widgets/sliver/trending_header.dart';
 import 'package:pili_aurora/http/loading_state.dart';
-import 'package:pili_aurora/models_new/search/search_trending/list.dart';
+import 'package:pili_aurora/models/remote/search/search_trending/list.dart';
 import 'package:pili_aurora/pages/search_trending/controller.dart';
 import 'package:pili_aurora/utils/color_utils.dart';
 import 'package:pili_aurora/utils/extension/context_ext.dart';

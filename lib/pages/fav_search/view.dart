@@ -1,6 +1,6 @@
 import 'package:pili_aurora/models/common/fav_order_type.dart';
-import 'package:pili_aurora/models_new/fav/fav_detail/data.dart';
-import 'package:pili_aurora/models_new/fav/fav_detail/media.dart';
+import 'package:pili_aurora/models/remote/fav/fav_detail/data.dart';
+import 'package:pili_aurora/models/remote/fav/fav_detail/media.dart';
 import 'package:pili_aurora/pages/common/search/common_search_page.dart';
 import 'package:pili_aurora/pages/fav_detail/widget/fav_video_card.dart';
 import 'package:pili_aurora/pages/fav_search/controller.dart';

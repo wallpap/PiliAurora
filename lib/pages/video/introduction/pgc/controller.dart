@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:math' show max;
 
 import 'package:pili_aurora/common/widgets/dialog/simple_dialog_option.dart';
+import 'package:pili_aurora/services/logger.dart';
 import 'package:pili_aurora/http/constants.dart';
 import 'package:pili_aurora/http/fav.dart';
 import 'package:pili_aurora/http/loading_state.dart';
@@ -10,11 +11,11 @@ import 'package:pili_aurora/http/search.dart';
 import 'package:pili_aurora/http/video.dart';
 import 'package:pili_aurora/models/common/video/source_type.dart';
 import 'package:pili_aurora/models/common/video/video_type.dart';
-import 'package:pili_aurora/models_new/pgc/pgc_info_model/episode.dart';
-import 'package:pili_aurora/models_new/pgc/pgc_info_model/result.dart';
-import 'package:pili_aurora/models_new/video/video_detail/episode.dart'
+import 'package:pili_aurora/models/remote/pgc/pgc_info_model/episode.dart';
+import 'package:pili_aurora/models/remote/pgc/pgc_info_model/result.dart';
+import 'package:pili_aurora/models/remote/video/video_detail/episode.dart'
     hide EpisodeItem;
-import 'package:pili_aurora/models_new/video/video_detail/stat_detail.dart';
+import 'package:pili_aurora/models/remote/video/video_detail/stat_detail.dart';
 import 'package:pili_aurora/pages/common/common_intro_controller.dart';
 import 'package:pili_aurora/pages/dynamics_repost/view.dart';
 import 'package:pili_aurora/pages/video/reply/controller.dart';
@@ -29,7 +30,6 @@ import 'package:pili_aurora/utils/platform_utils.dart';
 import 'package:pili_aurora/utils/share_utils.dart';
 import 'package:pili_aurora/utils/utils.dart';
 import 'package:collection/collection.dart';
-import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:get/get.dart';
 import 'package:material_ui/material_ui.dart';
@@ -293,7 +293,7 @@ class PgcIntroController extends CommonIntroController {
       queryVideoIntro(episode as EpisodeItem);
       return true;
     } catch (e) {
-      if (kDebugMode) debugPrint('pgc onChangeEpisode: $e');
+      logger.d('pgc onChangeEpisode: $e');
       return false;
     }
   }

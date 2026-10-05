@@ -1,7 +1,7 @@
 import 'package:pili_aurora/common/widgets/flutter/refresh_indicator.dart';
 import 'package:pili_aurora/common/widgets/loading_widget/http_error.dart';
 import 'package:pili_aurora/http/loading_state.dart';
-import 'package:pili_aurora/models_new/space/space_archive/item.dart';
+import 'package:pili_aurora/models/remote/space/space_archive/item.dart';
 import 'package:pili_aurora/pages/member_comic/controller.dart';
 import 'package:pili_aurora/pages/member_comic/widgets/item.dart';
 import 'package:pili_aurora/utils/grid.dart';

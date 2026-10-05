@@ -4,7 +4,7 @@ import 'dart:math' as math;
 import 'package:pili_aurora/common/widgets/custom_icon.dart';
 import 'package:pili_aurora/common/widgets/extra_hittest_stack.dart';
 import 'package:pili_aurora/common/widgets/scaffold/simple_scaffold.dart';
-import 'package:pili_aurora/models_new/live/live_superchat/item.dart';
+import 'package:pili_aurora/models/remote/live/live_superchat/item.dart';
 import 'package:pili_aurora/pages/live_room/superchat/superchat_card.dart';
 import 'package:pili_aurora/plugin/pl_player/utils/fullscreen.dart';
 import 'package:pili_aurora/utils/platform_utils.dart';

@@ -1,7 +1,7 @@
 import 'package:pili_aurora/http/loading_state.dart';
 import 'package:pili_aurora/http/member.dart';
-import 'package:pili_aurora/models_new/space/space_article/data.dart';
-import 'package:pili_aurora/models_new/space/space_article/item.dart';
+import 'package:pili_aurora/models/remote/space/space_article/data.dart';
+import 'package:pili_aurora/models/remote/space/space_article/item.dart';
 import 'package:pili_aurora/pages/common/common_list_controller.dart';
 
 class MemberArticleCtr
