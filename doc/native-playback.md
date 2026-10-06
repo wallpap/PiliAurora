@@ -20,9 +20,26 @@
 **不等于整条图形链零拷贝**：现有 Windows 输出仍经过 mpv OpenGL render API、
 ANGLE/D3D11、Flutter 共享纹理及弹幕/控件合成。依赖的 `ANGLESurfaceManager::Read`
 仍有 GPU 内 `CopyResource`，本次没有移除它，也没有改为 `gpu-next` 原生窗口。
-Android 渲染及硬解默认策略不变。
+Android 硬解默认策略不变；输出纹理按当前视口适配，详见下节。
 
 旧式多段 durl 的 EDL 拼接不属于本次 DASH 音视频合流改动，仍保留。
+
+## Android 自适应纹理输出
+
+`ANDROID_VIDEO_OUTPUT_SIZE` 编译开关默认开启；传入
+`--dart-define=ANDROID_VIDEO_OUTPUT_SIZE=false` 可恢复插件按视频源分辨率输出。
+Windows 原有 `WINDOWS_VIDEO_OUTPUT_SIZE` 开关不变。
+
+Android 在插件发布有效输出 Rect（完成源 Surface 初始化）后，通过已有
+`VideoOutputManager.SetSurfaceTextureSize` 通道调整缓冲区，并同步 mpv 的
+`android-surface-size`/`vo`。纹理保持源画面比例、受视口物理像素和源尺寸约束，
+避免先渲染视口黑边、再按源比例缩放造成画面失真；不降低视频解码分辨率。
+同分辨率切源也重新适配。视口调整沿用 100 ms 合并，通道调用串行，异步完成时
+检查页面、Surface 代次与媒体身份，防止旧请求重新激活已销毁或新切换的输出。
+
+通道协议来自当前锁定的 media_kit_video 源码，未修改依赖或 Pub 缓存。
+单元测试覆盖通道调用顺序、切源/销毁/代次失效及横竖屏比例计算。
+APK 构建不等价于真实 GPU、MediaCodec、HDR、超分或 PiP 效果验证；未据此宣称实机性能收益。
 
 ## 代码入口
 
