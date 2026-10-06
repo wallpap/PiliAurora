@@ -1,6 +1,6 @@
 import 'package:pili_aurora/http/browser_ua.dart';
 import 'package:pili_aurora/services/logger.dart';
-import 'package:pili_aurora/main.dart';
+import 'package:pili_aurora/services/webview_environment.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:get/get.dart';
 import 'package:material_ui/material_ui.dart';
@@ -57,7 +57,7 @@ class _GeetestWebviewDialogState extends State<GeetestWebviewDialog> {
     return Stack(
       children: [
         InAppWebView(
-          webViewEnvironment: webViewEnvironment,
+          webViewEnvironment: AppWebViewEnvironment.instance,
           initialSettings: InAppWebViewSettings(
             clearCache: true,
             javaScriptEnabled: true,

@@ -3,7 +3,7 @@ import 'dart:io' show Platform;
 
 import 'package:pili_aurora/http/loading_state.dart';
 import 'package:pili_aurora/http/user.dart';
-import 'package:pili_aurora/main.dart' show webViewEnvironment;
+import 'package:pili_aurora/services/webview_environment.dart';
 import 'package:pili_aurora/services/account_service.dart';
 import 'package:pili_aurora/utils/accounts.dart';
 import 'package:pili_aurora/utils/accounts/account.dart';
@@ -21,7 +21,7 @@ abstract final class LoginUtils {
   static FutureOr setWebCookie([Account? account]) {
     final cookies = (account ?? Accounts.main).cookieJar.toList();
     final webManager = web.CookieManager.instance(
-      webViewEnvironment: webViewEnvironment,
+      webViewEnvironment: AppWebViewEnvironment.instance,
     );
     return Future.wait(
       cookies.map(
@@ -83,7 +83,7 @@ abstract final class LoginUtils {
 
     return Future.wait([
       web.CookieManager.instance(
-        webViewEnvironment: webViewEnvironment,
+        webViewEnvironment: AppWebViewEnvironment.instance,
       ).deleteAllCookies(),
       GStorage.userInfo.delete('userInfoCache'),
     ]);

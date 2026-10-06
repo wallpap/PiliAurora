@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:io';
 
-import 'package:pili_aurora/http/init.dart';
 import 'package:pili_aurora/models/remote/download/bili_download_entry_info.dart';
 import 'package:pili_aurora/services/download/response_adapter.dart';
 import 'package:pili_aurora/services/download/stream_writer.dart';
@@ -20,14 +19,14 @@ class DownloadManager {
   DownloadStatus get status => _status;
   final _cancelToken = CancelToken();
   late Future<void> task;
-  final Dio? client;
+  final Dio client;
 
   DownloadManager({
     required this.url,
     required this.path,
     required this.onReceiveProgress,
     required this.onDone,
-    this.client,
+    required this.client,
   }) {
     task = _start();
   }
@@ -64,7 +63,7 @@ class DownloadManager {
 
     Response<ResponseBody> response;
     try {
-      response = await (client ?? Request.http11Dio).get<ResponseBody>(
+      response = await client.get<ResponseBody>(
         url.http2https,
         options: Options(
           headers: {'range': 'bytes=$received-'},

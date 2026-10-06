@@ -1,6 +1,6 @@
 # PiliAurora 项目文档
 
-本文档区是面向第一次接手项目的开发者和 AI 代理的导航入口。它基于 **2026-10-06、`main` 与 `origin/main` 同步后的代码**整理；如果代码、脚本和文档冲突，以代码和实际命令输出为准。
+本文档区是面向第一次接手项目的开发者和 AI 代理的导航入口。它基于 **2026-10-06 的代码**整理，架构说明已同步启动层与下载持久化重构；如果代码、脚本和文档冲突，以代码和实际命令输出为准。
 
 ## 推荐阅读顺序
 
@@ -19,7 +19,7 @@
 - **产品**：Flutter/Dart 编写的 Bilibili 第三方客户端。
 - **当前维护平台**：Android、Windows x64；不以 iOS、iPad、macOS 或 Linux 为当前目标。
 - **上游基线**：PiliPlus 2.1.5；本项目重点维护 Windows 播放/弹幕、硬件解码兼容性、性能稳定性，以及 Android 播放恢复能力。
-- **Flutter 入口**：`lib/main.dart`。
+- **Flutter 入口**：`lib/main.dart`；启动装配在 `lib/app/bootstrap.dart`，根 Widget 在 `lib/app/app.dart`。
 - **路由表**：`lib/router/app_pages.dart`。
 - **页面**：`lib/pages/`。
 - **HTTP API**：`lib/http/`。

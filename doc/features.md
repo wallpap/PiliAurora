@@ -88,8 +88,8 @@ flowchart TD
 ## 下载与离线文件
 
 - 页面：`lib/pages/download/`。
-- 服务：`lib/services/download/download_manager.dart`、`download_service.dart`、`response_adapter.dart`、`stream_writer.dart`。
-- API/配置：`lib/http/download.dart`，下载路径初始化在 `lib/main.dart`，设置键在 `lib/utils/storage_key.dart`。
+- 服务：`lib/services/download/download_manager.dart`、`download_service.dart`、`download_repository.dart`、`response_adapter.dart`、`stream_writer.dart`。
+- API/配置：`lib/http/download.dart`，下载路径初始化在 `lib/app/app_paths.dart`，设置键在 `lib/utils/storage_key.dart`。
 - 排障：目录权限、磁盘空间、网络重试、流式写入回压和任务退出顺序。
 
 ## 设置、主题与本地能力

@@ -27,7 +27,7 @@ import 'package:pili_aurora/common/widgets/image_viewer/loading_indicator.dart';
 import 'package:pili_aurora/common/widgets/image_viewer/viewer.dart';
 import 'package:pili_aurora/common/widgets/scroll_physics.dart'
     show tabBarScrollPhysics;
-import 'package:pili_aurora/main.dart' show tmpPadding;
+import 'package:pili_aurora/common/widgets/app_viewport.dart';
 import 'package:pili_aurora/models/common/image_preview_type.dart';
 import 'package:pili_aurora/plugin/pl_player/utils/fullscreen.dart';
 import 'package:pili_aurora/utils/device_utils.dart';
@@ -206,10 +206,10 @@ class _GalleryViewerState extends State<GalleryViewer>
       _padding = padding;
       _initHideSystemBar();
       if (_hideSystemBar) {
-        tmpPadding = padding;
+        final releasePadding = viewportInsets.preserve(padding);
         hideSystemBar()!.whenComplete(
           () => WidgetsBinding.instance.addPostFrameCallback(
-            (_) => tmpPadding = null,
+            (_) => releasePadding(),
           ),
         );
       }

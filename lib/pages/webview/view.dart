@@ -5,7 +5,7 @@ import 'package:pili_aurora/common/widgets/route_aware_mixin.dart'
 import 'package:pili_aurora/common/widgets/selection_text.dart';
 import 'package:pili_aurora/services/logger.dart';
 import 'package:pili_aurora/http/browser_ua.dart';
-import 'package:pili_aurora/main.dart' show webViewEnvironment;
+import 'package:pili_aurora/services/webview_environment.dart';
 import 'package:pili_aurora/models/common/webview_menu_type.dart';
 import 'package:pili_aurora/utils/app_scheme.dart';
 import 'package:pili_aurora/utils/cache_manager.dart';
@@ -176,7 +176,7 @@ class _WebviewPageState extends State<WebviewPage> with RouteAware {
           ? null
           : SafeArea(
               child: InAppWebView(
-                webViewEnvironment: webViewEnvironment,
+                webViewEnvironment: AppWebViewEnvironment.instance,
                 initialSettings: InAppWebViewSettings(
                   clearCache: true,
                   javaScriptEnabled: true,

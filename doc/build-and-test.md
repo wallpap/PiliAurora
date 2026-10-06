@@ -34,6 +34,14 @@ fvm flutter test
 
 如只验证某个目录，可传测试文件或目录给 `fvm flutter test`。测试按 common、grpc、http、pages、plugin、services、utils、windows 分组；播放器和平台测试可能依赖真实设备、驱动或媒体条件。
 
+## 架构回归检查
+
+```powershell
+fvm flutter test --no-pub test/architecture test/services/download test/common/widgets/app_viewport_test.dart test/utils/theme_utils_test.dart
+```
+
+依赖约束测试防止底层代码反向导入入口或装配层。下载测试使用临时目录和假网络响应；主题测试使用临时 Hive 和模拟平台通道，不需要真实账号或业务网络。完成局部检查后再运行全量测试及静态分析。
+
 ## 项目构建脚本
 
 仓库提供 `tool/build.ps1`，它会检查 Dart/FVM、执行 `flutter pub get`，按平台执行 `lib/scripts/patch.ps1`，最后调用 Flutter build：

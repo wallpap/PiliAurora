@@ -1,6 +1,5 @@
 import 'dart:async';
-import 'dart:convert' show jsonDecode, jsonEncode;
-import 'dart:io' show Directory, File;
+import 'dart:io' show File;
 
 import 'package:pili_aurora/grpc/dm.dart';
 import 'package:pili_aurora/http/download.dart';
@@ -8,19 +7,22 @@ import 'package:pili_aurora/http/init.dart';
 import 'package:pili_aurora/models/common/video/video_quality.dart';
 import 'package:pili_aurora/models/remote/download/bili_download_entry_info.dart';
 import 'package:pili_aurora/models/remote/download/bili_download_media_file_info.dart';
-import 'package:pili_aurora/models/remote/pgc/pgc_info_model/episode.dart' as pgc;
+import 'package:pili_aurora/models/remote/pgc/pgc_info_model/episode.dart'
+    as pgc;
 import 'package:pili_aurora/models/remote/pgc/pgc_info_model/result.dart';
 import 'package:pili_aurora/models/remote/video/video_detail/data.dart';
-import 'package:pili_aurora/models/remote/video/video_detail/episode.dart' as ugc;
+import 'package:pili_aurora/models/remote/video/video_detail/episode.dart'
+    as ugc;
 import 'package:pili_aurora/models/remote/video/video_detail/page.dart';
 import 'package:pili_aurora/services/download/download_manager.dart';
+import 'package:pili_aurora/services/download/download_repository.dart';
 import 'package:pili_aurora/services/logger.dart';
 import 'package:pili_aurora/utils/cache_manager.dart';
 import 'package:pili_aurora/utils/danmaku_utils.dart';
-import 'package:pili_aurora/utils/extension/file_ext.dart';
 import 'package:pili_aurora/utils/extension/string_ext.dart';
 import 'package:pili_aurora/utils/id_utils.dart';
 import 'package:pili_aurora/utils/path_utils.dart';
+import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:get/get.dart';
@@ -30,8 +32,10 @@ import 'package:synchronized/synchronized.dart';
 // ref https://github.com/10miaomiao/bilimiao2/blob/master/bilimiao-download/src/main/java/cn/a10miaomiao/bilimiao/download/DownloadService.kt
 
 class DownloadService extends GetxService {
-  static const _entryFile = 'entry.json';
-  static const _indexFile = 'index.json';
+  DownloadService({required this._repository, required this._downloadClient});
+
+  final DownloadRepository _repository;
+  final Dio _downloadClient;
   static const _maxDanmakuConcurrency = 4;
 
   final _lock = Lock();
@@ -67,52 +71,16 @@ class DownloadService extends GetxService {
   }
 
   Future<void> _readDownloadList() async {
-    downloadList.clear();
-    final downloadDir = Directory(await _getDownloadPath());
-    await for (final dir in downloadDir.list()) {
-      if (dir is Directory) {
-        downloadList.addAll(await _readDownloadDirectory(dir));
-      }
-    }
-    downloadList.sort((a, b) => b.timeUpdateStamp.compareTo(a.timeUpdateStamp));
-  }
-
-  @pragma('vm:notify-debugger-on-exception')
-  Future<List<BiliDownloadEntryInfo>> _readDownloadDirectory(
-    Directory pageDir,
-  ) async {
-    final result = <BiliDownloadEntryInfo>[];
-
-    if (!pageDir.existsSync()) {
-      return result;
-    }
-
-    await for (final entryDir in pageDir.list()) {
-      if (entryDir is Directory) {
-        final entryFile = File(path.join(entryDir.path, _entryFile));
-        if (entryFile.existsSync()) {
-          try {
-            final entryJson = await entryFile.readAsString();
-            final entry = BiliDownloadEntryInfo.fromJson(jsonDecode(entryJson))
-              ..pageDirPath = pageDir.path
-              ..entryDirPath = entryDir.path;
-            if (entry.isCompleted) {
-              result.add(entry);
-            } else {
-              waitDownloadQueue.add(entry..status = DownloadStatus.wait);
-            }
-          } catch (error, stackTrace) {
-            logger.w(
-              '忽略损坏的下载记录: ${entryFile.path}',
-              error: error,
-              stackTrace: stackTrace,
-            );
-          }
-        }
-      }
-    }
-
-    return result;
+    final entries = await _repository.load();
+    downloadList
+      ..clear()
+      ..addAll(entries.where((entry) => entry.isCompleted))
+      ..sort((a, b) => b.timeUpdateStamp.compareTo(a.timeUpdateStamp));
+    final pending = entries.where((entry) => !entry.isCompleted).toList();
+    final current = curDownload.value;
+    waitDownloadQueue.assignAll(
+      pending.map((entry) => current?.cid == entry.cid ? current! : entry),
+    );
   }
 
   void downloadVideo(
@@ -245,44 +213,12 @@ class DownloadService extends GetxService {
   }
 
   Future<void> _createDownload(BiliDownloadEntryInfo entry) async {
-    final entryDir = await _getDownloadEntryDir(entry);
-    final entryJsonFile = File(path.join(entryDir.path, _entryFile));
-    await entryJsonFile.writeAsString(jsonEncode(entry.toJson()));
-    entry
-      ..pageDirPath = entryDir.parent.path
-      ..entryDirPath = entryDir.path
-      ..status = DownloadStatus.wait;
+    await _repository.create(entry);
+    entry.status = DownloadStatus.wait;
     waitDownloadQueue.add(entry);
     if (curDownload.value?.status.isDownloading != true) {
       startDownload(entry);
     }
-  }
-
-  Future<Directory> _getDownloadEntryDir(BiliDownloadEntryInfo entry) async {
-    late final String dirName;
-    late final String pageDirName;
-    if (entry.ep case final ep?) {
-      dirName = 's_${entry.seasonId}';
-      pageDirName = ep.episodeId.toString();
-    } else if (entry.pageData case final page?) {
-      dirName = entry.avid.toString();
-      pageDirName = 'c_${page.cid}';
-    }
-    final pageDir = Directory(
-      path.join(await _getDownloadPath(), dirName, pageDirName),
-    );
-    if (!pageDir.existsSync()) {
-      await pageDir.create(recursive: true);
-    }
-    return pageDir;
-  }
-
-  static Future<String> _getDownloadPath() async {
-    final dir = Directory(downloadPath);
-    if (!dir.existsSync()) {
-      await dir.create(recursive: true);
-    }
-    return dir.path;
   }
 
   Future<void> startDownload(BiliDownloadEntryInfo entry) {
@@ -391,17 +327,9 @@ class DownloadService extends GetxService {
         pageData: entry.pageData,
       );
 
-      final videoDir = Directory(path.join(entry.entryDirPath, entry.typeTag));
-      if (!videoDir.existsSync()) {
-        await videoDir.create(recursive: true);
-      }
-
-      final mediaJsonFile = File(path.join(videoDir.path, _indexFile));
-      await Future.wait([
-        mediaJsonFile.writeAsString(jsonEncode(mediaFileInfo.toJson())),
-        _downloadCover(entry: entry),
-      ]);
-
+      final mediaDirectory = _repository.saveMediaInfo(entry, mediaFileInfo);
+      await Future.wait([mediaDirectory, _downloadCover(entry: entry)]);
+      final videoDir = await mediaDirectory;
       if (curDownload.value?.cid != entry.cid) {
         return;
       }
@@ -410,24 +338,27 @@ class DownloadService extends GetxService {
         case Type1 mediaFileInfo:
           final first = mediaFileInfo.segmentList.first;
           _downloadManager = DownloadManager(
+            client: _downloadClient,
             url: first.url,
-            path: path.join(videoDir.path, PathUtils.videoNameType1),
+            path: path.join(videoDir, PathUtils.videoNameType1),
             onReceiveProgress: _onReceive,
             onDone: _onDone,
           );
           break;
         case Type2 mediaFileInfo:
           _downloadManager = DownloadManager(
+            client: _downloadClient,
             url: mediaFileInfo.video.first.baseUrl,
-            path: path.join(videoDir.path, PathUtils.videoNameType2),
+            path: path.join(videoDir, PathUtils.videoNameType2),
             onReceiveProgress: _onReceive,
             onDone: _onDone,
           );
           final audio = mediaFileInfo.audio;
           if (audio != null && audio.isNotEmpty) {
             _audioDownloadManager = DownloadManager(
+              client: _downloadClient,
               url: audio.first.baseUrl,
-              path: path.join(videoDir.path, PathUtils.audioNameType2),
+              path: path.join(videoDir, PathUtils.audioNameType2),
               onReceiveProgress: null,
               onDone: _onAudioDone,
             );
@@ -439,7 +370,7 @@ class DownloadService extends GetxService {
           entry.ep
             ?..width = first.width
             ..height = first.height;
-          _updateBiliDownloadEntryJson(entry);
+          _repository.save(entry);
           break;
         default:
           break;
@@ -450,15 +381,10 @@ class DownloadService extends GetxService {
     }
   }
 
-  Future<void> _updateBiliDownloadEntryJson(BiliDownloadEntryInfo entry) {
-    final entryJsonFile = File(path.join(entry.entryDirPath, _entryFile));
-    return entryJsonFile.writeAsString(jsonEncode(entry.toJson()));
-  }
-
   void _onReceive(int progress, int total) {
     if (curDownload.value case final entry?) {
       if (progress == 0 && total != 0) {
-        _updateBiliDownloadEntryJson(entry..totalBytes = total);
+        _repository.save(entry..totalBytes = total);
       }
       entry
         ..downloadedBytes = progress
@@ -485,7 +411,7 @@ class DownloadService extends GetxService {
       if (status == DownloadStatus.completed) {
         _completeDownload();
       } else {
-        _updateBiliDownloadEntryJson(curEntryInfo);
+        _repository.save(curEntryInfo);
       }
     }
   }
@@ -513,7 +439,7 @@ class DownloadService extends GetxService {
     entry
       ..downloadedBytes = entry.totalBytes
       ..isCompleted = true;
-    await _updateBiliDownloadEntryJson(entry);
+    await _repository.save(entry);
     waitDownloadQueue.remove(entry);
     downloadList.insert(0, entry);
     flagNotifier.refresh();
@@ -549,17 +475,7 @@ class DownloadService extends GetxService {
         downloadNext: downloadNext,
       );
     }
-    final downloadDir = Directory(entry.pageDirPath);
-    if (downloadDir.existsSync()) {
-      if (!await downloadDir.lengthGte(2)) {
-        await downloadDir.tryDel(recursive: true);
-      } else {
-        final entryDir = Directory(entry.entryDirPath);
-        if (entryDir.existsSync()) {
-          await entryDir.tryDel(recursive: true);
-        }
-      }
-    }
+    await _repository.remove(entry);
     if (refresh) {
       flagNotifier.refresh();
     }
@@ -569,7 +485,7 @@ class DownloadService extends GetxService {
     required String pageDirPath,
     bool refresh = true,
   }) async {
-    await Directory(pageDirPath).tryDel(recursive: true);
+    await _repository.removePage(pageDirPath);
     downloadList.removeWhere((e) => e.pageDirPath == pageDirPath);
     if (refresh) {
       flagNotifier.refresh();
@@ -587,7 +503,7 @@ class DownloadService extends GetxService {
     if (!isDelete) {
       final entry = curDownload.value;
       if (entry != null) {
-        await _updateBiliDownloadEntryJson(entry);
+        await _repository.save(entry);
       }
     }
     if (isDelete) {

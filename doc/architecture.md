@@ -2,7 +2,7 @@
 
 > 面向新人和 AI 的代码导航文档。
 >
-> **文档基线**：本文按当前 `origin/main` 编写。核对时间为 **2026-10-06**，当前 `main` 与 `origin/main` 均指向提交 `0467272a3`。如果代码发生变化，应优先重新阅读本文列出的事实来源，而不是把本文当成永远准确的接口文档。
+> **文档基线**：2026-10-06 完成启动层与下载持久化重构后同步更新。请以当前检出代码为准，不把远端分支状态或本文当成永远准确的接口文档。
 
 ## 1. 项目定位
 
@@ -59,7 +59,8 @@ Flutter 应用（lib/）
 
 ```text
 lib/
-├─ main.dart                  应用入口；初始化运行环境并挂载根 Widget
+├─ main.dart                  仅调用 bootstrapApplication()
+├─ app/                       启动装配、平台准备、根 Widget 与返回导航
 ├─ build_config.dart          构建时间、提交哈希等构建信息
 ├─ common/                    通用常量、主题样式、骨架屏、共享 Flutter 组件
 ├─ grpc/                      Bilibili gRPC/protobuf 生成代码及相关结构
@@ -131,13 +132,14 @@ lib/pages/<功能域>/
 ```text
 lib/services/
 ├─ diagnostics/            诊断记录、历史读取、HTTP/播放器/进程指标、脱敏
-├─ download/               下载管理、响应适配、流式写入
+├─ download/               任务调度、记录仓库、响应适配、流式写入
 ├─ live_stream/            直播包、解码器和直播传输逻辑
 ├─ account_service.dart    账号相关跨页面服务
 ├─ audio_handler.dart      音频后台/系统媒体控制相关能力
 ├─ audio_session.dart      音频会话
 ├─ logger.dart             日志入口
-└─ service_locator.dart    平台服务定位/注册入口
+├─ service_locator.dart    平台服务定位/注册入口
+└─ webview_environment.dart 共享 WebView 环境的所有者
 ```
 
 不要把所有 controller 都称为 service。通常只有需要跨页面共享、后台持续运行、集中管理资源或连接平台能力的逻辑才应优先考虑放入 `services/`。
@@ -155,15 +157,15 @@ lib/services/
 
 ## 4. 启动链路：从 `main.dart` 开始
 
-`lib/main.dart` 是应用启动和全局壳层的主要入口。当前已确认的顺序如下：
+`lib/main.dart` 只调用 `app/bootstrap.dart` 的 `bootstrapApplication()`。启动装配与根 Widget 已分离；页面和底层模块不再导入入口文件。当前顺序如下：
 
 ```mermaid
 sequenceDiagram
     participant OS as Android / Windows
-    participant Main as lib/main.dart
+    participant Main as app/bootstrap.dart
     participant Local as 本地路径与 GStorage
     participant Services as GetX/平台服务
-    participant App as MyApp/GetMaterialApp
+    participant App as PiliAuroraApp/GetMaterialApp
 
     OS->>Main: 启动 Flutter 进程
     Main->>Main: ScaledWidgetsFlutterBinding.ensureInitialized()
@@ -173,7 +175,7 @@ sequenceDiagram
     Main->>Services: lazyPut AccountService、DownloadService
     Main->>Services: 初始化 HTTP overrides 和平台能力
     Main->>Main: 初始化 Request、Cookie/历史状态、窗口/系统 UI
-    Main->>App: 安装 Catcher2 并创建 MyApp
+    Main->>App: 安装 Catcher2 并创建 PiliAuroraApp
     App->>App: 创建主题、GetMaterialApp、路由和观察器
 ```
 
@@ -182,17 +184,31 @@ sequenceDiagram
 1. 使用 `ScaledWidgetsFlutterBinding.ensureInitialized()` 初始化 Flutter，并使用 `MediaKit.ensureInitialized()` 初始化播放器基础设施。
 2. 通过 `path_provider` 获取应用支持目录；初始化 `GStorage`。如果存储初始化失败，会记录错误、复制错误文本后退出进程。
 3. 从 `Pref` 读取 UI 缩放，初始化日志，并并行准备下载路径、临时目录、缓存和字体。
-4. 通过 GetX lazy 注册 `AccountService` 和 `DownloadService`。
-5. 安装全局 `HttpOverrides`，随后初始化 `Request`、Cookie 和历史状态同步。
+4. 通过 GetX lazy 注册 `AccountService` 和 `DownloadService`；下载仓库及 HTTP/1.1 客户端在装配层显式注入。下载根目录通过回调读取，使设置更改能作用于后续扫描和新任务。
+5. 安装全局 `HttpOverrides`；先初始化平台能力，再初始化 `Request`、Cookie 和历史状态同步，确保 Windows Cookie 使用已经创建的 WebView 环境。
 6. 移动平台分支处理屏幕方向、Android 最大屏幕尺寸和服务定位器；Windows 分支尝试创建带应用支持目录的 WebView 环境。
 7. 移动平台设置 edge-to-edge 系统 UI；Android 读取显示模式设置，桌面平台初始化窗口、最小窗口尺寸、标题栏、位置、最大化、显示和焦点。
-8. 如果启用动态颜色，调用 `MyApp.initPlatformState()`：优先读取系统核心调色板，失败后尝试读取 accent color，再失败则关闭动态颜色设置。
+8. 如果启用动态颜色，调用 `ThemeUtils.initPlatformState()`：优先读取系统核心调色板，失败后尝试读取 accent color，再失败则关闭动态颜色设置。
 9. 初始化 `JsonFileHandler`，安装 `Catcher2`，向异常记录附加构建时间、提交哈希和 MPV API 版本等信息。
-10. `MyApp.build()` 创建 `GetMaterialApp`，挂载主题、本地化、初始路由 `/`、`Routes.getPages`、SmartDialog builder 和导航观察器。
+10. `PiliAuroraApp.build()` 创建 `GetMaterialApp`，挂载主题、本地化、初始路由 `/`、`Routes.getPages`、SmartDialog builder 和导航观察器。
 
 ### 4.2 启动时的安全注意
 
 `_CustomHttpOverrides` 在调试模式，或 `Pref.badCertificateCallback` 被开启时，会接受无效证书。该开关会降低 TLS 校验强度，排查网络问题时要明确记录，发布环境不要把它当成常规解决方案。
+
+### 4.3 职责与状态所有权
+
+| 模块 | 职责 | 调用方 |
+| --- | --- | --- |
+| `app/bootstrap.dart` | 维护启动依赖顺序，装配下载仓库/客户端，挂载异常捕获与应用 | `main.dart` |
+| `app/app_paths.dart` | 初始化支持、临时和下载目录；保留原路径回退规则 | 启动层 |
+| `app/platform_setup.dart` | 音频/WebView/屏幕方向，以及窗口/系统 UI 初始化 | 启动层 |
+| `app/app.dart` | 根 Widget、路由、主题、本地化、对话框与观察器 | 启动层 |
+| `utils/theme_utils.dart` | 动态颜色读取和缓存、明暗主题生成与当前主题选择 | 根 Widget、设置页与主题更新扩展 |
+| `services/webview_environment.dart` | WebView 环境唯一所有者；调用方只读 `instance` | 启动层初始化，WebView 页和 Cookie 同步读取 |
+| `common/widgets/app_viewport.dart` | 注入缩放值后变换 MediaQuery；临时 padding 使用可独立释放的持有句柄 | 根 Widget、图片查看器 |
+
+`ViewportInsets` 不主动触发重建：沿用系统 UI 变化导致的 MediaQuery 更新节奏。它保证先完成的异步操作不会清空另一个操作仍在使用的 padding。
 
 ## 5. 路由与页面入口
 
@@ -227,9 +243,9 @@ sequenceDiagram
 Flutter / Android / Windows
             │
             ▼
-       main.dart
+       main.dart → app/bootstrap.dart
             │
-            ├─ 全局初始化、主题、窗口、异常、服务注册
+            ├─ 显式装配服务、平台准备、异常捕获 → app/app.dart
             ▼
          pages/ ───────────────► router/
             │
@@ -249,6 +265,31 @@ Flutter / Android / Windows
 - 某些跨域功能横跨页面、HTTP、service、平台和测试多个目录。
 
 因此，AI 或新人修改代码时应先从目标符号的 import、调用方和测试反向确认依赖，不要仅凭目录名称推断“只能单向依赖”。
+
+### 6.1 已落实的依赖约束
+
+`test/architecture/dependency_rules_test.dart` 检查以下规则（包含 package 和相对路径导入）：
+
+- 不允许任何模块导入或导出 `main.dart`。
+- `app/` 是最外层装配代码；除入口和 `app/` 内部外，其他 `lib/` 模块不得反向依赖它。
+- 下载仓库不直接导入页面、Flutter Widget、GetX、网络、全局偏好或日志模块。
+- 下载执行器必须接收 Dio，不能隐式读取 `Request` 客户端。
+
+### 6.2 下载模块的接口
+
+```text
+app/bootstrap.dart
+  └─ DownloadService(repository: ..., downloadClient: ...)
+       ├─ DownloadRepository：扫描/创建/更新记录、媒体索引、删除任务或页面
+       ├─ DownloadManager(client: ...)：执行单条音视频传输
+       └─ 现有弹幕、封面缓存和播放地址接口
+```
+
+- `DownloadRepository` 集中维护 UGC/PGC 目录布局、`entry.json` 与 `index.json`；目录扫描结果不包含 GetX 队列副作用。坏记录单独跳过并通过回调报告。
+- `save()` 在进入串行写队列前编码快照，防止并发写入互相截断、或后续模型修改污染之前的保存请求。它不是事务数据库，也不承诺进程崩溃时的原子写入。
+- `DownloadService` 负责完成列表排序、待下载队列、任务状态和调度。重读目录替换队列快照，不重复追加；同一活动任务保留内存对象和下载进度。
+- 没有新增仓库抽象接口或依赖注入框架：当前只有文件系统实现，构造函数注入已足够。测试直接使用临时目录，不需启动整个应用。
+- 尚未重构的边界：下载模型仍带有页面展示辅助逻辑；下载服务仍协调 gRPC 弹幕、封面缓存和 UI 提示。这里落实的是启动层和持久化接口，不宣称整个项目已实现严格分层。
 
 ## 7. 数据、状态与本地文件
 
@@ -319,7 +360,7 @@ README 已记录项目对 Android MediaCodec 输出异常恢复、Windows 硬件
 
 1. 先读根目录 `README.md`，确认平台范围、构建要求和项目与上游的关系。
 2. 阅读本文，建立目录、启动链路和平台边界的整体模型。
-3. 阅读 `lib/main.dart`，理解应用初始化、全局服务、主题、窗口、异常和根 Widget。
+3. 从 `lib/main.dart` 进入 `lib/app/bootstrap.dart` 与 `lib/app/app.dart`，理解启动顺序、服务装配和根 Widget；再按需阅读平台准备、主题和视口模块。
 4. 阅读 `lib/router/app_pages.dart`，确认目标功能的路由名和页面入口。
 5. 进入目标 `lib/pages/<功能域>/`，从 `view.dart`、`controller.dart`、私有 `widgets/` 开始。
 6. 沿 controller/view 的 import 查找对应 `lib/http/`、`lib/models/`、`lib/services/` 和 `lib/utils/`。
@@ -369,4 +410,4 @@ README 已记录项目对 Android MediaCodec 输出异常恢复、Windows 硬件
 
 ---
 
-**一句话总结**：先从 `main.dart` 理解启动和全局边界，再用 `app_pages.dart` 找页面入口，沿实际 import 连接 `pages → http/services/models/common/utils/plugin`；涉及播放器、生成代码、Android/JDK 25 或本地数据时，不要只改表面文件，必须把对应的平台配置、生成链路和测试一起核对。
+**一句话总结**：先从 `main.dart` 进入 `app/` 理解启动装配和全局边界，再用 `app_pages.dart` 找页面入口，沿实际 import 连接 `pages → http/services/models/common/utils/plugin`；涉及播放器、生成代码、Android/JDK 25 或本地数据时，不要只改表面文件，必须把对应的平台配置、生成链路和测试一起核对。

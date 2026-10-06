@@ -1,7 +1,6 @@
 import 'package:pili_aurora/common/widgets/animated_height.dart';
 import 'package:pili_aurora/common/widgets/color_palette.dart';
 import 'package:pili_aurora/common/widgets/scaffold/simple_scaffold.dart';
-import 'package:pili_aurora/main.dart' show MyApp;
 import 'package:pili_aurora/models/common/nav_bar_config.dart';
 import 'package:pili_aurora/models/common/theme/theme_color_type.dart';
 import 'package:pili_aurora/models/common/theme/theme_type.dart';
@@ -48,7 +47,7 @@ class _ColorSelectPageState extends State<ColorSelectPage> {
 
   Future<void> _onChanged([bool? val]) async {
     val ??= !ctr.dynamicColor.value;
-    if (val && !await MyApp.initPlatformState()) {
+    if (val && !await ThemeUtils.initPlatformState()) {
       SmartDialog.showToast('设备可能不支持动态取色');
       if (kReleaseMode) {
         return;
@@ -134,16 +133,16 @@ class _ColorSelectPageState extends State<ColorSelectPage> {
           ),
           Obx(
             () => ListTile(
-                title: const Text('动态取色'),
-                leading: ExcludeFocus(
-                  child: Checkbox(
-                    value: ctr.dynamicColor.value,
-                    onChanged: _onChanged,
-                    materialTapTargetSize: .shrinkWrap,
-                    visualDensity: const .new(horizontal: -4, vertical: -4),
-                  ),
+              title: const Text('动态取色'),
+              leading: ExcludeFocus(
+                child: Checkbox(
+                  value: ctr.dynamicColor.value,
+                  onChanged: _onChanged,
+                  materialTapTargetSize: .shrinkWrap,
+                  visualDensity: const .new(horizontal: -4, vertical: -4),
                 ),
-                onTap: _onChanged,
+              ),
+              onTap: _onChanged,
             ),
           ),
           Padding(

@@ -1,12 +1,90 @@
 import 'package:pili_aurora/common/style.dart';
+import 'package:pili_aurora/models/common/theme/theme_color_type.dart';
+import 'package:pili_aurora/services/logger.dart';
+import 'package:pili_aurora/utils/extension/core_palettes_ext.dart';
 import 'package:pili_aurora/utils/extension/theme_ext.dart';
 import 'package:pili_aurora/utils/font_utils.dart';
+import 'package:pili_aurora/utils/storage.dart';
+import 'package:pili_aurora/utils/storage_key.dart';
 import 'package:pili_aurora/utils/storage_pref.dart';
 import 'package:cupertino_ui/cupertino_ui.dart' show CupertinoThemeData;
+import 'package:dynamic_color/dynamic_color.dart' show DynamicColorPlugin;
 import 'package:flutter/foundation.dart' show PlatformDispatcher;
+import 'package:flutter/services.dart';
 import 'package:material_ui/material_ui.dart';
 
 abstract final class ThemeUtils {
+  static ColorScheme? _light, _dark;
+
+  static (ThemeData, ThemeData) getAllTheme() {
+    final dynamicColor = _light != null && _dark != null && Pref.dynamicColor;
+
+    final ColorScheme lightScheme, darkScheme;
+    if (dynamicColor) {
+      lightScheme = _light!;
+      darkScheme = _dark!;
+    } else {
+      final customColor = Pref.customColor;
+      final brandColor =
+          colorThemeTypes.elementAtOrNull(customColor)?.color ??
+          Color(customColor);
+      final variant = Pref.schemeVariant;
+
+      lightScheme = brandColor.asColorSchemeSeed(variant, .light);
+      darkScheme = brandColor.asColorSchemeSeed(variant, .dark);
+    }
+
+    return (
+      lightTheme = ThemeUtils.getThemeData(
+        colorScheme: lightScheme,
+        isDynamic: dynamicColor,
+      ),
+      darkTheme = ThemeUtils.getThemeData(
+        isDark: true,
+        colorScheme: darkScheme,
+        isDynamic: dynamicColor,
+      ),
+    );
+  }
+
+  /// from [DynamicColorBuilderState.initPlatformState]
+  static Future<bool> initPlatformState() async {
+    if (_light != null || _dark != null) return true;
+    // Platform messages may fail, so we use a try/catch PlatformException.
+    try {
+      final colors = await DynamicColorPlugin.channel.invokeMethod(
+        DynamicColorPlugin.methodName,
+      );
+
+      if (colors != null) {
+        final corePalettes = CorePalettesExt.fromList(colors.toList());
+        logger.d('dynamic_color: Core palette detected.');
+        _light = corePalettes.toColorScheme();
+        _dark = corePalettes.toColorScheme(brightness: Brightness.dark);
+        return true;
+      }
+    } on PlatformException catch (e) {
+      logger.w('dynamic_color: Failed to obtain core palette.', error: e);
+    }
+
+    try {
+      final Color? accentColor = await DynamicColorPlugin.getAccentColor();
+
+      if (accentColor != null) {
+        logger.d('dynamic_color: Accent color detected.');
+        final variant = Pref.schemeVariant;
+        _light = accentColor.asColorSchemeSeed(variant, .light);
+        _dark = accentColor.asColorSchemeSeed(variant, .dark);
+        return true;
+      }
+    } on PlatformException catch (e) {
+      logger.w('dynamic_color: Failed to obtain accent color.', error: e);
+    }
+    logger.i('dynamic_color: Dynamic color not detected on this device.');
+    GStorage.setting.put(SettingBoxKey.dynamicColor, false);
+    return false;
+  }
+
   static late ThemeData lightTheme;
 
   static late ThemeData darkTheme;
