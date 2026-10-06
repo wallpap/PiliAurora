@@ -13,4 +13,13 @@ pwsh -File tool/build.ps1 -Platform android -Mode debug
 fvm dart run tool/jnigen.dart
 ```
 
-`tool/` 只维护项目构建和代码生成入口。
+## 原生媒体加载烟测
+
+Windows 构建完成后，使用已有 Python 和 libmpv 验证独立音轨、特殊字符路径及重载。
+传入至少数秒的本地视频，不会访问网络；测试用静音 WAV 写入 `build/native-playback-smoke/`。
+
+```powershell
+python tool/native_media_smoke.py --library build/windows/x64/runner/Debug/libmpv-2.dll --video <本地视频文件>
+```
+
+该检查不包含 GPU 渲染或完整应用性能测试。实现与测量边界见 `doc/native-playback.md`。
