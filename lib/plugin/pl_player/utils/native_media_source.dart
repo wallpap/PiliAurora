@@ -9,7 +9,7 @@ import 'package:pili_aurora/plugin/pl_player/models/data_source.dart';
 /// `audio-files-append` 追加，无需为 DASH 构建两路 EDL。
 /// media_kit 的 `_add` 会把 extras 拼成 loadfile 的逗号分隔
 /// key-value 字符串，因此路径中的逗号会被解析为选项分隔符，必须用
-/// %<UTF-8 字节数>% 定长前缀转义；append 本身不再拆分路径列表。
+/// `%<UTF-8 字节数>%` 定长前缀转义；append 本身不再拆分路径列表。
 Media nativeMediaSource({
   required DataSource source,
   bool audioOnly = false,
