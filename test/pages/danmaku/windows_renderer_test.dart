@@ -241,6 +241,33 @@ void main() {
     byteLimited.clear();
   });
 
+  test('special lifetimes keep slots until the precise expiry tick', () {
+    final renderer = WindowsDanmakuRenderer<void>(option: _option, size: _size);
+    addTearDown(renderer.dispose);
+    SpecialDanmakuContentItem<void> special() =>
+        SpecialDanmakuContentItem<void>(
+          'special',
+          duration: 10000,
+          color: const Color(0xFFFFFFFF),
+          fontSize: 20,
+          translateXTween: ConstantTween<double>(.25),
+          translateYTween: ConstantTween<double>(.25),
+        );
+    for (var i = 0; i < 32; i++) {
+      expect(renderer.add(special()), isTrue);
+    }
+    renderer.advance(const Duration(milliseconds: 9994));
+    expect(renderer.specialDanmaku, hasLength(32));
+    renderer.advance(const Duration(milliseconds: 5));
+    expect(renderer.specialDanmaku, hasLength(32));
+    renderer.advance(const Duration(milliseconds: 1));
+    expect(renderer.specialDanmaku, isEmpty);
+    for (var i = 0; i < 18; i++) {
+      expect(renderer.add(special()), isTrue);
+    }
+    expect(renderer.specialDanmaku, hasLength(18));
+  });
+
   test('trajectory clock retains sub-millisecond frame time', () {
     final first = WindowsDanmakuRenderer<void>(option: _option, size: _size)
       ..add(_text('moving'));
@@ -273,12 +300,296 @@ void main() {
     renderer
       ..resume()
       ..prewarmPending();
-    expect(renderer.rasters.rasterizations, inInclusiveRange(1, 4));
+    expect(renderer.rasters.layouts, inInclusiveRange(1, 4));
+    expect(
+      renderer.rasters.rasterizations,
+      WindowsDanmakuRenderer.layoutFirstPrewarm ? 0 : renderer.rasters.layouts,
+    );
     renderer.configure(devicePixelRatio: 2);
     expect(renderer.statistics['pendingPrewarm'], 0);
     expect(renderer.rasters.length, 0);
     renderer.dispose();
   });
+
+  test(
+    'prewarm prepares only its configured stage and is reused at admission',
+    () {
+      final renderer = WindowsDanmakuRenderer<void>(
+        option: _option,
+        size: _size,
+      );
+      addTearDown(renderer.dispose);
+      final contents = List.generate(3, (index) => _text('prepared $index'));
+      renderer.queuePrewarm(contents);
+      for (var index = 0; index < contents.length; index++) {
+        renderer.prewarmPending();
+      }
+      expect(renderer.statistics['pendingPrewarm'], 0);
+      expect(renderer.rasters.layouts, contents.length);
+      const layoutFirst = WindowsDanmakuRenderer.layoutFirstPrewarm;
+      expect(
+        renderer.rasters.rasterizations,
+        layoutFirst ? 0 : contents.length,
+      );
+      expect(renderer.rasters.bytes, layoutFirst ? 0 : greaterThan(0));
+      expect(
+        renderer.statistics['prewarmedLayouts'],
+        layoutFirst ? contents.length : 0,
+      );
+      renderer.queuePrewarm(contents);
+      expect(renderer.statistics['pendingPrewarm'], 0);
+      expect(renderer.add(contents.first), isTrue);
+      expect(renderer.rasters.layouts, contents.length);
+      expect(
+        renderer.rasters.rasterizations,
+        layoutFirst ? 1 : contents.length,
+      );
+    },
+  );
+
+  test('admission cancels pending work even when a track rejects the item', () {
+    final renderer = WindowsDanmakuRenderer<void>(
+      option: _option.copyWith(
+        area: 0.3,
+        safeArea: false,
+        static2Scroll: false,
+      ),
+      size: _size,
+    );
+    addTearDown(renderer.dispose);
+    final future = _text('future', type: DanmakuItemType.top);
+    expect(renderer.add(_text('occupied', type: DanmakuItemType.top)), isTrue);
+    renderer.queuePrewarm([future]);
+    expect(renderer.statistics['pendingPrewarm'], 1);
+    expect(renderer.add(future), isFalse);
+    expect(renderer.statistics['rejectedByTrack'], 1);
+    expect(
+      renderer.statistics['pendingPrewarm'],
+      WindowsDanmakuRenderer.layoutFirstPrewarm ? 0 : 1,
+    );
+    renderer.prewarmPending();
+    expect(
+      renderer.rasters.rasterizations,
+      WindowsDanmakuRenderer.layoutFirstPrewarm ? 1 : 2,
+    );
+  });
+
+  test('prepared lookup does not promote an entry in the LRU', () {
+    final cache = DanmakuRasterCache(
+      option: _option,
+      devicePixelRatio: 1,
+      maxEntries: 2,
+    );
+    addTearDown(cache.clear);
+    final first = _text('first');
+    final second = _text('second');
+    cache
+      ..get(first)
+      ..get(second);
+    expect(cache.isPrepared(first), isTrue);
+    cache.get(_text('third'));
+    expect(cache.isPrepared(first), isFalse);
+    expect(cache.isPrepared(second), isTrue);
+  });
+
+  for (final ratio in [1.0, 1.5, 2.0]) {
+    test(
+      'layout-first admission preserves pixels and trajectories at DPR $ratio',
+      () async {
+        final option = _option.copyWith(massiveMode: true);
+        final demand = WindowsDanmakuRenderer<void>(
+          option: option,
+          size: _size,
+          devicePixelRatio: ratio,
+        );
+        final prepared = WindowsDanmakuRenderer<void>(
+          option: option,
+          size: _size,
+          devicePixelRatio: ratio,
+        );
+        addTearDown(demand.dispose);
+        addTearDown(prepared.dispose);
+        final contents = [
+          _text('moving'),
+          _text('moving', selfSend: true),
+          _text('top', type: DanmakuItemType.top),
+          _text('bottom', type: DanmakuItemType.bottom),
+          _text('long text with a border', selfSend: true),
+        ];
+        // 先积累可靠准入，像素对照也要覆盖自适应的图片预热分支。
+        for (var index = 0; index < 8; index++) {
+          expect(demand.add(_text('seed')), isTrue);
+          expect(prepared.add(_text('seed')), isTrue);
+        }
+        prepared.queuePrewarm(contents);
+        for (var index = 0; index < contents.length; index++) {
+          prepared.prewarmPending();
+        }
+        for (final content in contents) {
+          expect(prepared.add(content), demand.add(content));
+        }
+        for (final elapsed in [0, 250, 500]) {
+          demand.advance(Duration(milliseconds: elapsed));
+          prepared.advance(Duration(milliseconds: elapsed));
+          expect(prepared.activeBytes, demand.activeBytes);
+          expect(prepared.statistics['active'], demand.statistics['active']);
+          for (final opacity in [0.25, 0.5, 1.0]) {
+            final expected = await _pixels(
+              (canvas) => demand.paint(canvas, _size, opacity: opacity),
+            );
+            final actual = await _pixels(
+              (canvas) => prepared.paint(canvas, _size, opacity: opacity),
+            );
+            expect(
+              maxDifference(actual, expected),
+              0,
+              reason: 'elapsed=$elapsed opacity=$opacity',
+            );
+          }
+        }
+      },
+    );
+  }
+
+  test('adaptive prewarm caps images per batch after reliable admission', () {
+    final renderer = WindowsDanmakuRenderer<void>(
+      option: _option.copyWith(massiveMode: true),
+      size: _size,
+    );
+    addTearDown(renderer.dispose);
+    for (var i = 0; i < 8; i++) {
+      expect(renderer.add(_text('seed')), isTrue);
+    }
+    renderer.queuePrewarm([
+      _text('next one'),
+      _text('next two'),
+      _text('next three'),
+    ]);
+    for (var i = 0; i < 3; i++) {
+      renderer.prewarmPending();
+    }
+    expect(
+      renderer.prewarmed,
+      WindowsDanmakuRenderer.layoutFirstPrewarm &&
+              !WindowsDanmakuRenderer.adaptivePrewarm
+          ? 0
+          : 3,
+    );
+    expect(
+      renderer.maxPrewarmImagesPerBatch,
+      lessThanOrEqualTo(WindowsDanmakuRenderer.adaptivePrewarm ? 1 : 4),
+    );
+    expect(renderer.statistics['pendingPrewarm'], 0);
+  });
+
+  test('adaptive prewarm does not rasterize a rejection-heavy future', () {
+    final renderer = WindowsDanmakuRenderer<void>(
+      option: _option.copyWith(area: .3, safeArea: false, static2Scroll: false),
+      size: _size,
+    );
+    addTearDown(renderer.dispose);
+    expect(renderer.add(_text('occupied', type: DanmakuItemType.top)), isTrue);
+    for (var i = 0; i < 8; i++) {
+      expect(
+        renderer.add(_text('blocked', type: DanmakuItemType.top)),
+        isFalse,
+      );
+    }
+    renderer.queuePrewarm([
+      _text('future one'),
+      _text('future two'),
+      _text('future three'),
+    ]);
+    for (var i = 0; i < 3; i++) {
+      renderer.prewarmPending();
+    }
+    expect(
+      renderer.prewarmed,
+      WindowsDanmakuRenderer.layoutFirstPrewarm ? 0 : 3,
+    );
+    expect(
+      renderer.rasters.rasterizations,
+      WindowsDanmakuRenderer.layoutFirstPrewarm ? 1 : 4,
+    );
+  });
+
+  test('adaptive image prewarm does not evict a full resident cache', () {
+    final probe = DanmakuRasterCache(option: _option, devicePixelRatio: 1);
+    final seed = _text('aaaaaaaa');
+    final bytes = probe.get(seed)!.bytes;
+    probe.clear();
+    final renderer = WindowsDanmakuRenderer<void>(
+      option: _option.copyWith(massiveMode: true),
+      size: _size,
+      rasterCacheMaxBytes: bytes,
+    );
+    addTearDown(renderer.dispose);
+    for (var i = 0; i < 8; i++) {
+      expect(renderer.add(seed), isTrue);
+    }
+    final before = renderer.rasters.rasterizations;
+    renderer
+      ..queuePrewarm([_text('bbbbbbbb')])
+      ..prewarmPending();
+    expect(
+      renderer.rasters.rasterizations,
+      before + (WindowsDanmakuRenderer.layoutFirstPrewarm ? 0 : 1),
+    );
+    expect(
+      renderer.rasters.isRasterized(seed),
+      WindowsDanmakuRenderer.layoutFirstPrewarm,
+    );
+    expect(renderer.rasters.bytes, lessThanOrEqualTo(bytes));
+  });
+
+  test(
+    'adaptive slow-frame backoff preserves layouts then recovers images',
+    () {
+      final renderer = WindowsDanmakuRenderer<void>(
+        option: _option.copyWith(massiveMode: true),
+        size: _size,
+      );
+      addTearDown(renderer.dispose);
+      for (var i = 0; i < 8; i++) {
+        expect(renderer.add(_text('seed')), isTrue);
+      }
+      final future = [
+        _text('future one'),
+        _text('future two'),
+        _text('future three'),
+      ];
+      renderer
+        ..recordFrameCost(
+          const Duration(milliseconds: 20),
+          const Duration(milliseconds: 16),
+        )
+        ..queuePrewarm(future);
+      for (var i = 0; i < 3; i++) {
+        renderer.prewarmPending();
+      }
+      expect(
+        renderer.prewarmed,
+        WindowsDanmakuRenderer.layoutFirstPrewarm ? 0 : 3,
+      );
+      expect(
+        renderer.prewarmBackoffs,
+        WindowsDanmakuRenderer.adaptivePrewarm ? 1 : 0,
+      );
+      renderer
+        ..advance(const Duration(milliseconds: 500))
+        ..queuePrewarm(future);
+      for (var i = 0; i < 3; i++) {
+        renderer.prewarmPending();
+      }
+      expect(
+        renderer.prewarmed,
+        WindowsDanmakuRenderer.layoutFirstPrewarm &&
+                !WindowsDanmakuRenderer.adaptivePrewarm
+            ? 0
+            : 3,
+      );
+    },
+  );
 
   test('prewarm skips content already rasterized', () {
     final renderer = WindowsDanmakuRenderer<void>(option: _option, size: _size)

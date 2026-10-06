@@ -38,10 +38,14 @@ class _WindowsDanmakuScreenState<T> extends State<WindowsDanmakuScreen<T>>
   VoidCallback? _unregisterDiagnostics;
   Duration _lastElapsed = Duration.zero;
   bool _ancestorEnabled = true;
+  Duration _frameBudget = const Duration(microseconds: 16667);
 
   @override
   void initState() {
     super.initState();
+    if (WindowsDanmakuRenderer.adaptivePrewarm) {
+      SchedulerBinding.instance.addTimingsCallback(_onFrameTimings);
+    }
     _ticker = createTicker((elapsed) {
       final delta = elapsed - _lastElapsed;
       _lastElapsed = elapsed;
@@ -58,6 +62,14 @@ class _WindowsDanmakuScreenState<T> extends State<WindowsDanmakuScreen<T>>
   void didChangeDependencies() {
     super.didChangeDependencies();
     _ancestorEnabled = TickerMode.valuesOf(context).enabled;
+    if (WindowsDanmakuRenderer.adaptivePrewarm) {
+      final rate = View.of(context).display.refreshRate;
+      _frameBudget = Duration(
+        microseconds: rate.isFinite && rate > 0
+            ? (1000000 / rate).round()
+            : 16667,
+      );
+    }
     final ratio = MediaQuery.devicePixelRatioOf(context);
     final family = DefaultTextStyle.of(context).style.fontFamily;
     if (_renderer == null) {
@@ -100,6 +112,15 @@ class _WindowsDanmakuScreenState<T> extends State<WindowsDanmakuScreen<T>>
     _syncTicker();
   }
 
+  void _onFrameTimings(List<FrameTiming> timings) {
+    for (final frame in timings) {
+      final cost = frame.buildDuration > frame.rasterDuration
+          ? frame.buildDuration
+          : frame.rasterDuration;
+      _renderer?.recordFrameCost(cost, _frameBudget);
+    }
+  }
+
   void _syncTicker() {
     final renderer = _renderer;
     if (renderer == null) return;
@@ -130,6 +151,9 @@ class _WindowsDanmakuScreenState<T> extends State<WindowsDanmakuScreen<T>>
 
   @override
   void dispose() {
+    if (WindowsDanmakuRenderer.adaptivePrewarm) {
+      SchedulerBinding.instance.removeTimingsCallback(_onFrameTimings);
+    }
     _unregisterDiagnostics?.call();
     _renderer?.removeListener(_syncTicker);
     _ticker.dispose();

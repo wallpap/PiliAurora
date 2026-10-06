@@ -55,6 +55,10 @@ class DanmakuRasterCache {
 
   int get length => _entries.length;
 
+  /// 布局或图片均可直接复用；查询不改变 LRU 顺序。
+  bool isPrepared(DanmakuContentItem content) =>
+      _entries.containsKey(keyOf(content));
+
   bool isRasterized(DanmakuContentItem content) =>
       _entries[keyOf(content)]?.image != null;
 

@@ -5,6 +5,7 @@ import 'package:canvas_danmaku/special_danmaku_painter.dart';
 import 'package:canvas_danmaku/utils/utils.dart' as canvas_danmaku;
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/widgets.dart';
+import 'package:pili_aurora/pages/danmaku/prewarm_policy.dart';
 import 'package:pili_aurora/pages/danmaku/raster_cache.dart';
 import 'package:pili_aurora/pages/danmaku/render_guard.dart';
 import 'package:pili_aurora/pages/danmaku/trajectory.dart';
@@ -62,6 +63,17 @@ class WindowsDanmakuRenderer<T> extends ChangeNotifier {
   static const maxActiveBytes = maxActiveBytesMiB * 1024 * 1024;
   static const maxActiveItems = 600;
   static const maxPendingPrewarm = 64;
+  // 候选尚未完成长测和尾延迟验证，只通过编译参数显式启用。
+  static const adaptivePrewarm = bool.fromEnvironment(
+    'WINDOWS_DANMAKU_ADAPTIVE_PREWARM',
+    defaultValue: false,
+  );
+  static const layoutFirstPrewarm =
+      adaptivePrewarm ||
+      bool.fromEnvironment(
+        'WINDOWS_DANMAKU_LAYOUT_FIRST_PREWARM',
+        defaultValue: false,
+      );
   static const prewarmEnabled = bool.fromEnvironment(
     'WINDOWS_DANMAKU_PREWARM',
     defaultValue: true,
@@ -74,6 +86,7 @@ class WindowsDanmakuRenderer<T> extends ChangeNotifier {
   final specialDanmaku = <DanmakuItem<T>>[];
   final _entries = <DanmakuItem<T>, _PreparedEntry>{};
   final _pending = <DanmakuRasterKey, DanmakuContentItem<T>>{};
+  final _prewarmPolicy = adaptivePrewarm ? DanmakuPrewarmPolicy() : null;
   final _random = math.Random(0);
   final _paint = Paint();
   DanmakuOption _option;
@@ -90,6 +103,11 @@ class WindowsDanmakuRenderer<T> extends ChangeNotifier {
   int directPaints = 0;
   int groupPaints = 0;
   int prewarmed = 0;
+  int prewarmedLayouts = 0;
+  int prewarmMicros = 0;
+  int prewarmBackoffs = 0;
+  int maxPrewarmImagesPerBatch = 0;
+  int? observedFrameBudgetMicros;
   int rejectedByMemoryBudget = 0;
   int rejectedByActiveItemLimit = 0;
   int rejectedByTrack = 0;
@@ -100,6 +118,7 @@ class WindowsDanmakuRenderer<T> extends ChangeNotifier {
 
   Map<String, Object?> get statistics => {
     'renderer': 'windows-preprocess',
+    'clockMode': 'frame-delta',
     'active': _entries.length + specialDanmaku.length,
     'activeImageBytes': activeBytes,
     'activeImageLimitBytes': maxActiveBytes,
@@ -119,6 +138,18 @@ class WindowsDanmakuRenderer<T> extends ChangeNotifier {
     'evictedImageBytes': rasters.evictedImageBytes,
     'pendingPrewarm': _pending.length,
     'prewarmed': prewarmed,
+    'prewarmStrategy': adaptivePrewarm
+        ? 'adaptive'
+        : layoutFirstPrewarm
+        ? 'layout-first'
+        : 'image-first',
+    'recentAdmissionSamples': _prewarmPolicy?.samples ?? 0,
+    'recentAccepted': _prewarmPolicy?.accepted ?? 0,
+    'prewarmBackoffs': prewarmBackoffs,
+    'maxPrewarmImagesPerBatch': maxPrewarmImagesPerBatch,
+    'observedFrameBudgetMicros': observedFrameBudgetMicros,
+    'prewarmedLayouts': prewarmedLayouts,
+    'prewarmMicros': prewarmMicros,
     'directPaints': directPaints,
     'groupPaints': groupPaints,
     'overlapSafe': canPaintDirectly,
@@ -203,6 +234,18 @@ class WindowsDanmakuRenderer<T> extends ChangeNotifier {
   }
 
   bool add(DanmakuContentItem<T> content) {
+    final accepted = _add(content);
+    if (adaptivePrewarm && content.type != DanmakuItemType.special) {
+      _prewarmPolicy!.recordAdmission(accepted);
+    }
+    return accepted;
+  }
+
+  bool _add(DanmakuContentItem<T> content) {
+    // 已到入场时刻的内容不再属于未来工作，即使本次准入被拒绝也应取消预热。
+    if (layoutFirstPrewarm) {
+      _pending.remove(DanmakuRasterCache.keyOf(content));
+    }
     if (_disposed ||
         _option.hideWhat(content.type) ||
         scrollDanmaku.isEmpty ||
@@ -329,7 +372,19 @@ class WindowsDanmakuRenderer<T> extends ChangeNotifier {
           _option.hideWhat(content.type)) {
         continue;
       }
-      if (rasters.isRasterized(content)) continue;
+      final prepareImages =
+          adaptivePrewarm &&
+          _prewarmPolicy!.allowImages(
+            pending: _pending.length + 1,
+            activeBytes: activeBytes,
+            maxActiveBytes: maxActiveBytes,
+            nowMs: tick,
+          );
+      if (layoutFirstPrewarm && !prepareImages
+          ? rasters.isPrepared(content)
+          : rasters.isRasterized(content)) {
+        continue;
+      }
       final key = DanmakuRasterCache.keyOf(content);
       if (_pending.length >= maxPendingPrewarm && !_pending.containsKey(key)) {
         break;
@@ -361,15 +416,58 @@ class WindowsDanmakuRenderer<T> extends ChangeNotifier {
     if (_disposed || !running || !prewarmingAllowed) return;
     final stopwatch = Stopwatch()..start();
     var count = 0;
+    var images = 0;
+    // 候选默认只预排版；自适应分支仅在低压力、高准入率下限量生成图片。
+    // 单次排版不可中断，因此这是软预算；未完成项下帧继续，入场仍可同步兜底。
     while (_pending.isNotEmpty &&
         count < 4 &&
-        stopwatch.elapsedMicroseconds < 2000) {
+        stopwatch.elapsedMicroseconds < (layoutFirstPrewarm ? 500 : 2000)) {
       final content = _pending.remove(_pending.keys.first)!;
-      final before = rasters.rasterizations;
-      rasters.get(content, rasterize: true);
-      prewarmed += rasters.rasterizations - before;
+      if (layoutFirstPrewarm) {
+        final before = rasters.layouts;
+        final raster = rasters.get(content);
+        prewarmedLayouts += rasters.layouts - before;
+        if (adaptivePrewarm &&
+            raster != null &&
+            raster.image == null &&
+            _entries.length + specialDanmaku.length < maxActiveItems &&
+            activeBytes + raster.bytes <= maxActiveBytes &&
+            // 图片预热不触发字节淘汰；布局仍受既有条目上限和 LRU 约束。
+            rasters.bytes + raster.bytes <= rasters.maxBytes &&
+            _prewarmPolicy!.allowImages(
+              pending: _pending.length + 1,
+              activeBytes: activeBytes,
+              maxActiveBytes: maxActiveBytes,
+              nowMs: tick,
+            )) {
+          final beforeImages = rasters.rasterizations;
+          rasters.rasterize(content, raster);
+          final prepared = rasters.rasterizations - beforeImages;
+          prewarmed += prepared;
+          images += prepared;
+        }
+      } else {
+        final before = rasters.rasterizations;
+        rasters.get(content, rasterize: true);
+        final prepared = rasters.rasterizations - before;
+        prewarmed += prepared;
+        images += prepared;
+      }
       count++;
+      // 高置信度场景也不把多个图片任务塞进同一帧；剩余项下一帧继续。
+      if (adaptivePrewarm && images > 0) break;
     }
+    maxPrewarmImagesPerBatch = math.max(maxPrewarmImagesPerBatch, images);
+    stopwatch.stop();
+    prewarmMicros += stopwatch.elapsedMicroseconds;
+  }
+
+  void recordFrameCost(Duration cost, Duration budget) {
+    if (!adaptivePrewarm || _disposed) return;
+    observedFrameBudgetMicros = budget.inMicroseconds;
+    if (cost <= budget) return;
+    _prewarmPolicy!.backoff(tick);
+    prewarmBackoffs++;
   }
 
   void advance(Duration elapsed) {
@@ -638,6 +736,7 @@ class WindowsDanmakuRenderer<T> extends ChangeNotifier {
     specialDanmaku.clear();
     _removeDisposed();
     _pending.clear();
+    _prewarmPolicy?.clear();
     _unsafeUntilMs = 0;
     notifyListeners();
   }
