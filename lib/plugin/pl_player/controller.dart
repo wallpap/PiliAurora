@@ -32,6 +32,7 @@ import 'package:pili_aurora/plugin/pl_player/utils/android_decode_recovery.dart'
 import 'package:pili_aurora/plugin/pl_player/utils/hardware_video_configuration.dart';
 import 'package:pili_aurora/plugin/pl_player/utils/preview_image_cache.dart';
 import 'package:pili_aurora/plugin/pl_player/utils/native_media_source.dart';
+import 'package:pili_aurora/plugin/pl_player/utils/playback_load_queue.dart';
 import 'package:pili_aurora/services/service_locator.dart';
 import 'package:pili_aurora/services/diagnostics/diagnostics.dart';
 import 'package:pili_aurora/services/diagnostics/player_diagnostics.dart';
@@ -581,8 +582,9 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
       .._playerCount += 1;
   }
 
-  bool _processing = false;
-  bool get processing => _processing;
+  final _loadQueue = PlaybackLoadQueue();
+  Timer? _reloadTimer;
+  bool get processing => _loadQueue.isLoading;
 
   // offline
   bool get isFileSource => dataSource is FileSource;
@@ -612,9 +614,11 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
     VoidCallback? onInit,
     Volume? volume,
     bool autoFullScreenFlag = false,
-  }) async {
+  }) => _loadQueue.run((isCurrent) async {
+    if (_playerCount == 0) return;
+    _reloadTimer?.cancel();
+    _reloadTimer = null;
     try {
-      _processing = true;
       this.isLive = isLive;
       _videoType = videoType ?? VideoType.ugc;
       this.width = width;
@@ -646,19 +650,15 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
         await pause(notify: false);
       }
 
-      if (_playerCount == 0) {
-        return;
-      }
-      // 配置Player 音轨、字幕等等
-      await _createVideoController(dataSource, seekTo, volume);
-
-      if (_playerCount == 0) {
-        _removeListeners();
-        _videoPlayerController?.dispose();
-        _videoPlayerController = null;
-        _videoController = null;
-        return;
-      }
+      if (!isCurrent() || _playerCount == 0) return;
+      // 快速切源仅初始化一套原生资源；旧请求不能写回新页面。
+      final opened = await _createVideoController(
+        dataSource,
+        seekTo,
+        volume,
+        isCurrent,
+      );
+      if (!opened || !isCurrent() || _playerCount == 0) return;
 
       updateDuration(duration ?? _videoPlayerController!.state.duration);
       position.value = buffered.value = seekTo?.inSeconds ?? 0;
@@ -669,9 +669,10 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
         triggerFullScreen(status: true);
       }
 
-      await _initializePlayer();
-      onInit?.call();
+      await _initializePlayer(isCurrent);
+      if (isCurrent()) onInit?.call();
     } catch (err, stackTrace) {
+      if (!isCurrent()) return;
       dataStatus.value = DataStatus.error;
       Diagnostics.instance.log(
         DiagnosticLogLevel.error,
@@ -680,10 +681,8 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
         details: {'error': err},
         stack: stackTrace,
       );
-    } finally {
-      _processing = false;
     }
-  }
+  });
 
   String? shadersDirPath;
   Future<String> get copyShadersToExternalDirectory async {
@@ -737,7 +736,7 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
     }
   }
 
-  Future<Player> _initPlayer() async {
+  Future<(Player, VideoController)?> _initPlayer() async {
     assert(_videoPlayerController == null);
     final opt = {
       'video-sync': Pref.videoSync,
@@ -758,31 +757,45 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
       ),
     );
 
-    assert(_videoController == null);
-
-    _videoController = await VideoController.create(
-      player,
-      configuration: hardwareVideoConfiguration(
-        enabled: Pref.enableHA,
-        configured: Pref.hardwareDecoding,
-      ),
-    );
-
-    player.setMediaHeader(userAgent: BrowserUa.pc, referer: HttpString.baseUrl);
-
-    _startListeners(player);
-
-    return player;
+    // 创建句柄与输出均跨异步边界，页面可能已退出；不能发布迟到的原生资源。
+    if (_playerCount == 0) {
+      await player.dispose();
+      return null;
+    }
+    final VideoController videoController;
+    try {
+      assert(_videoController == null);
+      videoController = await VideoController.create(
+        player,
+        configuration: hardwareVideoConfiguration(
+          enabled: Pref.enableHA,
+          configured: Pref.hardwareDecoding,
+        ),
+      );
+      player.setMediaHeader(
+        userAgent: BrowserUa.pc,
+        referer: HttpString.baseUrl,
+      );
+    } catch (_) {
+      await player.dispose();
+      rethrow;
+    }
+    if (_playerCount == 0) {
+      await player.dispose();
+      return null;
+    }
+    return (player, videoController);
   }
 
   late final buffer = Pref.initBuffer(_playbackSpeed.value);
   late final liveBuffer = Pref.initLiveBuffer();
 
   // 配置播放器
-  Future<void> _createVideoController(
+  Future<bool> _createVideoController(
     DataSource dataSource,
     Duration? seekTo,
     Volume? volume,
+    bool Function() isCurrent,
   ) async {
     isBuffering.value = false;
     _androidDecodeRecovery?.reset();
@@ -793,19 +806,24 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
     var player = _videoPlayerController;
 
     if (player == null) {
-      player = await _initPlayer();
+      final created = await _initPlayer();
+      if (created == null) return false;
+      final (createdPlayer, createdVideoController) = created;
+      // await 返回前也可能退出页面；两份资源必须在同一同步段发布。
       if (_playerCount == 0) {
-        _removeListeners();
-        player.dispose();
-        player = null;
-        _videoController = null;
-        return;
+        await createdPlayer.dispose();
+        return false;
       }
+      player = createdPlayer;
       _videoPlayerController = player;
+      _videoController = createdVideoController;
+      _startListeners(player);
       if (isAnim && superResolutionType.value != .disable) {
         await setShader();
       }
     }
+
+    if (!isCurrent() || _playerCount == 0) return false;
 
     final Map<String, String> extras = {
       if (dataSource is FileSource)
@@ -837,23 +855,47 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
       ),
       play: false,
     );
+    return isCurrent() && _playerCount != 0;
   }
 
   Future<void>? refreshPlayer() {
-    if (dataSource is FileSource) {
+    if (dataSource is FileSource || processing || _playerCount == 0) {
       return null;
     }
-    if (_videoPlayerController case final ctr? when (ctr.current.isNotEmpty)) {
-      var media = ctr.current.last;
-      if (!isLive) media = media.copyWith(start: ctr.state.position);
-      return ctr.open(media, play: true);
+    if (_videoPlayerController case final ctr? when ctr.current.isNotEmpty) {
+      return _loadQueue.run((isCurrent) async {
+        if (!isCurrent() || ctr.disposed || ctr.current.isEmpty) return;
+        var media = ctr.current.last;
+        if (!isLive) media = media.copyWith(start: ctr.state.position);
+        await ctr.open(media, play: true);
+      });
     }
     return null;
   }
 
+  void _scheduleRefresh({bool requireEmptyBuffer = false}) {
+    // 同一媒体的错误风暴只保留一个重连定时器，旧媒体不能重开当前播放。
+    if (_reloadTimer?.isActive ?? false) return;
+    final source = dataSource;
+    _reloadTimer = Timer(const Duration(seconds: 3), () {
+      _reloadTimer = null;
+      if (_playerCount == 0 || processing || !identical(source, dataSource)) {
+        return;
+      }
+      if (requireEmptyBuffer) {
+        if (!isBuffering.value || buffered.value != 0) return;
+        SmartDialog.showToast(
+          '视频链接打开失败，重试中',
+          displayTime: const Duration(milliseconds: 500),
+        );
+      }
+      refreshPlayer();
+    });
+  }
+
   // 开始播放
-  Future<void> _initializePlayer() async {
-    if (_instance == null) return;
+  Future<void> _initializePlayer(bool Function() isCurrent) async {
+    if (!isCurrent()) return;
     // 设置倍速
     if (_videoPlayerController != null) {
       final speed = isLive ? 1.0 : playbackSpeed;
@@ -861,9 +903,10 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
         await setPlaybackSpeed(speed);
       }
     }
+    if (!isCurrent()) return;
     _initVideoFit();
 
-    // 自动播放
+    // 回调可能继续加载媒体，不在加载队列中等待，避免回调重新入队后自锁。
     if (_autoPlay) {
       playIfExists();
     }
@@ -1044,7 +1087,7 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
           if (event.startsWith('tcp: ffurl_read returned ') ||
               event.startsWith("Failed to open https://") ||
               event.startsWith("Can not open external file https://")) {
-            Timer(const Duration(milliseconds: 3000), refreshPlayer);
+            _scheduleRefresh();
           }
           return;
         }
@@ -1056,23 +1099,7 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
           EasyThrottle.throttle(
             'controllerStream.error.listen',
             const Duration(milliseconds: 10000),
-            () {
-              Timer(const Duration(milliseconds: 3000), () {
-                // if (kDebugMode) {
-                //   debugPrint("isBuffering.value: ${isBuffering.value}");
-                // }
-                // if (kDebugMode) {
-                //   debugPrint("_buffered.value: ${_buffered.value}");
-                // }
-                if (isBuffering.value && buffered.value == 0) {
-                  SmartDialog.showToast(
-                    '视频链接打开失败，重试中',
-                    displayTime: const Duration(milliseconds: 500),
-                  );
-                  refreshPlayer();
-                }
-              });
-            },
+            () => _scheduleRefresh(requireEmptyBuffer: true),
           );
         } else if (event.startsWith('Could not open codec')) {
           SmartDialog.showToast('无法加载解码器, $event，可能会切换至软解');
@@ -1623,6 +1650,9 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
     }
 
     _playerCount = 0;
+    _loadQueue.dispose();
+    _reloadTimer?.cancel();
+    _reloadTimer = null;
     if (removeSafeArea) {
       showSystemBar();
     }
