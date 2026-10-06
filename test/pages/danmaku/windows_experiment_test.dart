@@ -79,39 +79,48 @@ void main() {
     },
   );
 
-  testWidgets('prewarm makes progress during an active animation', (
-    tester,
-  ) async {
-    late WindowsDanmakuRenderer<void> renderer;
-    await tester.pumpWidget(
-      _host(
-        WindowsDanmakuScreen<void>(
-          option: _option,
-          size: _size,
-          createdRenderer: (value) => renderer = value,
-        ),
-      ),
-    );
-    renderer
-      ..add(
-        DanmakuContentItem<void>('active', color: const Color(0xFFFFFFFF)),
-      )
-      ..queuePrewarm(
-        List.generate(
-          12,
-          (index) => DanmakuContentItem<void>(
-            'future $index',
-            color: const Color(0xFFFFFFFF),
+  testWidgets(
+    'configured prewarm makes progress during animation',
+    (tester) async {
+      late WindowsDanmakuRenderer<void> renderer;
+      await tester.pumpWidget(
+        _host(
+          WindowsDanmakuScreen<void>(
+            option: _option,
+            size: _size,
+            createdRenderer: (value) => renderer = value,
           ),
         ),
       );
-    for (var frame = 0; frame < 16; frame++) {
-      await tester.pump(const Duration(milliseconds: 16));
-    }
-    expect(renderer.rasters.rasterizations, 13);
-    expect(renderer.statistics['pendingPrewarm'], 0);
-    await tester.pumpWidget(const SizedBox.shrink());
-  });
+      renderer
+        ..add(
+          DanmakuContentItem<void>('active', color: const Color(0xFFFFFFFF)),
+        )
+        ..queuePrewarm(
+          List.generate(
+            12,
+            (index) => DanmakuContentItem<void>(
+              'future $index',
+              color: const Color(0xFFFFFFFF),
+            ),
+          ),
+        );
+      for (var frame = 0; frame < 16; frame++) {
+        await tester.pump(const Duration(milliseconds: 16));
+      }
+      expect(renderer.rasters.layouts, 13);
+      expect(
+        renderer.rasters.rasterizations,
+        WindowsDanmakuRenderer.layoutFirstPrewarm ? 1 : 13,
+      );
+      expect(
+        renderer.statistics['prewarmedLayouts'],
+        WindowsDanmakuRenderer.layoutFirstPrewarm ? 12 : 0,
+      );
+      expect(renderer.statistics['pendingPrewarm'], 0);
+      await tester.pumpWidget(const SizedBox.shrink());
+    },
+  );
 
   testWidgets('baseline records animation rebuilds', (tester) async {
     late DanmakuController<void> controller;
