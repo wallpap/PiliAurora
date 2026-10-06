@@ -1,5 +1,5 @@
 import com.android.build.gradle.internal.api.ApkVariantOutputImpl
-import org.jetbrains.kotlin.konan.properties.Properties
+import java.util.Properties
 
 plugins {
     id("com.android.application")
@@ -23,8 +23,8 @@ android {
     ndkVersion = flutter.ndkVersion
 
     compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_17
-        targetCompatibility = JavaVersion.VERSION_17
+        sourceCompatibility = JavaVersion.VERSION_25
+        targetCompatibility = JavaVersion.VERSION_25
     }
 
     defaultConfig {
@@ -39,8 +39,9 @@ android {
 
     val keyProperties = Properties().also {
         val properties = rootProject.file("key.properties")
-        if (properties.exists())
-            it.load(properties.inputStream())
+        if (properties.exists()) {
+            properties.inputStream().use { stream -> it.load(stream) }
+        }
     }
 
     val config = keyProperties.getProperty("storeFile")?.let {
@@ -105,8 +106,9 @@ android {
 }
 
 kotlin {
+    jvmToolchain(25)
     compilerOptions {
-        jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17
+        jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_25
     }
 }
 
