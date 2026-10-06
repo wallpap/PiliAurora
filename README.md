@@ -57,8 +57,10 @@ PiliAurora 保留了 PiliPlus 的主要用户功能，包括：
 
 - Windows 开发环境建议使用 PowerShell 7、Git 和 FVM。
 - Flutter 版本由 [.fvmrc](.fvmrc) 固定；当前项目要求 Flutter `3.47.5`，Dart `>=3.13.0`。
-- 构建 Android：准备 Android SDK 和 Java 17 环境，并配置相应环境变量。
+- 构建 Android：准备 Android SDK 和 JDK 25，并将 `JAVA_HOME` 指向 JDK 25；Android Studio 的 Gradle JDK 也应使用同一版本。
 - 构建 Windows：安装 Visual Studio，并启用“使用 C++ 的桌面开发”工作负载。
+
+Android 构建使用 Gradle 9.6.0、AGP 9.2.1 和 Kotlin 2.4.20，并通过 `android/gradle/gradle-daemon-jvm.properties` 固定 Gradle 运行时为 JDK 25；应用与所有 Android 子模块（含 Flutter 插件源码）的 Java/Kotlin 编译目标及 Java 工具链统一为 25；Flutter SDK 内部构建逻辑和第三方预编译 JAR 保持其原始字节码版本。
 
 ### 构建命令
 
