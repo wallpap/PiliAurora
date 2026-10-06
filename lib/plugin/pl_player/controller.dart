@@ -1,5 +1,5 @@
 import 'dart:async' show StreamSubscription, Timer;
-import 'dart:convert' show ascii, utf8;
+import 'dart:convert' show ascii;
 import 'dart:io' show Platform;
 import 'dart:math' show max, min;
 
@@ -31,6 +31,7 @@ import 'package:pili_aurora/plugin/pl_player/utils/decode_fallback.dart';
 import 'package:pili_aurora/plugin/pl_player/utils/android_decode_recovery.dart';
 import 'package:pili_aurora/plugin/pl_player/utils/hardware_video_configuration.dart';
 import 'package:pili_aurora/plugin/pl_player/utils/preview_image_cache.dart';
+import 'package:pili_aurora/plugin/pl_player/utils/native_media_source.dart';
 import 'package:pili_aurora/services/service_locator.dart';
 import 'package:pili_aurora/services/diagnostics/diagnostics.dart';
 import 'package:pili_aurora/services/diagnostics/player_diagnostics.dart';
@@ -815,24 +816,9 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
         ...buffer,
     };
 
-    String video = dataSource.videoSource;
-    if (dataSource.audioSource case final audio? when (audio.isNotEmpty)) {
-      if (onlyPlayAudio.value) {
-        video = audio;
-      } else {
-        // dely_open need provide length
-        video =
-            ('edl://'
-            '!no_chapters;'
-            // '!delay_open,media_type=video;'
-            '%${isFileSource ? utf8.encode(video).length : video.length}%$video;'
-            '!new_stream;!no_chapters;'
-            // '!delay_open,media_type=audio;'
-            '%${isFileSource ? utf8.encode(audio).length : audio.length}%$audio');
-      }
+    if (dataSource.audioSource case final audio? when audio.isNotEmpty) {
       audioFilterExtras(volume, map: extras);
     }
-
     assert(!isLive || seekTo == null);
     // 复用播放器时也应用最新顺序；原生侧会重置本轮候选探测状态。
     player.setProperty(
@@ -843,10 +829,11 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
       ).hwdec!,
     );
     await player.open(
-      Media(
-        video,
+      nativeMediaSource(
+        source: dataSource,
+        audioOnly: onlyPlayAudio.value,
         start: seekTo,
-        extras: extras.isEmpty ? null : extras,
+        extras: extras,
       ),
       play: false,
     );
