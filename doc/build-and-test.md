@@ -53,7 +53,91 @@ pwsh -File tool/build.ps1 -Platform windows -Mode release
 pwsh -File tool/build.ps1 -Platform android -Mode release
 ```
 
-`-Mode` 还支持 `profile`；只有在明确理解影响时才使用 `-SkipPatch`。Android 构建脚本会使用仓库内 `.gradle-tmp` 作为临时目录，并将简单的 HTTP/HTTPS 代理环境变量转换为 Java 代理参数。
+`-Mode` 还支持 `profile`；只有在明确理解影响时才使用 `-SkipPatch`。Android 构建脚本会使用仓库内 `.gradle-tmp` 作为临时目录（本机该目录也能规避默认临时目录中的 Java 本地 socket 连接失败，详见下节），并将简单的 HTTP/HTTPS 代理环境变量转换为 Java 代理参数。
+
+## 故障记录：Gradle 的本地 socket 初始化失败
+
+记录日期：2026-10-06。环境：Windows 11 10.0.26300.9550、Oracle JDK
+25.0.3、Flutter 3.47.5、Gradle 9.6.0。
+
+### 症状与定位
+
+直接运行 `flutter build apk --debug --target-platform android-x64 --no-pub`
+时，Gradle 尚未进入项目编译就失败：
+
+```text
+java.io.IOException: Unable to establish loopback connection
+  sun.nio.ch.PipeImpl$Initializer.init
+  sun.nio.ch.WEPollSelectorImpl.<init>
+  java.nio.channels.Selector.open
+Caused by: java.net.SocketException: Invalid argument: connect
+  sun.nio.ch.UnixDomainSockets.connect0
+```
+
+**已确认的失败点**是 Java NIO Selector 为自身管道创建本地 Unix-domain socket
+时，在本机默认用户临时目录中连接失败；不是 Dart/Android 源码编译错误。
+用只调用 `Selector.open()` 的 Java 探针，不加载 Flutter 或 Gradle，也能复现。
+单独改变 socket 临时目录为仓库 `.gradle-tmp` 后，探针成功。
+
+| 对照 | 本机结果 |
+| --- | --- |
+| 默认用户临时目录（Windows 8.3 别名） | `Invalid argument: connect` |
+| 同一目录完整拼写或新建子目录 | 同样失败 |
+| 仓库内 `.gradle-tmp` | `SELECTOR_OK` |
+| 仅把 `TEMP`、`TMP` 改为 `.gradle-tmp` | `SELECTOR_OK`，Android Debug 构建成功 |
+| Gradle `--no-daemon` 加 IPv4 参数 | 仍失败 |
+| JDK 17 对默认临时目录执行相同探针 | 同样失败；不能据此归因于 JDK 25 专有回归 |
+
+失败路径比成功路径更短，两者所在卷均为 NTFS；目录检查未发现重解析链接。
+因此不能把“路径太长”“8.3 别名”“普通 IPv4 环回网络”写成已确认根因。
+本次定位到可复现的**目录相关本地 socket 环境问题**，未证明更底层的 Windows
+组件或安全软件成因；不据此修改防火墙、系统代理或全局 Java 配置。
+
+### 修复与复验
+
+优先使用项目已有脚本，它已为 Android 构建设置仓库内临时目录：
+
+```powershell
+pwsh -NoProfile -File tool/build.ps1 -Platform android -Mode debug
+```
+
+需要直接调用 Flutter 时，仅在当前 PowerShell 进程设置环境，不永久修改系统变量：
+
+```powershell
+$gradleTemp = Join-Path (Get-Location).Path '.gradle-tmp'
+New-Item -ItemType Directory -Path $gradleTemp -Force | Out-Null
+$env:TEMP = $gradleTemp
+$env:TMP = $gradleTemp
+flutter build apk --debug --target-platform android-x64 --no-pub
+```
+
+可在仓库 `build/` 目录保存以下 `SelectorProbe.java`，隔离验证目录差异：
+
+```java
+import java.nio.channels.Selector;
+public class SelectorProbe {
+    public static void main(String[] args) throws Exception {
+        try (var selector = Selector.open()) {
+            System.out.println("SELECTOR_OK");
+        }
+    }
+}
+```
+
+先在默认环境运行 `java build/SelectorProbe.java`，再比较：
+
+```powershell
+java "-Djdk.net.unixdomain.tmpdir=$gradleTemp" build/SelectorProbe.java
+```
+
+本次修复后 Android x86_64 Debug APK 构建成功（最终版本 `1.0.6+91`），
+播放器代码和测试的定向静态分析无问题，全仓 266 项测试通过。
+第三方插件仍有 compileSdk 覆盖及 Kotlin Gradle Plugin 兼容提示，未通过升级依赖
+或关闭检查掩盖它们。APK 构建不证明真实设备的 MediaCodec/GPU 播放效果。
+
+经验：先用最小探针区分 Java 环境与项目代码，再单变量对照临时目录。
+相同堆栈重复出现时停止无证据重试；`--no-daemon` 仍可能创建单次 daemon，
+也无法消除客户端自身的 Selector 初始化需求。
 
 ## 代码生成
 
