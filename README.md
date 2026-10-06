@@ -60,7 +60,7 @@ PiliAurora 保留了 PiliPlus 的主要用户功能，包括：
 - 构建 Android：准备 Android SDK 和 JDK 25，并将 `JAVA_HOME` 指向 JDK 25；Android Studio 的 Gradle JDK 也应使用同一版本。
 - 构建 Windows：安装 Visual Studio，并启用“使用 C++ 的桌面开发”工作负载。
 
-Android 构建使用 Gradle 9.6.0、AGP 9.2.1 和 Kotlin 2.4.20，并通过 `android/gradle/gradle-daemon-jvm.properties` 固定 Gradle 运行时为 JDK 25；应用的 Java/Kotlin 编译目标同样为 25，第三方 Flutter 插件仍保留 Java/Kotlin 17 目标。请先安装 JDK 25，本项目不自动下载 JDK。采用的新语法不依赖预览开关；JDK 的虚拟线程、Scoped Values 等 JVM API 不等同于 Android API，不用于应用运行时代码。
+Android 构建使用 Gradle 9.6.0、AGP 9.2.1 和 Kotlin 2.4.20，并通过 `android/gradle/gradle-daemon-jvm.properties` 固定 Gradle 运行时为 JDK 25；应用与所有 Android 子模块（含 Flutter 插件源码）的 Java/Kotlin 编译目标及 Java 工具链统一为 25；Flutter SDK 内部构建逻辑和第三方预编译 JAR 保持其原始字节码版本。
 
 ### 构建命令
 

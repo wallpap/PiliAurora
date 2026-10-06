@@ -1,3 +1,4 @@
+import org.gradle.api.plugins.JavaPluginExtension
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 
 allprojects {
@@ -28,17 +29,18 @@ subprojects {
                 androidExtension.namespace = project.group.toString()
             }
 
-            // 应用使用 Java 25；第三方 Flutter 插件保留原有的 Java/Kotlin 17 目标。
-            if (project.path != ":app") {
-                androidExtension.compileOptions {
-                    sourceCompatibility = JavaVersion.VERSION_17
-                    targetCompatibility = JavaVersion.VERSION_17
-                }
+            // 应用与 Flutter 插件源码统一使用 JDK 25，Java/Kotlin 字节码目标保持一致。
+            androidExtension.compileOptions {
+                sourceCompatibility = JavaVersion.VERSION_25
+                targetCompatibility = JavaVersion.VERSION_25
+            }
 
-                project.tasks.withType<KotlinCompile>().configureEach {
-                    compilerOptions {
-                        jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
-                    }
+            project.extensions.findByType<JavaPluginExtension>()?.toolchain?.languageVersion
+                ?.set(JavaLanguageVersion.of(25))
+
+            project.tasks.withType<KotlinCompile>().configureEach {
+                compilerOptions {
+                    jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_25)
                 }
             }
 
