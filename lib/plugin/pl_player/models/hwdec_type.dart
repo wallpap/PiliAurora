@@ -39,7 +39,12 @@ enum HwDecType {
             ? autoSafe.hwdec
             : [mediacodec.hwdec, autoSafe.hwdec].join(',')
       : Platform.isWindows
-      ? autoCopy.hwdec
+      // Windows 视频纹理桥（media_kit_video 的 ANGLE/D3D11 共享 HANDLE 路径）
+      // 只在 D3D11 后端上验证过非 copy 直通，因此默认先试 d3d11va，再交给
+      // mpv 的 auto 探测；默认不把当前桥未验证的 D3D12/AMF 直通排在前面。
+      // 注意：这里只影响解码器选择，画面每帧仍存在一次 GPU 内拷贝，
+      // 不能据此声称整条图形路径零拷贝。
+      ? [d3d11va.hwdec, auto.hwdec].join(',')
       : auto.hwdec;
 
   /// 按硬件解码效率排列候选项。`auto` 先交给 mpv 选择，失败后再逐个探测。

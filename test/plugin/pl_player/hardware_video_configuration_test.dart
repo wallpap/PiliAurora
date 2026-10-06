@@ -2,8 +2,28 @@ import 'dart:io' show Platform;
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pili_aurora/plugin/pl_player/utils/hardware_video_configuration.dart';
+import 'package:pili_aurora/plugin/pl_player/models/hwdec_type.dart';
 
 void main() {
+  test('Windows default prefers verified d3d11va passthrough before auto', () {
+    final candidates = HwDecType.orderedCandidates(HwDecType.kHwdec);
+
+    expect(candidates.take(2), ['d3d11va', 'auto']);
+    expect(candidates.last, 'no');
+  }, skip: !Platform.isWindows);
+
+  test(
+    'disabling hardware acceleration falls back to software decoding only',
+    () {
+      final configuration = hardwareVideoConfiguration(
+        enabled: false,
+        configured: HwDecType.kHwdec,
+      );
+
+      expect(configuration.enableHardwareAcceleration, isFalse);
+      expect(configuration.hwdec, 'no');
+    },
+  );
   test('Windows auto-copy does not append incompatible direct backends', () {
     final configuration = hardwareVideoConfiguration(
       enabled: true,

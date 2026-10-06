@@ -6,13 +6,15 @@ import 'package:pili_aurora/plugin/pl_player/utils/decode_fallback.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  test('uses copy-back hardware decoding by default on Windows only', () {
+  test('prefers d3d11va passthrough by default on Windows only', () {
     final expected = Platform.isAndroid
         ? kDebugMode
               ? 'auto-safe'
               : 'mediacodec,auto-safe'
         : Platform.isWindows
-        ? 'auto-copy'
+        // Windows 视频纹理桥基于 D3D11/ANGLE 共享纹理，默认先试已验证的
+        // d3d11va 非 copy 直通，失败再由 mpv 的 auto 探测。
+        ? 'd3d11va,auto'
         : 'auto';
     expect(HwDecType.kHwdec, expected);
   });
