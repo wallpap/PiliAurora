@@ -1,4 +1,5 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
     package="io.github.wallpap.piliaurora">
 
     <queries>
@@ -230,7 +231,8 @@
 
         <activity
             android:name="com.yalantis.ucrop.UCropActivity"
-            android:theme="@style/Ucrop.CropTheme" />
+            android:theme="@style/Ucrop.CropTheme"
+            tools:ignore="MissingClass" />
 
         <receiver
             android:name="com.ryanheise.audioservice.MediaButtonReceiver"
