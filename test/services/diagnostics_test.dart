@@ -73,6 +73,33 @@ void main() {
     expect(output, contains('https://host/path'));
   });
 
+  test('redacts signed queries in mpv filenames and relative URLs', () {
+    final output = DiagnosticRedactor.text(
+      "Audio 'track.m4s?e=synthetic-signature&mid=synthetic-user&upsig=synthetic-upsig' (aac)\n"
+      '/video/chunk.m4s?token=synthetic-token&expires=123\n'
+      '//cdn.example/chunk?sign=synthetic-cdn-signature#fragment',
+    );
+    for (final value in [
+      'synthetic-signature',
+      'synthetic-user',
+      'synthetic-upsig',
+      'synthetic-token',
+      'synthetic-cdn-signature',
+      '#fragment',
+    ]) {
+      expect(output, isNot(contains(value)));
+    }
+    expect(output, contains("Audio 'track.m4s?<redacted>' (aac)"));
+    expect(output, contains('/video/chunk.m4s?<redacted>'));
+  });
+
+  test('redacting queries retains ordinary diagnostic questions', () {
+    expect(
+      DiagnosticRedactor.text('GPU ready? paused=true'),
+      'GPU ready? paused=true',
+    );
+  });
+
   test('nested diagnostic payloads remain bounded', () {
     final large = List.generate(64, (_) => List.filled(64, 'x' * 10000));
     expect(jsonEncode(DiagnosticRedactor.clean(large)).length, lessThan(65536));
@@ -291,7 +318,7 @@ void main() {
       diagnostics.log(
         DiagnosticLogLevel.debug,
         'test',
-        'token=export-secret-test',
+        "token=export-secret-test\nAudio 'track.m4s?e=export-signed-query&mid=export-user-id' (aac)",
       );
       final file = await diagnostics.exportArchive();
       try {
@@ -303,6 +330,8 @@ void main() {
         for (final entry in archive.files) {
           final content = utf8.decode(entry.content);
           expect(content, isNot(contains('export-secret-test')));
+          expect(content, isNot(contains('export-signed-query')));
+          expect(content, isNot(contains('export-user-id')));
           for (final line in const LineSplitter().convert(content)) {
             expect(jsonDecode(line), isA<Map>());
           }

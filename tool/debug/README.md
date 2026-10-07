@@ -1,0 +1,57 @@
+# Android 暂停旋转诊断入口
+
+`paused_rotation.dart` 是独立 Flutter 入口，只加载本地文件、原生播放器和应用实际使用的 `FittedBox + SimpleVideo` / Android Surface 调整方法和正式 VideoOutputResizer 调度器。它不初始化应用账号、持久化设置、线上请求或真实视频链接，也不代替完整 PLVideoPlayer 页面实机回归。
+
+`paused_rotation_probe.py` 使用 adb 在**指定模拟器**上安装该测试 APK，依次检查暂停状态下横屏、竖屏、横屏的画面四个象限与源边缘。只接受 `emulator-*` 序列号，避免把调试包安装到真实设备。测试视频必须具有工具所检查的红、绿、蓝、黄色象限和白色边缘；不能任意传入普通视频后把失败当作旋转回归。
+
+- 退出码 0：三阶段像素检查均通过，且保持暂停。
+- 退出码 1：初始横屏画面有效，但随后旋转阶段失败。
+- 退出码 2：初始画面无效或阶段不完整，**不能推断旋转 bug 是否复现**。
+- 该入口用于诊断，不加入普通 CI。没有有效初始画面时，应检查系统引导/ANR、解码器或图形驱动，不继续比较截图。
+
+## 使用现有只读 AVD
+
+不要安装到有用户数据的真实设备，不要 wipe-data、删除 AVD 或改写共享模拟器配置。以 SDK 已安装的 AVD 为例，在隐藏的后台进程中使用 `-read-only -no-snapshot -no-window`，并给此次测试显式分配端口。结束后只关闭此次启动的序列号，不执行全局 `adb kill-server`。
+
+1. 生成测试图：
+
+   ```powershell
+   flutter build apk --debug --target tool/debug/paused_rotation.dart --dart-define=CREATE_ROTATION_FIXTURE=true --no-pub
+   ```
+
+   在只读模拟器安装运行该包，**先确认完整四象限画面和白边实际显示**，再用 SDK 自带 `screenrecord` 记录为 H.264 MP4，并 adb pull 到 `build/rotation-smoke/fixture.mp4`。不要录制真实应用或用户数据，也不要把系统弹窗录成测试视频。
+
+2. 构建正常诊断入口，另存 APK，避免与最终应用产物混淆：
+
+   ```powershell
+   flutter build apk --debug --target tool/debug/paused_rotation.dart --no-pub
+   Copy-Item -LiteralPath build/app/outputs/flutter-apk/app-debug.apk -Destination build/rotation-smoke/probe.apk
+   python tool/debug/paused_rotation_probe.py --adb E:/SDK/Android/platform-tools/adb.exe --serial emulator-5580 --apk build/rotation-smoke/probe.apk --fixture build/rotation-smoke/fixture.mp4
+   ```
+
+3. 对照构建可以加 `--dart-define=ANDROID_VIDEO_OUTPUT_SIZE=false`。仅在两组初始画面都有效时，才比较自适应尺寸与源尺寸两条路径。
+4. 保存结果到忽略的 `build/rotation-smoke`，不要把视频、模拟器日志或截图提交到仓库。结束后重新构建 `--target lib/main.dart`，不要将诊断 APK 当作应用交付。
+
+## 2026-10-07 的执行边界
+
+没有连接的实机。使用现有 AVD 的只读实例尝试了硬件和软件 GPU 路径：硬件路径有 OpenGL INVALID_OPERATION，软件路径出现 System UI ANR。期间还发现 MJPEG 不在当前 Android 原生包支持的解码器范围内，随后改用 SDK screenrecord 的 H.264；但系统弹窗/ANR 污染了测试图，初始画面检查仍无效。
+
+这些执行只验证了诊断入口可构建、可以控制旋转和捕获像素；没有成功复现用户的局部裁切现象。后续根据实际调用路径发现并修正了半次尺寸提交、请求/成功缓存混淆及源参数重建与视口调整不共用队列的问题，回归测试证明这些时序不再产生两端尺寸不同步；**不能把通道时序测试当作实机像素验收**。
+
+## 实机验收（正常应用包）
+
+1. 使用正常应用入口构建的 APK，进入关于 → 性能与诊断，开启记录性能，日志等级选 info。不要把隔离诊断入口安装到用户实机。
+2. 用同一视频分别在播放中、暂停后执行全屏 → 竖屏 → 全屏，至少重复三次；记录异常发生的秒级时间。确认暂停时画面完整、没有被自动恢复播放或 seek。
+3. 同时检查播放旋转是否仍黑闪、暂停后恢复播放是否正常。建议分别覆盖 1080p / 4K 和硬解 / 软解，切源时是否异常单独记录。
+4. 导出诊断包；新版本有 `videoViewport.*` 状态及 `video.output` 提交事件，可区分 Flutter 缩放、源重建与原生几何不同步。
+5. 如果仍异常，用同一代码构建 `ANDROID_VIDEO_OUTPUT_SIZE=false` 的正常应用对照包。只改变这一项，不同时更换解码配置或视频源，否则无法判断因果。
+
+当前 Android 稳定窗口为 250ms，暂停期间不新增自适应提交，源参数重建仍由插件负责；调度器回归覆盖 150ms 中间几何、暂停/恢复、通道延迟、失败、切源与销毁。250ms 并非动画完成事件，仍可能有设备过渡超过该窗口，若仍有闪屏需结合实际尺寸提交时间继续收敛。
+
+本轮正常应用 Debug 对照产物（不是独立诊断入口）：
+
+- `build/rotation-check/PiliAurora-debug-rotation-fix.apk`：开启修正后的自适应路径。
+- `build/rotation-check/PiliAurora-debug-rotation-control.apk`：同一代码，仅设置 `ANDROID_VIDEO_OUTPUT_SIZE=false`。
+- `build/app/outputs/flutter-apk/app-debug.apk` 已恢复为开启修正路径的正常应用包。旧的 adaptive / source-size 文件不作为本轮结果，避免用不同代码版本比较。
+
+这些是 Debug 验收包，不是已签名的正式 Release 发布；未安装到实机，也未上传到远程服务。

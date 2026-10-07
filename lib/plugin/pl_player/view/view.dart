@@ -45,6 +45,7 @@ import 'package:pili_aurora/plugin/pl_player/models/gesture_type.dart';
 import 'package:pili_aurora/plugin/pl_player/models/video_fit_type.dart';
 import 'package:pili_aurora/plugin/pl_player/utils/android_video_output.dart';
 import 'package:pili_aurora/plugin/pl_player/utils/preview_image_cache.dart';
+import 'package:pili_aurora/plugin/pl_player/utils/video_output_resizer.dart';
 import 'package:pili_aurora/plugin/pl_player/utils/video_output_size.dart';
 import 'package:pili_aurora/plugin/pl_player/widgets/app_bar_ani.dart';
 import 'package:pili_aurora/plugin/pl_player/widgets/backward_seek.dart';
@@ -53,6 +54,7 @@ import 'package:pili_aurora/plugin/pl_player/widgets/common_btn.dart';
 import 'package:pili_aurora/plugin/pl_player/widgets/forward_seek.dart';
 import 'package:pili_aurora/plugin/pl_player/widgets/mpv_convert_webp.dart';
 import 'package:pili_aurora/plugin/pl_player/widgets/play_pause_btn.dart';
+import 'package:pili_aurora/services/diagnostics/diagnostics.dart';
 import 'package:pili_aurora/utils/android/bindings.g.dart';
 import 'package:pili_aurora/utils/cache_manager.dart';
 import 'package:pili_aurora/utils/connectivity_utils.dart';
@@ -145,7 +147,6 @@ class _PLVideoPlayerState extends State<PLVideoPlayer>
   bool get _fitVideoOutputToViewport => Platform.isAndroid
       ? _fitAndroidVideoOutputToViewport
       : _fitWindowsVideoOutputToViewport;
-  static const _videoOutputResizeDelay = Duration(milliseconds: 100);
 
   late AnimationController _animationController;
   late VideoController videoController;
@@ -171,12 +172,10 @@ class _PLVideoPlayerState extends State<PLVideoPlayer>
 
   StreamSubscription? _brightnessListener;
   StreamSubscription<(int, int)>? _videoSizeListener;
-  Timer? _videoOutputResizeTimer;
-  VideoOutputSize? _pendingVideoOutputSize;
-  VideoOutputSize? _videoOutputSize;
+  late final VideoOutputResizer _videoOutputResizer;
+  StreamSubscription<bool>? _videoOutputPlayingListener;
   double _devicePixelRatio = 1.0;
-  int _androidOutputGeneration = 0;
-  Future<void> _videoOutputApplyFuture = Future<void>.value();
+  void Function()? _unregisterVideoDiagnostics;
   void _onBrightnessChanged(double value) {
     if (mounted && _gestureType != .left) {
       _brightnessValue.value = value;
@@ -277,6 +276,32 @@ class _PLVideoPlayerState extends State<PLVideoPlayer>
       duration: const Duration(milliseconds: 100),
     );
     videoController = plPlayerController.videoController!;
+    _videoOutputResizer = VideoOutputResizer(
+      enabled: !Platform.isAndroid || videoController.player.state.playing,
+      settleDelay: Duration(milliseconds: Platform.isAndroid ? 250 : 100),
+      apply: _applyVideoOutputSize,
+      onError: (size, error, _) {
+        if (Platform.isAndroid) {
+          Diagnostics.instance.log(
+            DiagnosticLogLevel.warning,
+            'video.output',
+            'resize.failed',
+            details: {
+              ..._captureVideoOutputDiagnostics(),
+              'requested': {'width': size.width, 'height': size.height},
+              'error': error,
+            },
+          );
+        }
+      },
+    );
+    if (Platform.isAndroid) {
+      // 仅在开启性能追踪时采样；页面销毁前解除，避免持有旧视口。
+      _unregisterVideoDiagnostics = Diagnostics.instance.register(
+        'videoViewport.$hashCode',
+        _captureVideoOutputDiagnostics,
+      );
+    }
     if (_fitVideoOutputToViewport) {
       if (Platform.isWindows) {
         _videoSizeListener = videoController.player.stream.size.listen((_) {
@@ -285,6 +310,14 @@ class _PLVideoPlayerState extends State<PLVideoPlayer>
       } else if (Platform.isAndroid) {
         // 插件先按源尺寸配置 Surface，再发布非空 Rect；此时才能覆盖输出尺寸。
         videoController.rect.addListener(_onAndroidVideoOutputChanged);
+        _videoOutputPlayingListener = videoController.player.stream.playing
+            .listen(
+              (playing) {
+                // 暂停帧复用现有纹理，只让 Flutter 布局缩放；恢复播放后再适配。
+                _videoOutputResizer.setEnabled(playing);
+                if (playing) _updateVideoOutputSize();
+              },
+            );
       }
     }
 
@@ -396,6 +429,7 @@ class _PLVideoPlayerState extends State<PLVideoPlayer>
   @override
   void dispose() {
     removeObserverMobile(this);
+    _unregisterVideoDiagnostics?.call();
     _danmakuListener?.cancel();
     _tapGestureRecognizer.dispose();
     _longPressRecognizer?.dispose();
@@ -404,8 +438,8 @@ class _PLVideoPlayerState extends State<PLVideoPlayer>
     _brightnessListener?.cancel();
     _videoSizeListener?.cancel();
     videoController.rect.removeListener(_onAndroidVideoOutputChanged);
-    _androidOutputGeneration++;
-    _videoOutputResizeTimer?.cancel();
+    _videoOutputPlayingListener?.cancel();
+    _videoOutputResizer.dispose();
     _controlsListener?.cancel();
     _animationController.dispose();
     _transformationController.dispose();
@@ -959,12 +993,66 @@ class _PLVideoPlayerState extends State<PLVideoPlayer>
     _updateVideoOutputSize();
   }
 
+  Map<String, Object?> _captureVideoOutputDiagnostics() {
+    final rect = videoController.rect.value;
+    final target = _videoOutputResizer.target;
+    final applied = _videoOutputResizer.applied;
+    return {
+      'player': 'player.${videoController.player.hashCode}',
+      'adaptiveOutput': _fitVideoOutputToViewport,
+      'fullScreen': isFullScreen,
+      'playing': videoController.player.state.playing,
+      'positionMs': videoController.player.state.position.inMilliseconds,
+      'fit': plPlayerController.videoFit.value.name,
+      'viewport': {'width': maxWidth, 'height': maxHeight},
+      'devicePixelRatio': _devicePixelRatio,
+      'surfaceGeneration': _videoOutputResizer.generation,
+      'textureId': videoController.id.value,
+      'sourceRect': rect == null
+          ? null
+          : {
+              'left': rect.left,
+              'top': rect.top,
+              'width': rect.width,
+              'height': rect.height,
+            },
+      // 提交尺寸与期望尺寸分开记录；提交成功仍不能证明暂停帧已重绘。
+      'target': target == null
+          ? null
+          : {'width': target.width, 'height': target.height},
+      'applied': applied == null
+          ? null
+          : {'width': applied.width, 'height': applied.height},
+      'transform': _transformationController.value.storage.toList(
+        growable: false,
+      ),
+    };
+  }
+
+  void _logVideoOutputResize(
+    String event,
+    VideoOutputSize size, {
+    required int generation,
+    bool? accepted,
+  }) {
+    final diagnostics = Diagnostics.instance;
+    if (!diagnostics.accepts(DiagnosticLogLevel.info)) return;
+    diagnostics.log(
+      DiagnosticLogLevel.info,
+      'video.output',
+      event,
+      details: {
+        ..._captureVideoOutputDiagnostics(),
+        'requested': {'width': size.width, 'height': size.height},
+        'requestGeneration': generation,
+        // accepted 只表示调用完成，不能据此断言暂停帧已正确重绘。
+        'accepted': accepted,
+      },
+    );
+  }
+
   void _onAndroidVideoOutputChanged() {
-    // 同分辨率切源也会重建 Surface，不能让旧尺寸缓存阻止重新适配。
-    _androidOutputGeneration++;
-    _videoOutputResizeTimer?.cancel();
-    _pendingVideoOutputSize = null;
-    _videoOutputSize = null;
+    _videoOutputResizer.invalidate();
     _updateVideoOutputSize();
   }
 
@@ -999,56 +1087,34 @@ class _PLVideoPlayerState extends State<PLVideoPlayer>
       preserveSourceAspectRatio: Platform.isAndroid,
     );
     if (size == null) return;
-    _scheduleVideoOutputSize(size);
+    _videoOutputResizer.request(size);
   }
 
-  void _scheduleVideoOutputSize(VideoOutputSize size) {
-    if (size == _videoOutputSize && _pendingVideoOutputSize == null) {
-      return;
-    }
-
-    if (_videoOutputSize == null) {
-      _pendingVideoOutputSize = null;
-      _videoOutputSize = size;
-      unawaited(_applyVideoOutputSize(size));
-      return;
-    }
-
-    _pendingVideoOutputSize = size;
-    _videoOutputResizeTimer?.cancel();
-    _videoOutputResizeTimer = Timer(_videoOutputResizeDelay, () {
-      _videoOutputResizeTimer = null;
-      final pending = _pendingVideoOutputSize;
-      _pendingVideoOutputSize = null;
-      if (!mounted || pending == null || pending == _videoOutputSize) return;
-      _videoOutputSize = pending;
-      unawaited(_applyVideoOutputSize(pending));
-    });
-  }
-
-  Future<void> _applyVideoOutputSize(VideoOutputSize size) {
-    final generation = _androidOutputGeneration;
-    // 串行通道调用，迟到的旧 viewport/旧 Surface 请求不再更新 mpv。
-    return _videoOutputApplyFuture = _videoOutputApplyFuture.then((_) async {
-      if (!mounted) return;
-      try {
-        if (Platform.isAndroid) {
-          await setAndroidVideoOutputSize(
-            player: videoController.player,
-            size: size,
-            isCurrent: () =>
-                mounted &&
-                generation == _androidOutputGeneration &&
-                size == _videoOutputSize,
-          );
-        } else {
-          await videoController.setSize(width: size.width, height: size.height);
-        }
-      } catch (_) {
-        // 未生效的尺寸不能成为成功缓存；后续有效布局变化可以重新请求。
-        if (_videoOutputSize == size) _videoOutputSize = null;
+  Future<bool> _applyVideoOutputSize(
+    VideoOutputSize size,
+    bool Function() isCurrent,
+  ) async {
+    if (Platform.isAndroid) {
+      final generation = _videoOutputResizer.generation;
+      _logVideoOutputResize('resize.requested', size, generation: generation);
+      final accepted = await setAndroidVideoOutputSize(
+        player: videoController.player,
+        size: size,
+        // 这里只检查 Surface 生命周期，不用新视口撤销已改变纹理的提交。
+        isCurrent: isCurrent,
+      );
+      if (mounted) {
+        _logVideoOutputResize(
+          'resize.completed',
+          size,
+          generation: generation,
+          accepted: accepted,
+        );
       }
-    });
+      return accepted;
+    }
+    await videoController.setSize(width: size.width, height: size.height);
+    return true;
   }
 
   @override
