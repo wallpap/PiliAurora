@@ -53,7 +53,7 @@ PiliAurora 保留了 PiliPlus 的主要用户功能，包括：
 
 ## 依赖维护
 
-普通依赖使用发布版版本约束，并提交 `pubspec.lock`；定制依赖使用仓库内版本化源码，不跟踪远端 Git 分支。来源、保留原因及更新流程见 [third_party/README.md](third_party/README.md)。解析依赖后运行 `dart run tool/check_dependencies.dart` 检查版本、许可和来源一致性。
+普通依赖使用发布版精确版本，并提交 `pubspec.lock`；定制依赖使用仓库内版本化源码，不跟踪远端 Git 分支。来源、保留原因及更新流程见 [third_party/README.md](third_party/README.md)。解析依赖后运行 `dart run tool/check_dependencies.dart` 检查版本、许可和来源一致性。
 
 ## 从源码构建
 
