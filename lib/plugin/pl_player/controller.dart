@@ -55,9 +55,9 @@ import 'package:pili_aurora/utils/storage.dart';
 import 'package:pili_aurora/utils/storage_key.dart';
 import 'package:pili_aurora/utils/storage_pref.dart';
 import 'package:pili_aurora/utils/utils.dart';
+import 'package:pili_aurora/utils/rate_limiter.dart';
 import 'package:archive/archive.dart' show getCrc32;
 import 'package:canvas_danmaku/canvas_danmaku.dart';
-import 'package:easy_debounce/easy_throttle.dart';
 import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/services.dart' show HapticFeedback, DeviceOrientation;
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
@@ -1121,7 +1121,7 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
           return;
         }
         if (isPlaybackNetworkFailure(event)) {
-          EasyThrottle.throttle(
+          ActionThrottle.run(
             'controllerStream.error.listen',
             const Duration(milliseconds: 10000),
             () => _scheduleRefresh(requireEmptyBuffer: true),

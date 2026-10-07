@@ -515,7 +515,7 @@ class _DownloadPanelState extends State<DownloadPanel> {
                                   color: theme.colorScheme.secondary.withValues(
                                     alpha: 0.8,
                                   ),
-                                  FontAwesomeIcons.circleDown,
+                                  FontAwesomeIcons.circleDown.data,
                                 ),
                               ),
                           ],

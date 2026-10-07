@@ -1,4 +1,3 @@
-import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:pili_aurora/models/model_owner.dart';
@@ -11,7 +10,7 @@ import 'package:pili_aurora/utils/accounts/cookie_jar_adapter.dart';
 import 'package:pili_aurora/utils/path_utils.dart';
 import 'package:pili_aurora/utils/set_int_adapter.dart';
 import 'package:pili_aurora/utils/storage_pref.dart';
-import 'package:pili_aurora/utils/utils.dart';
+import 'package:pili_aurora/services/settings/settings_backup.dart';
 import 'package:hive_ce/hive.dart';
 import 'package:path/path.dart' as path;
 
@@ -77,24 +76,8 @@ abstract final class GStorage {
     }
   }
 
-  static String exportAllSettings() {
-    return Utils.jsonEncoder.convert({
-      setting.name: setting.toMap(),
-      video.name: video.toMap(),
-    });
-  }
-
-  static Future<void> importAllSettings(String data) =>
-      importAllJsonSettings(jsonDecode(data));
-
-  static Future<List<void>> importAllJsonSettings(
-    Map<String, dynamic> map,
-  ) {
-    return Future.wait([
-      setting.clear().then((_) => setting.putAll(map[setting.name])),
-      video.clear().then((_) => video.putAll(map[video.name])),
-    ]);
-  }
+  static SettingsBackup get settingsBackup =>
+      SettingsBackup(setting: setting, video: video);
 
   static void regAdapter() {
     Hive

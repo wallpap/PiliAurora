@@ -5,6 +5,9 @@ abstract final class DiagnosticRedactor {
     caseSensitive: false,
   );
   static final _url = RegExp(r'https?://[^\s<>"\x27]+', caseSensitive: false);
+  // mpv 的音轨标题可能只含文件名和签名查询串，没有 URL scheme。
+  // 整段查询一并移除，不能只枚举已知 token 名称而漏掉其他签名参数。
+  static final _query = RegExp(r'''\?[^\s<>"']+''');
   static final _assignment = RegExp(
     r'''((?:authorization|cookie|set-cookie|token|access_token|refresh_token|access[_-]?key|api[_-]?key|password|passwd|secret|credential|private[_-]?key|SESSDATA|bili_jct|csrf|buvid\w*|DedeUserID)["']?\s*[=:]\s*)([^\r\n,;}]+)''',
     caseSensitive: false,
@@ -27,6 +30,7 @@ abstract final class DiagnosticRedactor {
           if (uri == null) return '<url>';
           return '${uri.scheme}://${uri.host}${uri.path}${uri.hasQuery ? '?<redacted>' : ''}';
         })
+        .replaceAll(_query, '?<redacted>')
         .replaceAllMapped(_header, (match) => '${match[1]}<redacted>')
         .replaceAllMapped(_assignment, (match) => '${match[1]}<redacted>')
         .replaceAll(_bearer, 'Bearer <redacted>');

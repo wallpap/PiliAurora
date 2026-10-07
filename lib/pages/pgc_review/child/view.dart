@@ -330,8 +330,8 @@ class _PgcReviewChildPageState extends State<PgcReviewChildPage>
                             ),
                             child: Icon(
                               isDislike
-                                  ? FontAwesomeIcons.solidThumbsDown
-                                  : FontAwesomeIcons.thumbsDown,
+                                  ? FontAwesomeIcons.solidThumbsDown.data
+                                  : FontAwesomeIcons.thumbsDown.data,
                               size: 16,
                               color: isDislike ? primary : color,
                             ),
@@ -353,8 +353,8 @@ class _PgcReviewChildPageState extends State<PgcReviewChildPage>
                             children: [
                               Icon(
                                 isLike
-                                    ? FontAwesomeIcons.solidThumbsUp
-                                    : FontAwesomeIcons.thumbsUp,
+                                    ? FontAwesomeIcons.solidThumbsUp.data
+                                    : FontAwesomeIcons.thumbsUp.data,
                                 size: 16,
                                 color: isLike ? primary : color,
                               ),

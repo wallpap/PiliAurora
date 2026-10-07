@@ -23,3 +23,12 @@ python tool/native_media_smoke.py --library build/windows/x64/runner/Debug/libmp
 ```
 
 该检查不包含 GPU 渲染或完整应用性能测试。实现与测量边界见 `doc/native-playback.md`。
+
+## 依赖版本与来源检查
+
+```powershell
+dart run tool/check_dependencies.dart
+flutter test --no-pub test/architecture/dependency_policy_test.dart test/common/widgets/font_awesome_icons_test.dart
+```
+
+该工具只读取工作区文件，检查 Git 来源、path 范围、来源 SHA、许可证、版本登记与锁文件一致性，也检查合并来源的目录和许可证登记。可用位置参数检查指定工作区。普通更新与本地定制包更新流程见 `third_party/README.md`。本地构建和 CI 会在解析依赖后检查；构建使用 `--enforce-lockfile`，版本更新需显式运行 `flutter pub get` 或针对包执行 `flutter pub upgrade` 后提交锁文件。

@@ -12,7 +12,7 @@ import 'package:pili_aurora/utils/bili_utils.dart';
 import 'package:pili_aurora/utils/extension/file_ext.dart';
 import 'package:pili_aurora/utils/extension/theme_ext.dart';
 import 'package:pili_aurora/utils/platform_utils.dart';
-import 'package:easy_debounce/easy_throttle.dart';
+import 'package:pili_aurora/utils/rate_limiter.dart';
 import 'package:flutter/services.dart' show LengthLimitingTextInputFormatter;
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:get/get.dart';
@@ -185,7 +185,7 @@ class _CreateFavPageState extends State<CreateFavPage> {
                   visualDensity: .standard,
                   tileColor: theme.colorScheme.onInverseSurface,
                   onTap: () {
-                    EasyThrottle.throttle(
+                    ActionThrottle.run(
                       'imagePicker',
                       const Duration(milliseconds: 500),
                       () {

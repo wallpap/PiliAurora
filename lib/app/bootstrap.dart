@@ -91,7 +91,15 @@ Future<void> bootstrapApplication() async {
   Catcher2(
     [?fileHandler],
     const PiliAuroraApp(),
-    logger: logger,
+    logger: (level, message, {error, stackTrace}) {
+      final log = switch (level) {
+        ReportLogLevel.debug => logger.d,
+        ReportLogLevel.info => logger.i,
+        ReportLogLevel.warning => logger.w,
+        ReportLogLevel.error => logger.e,
+      };
+      log(message, error: error, stackTrace: stackTrace);
+    },
     customParameters: customParameters,
   );
 }

@@ -393,8 +393,8 @@ class _PgcIntroPageState extends State<PgcIntroPage> {
           Obx(
             () => ActionItem(
               animation: introController.tripleAnimation,
-              icon: const Icon(FontAwesomeIcons.thumbsUp),
-              selectIcon: const Icon(FontAwesomeIcons.solidThumbsUp),
+              icon: Icon(FontAwesomeIcons.thumbsUp.data),
+              selectIcon: Icon(FontAwesomeIcons.solidThumbsUp.data),
               selectStatus: introController.hasLike.value,
               semanticsLabel: '点赞',
               text: NumUtils.numFormat(stat.like),
@@ -405,8 +405,8 @@ class _PgcIntroPageState extends State<PgcIntroPage> {
           Obx(
             () => ActionItem(
               animation: introController.tripleAnimation,
-              icon: const Icon(FontAwesomeIcons.b),
-              selectIcon: const Icon(FontAwesomeIcons.b),
+              icon: Icon(FontAwesomeIcons.b.data),
+              selectIcon: Icon(FontAwesomeIcons.b.data),
               onTap: introController.actionCoinVideo,
               selectStatus: introController.hasCoin,
               semanticsLabel: '投币',
@@ -416,8 +416,8 @@ class _PgcIntroPageState extends State<PgcIntroPage> {
           Obx(
             () => ActionItem(
               animation: introController.tripleAnimation,
-              icon: const Icon(FontAwesomeIcons.star),
-              selectIcon: const Icon(FontAwesomeIcons.solidStar),
+              icon: Icon(FontAwesomeIcons.star.data),
+              selectIcon: Icon(FontAwesomeIcons.solidStar.data),
               onTap: () => introController.showFavBottomSheet(context),
               onLongPress: () => introController.showFavBottomSheet(
                 context,
@@ -430,8 +430,8 @@ class _PgcIntroPageState extends State<PgcIntroPage> {
           ),
           Obx(
             () => ActionItem(
-              icon: const Icon(FontAwesomeIcons.clock),
-              selectIcon: const Icon(FontAwesomeIcons.solidClock),
+              icon: Icon(FontAwesomeIcons.clock.data),
+              selectIcon: Icon(FontAwesomeIcons.solidClock.data),
               onTap: () =>
                   introController.handleAction(introController.viewLater),
               selectStatus: introController.hasLater.value,
@@ -440,7 +440,7 @@ class _PgcIntroPageState extends State<PgcIntroPage> {
             ),
           ),
           ActionItem(
-            icon: const Icon(FontAwesomeIcons.shareFromSquare),
+            icon: Icon(FontAwesomeIcons.shareFromSquare.data),
             onTap: () => introController.actionShareVideo(context),
             selectStatus: false,
             semanticsLabel: '转发',

@@ -331,7 +331,7 @@ class _ReportCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colorScheme = ColorScheme.of(context);
-    late final stackTrace = PrettyLogPrinter.formatStackString(
+    late final stackTrace = ReportStackFormatter.formatStackString(
       report.item.stackTrace?.toString(),
       -1,
     );

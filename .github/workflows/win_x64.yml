@@ -8,6 +8,11 @@ on:
         required: false
         default: ""
         type: string
+      draft_release:
+        description: "Keep uploaded release assets in a draft until final verification"
+        required: false
+        default: false
+        type: boolean
   workflow_dispatch:
     inputs:
       tag:
@@ -15,6 +20,11 @@ on:
         required: false
         default: ""
         type: string
+      draft_release:
+        description: "Keep uploaded release assets in a draft until final verification"
+        required: false
+        default: false
+        type: boolean
 
 jobs:
   build-windows-app:
@@ -58,6 +68,32 @@ jobs:
       - name: Apply Flutter patches
         shell: pwsh
         run: lib/scripts/patch.ps1 windows
+
+      - name: Check dependency sources and versions
+        run: dart run tool/check_dependencies.dart
+
+      - name: Test dependency migration contracts
+        run: >-
+          flutter test --no-pub
+          test/architecture/dependency_policy_test.dart
+          test/architecture/internal_dependencies_test.dart
+          test/common/widgets/font_awesome_icons_test.dart
+          test/common/widgets/debounced_state_test.dart
+          test/common/widgets/image/image_lifecycle_test.dart
+          test/utils/random_id_test.dart
+          test/utils/rate_limiter_test.dart
+          test/services/diagnostics/app_logger_test.dart
+          test/services/diagnostics/catcher_logging_test.dart
+          test/services/settings/webdav_client_test.dart
+          test/architecture/dependency_rules_test.dart
+          test/architecture/release_workflow_test.dart
+          test/pages/common/common_controller_test.dart
+          test/services/settings/settings_backup_test.dart
+          test/services/settings/webdav_sync_test.dart
+          test/services/diagnostics_test.dart
+          test/plugin/pl_player/video_output_resizer_test.dart
+          test/plugin/pl_player/android_video_output_test.dart
+          test/plugin/pl_player/video_output_size_test.dart
 
       - name: Build Windows release
         run: |
@@ -106,6 +142,7 @@ jobs:
         with:
           tag_name: ${{ github.event.inputs.tag }}
           name: ${{ github.event.inputs.tag }}
+          draft: ${{ inputs.draft_release }}
           files: |
             PiliAurora_windows_*_x64_portable.zip
             PiliAurora-Win-Setup/PiliAurora_windows_*_x64_setup.exe

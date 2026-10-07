@@ -1,120 +1,59 @@
-import 'dart:convert';
-
 import 'package:pili_aurora/common/constants.dart';
 import 'package:pili_aurora/common/widgets/pair.dart';
+import 'package:pili_aurora/services/diagnostics/redact.dart';
+import 'package:pili_aurora/services/settings/webdav_client.dart';
+import 'package:pili_aurora/services/settings/webdav_sync.dart';
 import 'package:pili_aurora/utils/device_utils.dart';
 import 'package:pili_aurora/utils/storage.dart';
 import 'package:pili_aurora/utils/storage_pref.dart';
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
-import 'package:webdav_client/webdav_client.dart' as webdav;
-
-typedef _WebDavConfig = ({
-  String uri,
-  String username,
-  String password,
-  String directory,
-});
 
 class WebDav {
-  _WebDavConfig? _clientConfig;
-  webdav.Client? _client;
+  const WebDav();
 
-  WebDav._internal();
-  static final WebDav _instance = WebDav._internal();
-  factory WebDav() => _instance;
-
-  _WebDavConfig _getConfig() {
-    String directory = Pref.webdavDirectory;
-    if (!directory.endsWith('/')) {
-      directory += '/';
-    }
-    return (
-      uri: Pref.webdavUri,
-      username: Pref.webdavUsername,
-      password: Pref.webdavPassword,
-      directory: '$directory${Constants.appName}',
+  WebDavSettingsSync _sync() {
+    // 同一次操作使用固定配置；下一次操作重新读取，避免旧凭据被缓存。
+    final endpoint = Uri.parse(Pref.webdavUri);
+    final username = Pref.webdavUsername;
+    final password = Pref.webdavPassword;
+    final directory = Pref.webdavDirectory;
+    final separator = directory.endsWith('/') ? '' : '/';
+    return WebDavSettingsSync(
+      connect: () => WebDavSettingsClient(
+        endpoint: endpoint,
+        username: username,
+        password: password,
+      ),
+      directory: '$directory$separator${Constants.appName}',
+      fileName:
+          '${Constants.dartPackageName}_settings_${DeviceUtils.platformName}.json',
     );
-  }
-
-  Future<webdav.Client> _connect(
-    _WebDavConfig config, {
-    bool force = false,
-  }) async {
-    final cachedClient = _client;
-    if (!force && cachedClient != null && _clientConfig == config) {
-      return cachedClient;
-    }
-
-    final client =
-        webdav.newClient(
-            config.uri,
-            user: config.username,
-            password: config.password,
-          )
-          ..setHeaders({'accept-charset': 'utf-8'})
-          ..setConnectTimeout(12000)
-          ..setReceiveTimeout(12000)
-          ..setSendTimeout(12000);
-
-    await client.mkdirAll(config.directory);
-    _clientConfig = config;
-    _client = client;
-    return client;
   }
 
   Future<Pair<bool, String?>> init() async {
     try {
-      await _connect(_getConfig(), force: true);
-
+      await _sync().prepare();
       return Pair(first: true, second: null);
-    } catch (e) {
-      return Pair(first: false, second: e.toString());
+    } catch (error) {
+      return Pair(first: false, second: DiagnosticRedactor.text(error));
     }
-  }
-
-  String _getFileName() {
-    return '${Constants.dartPackageName}_settings_${DeviceUtils.platformName}.json';
   }
 
   Future<void> backup() async {
-    // Keep the payload bound to the same settings snapshot as the connection.
-    final config = _getConfig();
-    final data = GStorage.exportAllSettings();
-    final webdav.Client client;
     try {
-      client = await _connect(config);
-    } catch (e) {
-      SmartDialog.showToast('备份失败，请检查配置: $e');
-      return;
-    }
-    try {
-      final path = '${config.directory}/${_getFileName()}';
-      try {
-        await client.remove(path);
-      } catch (_) {}
-      await client.write(path, utf8.encode(data));
+      await _sync().backup(GStorage.settingsBackup);
       SmartDialog.showToast('备份成功');
-    } catch (e) {
-      SmartDialog.showToast('备份失败: $e');
+    } catch (error) {
+      SmartDialog.showToast('备份失败: ${DiagnosticRedactor.text(error)}');
     }
   }
 
   Future<void> restore() async {
-    final config = _getConfig();
-    final webdav.Client client;
     try {
-      client = await _connect(config);
-    } catch (e) {
-      SmartDialog.showToast('恢复失败，请检查配置: $e');
-      return;
-    }
-    try {
-      final path = '${config.directory}/${_getFileName()}';
-      final data = await client.read(path);
-      await GStorage.importAllSettings(utf8.decode(data));
+      await _sync().restore(GStorage.settingsBackup);
       SmartDialog.showToast('恢复成功');
-    } catch (e) {
-      SmartDialog.showToast('恢复失败: $e');
+    } catch (error) {
+      SmartDialog.showToast('恢复失败: ${DiagnosticRedactor.text(error)}');
     }
   }
 }

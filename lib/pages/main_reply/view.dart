@@ -17,7 +17,7 @@ import 'package:pili_aurora/utils/extension/widget_ext.dart';
 import 'package:pili_aurora/utils/feed_back.dart';
 import 'package:pili_aurora/utils/num_utils.dart';
 import 'package:pili_aurora/utils/utils.dart';
-import 'package:easy_debounce/easy_throttle.dart';
+import 'package:pili_aurora/utils/rate_limiter.dart';
 import 'package:get/get.dart';
 import 'package:material_ui/material_ui.dart';
 
@@ -211,7 +211,7 @@ class _MainReplyPageState extends State<MainReplyPage>
     int? id,
     ColorScheme colorScheme,
   ) {
-    EasyThrottle.throttle('replyReply', const Duration(milliseconds: 500), () {
+    ActionThrottle.run('replyReply', const Duration(milliseconds: 500), () {
       int oid = replyItem.oid.toInt();
       int rpid = replyItem.id.toInt();
       Get.to(

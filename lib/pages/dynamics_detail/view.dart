@@ -567,7 +567,7 @@ class _DynamicDetailPageState
                     builder: (btnContext) {
                       final forward = moduleStat?.forward;
                       return textIconButton(
-                        icon: FontAwesomeIcons.shareFromSquare,
+                        icon: FontAwesomeIcons.shareFromSquare.data,
                         text: '转发',
                         stat: forward,
                         onPressed: (_) => showModalBottomSheet(
@@ -603,7 +603,7 @@ class _DynamicDetailPageState
                 ),
                 Expanded(
                   child: textIconButton(
-                    icon: FontAwesomeIcons.comment,
+                    icon: FontAwesomeIcons.comment.data,
                     text: '评论',
                     stat: moduleStat?.comment,
                     onPressed: _jumpToComment,
@@ -613,8 +613,8 @@ class _DynamicDetailPageState
                   child: Builder(
                     builder: (context) {
                       return textIconButton(
-                        icon: FontAwesomeIcons.thumbsUp,
-                        activatedIcon: FontAwesomeIcons.solidThumbsUp,
+                        icon: FontAwesomeIcons.thumbsUp.data,
+                        activatedIcon: FontAwesomeIcons.solidThumbsUp.data,
                         text: '点赞',
                         stat: moduleStat?.like,
                         onPressed: (iconColor) => RequestUtils.onLikeDynamic(

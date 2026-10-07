@@ -275,8 +275,8 @@ class _DynTopicPageState extends State<DynTopicPage>
                     ),
                     onPressed: _controller.onLike,
                     icon: _controller.isLike.value
-                        ? const Icon(FontAwesomeIcons.solidThumbsUp, size: 13)
-                        : const Icon(FontAwesomeIcons.thumbsUp, size: 13),
+                        ? Icon(FontAwesomeIcons.solidThumbsUp.data, size: 13)
+                        : Icon(FontAwesomeIcons.thumbsUp.data, size: 13),
                     label: Text(
                       NumUtils.numFormat(response.topicItem!.like),
                       style: const TextStyle(fontSize: 13),
@@ -299,8 +299,8 @@ class _DynTopicPageState extends State<DynTopicPage>
                     ),
                     onPressed: _controller.onFav,
                     icon: _controller.isFav.value
-                        ? const Icon(FontAwesomeIcons.solidStar, size: 13)
-                        : const Icon(FontAwesomeIcons.star, size: 13),
+                        ? Icon(FontAwesomeIcons.solidStar.data, size: 13)
+                        : Icon(FontAwesomeIcons.star.data, size: 13),
                     label: Text(
                       NumUtils.numFormat(response.topicItem!.fav),
                       style: const TextStyle(fontSize: 13),

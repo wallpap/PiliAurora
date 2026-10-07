@@ -20,8 +20,8 @@ import 'package:pili_aurora/utils/storage.dart';
 import 'package:pili_aurora/utils/storage_key.dart';
 import 'package:pili_aurora/utils/storage_pref.dart';
 import 'package:pili_aurora/utils/update.dart';
+import 'package:pili_aurora/utils/rate_limiter.dart';
 import 'package:collection/collection.dart';
-import 'package:easy_debounce/easy_throttle.dart';
 import 'package:get/get.dart';
 import 'package:material_ui/material_ui.dart';
 
@@ -322,7 +322,7 @@ class MainController extends GetxController
     } else {
       int now = DateTime.now().millisecondsSinceEpoch;
       if (now - _lastSelectTime < 500) {
-        EasyThrottle.throttle(
+        ActionThrottle.run(
           'topOrRefresh',
           const Duration(milliseconds: 500),
           () {
