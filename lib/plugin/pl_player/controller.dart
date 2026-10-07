@@ -33,6 +33,7 @@ import 'package:pili_aurora/plugin/pl_player/utils/hardware_video_configuration.
 import 'package:pili_aurora/plugin/pl_player/utils/preview_image_cache.dart';
 import 'package:pili_aurora/plugin/pl_player/utils/native_media_source.dart';
 import 'package:pili_aurora/plugin/pl_player/utils/playback_load_queue.dart';
+import 'package:pili_aurora/plugin/pl_player/utils/playback_network_recovery.dart';
 import 'package:pili_aurora/services/service_locator.dart';
 import 'package:pili_aurora/services/diagnostics/diagnostics.dart';
 import 'package:pili_aurora/services/diagnostics/player_diagnostics.dart';
@@ -863,11 +864,17 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
       return null;
     }
     if (_videoPlayerController case final ctr? when ctr.current.isNotEmpty) {
+      final source = dataSource;
+      final media = ctr.current.last;
       return _loadQueue.run((isCurrent) async {
-        if (!isCurrent() || ctr.disposed || ctr.current.isEmpty) return;
-        var media = ctr.current.last;
-        if (!isLive) media = media.copyWith(start: ctr.state.position);
-        await ctr.open(media, play: true);
+        if (!isCurrent() ||
+            ctr.disposed ||
+            ctr.current.isEmpty ||
+            !identical(source, dataSource) ||
+            !identical(media, ctr.current.last)) {
+          return;
+        }
+        await reloadNativeMedia(player: ctr, isLive: isLive);
       });
     }
     return null;
@@ -883,13 +890,19 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
         return;
       }
       if (requireEmptyBuffer) {
-        if (!isBuffering.value || buffered.value != 0) return;
+        if (!hasExhaustedPlaybackBuffer(
+          buffering: isBuffering.value,
+          position: _videoPlayerController!.state.position,
+          buffer: _videoPlayerController!.state.buffer,
+        )) {
+          return;
+        }
         SmartDialog.showToast(
           '视频链接打开失败，重试中',
           displayTime: const Duration(milliseconds: 500),
         );
       }
-      refreshPlayer();
+      refreshPlayer()?.catchError(Utils.reportError);
     });
   }
 
@@ -975,6 +988,24 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
             'player',
             'Android video output recovery: hwdec=$decoder',
           );
+        },
+        onFallback: (_) {
+          SmartDialog.showToast(
+            '正在切换解码...',
+            displayTime: const Duration(seconds: 2),
+          );
+        },
+        recoverSoftware: () async {
+          if (isLive || dataSource is FileSource) return false;
+          final reload = refreshPlayer();
+          if (reload == null) return false;
+          Diagnostics.instance.log(
+            DiagnosticLogLevel.warning,
+            'player',
+            'Android AV1 software recovery: reload current media once',
+          );
+          await reload;
+          return true;
         },
         onError: Utils.reportError,
       );
@@ -1084,18 +1115,12 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
           return;
         }
         if (isLive) {
-          if (event.startsWith('tcp: ffurl_read returned ') ||
-              event.startsWith("Failed to open https://") ||
-              event.startsWith("Can not open external file https://")) {
+          if (isPlaybackNetworkFailure(event)) {
             _scheduleRefresh();
           }
           return;
         }
-        if (event.startsWith("Failed to open https://") ||
-            event.startsWith("Can not open external file https://") ||
-            //tcp: ffurl_read returned 0xdfb9b0bb
-            //tcp: ffurl_read returned 0xffffff99
-            event.startsWith('tcp: ffurl_read returned ')) {
+        if (isPlaybackNetworkFailure(event)) {
           EasyThrottle.throttle(
             'controllerStream.error.listen',
             const Duration(milliseconds: 10000),
