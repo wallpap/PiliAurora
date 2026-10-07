@@ -2,7 +2,8 @@ import 'package:pili_aurora/http/loading_state.dart';
 import 'package:pili_aurora/pages/common/common_controller.dart';
 import 'package:get/get.dart';
 
-abstract class CommonListController<R, T> extends CommonController<R, T> {
+abstract class CommonListController<R, T>
+    extends CommonController<R, List<T>?> {
   int page = 1;
   bool isEnd = false;
   bool? hasFooter;
@@ -20,40 +21,36 @@ abstract class CommonListController<R, T> extends CommonController<R, T> {
   void checkIsEnd(int length) {}
 
   @override
-  Future<void> queryData([bool isRefresh = true]) async {
-    if (isLoading || (!isRefresh && isEnd)) return;
-    isLoading = true;
-    final LoadingState<R> res = await customGetData();
-    if (res case Success(:final response)) {
-      if (!customHandleResponse(isRefresh, res)) {
-        final dataList = getDataList(response);
-        if (dataList == null || dataList.isEmpty) {
-          isEnd = true;
-          if (isRefresh) {
-            loadingState.value = Success(dataList);
-          } else if (hasFooter == true) {
-            loadingState.refresh();
-          }
-          isLoading = false;
-          return;
-        }
-        handleListResponse(dataList);
-        if (isRefresh) {
-          checkIsEnd(dataList.length);
-          loadingState.value = Success(dataList);
-        } else if (loadingState.value case Success(:final response)) {
-          response!.addAll(dataList);
-          checkIsEnd(response.length);
-          loadingState.refresh();
-        }
-      }
+  bool get canLoadMore => !isEnd && loadingState.value.dataOrNull != null;
+
+  @override
+  void applyResponse(bool isRefresh, Success<R> response) {
+    if (customHandleResponse(isRefresh, response)) {
       page++;
-    } else {
-      if (isRefresh && !handleError(res is Error ? res.errMsg : null)) {
-        loadingState.value = res as Error;
-      }
+      return;
     }
-    isLoading = false;
+    final source = getDataList(response.response);
+    if (source == null || source.isEmpty) {
+      isEnd = true;
+      if (isRefresh) {
+        loadingState.value = Success(source);
+      } else if (hasFooter == true) {
+        loadingState.refresh();
+      }
+      return;
+    }
+    // 列表处理钩子也可能插入历史推荐项，先取得所有权再交给业务逻辑。
+    final data = List<T>.of(source);
+    handleListResponse(data);
+    if (isRefresh) {
+      checkIsEnd(data.length);
+      loadingState.value = Success(data);
+    } else {
+      final current = loadingState.value.data!..addAll(data);
+      checkIsEnd(current.length);
+      loadingState.refresh();
+    }
+    page++;
   }
 
   @override
