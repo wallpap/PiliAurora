@@ -1,100 +1,59 @@
-import 'dart:convert';
-
 import 'package:pili_aurora/common/constants.dart';
 import 'package:pili_aurora/common/widgets/pair.dart';
+import 'package:pili_aurora/services/diagnostics/redact.dart';
+import 'package:pili_aurora/services/settings/webdav_client.dart';
+import 'package:pili_aurora/services/settings/webdav_sync.dart';
 import 'package:pili_aurora/utils/device_utils.dart';
 import 'package:pili_aurora/utils/storage.dart';
 import 'package:pili_aurora/utils/storage_pref.dart';
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
-import 'package:pili_aurora/services/settings/webdav_client.dart';
-import 'package:pili_aurora/services/diagnostics/redact.dart';
-
-typedef _WebDavConfig = ({
-  String uri,
-  String username,
-  String password,
-  String directory,
-});
 
 class WebDav {
   const WebDav();
 
-  _WebDavConfig _getConfig() {
-    String directory = Pref.webdavDirectory;
-    if (!directory.endsWith('/')) {
-      directory += '/';
-    }
-    return (
-      uri: Pref.webdavUri,
-      username: Pref.webdavUsername,
-      password: Pref.webdavPassword,
-      directory: '$directory${Constants.appName}',
+  WebDavSettingsSync _sync() {
+    // 同一次操作使用固定配置；下一次操作重新读取，避免旧凭据被缓存。
+    final endpoint = Uri.parse(Pref.webdavUri);
+    final username = Pref.webdavUsername;
+    final password = Pref.webdavPassword;
+    final directory = Pref.webdavDirectory;
+    final separator = directory.endsWith('/') ? '' : '/';
+    return WebDavSettingsSync(
+      connect: () => WebDavSettingsClient(
+        endpoint: endpoint,
+        username: username,
+        password: password,
+      ),
+      directory: '$directory$separator${Constants.appName}',
+      fileName:
+          '${Constants.dartPackageName}_settings_${DeviceUtils.platformName}.json',
     );
-  }
-
-  Future<T> _withClient<T>(
-    _WebDavConfig config,
-    Future<T> Function(WebDavSettingsClient client) action,
-  ) async {
-    final client = WebDavSettingsClient(
-      endpoint: Uri.parse(config.uri),
-      username: config.username,
-      password: config.password,
-    );
-    try {
-      return await action(client);
-    } finally {
-      client.close();
-    }
   }
 
   Future<Pair<bool, String?>> init() async {
     try {
-      final config = _getConfig();
-      await _withClient(
-        config,
-        (client) => client.ensureDirectory(config.directory),
-      );
-
+      await _sync().prepare();
       return Pair(first: true, second: null);
-    } catch (e) {
-      return Pair(first: false, second: DiagnosticRedactor.text(e));
+    } catch (error) {
+      return Pair(first: false, second: DiagnosticRedactor.text(error));
     }
   }
 
-  String _getFileName() {
-    return '${Constants.dartPackageName}_settings_${DeviceUtils.platformName}.json';
-  }
-
   Future<void> backup() async {
-    // 连接配置和内容都取自同一个操作快照，不跨操作缓存含凭据的客户端。
-    final config = _getConfig();
-    final data = GStorage.exportAllSettings();
     try {
-      await _withClient(config, (client) async {
-        await client.ensureDirectory(config.directory);
-        await client.write(
-          '${config.directory}/${_getFileName()}',
-          utf8.encode(data),
-        );
-      });
+      await _sync().backup(GStorage.settingsBackup);
       SmartDialog.showToast('备份成功');
-    } catch (e) {
-      SmartDialog.showToast('备份失败: ${DiagnosticRedactor.text(e)}');
+    } catch (error) {
+      SmartDialog.showToast('备份失败: ${DiagnosticRedactor.text(error)}');
     }
   }
 
   Future<void> restore() async {
-    final config = _getConfig();
     try {
-      final data = await _withClient(
-        config,
-        (client) => client.read('${config.directory}/${_getFileName()}'),
-      );
-      await GStorage.importAllSettings(utf8.decode(data));
+      await _sync().restore(GStorage.settingsBackup);
       SmartDialog.showToast('恢复成功');
-    } catch (e) {
-      SmartDialog.showToast('恢复失败: ${DiagnosticRedactor.text(e)}');
+    } catch (error) {
+      SmartDialog.showToast('恢复失败: ${DiagnosticRedactor.text(error)}');
     }
   }
 }
