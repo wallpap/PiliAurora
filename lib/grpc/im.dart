@@ -4,9 +4,9 @@ import 'package:pili_aurora/grpc/bilibili/im/type.pb.dart';
 import 'package:pili_aurora/grpc/grpc_req.dart';
 import 'package:pili_aurora/grpc/url.dart';
 import 'package:pili_aurora/http/loading_state.dart';
+import 'package:pili_aurora/utils/random_id.dart';
 import 'package:fixnum/fixnum.dart';
 import 'package:protobuf/protobuf.dart' show PbMap;
-import 'package:uuid/v4.dart';
 
 abstract final class ImGrpc {
   static Future<LoadingState<RspSendMsg>> sendMsg({
@@ -28,7 +28,7 @@ abstract final class ImGrpc {
           msgStatus: 0,
           newFaceVersion: 1,
         ),
-        devId: const UuidV4().generate(),
+        devId: newUuidV4(),
       ),
       RspSendMsg.fromBuffer,
     );

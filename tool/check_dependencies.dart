@@ -318,13 +318,7 @@ class _DependencyPolicyChecker {
       }
     }
     requireString(item, 'reason', context);
-    final source = requireMap(item['source'], '$context source');
-    requireString(source, 'url', '$context source');
-    requireString(source, 'path', '$context source');
-    final commit = requireString(source, 'commit', '$context source');
-    if (commit != null && !RegExp(r'^[0-9a-fA-F]{40}$').hasMatch(commit)) {
-      issues.add('$name：source.commit 必须为完整 40 位十六进制 SHA');
-    }
+    checkSource(item['source'], '$context source');
     final packagePath = checkedPath(
       item['path'],
       workspace,
@@ -339,6 +333,9 @@ class _DependencyPolicyChecker {
         issues.add('$name：本地 pubspec name 或路径与登记不一致');
       }
       checkLicenses(name, item['licenses'], packagePath);
+      if (item.containsKey('merged_sources')) {
+        checkMergedSources(name, item, packagePath);
+      }
     }
     final local = localPubspecs[name];
     if (local != null && local['version'] != versionText) {
@@ -369,6 +366,55 @@ class _DependencyPolicyChecker {
     }
     if (root != null && version != null) {
       checkDirectConstraint(name, version, root);
+    }
+  }
+
+  void checkSource(Object? value, String context) {
+    final source = requireMap(value, context);
+    requireString(source, 'url', context);
+    requireString(source, 'path', context);
+    final commit = requireString(source, 'commit', context);
+    if (commit != null && !RegExp(r'^[0-9a-fA-F]{40}$').hasMatch(commit)) {
+      issues.add('$context.commit 必须为完整 40 位十六进制 SHA');
+    }
+  }
+
+  void checkMergedSources(String owner, Map item, String packagePath) {
+    final value = item['merged_sources'];
+    if (value is! List || value.isEmpty) {
+      issues.add('$owner：merged_sources 必须是非空列表');
+      return;
+    }
+    final names = <String>{owner};
+    for (var index = 0; index < value.length; index++) {
+      final context = '$owner merged_sources[$index]';
+      final merged = requireMap(value[index], context);
+      final name = requireString(merged, 'name', context);
+      if (name != null && !names.add(name)) {
+        issues.add('$context：来源名称重复');
+      }
+      final upstream = requireString(merged, 'upstream_version', context);
+      parseVersion(upstream, '$context upstream_version');
+      requireString(merged, 'reason', context);
+      checkSource(merged['source'], '$context source');
+      final sourcePath = checkedPath(
+        merged['path'],
+        packagePath,
+        packagePath,
+        '$context path',
+      );
+      if (sourcePath != null && !Directory(sourcePath).existsSync()) {
+        issues.add('$context：合并源码目录缺失');
+      }
+      checkLicenses(context, merged['licenses'], packagePath);
+      final licenses = merged['licenses'];
+      if (licenses is List && item['licenses'] is List) {
+        for (final license in licenses) {
+          if (!(item['licenses'] as List).contains(license)) {
+            issues.add('$context：许可证未登记到主包 licenses');
+          }
+        }
+      }
     }
   }
 

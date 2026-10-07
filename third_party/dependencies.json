@@ -18,7 +18,7 @@
     },
     {
       "name": "cached_network_image_ce",
-      "version": "4.6.4+piliaurora.1",
+      "version": "4.6.4+piliaurora.2",
       "upstream_version": "4.6.4",
       "path": "third_party/cached_network_image_ce",
       "source": {
@@ -27,24 +27,26 @@
         "path": "cached_network_image"
       },
       "licenses": [
-        "LICENSE"
+        "LICENSE",
+        "upstream/platform_interface/LICENSE"
       ],
-      "reason": "保留独立 material_ui 类型、容量缓存接口和当前图片生命周期行为。"
-    },
-    {
-      "name": "cached_network_image_platform_interface_ce",
-      "version": "5.2.0+piliaurora.1",
-      "upstream_version": "5.2.0",
-      "path": "third_party/cached_network_image_platform_interface_ce",
-      "source": {
-        "url": "https://github.com/My-Responsitories/flutter_cached_network_image_ce.git",
-        "commit": "dacec4de669b4c52c59576509db069e3194408ac",
-        "path": "cached_network_image_platform_interface"
-      },
-      "licenses": [
-        "LICENSE"
-      ],
-      "reason": "与 CE 主包保持一致的 material_ui 平台接口。"
+      "reason": "保留独立 material_ui 类型、容量缓存接口和当前图片生命周期行为。",
+      "merged_sources": [
+        {
+          "name": "cached_network_image_platform_interface_ce",
+          "upstream_version": "5.2.0",
+          "source": {
+            "url": "https://github.com/My-Responsitories/flutter_cached_network_image_ce.git",
+            "commit": "dacec4de669b4c52c59576509db069e3194408ac",
+            "path": "cached_network_image_platform_interface"
+          },
+          "path": "lib/src/cache_api",
+          "licenses": [
+            "upstream/platform_interface/LICENSE"
+          ],
+          "reason": "接口仅供本地缓存包使用，合并后由主包统一维护；实现及公开导出类型不变。"
+        }
+      ]
     },
     {
       "name": "canvas_danmaku",

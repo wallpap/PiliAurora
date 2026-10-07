@@ -3,10 +3,9 @@ import 'dart:typed_data';
 import 'dart:ui' as ui;
 import 'dart:ui';
 
-import 'package:cached_network_image_platform_interface_ce'
-        '/cached_network_image_platform_interface_ce.dart' as platform
+import 'package:cached_network_image_ce/src/cache_api.dart' as platform
     show ImageLoader;
-import 'package:cached_network_image_platform_interface_ce/cached_network_image_platform_interface_ce.dart';
+import 'package:cached_network_image_ce/src/cache_api.dart';
 import 'package:flutter/painting.dart';
 
 /// ImageLoader class to load images on IO platforms.

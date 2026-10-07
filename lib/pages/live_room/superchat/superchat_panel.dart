@@ -3,7 +3,7 @@ import 'package:pili_aurora/common/widgets/scroll_physics.dart'
 import 'package:pili_aurora/models/common/super_chat_type.dart';
 import 'package:pili_aurora/pages/live_room/controller.dart';
 import 'package:pili_aurora/pages/live_room/superchat/superchat_card.dart';
-import 'package:pili_aurora/pages/search/controller.dart';
+import 'package:pili_aurora/common/widgets/debounced_state.dart';
 import 'package:get/get_state_manager/src/rx_flutter/rx_obx_widget.dart';
 import 'package:material_ui/material_ui.dart';
 

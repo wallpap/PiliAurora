@@ -214,14 +214,7 @@ packages:
       path: "third_party/cached_network_image_ce"
       relative: true
     source: path
-    version: "4.6.4+piliaurora.1"
-  cached_network_image_platform_interface_ce:
-    dependency: "direct overridden"
-    description:
-      path: "third_party/cached_network_image_platform_interface_ce"
-      relative: true
-    source: path
-    version: "5.2.0+piliaurora.1"
+    version: "4.6.4+piliaurora.2"
   canvas_danmaku:
     dependency: "direct main"
     description:
@@ -443,14 +436,6 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "2.1.0"
-  easy_debounce:
-    dependency: "direct main"
-    description:
-      name: easy_debounce
-      sha256: f082609cfb8f37defb9e37fc28bc978c6712dedf08d4c5a26f820fa10165a236
-      url: "https://pub.dev"
-    source: hosted
-    version: "2.0.3"
   encrypt:
     dependency: "direct main"
     description:
@@ -1026,7 +1011,7 @@ packages:
     source: hosted
     version: "0.7.2"
   json_annotation:
-    dependency: "direct main"
+    dependency: transitive
     description:
       name: json_annotation
       sha256: "2a743920d81b7910627f68ee2c9ac1fc0bfee32b9fc3403587d7c6791ca12f80"
@@ -1268,7 +1253,7 @@ packages:
     source: hosted
     version: "3.0.0"
   package_info_plus:
-    dependency: "direct main"
+    dependency: transitive
     description:
       name: package_info_plus
       sha256: "127e1751e37ffb2ff4658beeaca77bad0c27bf5f932bd3a501c2296926d4b481"
@@ -1665,7 +1650,7 @@ packages:
     source: hosted
     version: "2.1.4"
   stream_transform:
-    dependency: "direct main"
+    dependency: transitive
     description:
       name: stream_transform
       sha256: a00e5f18bffc764f923e7dec1038527f7fe7a1791361a7117f0358193f13d53a
@@ -1808,7 +1793,7 @@ packages:
     source: hosted
     version: "3.1.6"
   uuid:
-    dependency: "direct main"
+    dependency: transitive
     description:
       name: uuid
       sha256: "9b129329f58692f6e6578329498a8fe9fbe98f090beb764ffbb8ee2eadd01dcd"

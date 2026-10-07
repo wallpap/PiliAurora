@@ -15,7 +15,7 @@ import 'package:pili_aurora/pages/video/reply/vote/reply_vote_item.dart';
 import 'package:pili_aurora/pages/video/reply/widgets/reply_item_grpc.dart';
 import 'package:pili_aurora/pages/video/reply_reply/view.dart';
 import 'package:pili_aurora/utils/feed_back.dart';
-import 'package:easy_debounce/easy_throttle.dart';
+import 'package:pili_aurora/utils/rate_limiter.dart';
 import 'package:get/get.dart';
 import 'package:material_ui/material_ui.dart';
 
@@ -234,7 +234,7 @@ class _VideoReplyPanelState extends State<VideoReplyPanel>
 
   // 展示二级回复
   void replyReply(ReplyInfo replyItem, int? id) {
-    EasyThrottle.throttle('replyReply', const Duration(milliseconds: 500), () {
+    ActionThrottle.run('replyReply', const Duration(milliseconds: 500), () {
       int oid = replyItem.oid.toInt();
       int rpid = replyItem.id.toInt();
       MiniScaffold.of(context).showBottomSheet(
