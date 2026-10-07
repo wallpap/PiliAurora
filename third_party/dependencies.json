@@ -65,7 +65,7 @@
     },
     {
       "name": "catcher_2",
-      "version": "2.1.9+piliaurora.1",
+      "version": "2.1.9+piliaurora.2",
       "upstream_version": "2.1.9",
       "path": "third_party/catcher_2",
       "source": {
@@ -76,7 +76,7 @@
       "licenses": [
         "LICENSE"
       ],
-      "reason": "保留精简的异常捕获、日志接口和 Windows 设备信息。"
+      "reason": "保留异常捕获、Report 格式、堆栈过滤和 Windows 设备信息；捕获器日志经宿主回调接入诊断，不依赖 logger。"
     },
     {
       "name": "chat_bottom_container",

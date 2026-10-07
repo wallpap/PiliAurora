@@ -100,7 +100,7 @@ class _WebDavSettingPageState extends State<WebDavSettingPage> {
                         borderRadius: Style.mdRadius,
                       ),
                     ),
-                    onPressed: WebDav().backup,
+                    onPressed: (const WebDav()).backup,
                     child: const Text('备份设置'),
                   ),
                 ),
@@ -112,7 +112,7 @@ class _WebDavSettingPageState extends State<WebDavSettingPage> {
                         borderRadius: Style.mdRadius,
                       ),
                     ),
-                    onPressed: WebDav().restore,
+                    onPressed: (const WebDav()).restore,
                     child: const Text('恢复设置'),
                   ),
                 ),
@@ -140,7 +140,7 @@ class _WebDavSettingPageState extends State<WebDavSettingPage> {
                 return;
               }
               try {
-                final res = await WebDav().init();
+                final res = await (const WebDav()).init();
                 if (res.first) {
                   SmartDialog.showToast('配置成功');
                 } else {

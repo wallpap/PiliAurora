@@ -20,12 +20,9 @@ environment:
   sdk: ">=3.13.0"
   flutter: 3.47.5
 
-# Dependencies specify other packages that your package needs in order to work.
-# To automatically upgrade your package dependencies to the latest versions
-# consider running `flutter pub upgrade --major-versions`. Alternatively,
-# dependencies can be manually updated by changing the version numbers below to
-# the latest version available on pub.dev. To see which dependencies have newer
-# versions available, run `flutter pub outdated`.
+# 根依赖使用已验收的精确版本；传递解析由 pubspec.lock 和 --enforce-lockfile 固定。
+# 定制源码的版本与来源登记见 third_party/dependencies.json。
+# 仅更新目标包并验证锁文件差异，维护流程见 third_party/README.md。
 dependencies:
   flutter:
     sdk: flutter
@@ -40,7 +37,7 @@ dependencies:
   brotli: 0.6.0
   cached_network_image_ce: 4.6.4+piliaurora.2
   canvas_danmaku: 0.2.6+piliaurora.1
-  catcher_2: 2.1.9+piliaurora.1
+  catcher_2: 2.1.9+piliaurora.2
   characters: 1.4.1
   chat_bottom_container: 0.5.2+piliaurora.1
   collection: 1.19.1
@@ -76,7 +73,6 @@ dependencies:
   image_picker: 1.2.3
   intl: 0.20.3
   jni: 1.1.0
-  logger: 2.8.0
   material_color_utilities: 0.13.0
   material_design_icons_flutter: 7.0.7447+piliaurora.1
   material_new_shapes: 1.0.0
@@ -105,7 +101,6 @@ dependencies:
   wakelock_plus: 1.8.0
   waterfall_flow: 3.1.1
   web_socket_channel: 3.0.3
-  webdav_client: 1.2.2
   win32: 6.4.0
   window_manager: 0.5.2
 

@@ -4,18 +4,17 @@ import 'dart:isolate';
 
 import 'package:catcher_2/model/report.dart';
 import 'package:catcher_2/model/report_handler.dart';
-import 'package:catcher_2/utils/log_printer.dart';
+import 'package:catcher_2/model/report_log.dart';
 import 'package:device_info_plus/device_info_plus.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
-import 'package:logger/logger.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 
 class Catcher2 {
   Catcher2(
     this.handlers,
     this._rootWidget, {
-    Logger? logger,
+    ReportLog? logger,
     this.handlerTimeout = const Duration(seconds: 5),
     this.customParameters = const {},
     this.handleSilentError = true,
@@ -24,8 +23,7 @@ class Catcher2 {
     this.reportOccurrenceTimeout = const Duration(seconds: 3),
   }) {
     assert(instance == null);
-    Catcher2.logger = logger ??
-        Logger(filter: ProductionFilter(), printer: PrettyLogPrinter());
+    Catcher2.logger = logger;
     Catcher2.instance = this;
 
     _configure();
@@ -72,7 +70,7 @@ class Catcher2 {
   final Map<String, DateTime> _reportsOccurrenceMap = {};
 
   static Catcher2? instance;
-  static late final Logger logger;
+  static ReportLog? logger;
 
   void _configure() {
     _loadDeviceInfo();
@@ -84,12 +82,13 @@ class Catcher2 {
 
     if (handlers.isEmpty) {
       assert(false);
-      logger.w(
+      logger?.call(
+        ReportLogLevel.warning,
         'Handlers list is empty. Configure at least one handler to '
         'process error reports.',
       );
     } else {
-      logger.d('Catcher 2 configured successfully.');
+      logger?.call(ReportLogLevel.debug, 'Catcher 2 configured successfully.');
     }
   }
 
@@ -130,7 +129,8 @@ class Catcher2 {
     FlutterErrorDetails? errorDetails,
   }) {
     if ((errorDetails?.silent ?? false) && !handleSilentError) {
-      logger.d(
+      logger?.call(
+        ReportLogLevel.debug,
         'Report error skipped. HandleSilentError is false.',
         error: error,
       );
@@ -152,7 +152,8 @@ class Catcher2 {
     );
 
     if (_isReportInReportsOccurrencesMap(report)) {
-      logger.d(
+      logger?.call(
+        ReportLogLevel.debug,
         "Error: '$error' has been skipped to due to duplication occurrence "
         'within $reportOccurrenceTimeout ms.',
       );
@@ -160,7 +161,8 @@ class Catcher2 {
     }
 
     if (filterFunction?.call(report) ?? false) {
-      logger.d(
+      logger?.call(
+        ReportLogLevel.debug,
         "Error: '$error' has been filtered from Catcher 2 logs. "
         'Report will be skipped.',
       );
@@ -206,11 +208,13 @@ class Catcher2 {
       } else if (Platform.isIOS) {
         _loadIosParameters(await deviceInfo.iosInfo);
       } else {
-        logger.w("Couldn't load device info for unsupported device type.");
+        logger?.call(ReportLogLevel.warning,
+            "Couldn't load device info for unsupported device type.");
       }
       _removeExcludedParameters();
     } catch (exception) {
-      logger.w("Couldn't load device info", error: exception);
+      logger?.call(ReportLogLevel.warning, "Couldn't load device info",
+          error: exception);
     }
   }
 
@@ -232,7 +236,8 @@ class Catcher2 {
       deviceParameters['variantId'] = linuxDeviceInfo.variantId;
       deviceParameters['machineId'] = linuxDeviceInfo.machineId;
     } catch (exception) {
-      logger.w('Load Linux parameters failed', error: exception);
+      logger?.call(ReportLogLevel.warning, 'Load Linux parameters failed',
+          error: exception);
     }
   }
 
@@ -248,7 +253,8 @@ class Catcher2 {
       deviceParameters['memorySize'] = macOsDeviceInfo.memorySize;
       deviceParameters['cpuFrequency'] = macOsDeviceInfo.cpuFrequency;
     } catch (exception) {
-      logger.w('Load MacOS parameters failed', error: exception);
+      logger?.call(ReportLogLevel.warning, 'Load MacOS parameters failed',
+          error: exception);
     }
   }
 
@@ -261,7 +267,8 @@ class Catcher2 {
       deviceParameters['displayVersion'] = windowsDeviceInfo.displayVersion;
       deviceParameters['productName'] = windowsDeviceInfo.productName;
     } catch (exception) {
-      logger.w('Load Windows parameters failed', error: exception);
+      logger?.call(ReportLogLevel.warning, 'Load Windows parameters failed',
+          error: exception);
     }
   }
 
@@ -296,7 +303,8 @@ class Catcher2 {
       deviceParameters['versionSecurityPatch'] =
           androidDeviceInfo.version.securityPatch;
     } catch (exception) {
-      logger.w('Load Android parameters failed', error: exception);
+      logger?.call(ReportLogLevel.warning, 'Load Android parameters failed',
+          error: exception);
     }
   }
 
@@ -314,7 +322,8 @@ class Catcher2 {
       deviceParameters['utsnameNodename'] = iosInfo.utsname.nodename;
       deviceParameters['utsnameSysname'] = iosInfo.utsname.sysname;
     } catch (exception) {
-      logger.w('Load iOS parameters failed', error: exception);
+      logger?.call(ReportLogLevel.warning, 'Load iOS parameters failed',
+          error: exception);
     }
   }
 
@@ -326,7 +335,8 @@ class Catcher2 {
       applicationParameters['buildNumber'] = packageInfo.buildNumber;
       applicationParameters['packageName'] = packageInfo.packageName;
     } catch (exception) {
-      logger.w("Couldn't load application info", error: exception);
+      logger?.call(ReportLogLevel.warning, "Couldn't load application info",
+          error: exception);
     }
   }
 
@@ -338,18 +348,22 @@ class Catcher2 {
 
   void _handleReport(Report report, ReportHandler reportHandler) {
     reportHandler.handle(report).catchError((handlerError) {
-      logger.w('Error occurred in $reportHandler', error: handlerError);
+      logger?.call(ReportLogLevel.warning, 'Error occurred in $reportHandler',
+          error: handlerError);
       return true; // Shut up warnings
     }).then((result) {
       if (result) {
-        logger.d('$reportHandler successfully reported an error');
+        logger?.call(ReportLogLevel.debug,
+            '$reportHandler successfully reported an error');
       } else {
-        logger.w('$reportHandler failed to report an error');
+        logger?.call(
+            ReportLogLevel.warning, '$reportHandler failed to report an error');
       }
     }).timeout(
       handlerTimeout,
       onTimeout: () {
-        logger.w('$reportHandler failed to report an error because of timeout');
+        logger?.call(ReportLogLevel.warning,
+            '$reportHandler failed to report an error because of timeout');
       },
     );
   }

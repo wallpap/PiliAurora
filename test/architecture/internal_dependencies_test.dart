@@ -9,6 +9,8 @@ const _retiredDirectDependencies = [
   'uuid',
   'json_annotation',
   'package_info_plus',
+  'logger',
+  'webdav_client',
 ];
 
 void main() {
@@ -32,6 +34,24 @@ void main() {
       }
     }
     expect(violations, isEmpty, reason: violations.join('\n'));
+  });
+
+  test('catcher logs use host callbacks without a second logging package', () {
+    final pubspec = loadYaml(
+      File('third_party/catcher_2/pubspec.yaml').readAsStringSync(),
+    ) as Map;
+    expect((pubspec['dependencies'] as Map).containsKey('logger'), isFalse);
+    for (final file in Directory(
+      'third_party/catcher_2/lib',
+    ).listSync(recursive: true)) {
+      if (file is File && file.path.endsWith('.dart')) {
+        expect(
+          file.readAsStringSync(),
+          isNot(contains('package:logger/')),
+          reason: file.path,
+        );
+      }
+    }
   });
 
   test('cache models are owned by the cache implementation package', () {
