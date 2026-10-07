@@ -2,16 +2,16 @@ import 'package:catcher_2/core/catcher_2.dart';
 import 'package:catcher_2/model/report.dart';
 import 'package:catcher_2/model/report_handler.dart';
 import 'package:flutter/foundation.dart';
-import 'package:logger/logger.dart';
+import 'package:catcher_2/model/report_log.dart';
 
 class ConsoleHandler extends ReportHandler {
-  final Level level;
+  final ReportLogLevel level;
   final bool enableDeviceParameters;
   final bool enableApplicationParameters;
   final bool enableCustomParameters;
 
   const ConsoleHandler({
-    this.level = Level.warning,
+    this.level = ReportLogLevel.warning,
     this.enableDeviceParameters = kReleaseMode,
     this.enableApplicationParameters = kReleaseMode,
     this.enableCustomParameters = kReleaseMode,
@@ -26,10 +26,9 @@ class ConsoleHandler extends ReportHandler {
         app: enableApplicationParameters,
         custom: enableCustomParameters,
       );
-      Catcher2.logger.log(
+      Catcher2.logger?.call(
         level,
         info.isEmpty ? null : info,
-        time: report.dateTime,
         error: report.error,
         stackTrace: stack is StackTrace
             ? stack

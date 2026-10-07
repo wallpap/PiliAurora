@@ -97,6 +97,6 @@ class Report {
     return '${formatInfo()}'
         '------- TIME -------\n$dateTime\n'
         '------- ERROR -------\n$error\n'
-        '------- STACK TRACE -------\n${PrettyLogPrinter.formatStackString(stackTrace?.toString())?.join("\n")}\n';
+        '------- STACK TRACE -------\n${ReportStackFormatter.formatStackString(stackTrace?.toString())?.join("\n")}\n';
   }
 }
