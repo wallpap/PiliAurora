@@ -214,17 +214,50 @@ class _DecoderTestDialogState extends State<DecoderTestDialog> {
       _results.clear();
     });
 
-    for (final codec in codecs) {
-      for (final decoder in decoders) {
-        if (!mounted || generation != _testGeneration) break;
-        final key = _resultKey(codec, decoder);
-        setState(() => _results[key] = const _DecoderResult.running());
-        final result = await _testDecoder(codec, decoder);
-        if (!mounted || generation != _testGeneration) break;
-        setState(() {
-          _results[key] = result;
-          _completedTests++;
-        });
+    // 同一个解码器复用一个 mpv/VideoOutput 实例，避免每个组合都触发一次
+    // 原生渲染上下文的创建和延迟销毁。Windows 的 libmpv 销毁本身是异步的，
+    // 逐组合创建播放器会在一次测试中积累多个仍未真正释放的上下文。
+    for (final decoder in decoders) {
+      if (!mounted || generation != _testGeneration) break;
+
+      _DecoderTestSession? session;
+      Object? sessionError;
+      try {
+        session = await _createDecoderSession(decoder);
+      } catch (error) {
+        sessionError = error;
+      }
+
+      try {
+        for (final codec in codecs) {
+          if (!mounted || generation != _testGeneration) break;
+          final key = _resultKey(codec, decoder);
+          setState(() => _results[key] = const _DecoderResult.running());
+          final result = sessionError == null
+              ? await _testDecoder(codec, decoder, session!)
+              : _DecoderResult.failure(
+                  _formatDecoderTestError(sessionError),
+                  performance: const _PerformanceSummary(
+                    averageCpu: null,
+                    peakMemoryMb: null,
+                    averageGpu: null,
+                  ),
+                );
+          if (!mounted || generation != _testGeneration) break;
+          setState(() {
+            _results[key] = result;
+            _completedTests++;
+          });
+        }
+      } finally {
+        if (session != null) {
+          if (identical(_activePlayer, session.player)) {
+            _activePlayer = null;
+            _activeVideoController = null;
+            if (mounted) setState(() {});
+          }
+          await session.dispose();
+        }
       }
     }
 
@@ -242,28 +275,21 @@ class _DecoderTestDialogState extends State<DecoderTestDialog> {
     _testing = false;
     final player = _activePlayer;
     _activePlayer = null;
+    _activeVideoController = null;
     if (player != null) await player.dispose();
     if (mounted) setState(() {});
   }
 
-  Future<_DecoderResult> _testDecoder(
-    VideoItem codec,
-    HwDecType decoder,
-  ) async {
-    Player? player;
+  Future<_DecoderTestSession> _createDecoderSession(HwDecType decoder) async {
+    final player = await Player.create(
+      configuration: const PlayerConfiguration(
+        logLevel: kDebugMode ? .warn : .error,
+        options: {'audio': 'no', 'video-sync': 'audio'},
+      ),
+    );
+    _activePlayer = player;
     PlayerDiagnostics? diagnostics;
-    StreamSubscription<String>? errorSubscription;
-    String? playbackError;
-    final monitor = _PerformanceMonitor();
     try {
-      monitor.start();
-      player = await Player.create(
-        configuration: const PlayerConfiguration(
-          logLevel: kDebugMode ? .warn : .error,
-          options: {'audio': 'no', 'video-sync': 'audio'},
-        ),
-      );
-      _activePlayer = player;
       diagnostics = PlayerDiagnostics(
         player,
         extra: () => {
@@ -271,10 +297,6 @@ class _DecoderTestDialogState extends State<DecoderTestDialog> {
           'requestedDecoder': decoder.hwdec,
         },
       );
-      final errors = Completer<String>();
-      errorSubscription = player.stream.error.listen((message) {
-        if (!errors.isCompleted) errors.complete(message);
-      });
       final videoController = await VideoController.create(
         player,
         configuration: VideoControllerConfiguration(
@@ -282,14 +304,49 @@ class _DecoderTestDialogState extends State<DecoderTestDialog> {
           hwdec: decoder.hwdec,
         ),
       );
-      configureDecoderTestMediaHeaders(({
-        String? userAgent,
-        String? referer,
-      }) {
-        player!.setMediaHeader(userAgent: userAgent, referer: referer);
-      });
+      void writeMediaHeaders({String? userAgent, String? referer}) {
+        player.setMediaHeader(userAgent: userAgent, referer: referer);
+      }
+
+      configureDecoderTestMediaHeaders(writeMediaHeaders);
       _activeVideoController = videoController;
       if (mounted) setState(() {});
+      return _DecoderTestSession(
+        player: player,
+        diagnostics: diagnostics,
+      );
+    } catch (_) {
+      diagnostics?.dispose();
+      if (!player.disposed) await player.dispose();
+      if (identical(_activePlayer, player)) {
+        _activePlayer = null;
+        _activeVideoController = null;
+        if (mounted) setState(() {});
+      }
+      rethrow;
+    }
+  }
+
+  String _formatDecoderTestError(Object error) {
+    final message = error.toString().replaceFirst('Bad state: ', '');
+    return message.length > 68 ? '初始化或播放失败' : message;
+  }
+
+  Future<_DecoderResult> _testDecoder(
+    VideoItem codec,
+    HwDecType decoder,
+    _DecoderTestSession session,
+  ) async {
+    final player = session.player;
+    StreamSubscription<String>? errorSubscription;
+    String? playbackError;
+    final monitor = _PerformanceMonitor();
+    try {
+      monitor.start();
+      final errors = Completer<String>();
+      errorSubscription = player.stream.error.listen((message) {
+        if (!errors.isCompleted) errors.complete(message);
+      });
       final url = codec.playUrls.firstOrNull;
       if (url == null || url.isEmpty) throw StateError('测试视频地址为空');
       await player.open(Media(url), play: true).timeout(_startupTimeout);
@@ -330,21 +387,12 @@ class _DecoderTestDialogState extends State<DecoderTestDialog> {
         error,
         details: {'decoder': decoder.hwdec, 'codec': codec.codecid},
       );
-      final message = error.toString().replaceFirst('Bad state: ', '');
       return _DecoderResult.failure(
-        message.length > 68 ? '初始化或播放失败' : message,
+        _formatDecoderTestError(error),
         performance: await monitor.stop(),
       );
     } finally {
-      diagnostics?.dispose();
       await errorSubscription?.cancel();
-      if (identical(_activePlayer, player)) {
-        _activePlayer = null;
-        await player?.dispose();
-      }
-      if (mounted) {
-        setState(() => _activeVideoController = null);
-      }
     }
   }
 
@@ -551,6 +599,21 @@ class _SelectionWrap<T, V> extends StatelessWidget {
         ),
     ],
   );
+}
+
+class _DecoderTestSession {
+  final Player player;
+  final PlayerDiagnostics diagnostics;
+  bool _disposed = false;
+
+  _DecoderTestSession({required this.player, required this.diagnostics});
+
+  Future<void> dispose() async {
+    if (_disposed) return;
+    _disposed = true;
+    diagnostics.dispose();
+    if (!player.disposed) await player.dispose();
+  }
 }
 
 class _DecoderResult {
