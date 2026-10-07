@@ -1,6 +1,6 @@
 # PiliAurora
 
-PiliAurora 是一个使用 Flutter 开发的 Bilibili 第三方客户端，面向 **Android** 和 **Windows**。项目基于 [PiliPlus 2.1.5](https://github.com/bggRGjQaUbCoE/PiliPlus/tree/2.1.5) 继续维护，重点放在 Windows 播放体验、弹幕渲染、硬件解码兼容性、性能和稳定性，而不是单纯增加页面数量。
+PiliAurora 是面向 Android 和 Windows 的 Flutter Bilibili 第三方客户端，基于 [PiliPlus 2.1.5](https://github.com/bggRGjQaUbCoE/PiliPlus/tree/2.1.5) 继续开发。维护工作主要围绕 Windows 播放、弹幕渲染、硬件解码兼容性，以及性能和稳定性展开。
 
 > 本项目与 Bilibili 官方没有隶属关系。它是独立维护的第三方客户端，使用时请遵守 Bilibili 的服务条款及适用法律。
 
@@ -8,19 +8,19 @@ PiliAurora 是一个使用 Flutter 开发的 Bilibili 第三方客户端，面�
 
 ## 与源项目的功能对比
 
-这里的“源项目”指本项目当前代码所基于的 PiliPlus `2.1.5` 版本。上游项目仍可能继续变化，因此下表描述的是本仓库与该基线版本之间的差异。
+以下对比以 PiliPlus `2.1.5` 为基线，不代表上游后续版本的功能或表现。
 
 ### 保留的主要功能
 
-PiliAurora 保留了 PiliPlus 的主要用户功能，包括：
+从 PiliPlus 保留的主要功能：
 
-- **视频与番剧**：视频详情、分 P、画质和音质选择、倍速播放、字幕、章节、硬件解码、音频播放和番剧播放。
-- **弹幕与直播**：视频弹幕、弹幕设置与屏蔽、直播分区、直播间、直播聊天和直播弹幕。
-- **动态与评论**：动态浏览、发布、转发、投票、话题、评论、楼中楼、点赞、回复和富文本内容展示。
-- **内容管理**：收藏夹、收藏夹排序、稍后再看、观看记录、离线缓存和离线播放。
-- **账号与社交**：登录、设备管理、多账号、关注和分组、粉丝、黑名单、私信及消息中心。
-- **搜索与个人空间**：视频、番剧、用户、动态、专栏和直播搜索，以及用户主页、投稿、收藏、动态和相关数据。
-- **扩展功能**：DLNA 投屏、WebDAV 设置备份、主题和播放参数设置、Bilibili Web 页面、SponsorBlock 等。
+- 视频与番剧：视频详情、分 P、画质和音质选择、倍速播放、字幕、章节、硬件解码、音频播放和番剧播放。
+- 弹幕与直播：视频弹幕、弹幕设置与屏蔽、直播分区、直播间、直播聊天和直播弹幕。
+- 动态与评论：动态浏览、发布、转发、投票、话题、评论、楼中楼、点赞、回复和富文本内容展示。
+- 内容管理：收藏夹、收藏夹排序、稍后再看、观看记录、离线缓存和离线播放。
+- 账号与社交：登录、设备管理、多账号、关注和分组、粉丝、黑名单、私信及消息中心。
+- 搜索与个人空间：视频、番剧、用户、动态、专栏和直播搜索，以及用户主页、投稿、收藏、动态和相关数据。
+- 扩展功能：DLNA 投屏、WebDAV 设置备份、主题和播放参数设置、Bilibili Web 页面、SponsorBlock 等。
 
 ### PiliAurora 的主要变化
 
@@ -37,8 +37,8 @@ PiliAurora 保留了 PiliPlus 的主要用户功能，包括：
 
 - 如果你需要 **iOS、iPad、macOS 或 Linux**，请使用仍维护这些平台的上游项目；PiliAurora 不再以这些平台为目标。
 - 如果你主要在 **Windows** 上观看视频或直播，PiliAurora 更关注硬件解码选择、密集弹幕和长时间运行的稳定性。
-- 与上游不同，PiliAurora 的部分修改属于播放器、渲染器和诊断基础设施优化，未必会表现为新的业务页面或新的 Bilibili 功能。
-- PiliAurora 使用独立的应用标识和数据目录，可与 PiliPlus 并存；但两者的登录状态、设置、缓存和离线文件不会自动共享。
+- 播放器、渲染器和诊断基础设施的改动，未必会增加页面或 Bilibili 功能。
+- PiliAurora 使用独立的应用标识和数据目录，可以与 PiliPlus 并存。两个应用的登录状态、设置、缓存和离线文件不会自动共享。
 
 ## 支持平台
 
@@ -49,11 +49,11 @@ PiliAurora 保留了 PiliPlus 的主要用户功能，包括：
 
 前往 [Releases](https://github.com/wallpap/PiliAurora/releases) 获取安装包。发布页没有适合你设备的构建时，可以从源码构建。
 
-发布版本号和构建号以仓库中的 `pubspec.yaml`、`pili_release.json` 及对应发布说明为准。请仅从源码仓库或 Releases 页面下载应用。
+版本号和构建号可在 `pubspec.yaml`、`pili_release.json` 及对应发布说明中查看。请从本仓库或 Releases 页面下载应用。
 
 ## 依赖维护
 
-普通依赖使用发布版精确版本，并提交 `pubspec.lock`；定制依赖使用仓库内版本化源码，不跟踪远端 Git 分支。来源、保留原因及更新流程见 [third_party/README.md](third_party/README.md)。解析依赖后运行 `dart run tool/check_dependencies.dart` 检查版本、许可和来源一致性。
+普通依赖固定到发布版的精确版本，解析结果保存在 `pubspec.lock` 中。需要定制的依赖随仓库源码维护，不跟踪远端 Git 分支。包的来源、保留原因和更新步骤见 [third_party/README.md](third_party/README.md)；解析后运行 `dart run tool/check_dependencies.dart`，核对版本、许可证和来源。
 
 ## 从源码构建
 
@@ -110,7 +110,7 @@ fvm flutter test
 
 ## 问题反馈
 
-请通过 [Issues](https://github.com/wallpap/PiliAurora/issues) 反馈问题或提出建议。为了便于定位，请尽量提供：
+请通过 [Issues](https://github.com/wallpap/PiliAurora/issues) 反馈问题或提出建议。请附上以下信息：
 
 - 操作系统、设备/显卡和应用版本；
 - 复现步骤、媒体类型和是否使用硬件解码；

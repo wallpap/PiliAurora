@@ -1,8 +1,8 @@
 # PiliAurora 架构说明
 
-> 面向新人和 AI 的代码导航文档。
+> 供首次接手项目的开发者和 AI 代理查找代码入口。
 >
-> **文档基线**：2026-10-06 完成启动层与下载持久化重构后同步更新。请以当前检出代码为准，不把远端分支状态或本文当成永远准确的接口文档。
+> 架构记录始于 2026-10-06 的启动层和下载持久化重构。接口及分支状态会继续变化，使用时请核对当前检出的代码。
 
 ## 1. 项目定位
 
@@ -11,7 +11,7 @@ PiliAurora 是一个使用 Flutter/Dart 编写的 Bilibili 第三方客户端，
 - Android；
 - Windows x64。
 
-它是一个本地运行的客户端应用，不是前后端一体的服务器项目。主要边界如下：
+应用在本地运行；仓库不包含配套的服务端。主要边界如下：
 
 ```text
 用户
@@ -34,7 +34,7 @@ Flutter 应用（lib/）
 本地边界：应用支持目录、Hive 存储、缓存、下载文件、诊断日志
 ```
 
-项目基于 PiliPlus 2.1.5 继续维护。当前工作的重点包括 Windows 播放与弹幕体验、硬件解码兼容性、Android 播放恢复、性能、诊断和稳定性；不要把本项目理解成只增加业务页面的 UI 项目。
+项目基于 PiliPlus 2.1.5 继续维护，重点包括 Windows 播放和弹幕、硬件解码兼容性、Android 播放恢复，以及性能、诊断和稳定性。
 
 ## 2. 当前已确认的技术基线
 
@@ -53,7 +53,7 @@ Flutter 应用（lib/）
 | 生成代码 | protobuf/gRPC 相关 Dart 代码在 `lib/grpc/`；Android JNI bindings 由 `tool/jnigen.dart` 生成 |
 | 测试 | Flutter/Dart 测试在 `test/`，重点覆盖播放器、直播、下载、诊断、页面和账号等领域 |
 
-`pubspec.yaml` 中存在较多 Git 依赖和 `dependency_overrides`。因此排查依赖行为时，不能只按 pub.dev 上同名包的默认版本推断，必须同时查看 override、Git ref 和 `pubspec.lock`。
+依赖清理后，`pubspec.yaml` 已固定根依赖版本，定制源码由 `dependency_overrides` 指向仓库内的包。排查具体行为时，请同时核对来源登记和 `pubspec.lock`，不要套用 pub.dev 上同名包的默认实现。
 
 ## 3. 目录地图
 
@@ -87,7 +87,7 @@ lib/
 
 ### 3.1 `lib/http/`：远端 API 边界
 
-当前可以看到的 API 文件包括 `video.dart`、`live.dart`、`login.dart`、`member.dart`、`dynamics.dart`、`fav.dart`、`follow.dart`、`msg.dart`、`search.dart`、`reply.dart`、`download.dart`、`danmaku.dart`、`sponsor_block.dart` 等。
+API 文件包括 `video.dart`、`live.dart`、`login.dart`、`member.dart`、`dynamics.dart`、`fav.dart`、`follow.dart`、`msg.dart`、`search.dart`、`reply.dart`、`download.dart`、`danmaku.dart`、`sponsor_block.dart` 等。
 
 网络横切逻辑主要位于：
 
@@ -123,7 +123,7 @@ lib/pages/<功能域>/
 └─ ...                    子页面、模型或功能专属逻辑
 ```
 
-这是代码中的常见形态，不是强制模板。页面之间的状态管理、网络调用和生命周期处理需要以具体目录为准。
+页面常按这种方式组织，但没有统一的强制模板。状态管理、网络调用和生命周期处理需查看具体目录。
 
 ### 3.4 `lib/services/`：跨页面与长生命周期能力
 
@@ -146,7 +146,7 @@ lib/services/
 
 ### 3.5 `lib/plugin/pl_player/`：播放器边界
 
-播放器代码不是普通页面组件，包含：
+播放器目录同时负责播放状态、原生输出和界面控制：
 
 - `controller.dart`：播放控制和状态协调；
 - `models/`：音量、倍速、全屏、硬解类型、播放状态、视频适配等模型；
@@ -228,7 +228,7 @@ sequenceDiagram
 | 下载与外部能力 | `/download`、`/dlna`、`/webview` |
 | 文章/音频/扩展 | `/articlePage`、`/articleList`、`/audio`、`/sponsorBlock` |
 
-路由名是字符串，不是自动从目录推导。新增或移动页面时，至少需要同步检查：
+路由名使用字符串，不会随目录自动变化。新增或移动页面时，需要一起检查：
 
 1. `app_pages.dart` 的 import 和 `GetPage` 注册；
 2. 页面构造函数及其参数；
@@ -256,7 +256,7 @@ Flutter / Android / Windows
             └───────────────► plugin/pl_player/ ────► media_kit/平台媒体库
 ```
 
-这不是编译器强制的分层规则，也不是 Clean Architecture 的完整实现。当前代码允许以下现实情况：
+项目没有用编译器强制这些边界，也没有完整实现 Clean Architecture。代码中仍有以下依赖关系：
 
 - 页面 controller 直接调用 `lib/http/`；
 - service 使用 HTTP、模型、存储和平台插件；
@@ -388,7 +388,7 @@ README 已记录项目对 Android MediaCodec 输出异常恢复、Windows 硬件
 
 ### 11.3 验证与报告
 
-最终报告应明确区分：
+报告中请分别说明：
 
 - 已实际修改的文件；
 - 实际执行过的检查及结果；
@@ -397,17 +397,17 @@ README 已记录项目对 Android MediaCodec 输出异常恢复、Windows 硬件
 
 ## 12. 待核实项
 
-以下内容不是本文声称已经验证的事实，后续改动涉及它们时应重新确认：
+以下问题需要在相关改动中重新确认：
 
-1. **跨平台实测范围**：本文根据仓库配置记录 Android 和 Windows x64 为维护目标；没有在本文中验证每个版本的真实设备、显卡、驱动、WebView 和音频环境。
-2. **JDK 25 发布构建兼容性**：仓库已固定 Gradle/AGP/Kotlin/JDK 配置，但具体 CI、签名发布和每个 Flutter 插件在当前环境的构建结果仍应通过实际构建确认。
-3. **第三方 Git 依赖稳定性**：多个依赖使用 Git 分支或 fork，分支内容可能变化；不能只依据 `pubspec.yaml` 中的包名判断行为。
-4. **远端 API 契约**：Bilibili 接口、直播协议、弹幕格式、登录流程和第三方服务可能变化，模型文件不能代替在线接口验证。
-5. **页面生命周期**：GetX controller 的创建、复用、销毁和返回栈行为需要按具体页面确认，本文不假设所有页面采用相同生命周期。
-6. **本地数据兼容**：具体 Hive box、存储键、缓存格式、下载记录和历史诊断文件的迁移策略需要查看对应实现，本文没有替代迁移文档。
-7. **生成代码来源**：`lib/grpc/` 和 JNI bindings 的完整源定义、生成参数和版本约束需要在相关任务中沿 `tool/`、Android 工程和依赖仓库进一步确认。
-8. **平台回退顺序**：播放器硬解、MediaCodec、AV1、音频和 WebView 的最终回退顺序以代码、日志和真实设备/媒体文件测试为准。
+1. 跨平台实测范围：本文根据仓库配置记录 Android 和 Windows x64 为维护目标；没有在本文中验证每个版本的真实设备、显卡、驱动、WebView 和音频环境。
+2. JDK 25 发布构建兼容性：仓库已固定 Gradle/AGP/Kotlin/JDK 配置，但具体 CI、签名发布和每个 Flutter 插件在当前环境的构建结果仍应通过实际构建确认。
+3. 定制依赖行为：根依赖已固定版本，定制包也已纳入仓库；排查时仍须核对来源和本地修改，不能只依据 `pubspec.yaml` 中的包名判断行为。
+4. 远端 API 契约：Bilibili 接口、直播协议、弹幕格式、登录流程和第三方服务可能变化，模型文件不能代替在线接口验证。
+5. 页面生命周期：GetX controller 的创建、复用、销毁和返回栈行为需要按具体页面确认，本文不假设所有页面采用相同生命周期。
+6. 本地数据兼容：具体 Hive box、存储键、缓存格式、下载记录和历史诊断文件的迁移策略需要查看对应实现，本文没有替代迁移文档。
+7. 生成代码来源：`lib/grpc/` 和 JNI bindings 的完整源定义、生成参数和版本约束需要在相关任务中沿 `tool/`、Android 工程和依赖仓库进一步确认。
+8. 平台回退顺序：播放器硬解、MediaCodec、AV1、音频和 WebView 的最终回退顺序以代码、日志和真实设备/媒体文件测试为准。
 
 ---
 
-**一句话总结**：先从 `main.dart` 进入 `app/` 理解启动装配和全局边界，再用 `app_pages.dart` 找页面入口，沿实际 import 连接 `pages → http/services/models/common/utils/plugin`；涉及播放器、生成代码、Android/JDK 25 或本地数据时，不要只改表面文件，必须把对应的平台配置、生成链路和测试一起核对。
+定位代码时，先从 `main.dart` 进入 `app/` 理解启动装配和全局边界，再用 `app_pages.dart` 找页面入口，沿实际 import 连接 `pages → http/services/models/common/utils/plugin`；涉及播放器、生成代码、Android/JDK 25 或本地数据时，不要只改表面文件，必须把对应的平台配置、生成链路和测试一起核对。
