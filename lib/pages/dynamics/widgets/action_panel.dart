@@ -50,7 +50,7 @@ class ActionPanel extends StatelessWidget {
                   ),
                 ),
                 icon: Icon(
-                  FontAwesomeIcons.shareFromSquare,
+                  FontAwesomeIcons.shareFromSquare.data,
                   size: 16,
                   color: outline,
                   semanticLabel: "转发",
@@ -73,7 +73,7 @@ class ActionPanel extends StatelessWidget {
               viewComment: true,
             ),
             icon: Icon(
-              FontAwesomeIcons.comment,
+              FontAwesomeIcons.comment.data,
               size: 16,
               color: outline,
               semanticLabel: "评论",
@@ -91,11 +91,11 @@ class ActionPanel extends StatelessWidget {
               final Color color;
               final String label;
               if (like.status ?? false) {
-                icon = FontAwesomeIcons.solidThumbsUp;
+                icon = FontAwesomeIcons.solidThumbsUp.data;
                 color = primary;
                 label = '已赞';
               } else {
-                icon = FontAwesomeIcons.thumbsUp;
+                icon = FontAwesomeIcons.thumbsUp.data;
                 color = outline;
                 label = '点赞';
               }

@@ -138,8 +138,8 @@ class ZanButtonGrpc extends StatelessWidget {
             ),
             child: Icon(
               isDislike
-                  ? FontAwesomeIcons.solidThumbsDown
-                  : FontAwesomeIcons.thumbsDown,
+                  ? FontAwesomeIcons.solidThumbsDown.data
+                  : FontAwesomeIcons.thumbsDown.data,
               size: 16,
               color: isDislike ? primary : outline,
               semanticLabel: isDislike ? '已踩' : '点踩',
@@ -162,8 +162,8 @@ class ZanButtonGrpc extends StatelessWidget {
               children: [
                 Icon(
                   isLike
-                      ? FontAwesomeIcons.solidThumbsUp
-                      : FontAwesomeIcons.thumbsUp,
+                      ? FontAwesomeIcons.solidThumbsUp.data
+                      : FontAwesomeIcons.thumbsUp.data,
                   size: 16,
                   color: isLike ? primary : outline,
                   semanticLabel: isLike ? '已赞' : '点赞',

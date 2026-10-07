@@ -389,10 +389,10 @@ List<SettingsModel> get extraSettings => [
     defaultVal: false,
   ),
   if (Platform.isAndroid)
-    const SwitchModel(
+    SwitchModel(
       title: '使用「哔哩发评反诈」检查评论',
       leading: Icon(
-        FontAwesomeIcons.b,
+        FontAwesomeIcons.b.data,
         size: 22,
       ),
       setKey: SettingBoxKey.biliSendCommAntifraud,

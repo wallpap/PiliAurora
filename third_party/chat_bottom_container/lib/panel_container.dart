@@ -1,0 +1,509 @@
+/*
+ * @Author: LinXunFeng linxunfeng@yeah.net
+ * @Repo: https://github.com/LinXunFeng/flutter_chat_packages
+ * @Date: 2024-06-17 22:25:15
+ */
+
+import 'package:chat_bottom_container/constants.dart';
+import 'package:chat_bottom_container/listener_manager.dart';
+import 'package:chat_bottom_container/typedef.dart';
+import 'package:material_ui/material_ui.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
+class ChatBottomPanelContainerController<T> {
+  ChatBottomPanelContainerController({this.uiScale = 1.0});
+
+  final double uiScale;
+
+  _ChatBottomPanelContainerState? _state;
+
+  /// The data used to associate with user-defined panel types.
+  T? data;
+
+  /// The current [ChatBottomPanelType].
+  ChatBottomPanelType currentPanelType = ChatBottomPanelType.none;
+
+  /// The keyboard height (dynamic height under current orientation).
+  /// This value may be 0 when the keyboard height has never been recorded
+  /// under the current orientation.
+  double get keyboardHeight => _state?.currentNativeKeyboardHeight ?? 0;
+
+  /// The bottom height of the safe area.
+  double get safeAreaBottom => _state?.safeAreaBottom ?? 0;
+
+  /// Determine whether the keyboard height changes due to the keyboard's own
+  /// function.
+  /// For example, the expansion and closing of the keyboard's own search box.
+  bool get isKeyboardHeightChangedByItself =>
+      _state?.isKeyboardHeightChangedByItself ?? false;
+
+  void _attachState(_ChatBottomPanelContainerState state) {
+    _state = state;
+  }
+
+  void _detachState() {
+    _state = null;
+  }
+
+  /// Update the panel type.
+  ///
+  /// [data] is used to associate [ChatBottomPanelType.other] with the data of
+  /// the externally defined panel type.
+  ///
+  /// For other parameters, please go to
+  /// [_ChatBottomPanelContainerState.updatePanelType] to view the description.
+  void updatePanelType(
+    ChatBottomPanelType panelType, {
+    T? data,
+    ChatBottomHandleFocus forceHandleFocus = ChatBottomHandleFocus.none,
+  }) {
+    this.data = data;
+    _state?.updatePanelType(
+      panelType,
+      isIgnoreFocusListener: true,
+      forceHandleFocus: forceHandleFocus,
+    );
+  }
+
+  /// Build build-in panel.
+  Widget? buildInPanel(ChatBottomPanelType panelType) {
+    switch (panelType) {
+      case ChatBottomPanelType.none:
+        return _state?.buildSafeArea.call();
+      case ChatBottomPanelType.keyboard:
+        return _state?.buildKeyboardPlaceholderPanel.call();
+      case ChatBottomPanelType.other:
+        return _state?.buildOtherPanel.call();
+    }
+  }
+}
+
+class ChatBottomPanelContainer<T> extends StatefulWidget {
+  const ChatBottomPanelContainer({
+    super.key,
+    required this.controller,
+    required this.inputFocusNode,
+    this.otherPanelWidget,
+    this.onPanelTypeChange,
+    this.panelBgColor = Colors.white,
+    this.safeAreaBottom,
+    this.changeKeyboardPanelHeight,
+    this.customPanelContainer,
+  }) : assert(otherPanelWidget != null || customPanelContainer != null,
+            'otherPanelWidget and customPanelContainer cannot both be null.');
+
+  /// The controller of [ChatBottomPanelContainer].
+  final ChatBottomPanelContainerController<T> controller;
+
+  /// The focus node of the input box.
+  final FocusNode inputFocusNode;
+
+  /// The widget of the other panel.
+  final Widget Function(T? data)? otherPanelWidget;
+
+  /// The callback when the panel type changes.
+  final void Function(ChatBottomPanelType, T? data)? onPanelTypeChange;
+
+  /// The background color of the panel container.
+  ///
+  /// If [customPanelContainer] is not null, this property will be ignored.
+  final Color panelBgColor;
+
+  /// The bottom height of the safe area.
+  /// If it is null, the widget will automatically calculate the bottom height
+  /// of the safe area.
+  final double? safeAreaBottom;
+
+  /// The callback to change the height of the keyboard panel.
+  final ChatKeyboardChangeKeyboardPanelHeight? changeKeyboardPanelHeight;
+
+  /// The callback to custom panel container.
+  final ChatBottomCustomPanelContainer<T>? customPanelContainer;
+
+  @override
+  State<ChatBottomPanelContainer> createState() =>
+      _ChatBottomPanelContainerState<T>();
+}
+
+class _ChatBottomPanelContainerState<T>
+    extends State<ChatBottomPanelContainer<T>> {
+  String chatKeyboardManagerId = '';
+
+  ChatBottomPanelType lastPanelType = ChatBottomPanelType.none;
+  ChatBottomPanelType panelType = ChatBottomPanelType.none;
+
+  bool isIgnoreFocusListener = false;
+
+  /// Record the height of the keyboard for portrait orientation.
+  double currentNativeKeyboardHeightPortrait = 0;
+
+  /// Record the height of the keyboard for landscape orientation.
+  double currentNativeKeyboardHeightLandscape = 0;
+
+  /// Record the height of the keyboard. It will only be updated when the
+  /// keyboard pops up and the height of the keyboard itself changes.
+  double get currentNativeKeyboardHeight {
+    if (!mounted) return 0;
+    final isPortrait =
+        MediaQuery.orientationOf(context) == Orientation.portrait;
+    return isPortrait
+        ? currentNativeKeyboardHeightPortrait
+        : currentNativeKeyboardHeightLandscape;
+  }
+
+  /// Determine whether the keyboard height changes due to the keyboard's own
+  /// function.
+  /// For example, the expansion and closing of the keyboard's own search box.
+  bool isKeyboardHeightChangedByItself = false;
+
+  FocusNode get inputFocusNode => widget.inputFocusNode;
+
+  double safeAreaBottom = 0;
+
+  Future<SharedPreferences> get preferences => SharedPreferences.getInstance();
+
+  Future<void> setup() async {
+    safeAreaBottom = widget.safeAreaBottom ?? 0;
+    widget.controller._attachState(this);
+    chatKeyboardManagerId = ChatBottomContainerListenerManager().register(
+      onKeyboardHeightChange,
+    );
+
+    inputFocusNode.addListener(inputFocusNodeListener);
+
+    final pref = await preferences;
+    final portraitHeight =
+        pref.getDouble(ChatBottomContainerPrefKey.keyboardHeightPortrait) ?? 0;
+    final landscapeHeight =
+        pref.getDouble(ChatBottomContainerPrefKey.keyboardHeightLandscape) ?? 0;
+    if (portraitHeight > 0) {
+      currentNativeKeyboardHeightPortrait = portraitHeight;
+    }
+    if (landscapeHeight > 0) {
+      currentNativeKeyboardHeightLandscape = landscapeHeight;
+    }
+  }
+
+  /// Record the height of the keyboard.
+  Future<void> recordKeyboardHeight(double height) async {
+    if (height <= 0) return;
+    final isPortrait =
+        MediaQuery.orientationOf(context) == Orientation.portrait;
+    final pref = await preferences;
+    await pref.setDouble(ChatBottomContainerPrefKey.keyboardHeight, height);
+    final key = isPortrait
+        ? ChatBottomContainerPrefKey.keyboardHeightPortrait
+        : ChatBottomContainerPrefKey.keyboardHeightLandscape;
+    await pref.setDouble(key, height);
+  }
+
+  /// The listener of the input focus node.
+  void inputFocusNodeListener() {
+    if (isIgnoreFocusListener) return;
+    if (inputFocusNode.hasFocus) {
+      updatePanelType(ChatBottomPanelType.keyboard);
+    } else {
+      updatePanelType(ChatBottomPanelType.none);
+    }
+  }
+
+  @override
+  void initState() {
+    super.initState();
+
+    setup();
+  }
+
+  @override
+  void dispose() {
+    widget.controller._detachState();
+    ChatBottomContainerListenerManager().unregister(chatKeyboardManagerId);
+    inputFocusNode.removeListener(inputFocusNodeListener);
+    super.dispose();
+  }
+
+  @override
+  void didUpdateWidget(covariant ChatBottomPanelContainer<T> oldWidget) {
+    super.didUpdateWidget(oldWidget);
+
+    // The input focus node has changed.
+    if (widget.inputFocusNode != oldWidget.inputFocusNode) {
+      oldWidget.inputFocusNode.removeListener(inputFocusNodeListener);
+      inputFocusNode.addListener(inputFocusNodeListener);
+    }
+
+    // The safe area bottom has changed.
+    if (widget.safeAreaBottom != oldWidget.safeAreaBottom) {
+      safeAreaBottom = widget.safeAreaBottom ?? 0;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      children: [
+        // Get the accurate bottom height of safe area.
+        if (widget.safeAreaBottom == null)
+          Positioned(
+            left: 0,
+            bottom: 0,
+            child: ChatKeyboardSafeAreaDataView(
+              safeAreaBottom: (value) async {
+                safeAreaBottom = value;
+                await WidgetsBinding.instance.endOfFrame;
+                setState(() {});
+              },
+            ),
+          ),
+        _buildPanelContainer(),
+      ],
+    );
+  }
+
+  Widget _buildPanelContainer() {
+    // Custom panel container
+    if (widget.customPanelContainer != null) {
+      Widget resultWidget = widget.customPanelContainer!.call(
+        panelType,
+        widget.controller.data,
+      );
+      return resultWidget;
+    }
+
+    // Default panel container
+    return _buildDefaultPanelContainer();
+  }
+
+  Widget _buildDefaultPanelContainer() {
+    // When the keyboard height changes due to the keyboard's internal
+    // functions, the animation duration should be shorter.
+    final duration = isKeyboardHeightChangedByItself
+        ? const Duration(milliseconds: 50)
+        : const Duration(milliseconds: 200);
+    const curve = Curves.linear;
+    Widget resultWidget = AnimatedSize(
+      alignment: Alignment.topCenter,
+      duration: duration,
+      curve: curve,
+      child: fetchPanel(),
+    );
+    return ColoredBox(
+      color: widget.panelBgColor,
+      child: resultWidget,
+    );
+  }
+
+  /// Fetch the panel widget according to [panelType].
+  Widget fetchPanel() {
+    Widget resultWidget;
+    switch (panelType) {
+      case ChatBottomPanelType.other:
+        resultWidget = buildOtherPanel();
+      case ChatBottomPanelType.keyboard:
+        resultWidget = buildKeyboardPlaceholderPanel();
+      case ChatBottomPanelType.none:
+        resultWidget = buildSafeArea();
+    }
+    return resultWidget;
+  }
+
+  /// Build the safe area.
+  Widget buildSafeArea() {
+    return Builder(
+      builder: (context) {
+        return SizedBox(
+          width: double.infinity,
+          height: safeAreaBottom,
+        );
+      },
+    );
+  }
+
+  /// Build the other panel.
+  Widget buildOtherPanel() {
+    return widget.otherPanelWidget?.call(widget.controller.data) ??
+        const SizedBox.shrink();
+  }
+
+  /// Build the keyboard placeholder panel.
+  Widget buildKeyboardPlaceholderPanel() {
+    return Builder(
+      builder: (context) {
+        final isSwitchToKeyboardFromOtherPanelType =
+            ChatBottomPanelType.keyboard == panelType &&
+                ChatBottomPanelType.other == lastPanelType;
+        double height = 0;
+
+        if (isSwitchToKeyboardFromOtherPanelType) {
+          // When switching to the keyboard from other panel. The height of
+          // keyboard container should be fixed in order to achieve a smooth
+          // switching effect.
+          height = currentNativeKeyboardHeight == 0
+              ? MediaQuery.viewInsetsOf(context).bottom
+              : currentNativeKeyboardHeight;
+        } else {
+          // Follow the keyboard pop up from the bottom.
+          height = MediaQuery.viewInsetsOf(context).bottom;
+        }
+
+        // The height of the keyboard container can be adjusted by developer.
+        height = widget.changeKeyboardPanelHeight?.call(height) ?? height;
+
+        // To prevent jitter.
+        if (height < safeAreaBottom) {
+          height = safeAreaBottom;
+        }
+
+        return SizedBox(width: double.infinity, height: height);
+      },
+    );
+  }
+
+  void onKeyboardHeightChange(double height) {
+    // Ignore it if the height change is not caused by the chat input box.
+    // e.g. the form input boxes on the page.
+    if (!widget.inputFocusNode.hasFocus) return;
+    if (ChatBottomPanelType.other == panelType) return;
+
+    if (height == 0) {
+      // Android
+      // When you press the back key on Android 10 and below, the input box will
+      // not lose focus, but the keyboard will hide.
+      //
+      // iOS
+      // When an external keyboard is connected, the soft keyboard hide, but
+      // the input box remains in focus.
+      if (ChatBottomPanelType.keyboard == panelType) {
+        updatePanelType(ChatBottomPanelType.none);
+      }
+      return;
+    }
+
+    // The soft keyboard pops up.
+    final isPortrait =
+        MediaQuery.orientationOf(context) == Orientation.portrait;
+    if (isPortrait) {
+      currentNativeKeyboardHeightPortrait = height / widget.controller.uiScale;
+    } else {
+      currentNativeKeyboardHeightLandscape = height / widget.controller.uiScale;
+    }
+    // Record the height of the keyboard.
+    recordKeyboardHeight(height);
+    switch (panelType) {
+      case ChatBottomPanelType.none:
+        // Switch to the keyboard panel.
+        updatePanelType(ChatBottomPanelType.keyboard);
+        break;
+      case ChatBottomPanelType.keyboard:
+        isKeyboardHeightChangedByItself = true;
+        WidgetsBinding.instance.addPostFrameCallback((timeStamp) {
+          isKeyboardHeightChangedByItself = false;
+        });
+        setState(() {});
+        break;
+      case ChatBottomPanelType.other:
+        // Unexpected situation, ignore.
+        break;
+    }
+  }
+
+  /// Update the panel type.
+  ///
+  /// [isIgnoreFocusListener] is used to ignore the focus change event listener.
+  ///
+  /// [forceHandleFocus] is used to force focus handling. When you want the
+  /// input box to have focus and not pop up the system keyboard, you need to
+  /// set it to [ChatBottomHandleFocus.requestFocus]. In addition, you also need
+  /// to set the [TextField.readOnly] to true.
+  void updatePanelType(
+    ChatBottomPanelType type, {
+    bool isIgnoreFocusListener = false,
+    ChatBottomHandleFocus forceHandleFocus = ChatBottomHandleFocus.none,
+  }) {
+    ChatBottomHandleFocus handleFocus = ChatBottomHandleFocus.none;
+    switch (type) {
+      case ChatBottomPanelType.none:
+        // The soft keyboard may hide, but the input box still has focus.
+        break;
+      case ChatBottomPanelType.keyboard:
+        handleFocus = ChatBottomHandleFocus.requestFocus;
+        break;
+      case ChatBottomPanelType.other:
+        handleFocus = ChatBottomHandleFocus.unfocus;
+        break;
+    }
+    // Determine whether it need to force the focus to be handled.
+    switch (forceHandleFocus) {
+      case ChatBottomHandleFocus.none:
+        break;
+      case ChatBottomHandleFocus.requestFocus:
+        handleFocus = ChatBottomHandleFocus.requestFocus;
+        break;
+      case ChatBottomHandleFocus.unfocus:
+        handleFocus = ChatBottomHandleFocus.unfocus;
+        break;
+    }
+    lastPanelType = panelType;
+    panelType = type;
+    widget.controller.currentPanelType = panelType;
+    widget.onPanelTypeChange?.call(
+      panelType,
+      widget.controller.data,
+    );
+    this.isIgnoreFocusListener = isIgnoreFocusListener;
+    setState(() {});
+    switch (handleFocus) {
+      case ChatBottomHandleFocus.unfocus:
+        widget.inputFocusNode.unfocus();
+        break;
+      case ChatBottomHandleFocus.requestFocus:
+        widget.inputFocusNode.requestFocus();
+        break;
+      case ChatBottomHandleFocus.none:
+        break;
+    }
+
+    WidgetsBinding.instance.addPostFrameCallback((timeStamp) {
+      this.isIgnoreFocusListener = false;
+    });
+  }
+}
+
+class ChatKeyboardSafeAreaDataView extends StatefulWidget {
+  final Function(double)? safeAreaBottom;
+
+  const ChatKeyboardSafeAreaDataView({
+    super.key,
+    this.safeAreaBottom,
+  });
+
+  @override
+  State<ChatKeyboardSafeAreaDataView> createState() =>
+      _ChatKeyboardSafeAreaDataViewState();
+}
+
+class _ChatKeyboardSafeAreaDataViewState
+    extends State<ChatKeyboardSafeAreaDataView> {
+  double safeAreaBottom = 0;
+
+  bool haveSetup = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+
+    // On some Android devices, when the keyboard is displayed and push the
+    // next page, the viewPadding.bottom changes twice, the first time is 0,
+    // the second time is non-0 and the second time it is the correct value.
+    if (haveSetup && safeAreaBottom != 0) return;
+    haveSetup = true;
+    double bottom = MediaQuery.viewPaddingOf(context).bottom;
+    safeAreaBottom = bottom;
+    widget.safeAreaBottom?.call(safeAreaBottom);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return const SizedBox.shrink();
+  }
+}

@@ -1942,13 +1942,13 @@ class _PLVideoPlayerState extends State<PLVideoPlayer>
                           return ComBtn(
                             tooltip: controlsLock ? '解锁' : '锁定',
                             icon: controlsLock
-                                ? const Icon(
-                                    FontAwesomeIcons.lock,
+                                ? Icon(
+                                    FontAwesomeIcons.lock.data,
                                     size: 15,
                                     color: Colors.white,
                                   )
-                                : const Icon(
-                                    FontAwesomeIcons.lockOpen,
+                                : Icon(
+                                    FontAwesomeIcons.lockOpen.data,
                                     size: 15,
                                     color: Colors.white,
                                   ),

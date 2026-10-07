@@ -1,6 +1,7 @@
 # 本地 Windows WebView 补丁
 
-- 包：flutter_inappwebview_windows 0.6.0。
+- 来源包：flutter_inappwebview_windows 0.6.0。
+- 本地版本：`0.6.0+piliaurora.1`，登记见 `../dependencies.json`。
 - 来源：bggRGjQaUbCoE/flutter_inappwebview。
 - 固定提交：0bfa46dfff87f0d9e9d5e13cbd5c4a7c7310f8c9。
 - 仅复制该包的 lib、windows、pubspec、analysis_options 与许可/版本说明；不复制 example、开发缓存或 Git 仓库。

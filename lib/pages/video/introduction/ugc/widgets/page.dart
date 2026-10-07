@@ -263,7 +263,7 @@ class _PagesPanelState extends State<PagesPanel> {
                                         color: colorScheme.secondary.withValues(
                                           alpha: .8,
                                         ),
-                                        FontAwesomeIcons.circleDown,
+                                        FontAwesomeIcons.circleDown.data,
                                       ),
                                     ),
                                   TextSpan(text: item.part),

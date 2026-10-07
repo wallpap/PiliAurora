@@ -120,7 +120,7 @@ class _LiveHeaderControlState extends State<LiveHeaderControl>
             ComBtn(
               height: btnHeight,
               tooltip: '返回',
-              icon: const Icon(FontAwesomeIcons.arrowLeft, size: 15),
+              icon: Icon(FontAwesomeIcons.arrowLeft.data, size: 15),
               onTap: () {
                 if (plPlayerController.isDesktopPip) {
                   plPlayerController.exitDesktopPip();

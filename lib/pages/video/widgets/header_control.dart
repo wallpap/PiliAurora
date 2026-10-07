@@ -1739,8 +1739,8 @@ class HeaderControlState extends State<HeaderControl>
                 child: IconButton(
                   tooltip: '返回',
                   style: btnStyle,
-                  icon: const Icon(
-                    FontAwesomeIcons.arrowLeft,
+                  icon: Icon(
+                    FontAwesomeIcons.arrowLeft.data,
                     size: 15,
                     color: Colors.white,
                   ),
@@ -1756,8 +1756,8 @@ class HeaderControlState extends State<HeaderControl>
                   child: IconButton(
                     tooltip: '返回主页',
                     style: btnStyle,
-                    icon: const Icon(
-                      FontAwesomeIcons.house,
+                    icon: Icon(
+                      FontAwesomeIcons.house.data,
                       size: 15,
                       color: Colors.white,
                     ),
@@ -1974,11 +1974,11 @@ class HeaderControlState extends State<HeaderControl>
                   child: Obx(
                     () => ActionItem(
                       expand: false,
-                      icon: const Icon(
-                        FontAwesomeIcons.thumbsUp,
+                      icon: Icon(
+                        FontAwesomeIcons.thumbsUp.data,
                         color: Colors.white,
                       ),
-                      selectIcon: const Icon(FontAwesomeIcons.solidThumbsUp),
+                      selectIcon: Icon(FontAwesomeIcons.solidThumbsUp.data),
                       selectStatus: introController.hasLike.value,
                       semanticsLabel: '点赞',
                       animation: introController.tripleAnimation,
@@ -2002,12 +2002,12 @@ class HeaderControlState extends State<HeaderControl>
                     child: Obx(
                       () => ActionItem(
                         expand: false,
-                        icon: const Icon(
-                          FontAwesomeIcons.thumbsDown,
+                        icon: Icon(
+                          FontAwesomeIcons.thumbsDown.data,
                           color: Colors.white,
                         ),
-                        selectIcon: const Icon(
-                          FontAwesomeIcons.solidThumbsDown,
+                        selectIcon: Icon(
+                          FontAwesomeIcons.solidThumbsDown.data,
                         ),
                         onTap: () => ugc.handleAction(ugc.actionDislikeVideo),
                         selectStatus: ugc.hasDislike.value,
@@ -2022,11 +2022,11 @@ class HeaderControlState extends State<HeaderControl>
                     () => ActionItem(
                       expand: false,
                       animation: introController.tripleAnimation,
-                      icon: const Icon(
-                        FontAwesomeIcons.b,
+                      icon: Icon(
+                        FontAwesomeIcons.b.data,
                         color: Colors.white,
                       ),
-                      selectIcon: const Icon(FontAwesomeIcons.b),
+                      selectIcon: Icon(FontAwesomeIcons.b.data),
                       onTap: introController.actionCoinVideo,
                       selectStatus: introController.hasCoin,
                       semanticsLabel: '投币',
@@ -2040,11 +2040,11 @@ class HeaderControlState extends State<HeaderControl>
                     () => ActionItem(
                       expand: false,
                       animation: introController.tripleAnimation,
-                      icon: const Icon(
-                        FontAwesomeIcons.star,
+                      icon: Icon(
+                        FontAwesomeIcons.star.data,
                         color: Colors.white,
                       ),
-                      selectIcon: const Icon(FontAwesomeIcons.solidStar),
+                      selectIcon: Icon(FontAwesomeIcons.solidStar.data),
                       onTap: () => introController.showFavBottomSheet(context),
                       onLongPress: () => introController.showFavBottomSheet(
                         context,
@@ -2060,8 +2060,8 @@ class HeaderControlState extends State<HeaderControl>
                   height: btnHeight,
                   child: ActionItem(
                     expand: false,
-                    icon: const Icon(
-                      FontAwesomeIcons.shareFromSquare,
+                    icon: Icon(
+                      FontAwesomeIcons.shareFromSquare.data,
                       color: Colors.white,
                     ),
                     onTap: () => introController.actionShareVideo(context),
