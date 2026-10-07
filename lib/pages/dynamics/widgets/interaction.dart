@@ -63,8 +63,8 @@ Widget _item(
               size: 13,
               color: theme.colorScheme.outline,
               switch (item.type) {
-                1 => FontAwesomeIcons.comment,
-                _ => FontAwesomeIcons.thumbsUp,
+                1 => FontAwesomeIcons.comment.data,
+                _ => FontAwesomeIcons.thumbsUp.data,
               },
             ),
           ),

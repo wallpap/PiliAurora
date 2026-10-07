@@ -474,8 +474,8 @@ class _UgcIntroPanelState extends State<UgcIntroPanel> {
           Obx(
             () => ActionItem(
               animation: introController.tripleAnimation,
-              icon: const Icon(FontAwesomeIcons.thumbsUp),
-              selectIcon: const Icon(FontAwesomeIcons.solidThumbsUp),
+              icon: Icon(FontAwesomeIcons.thumbsUp.data),
+              selectIcon: Icon(FontAwesomeIcons.solidThumbsUp.data),
               selectStatus: introController.hasLike.value,
               semanticsLabel: '点赞',
               text: !isLoading ? NumUtils.numFormat(stat!.like) : null,
@@ -485,8 +485,8 @@ class _UgcIntroPanelState extends State<UgcIntroPanel> {
           ),
           Obx(
             () => ActionItem(
-              icon: const Icon(FontAwesomeIcons.thumbsDown),
-              selectIcon: const Icon(FontAwesomeIcons.solidThumbsDown),
+              icon: Icon(FontAwesomeIcons.thumbsDown.data),
+              selectIcon: Icon(FontAwesomeIcons.solidThumbsDown.data),
               onTap: () => introController.handleAction(
                 introController.actionDislikeVideo,
               ),
@@ -498,8 +498,8 @@ class _UgcIntroPanelState extends State<UgcIntroPanel> {
           Obx(
             () => ActionItem(
               animation: introController.tripleAnimation,
-              icon: const Icon(FontAwesomeIcons.b),
-              selectIcon: const Icon(FontAwesomeIcons.b),
+              icon: Icon(FontAwesomeIcons.b.data),
+              selectIcon: Icon(FontAwesomeIcons.b.data),
               onTap: introController.actionCoinVideo,
               selectStatus: introController.hasCoin,
               semanticsLabel: '投币',
@@ -509,8 +509,8 @@ class _UgcIntroPanelState extends State<UgcIntroPanel> {
           Obx(
             () => ActionItem(
               animation: introController.tripleAnimation,
-              icon: const Icon(FontAwesomeIcons.star),
-              selectIcon: const Icon(FontAwesomeIcons.solidStar),
+              icon: Icon(FontAwesomeIcons.star.data),
+              selectIcon: Icon(FontAwesomeIcons.solidStar.data),
               onTap: () => introController.showFavBottomSheet(context),
               onLongPress: () => introController.showFavBottomSheet(
                 context,
@@ -523,8 +523,8 @@ class _UgcIntroPanelState extends State<UgcIntroPanel> {
           ),
           Obx(
             () => ActionItem(
-              icon: const Icon(FontAwesomeIcons.clock),
-              selectIcon: const Icon(FontAwesomeIcons.solidClock),
+              icon: Icon(FontAwesomeIcons.clock.data),
+              selectIcon: Icon(FontAwesomeIcons.solidClock.data),
               onTap: () =>
                   introController.handleAction(introController.viewLater),
               selectStatus: introController.hasLater.value,
@@ -533,7 +533,7 @@ class _UgcIntroPanelState extends State<UgcIntroPanel> {
             ),
           ),
           ActionItem(
-            icon: const Icon(FontAwesomeIcons.shareFromSquare),
+            icon: Icon(FontAwesomeIcons.shareFromSquare.data),
             onTap: () => introController.actionShareVideo(context),
             selectStatus: false,
             semanticsLabel: '分享',

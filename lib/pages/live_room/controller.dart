@@ -42,8 +42,8 @@ import 'package:pili_aurora/utils/storage_pref.dart';
 import 'package:pili_aurora/utils/theme_utils.dart';
 import 'package:pili_aurora/utils/utils.dart';
 import 'package:pili_aurora/utils/video_utils.dart';
+import 'package:pili_aurora/utils/rate_limiter.dart';
 import 'package:canvas_danmaku/canvas_danmaku.dart';
-import 'package:easy_debounce/easy_throttle.dart';
 import 'package:flutter/foundation.dart' show kDebugMode, kReleaseMode;
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:get/get.dart';
@@ -393,7 +393,7 @@ class LiveRoomController extends GetxController {
   }
 
   void scrollToBottom() {
-    EasyThrottle.throttle(
+    ActionThrottle.run(
       'liveDm:$heroTag',
       const Duration(milliseconds: 500),
       () => WidgetsBinding.instance.addPostFrameCallback(_scrollToBottom),
@@ -530,7 +530,7 @@ class LiveRoomController extends GetxController {
     cancelLiveTimer();
     _messageRefreshTimer?.cancel();
     _messageRefreshTimer = null;
-    EasyThrottle.cancel('liveDm:$heroTag');
+    ActionThrottle.cancel('liveDm:$heroTag');
     savedDanmaku?.clear();
     savedDanmaku = null;
     chatBuffer.clear();

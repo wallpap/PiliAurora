@@ -1,5 +1,4 @@
-import 'dart:async';
-
+import 'package:pili_aurora/common/widgets/debounced_state.dart';
 import 'package:pili_aurora/common/widgets/dialog/dialog.dart';
 import 'package:pili_aurora/http/loading_state.dart';
 import 'package:pili_aurora/http/search.dart';
@@ -14,42 +13,6 @@ import 'package:pili_aurora/utils/storage.dart';
 import 'package:pili_aurora/utils/storage_pref.dart';
 import 'package:get/get.dart';
 import 'package:material_ui/material_ui.dart';
-import 'package:stream_transform/stream_transform.dart';
-
-mixin DebounceStreamMixin<T> {
-  final Duration duration = const Duration(milliseconds: 200);
-  StreamController<T>? ctr;
-  StreamSubscription<T>? _sub;
-  void onValueChanged(T value);
-
-  void subInit() {
-    _sub = (ctr = StreamController<T>()).stream
-        .debounce(duration, trailing: true)
-        .listen(onValueChanged);
-  }
-
-  void subDispose() {
-    _sub?.cancel();
-    ctr?.close();
-    _sub = null;
-    ctr = null;
-  }
-}
-
-abstract class DebounceStreamState<T extends StatefulWidget, S> extends State<T>
-    with DebounceStreamMixin<S> {
-  @override
-  void dispose() {
-    subDispose();
-    super.dispose();
-  }
-
-  @override
-  void initState() {
-    super.initState();
-    subInit();
-  }
-}
 
 class BaseSearchController extends GetxController {
   final historyList = List<String>.from(

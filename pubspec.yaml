@@ -14,204 +14,147 @@ publish_to: "none" # Remove this line if you wish to publish to pub.dev
 # In Windows, build-name is used as the major, minor, and patch parts
 # of the product and file versions while build-number is used as the build suffix.
 # update when release
-version: 1.0.6+91
+version: 1.0.7+105
 
 environment:
   sdk: ">=3.13.0"
   flutter: 3.47.5
 
-# Dependencies specify other packages that your package needs in order to work.
-# To automatically upgrade your package dependencies to the latest versions
-# consider running `flutter pub upgrade --major-versions`. Alternatively,
-# dependencies can be manually updated by changing the version numbers below to
-# the latest version available on pub.dev. To see which dependencies have newer
-# versions available, run `flutter pub outdated`.
+# 根依赖使用已验收的精确版本；传递解析由 pubspec.lock 和 --enforce-lockfile 固定。
+# 定制源码的版本与来源登记见 third_party/dependencies.json。
+# 仅更新目标包并验证锁文件差异，维护流程见 third_party/README.md。
 dependencies:
   flutter:
     sdk: flutter
   flutter_localizations:
     sdk: flutter
 
-  app_links: ^7.1.1
-  archive: ^4.0.0
-  audio_service:
-    git:
-      url: https://github.com/bggRGjQaUbCoE/audio_service.git
-      path: audio_service
-      ref: dev
-  audio_session:
-    git:
-      url: https://github.com/bggRGjQaUbCoE/audio_session.git
-      ref: dev
-  battery_plus: ^7.0.0
-  brotli: ^0.6.0
-  cached_network_image_ce:
-    git:
-      url: https://github.com/My-Responsitories/flutter_cached_network_image_ce.git
-      path: cached_network_image
-      ref: develop
-  canvas_danmaku:
-    git:
-      url: https://github.com/bggRGjQaUbCoE/canvas_danmaku.git
-      ref: main
-  catcher_2:
-    git:
-      url: https://github.com/My-Responsitories/catcher_2.git
-      ref: dev
-  characters: ^1.4.1
-  chat_bottom_container:
-    git:
-      url: https://github.com/bggRGjQaUbCoE/flutter_chat_packages.git
-      path: packages/chat_bottom_container
-      ref: dev
-  collection: ^1.19.1
-  connectivity_plus: ^7.1.1
-  cookie_jar: ^4.0.8
-  crypto: ^3.0.6
-  cupertino_ui: ^1.0.0
-  device_info_plus: ^13.1.0
-  dio: ^5.9.1
-  dio_http2_adapter: ^2.7.1
-  dlna_dart: ^0.1.0
-  dynamic_color: ^2.1.0
-  easy_debounce: ^2.0.3
-  encrypt: ^5.0.3
-  extended_nested_scroll_view:
-    git:
-      url: https://github.com/bggRGjQaUbCoE/extended_nested_scroll_view.git
-      ref: dev
-  ffi: ^2.2.0
-  file_picker: ^13.1.0
-  fixnum: ^1.1.1
-  fl_chart: ^1.0.0
-  flex_seed_scheme: ^5.0.0
-  flutter_displaymode: ^0.7.0
-  flutter_html:
-    git:
-      url: https://github.com/bggRGjQaUbCoE/flutter_html.git
-      ref: dev
-  flutter_inappwebview: ^6.1.5
-  flutter_smart_dialog: ^5.3.0
-  flutter_sortable_wrap:
-    git:
-      url: https://github.com/bggRGjQaUbCoE/flutter_sortable_wrap.git
-      ref: master
-  flutter_svg: ^2.0.14
-  flutter_volume_controller: ^2.0.0
-  font_awesome_flutter:
-    git:
-      url: https://github.com/bggRGjQaUbCoE/font_awesome_flutter.git
-      ref: v10.9.0
-  get:
-    git:
-      url: https://github.com/bggRGjQaUbCoE/getx.git
-      ref: dev
-  hive_ce: ^2.20.1
-  html: ^0.15.4
-  http2: ^2.3.1
-  image_cropper: ^12.0.0
-  image_picker: ^1.1.2
-  intl: ^0.20.2
-  jni: ^1.1.0
-  json_annotation: ^4.11.0
-  logger: ^2.5.0
-  material_color_utilities: ^0.13.0
-  material_design_icons_flutter:
-    git:
-      url: https://github.com/bggRGjQaUbCoE/material_design_icons_flutter.git
-      ref: const
-  material_new_shapes: ^1.0.0
-  material_ui: ">=1.0.0 <1.5.0"
-  media_kit: 1.1.11
+  app_links: 7.2.1
+  archive: 4.3.0
+  audio_service: 0.18.19+piliaurora.1
+  audio_session: 0.2.4
+  battery_plus: 7.1.1
+  brotli: 0.6.0
+  cached_network_image_ce: 4.6.4+piliaurora.2
+  canvas_danmaku: 0.2.6+piliaurora.1
+  catcher_2: 2.1.9+piliaurora.2
+  characters: 1.4.1
+  chat_bottom_container: 0.5.2+piliaurora.1
+  collection: 1.19.1
+  connectivity_plus: 7.3.1
+  cookie_jar: 4.0.9
+  crypto: 3.0.7
+  cupertino_ui: 1.1.1
+  device_info_plus: 13.2.0
+  dio: 5.11.1
+  dio_http2_adapter: 2.9.0
+  dlna_dart: 0.1.1
+  dynamic_color: 2.1.0
+  encrypt: 5.0.3
+  extended_nested_scroll_view: 6.2.1+piliaurora.1
+  ffi: 2.2.0
+  file_picker: 13.1.0
+  fixnum: 1.1.1
+  fl_chart: 1.2.0
+  flex_seed_scheme: 5.0.1
+  flutter_displaymode: 0.7.0
+  flutter_html: 3.0.0+piliaurora.1
+  flutter_inappwebview: 6.1.5
+  flutter_smart_dialog: 5.3.0
+  flutter_sortable_wrap: 1.0.6+piliaurora.1
+  flutter_svg: 2.3.0
+  flutter_volume_controller: 2.0.2
+  font_awesome_flutter: 11.0.0
+  get: 4.7.2+piliaurora.1
+  hive_ce: 2.20.1
+  html: 0.15.7
+  http2: 2.3.1
+  image_cropper: 12.2.1
+  image_picker: 1.2.3
+  intl: 0.20.3
+  jni: 1.1.0
+  material_color_utilities: 0.13.0
+  material_design_icons_flutter: 7.0.7447+piliaurora.1
+  material_new_shapes: 1.0.0
+  material_ui: 1.4.0
+  media_kit: 1.1.11+piliaurora.1
   media_kit_libs_video: 1.0.5
-  media_kit_video: 1.2.5
-  mime: ^2.0.0
-  native_device_orientation:
-    git:
-      url: https://github.com/bggRGjQaUbCoE/flutter_native_device_orientation.git
-      ref: master
-  package_info_plus: ^10.1.0
-  path: ^1.9.1
-  path_provider: ^2.1.5
-  permission_handler_android: ^14.0.0
-  permission_handler_platform_interface: ^4.3.0
-  pretty_qr_code: ^3.3.0
-  protobuf: ^6.0.0
-  re_highlight: ^0.0.3
-  saver_gallery: ^5.0.2
-  screen_brightness_platform_interface: ^2.1.0
-  screen_retriever: ^0.2.0
-  share_plus: ^13.1.0
-  stream_transform: ^2.1.1
-  super_sliver_list:
-    git:
-      url: https://github.com/bggRGjQaUbCoE/super_sliver_list.git
-      ref: mod
-  synchronized: ^3.3.0
-  tray_manager: ^0.7.0
-  url_launcher: ^6.3.1
-  uuid: ^4.5.1
-  vector_math: ^2.2.0
-  wakelock_plus: ^1.2.8
-  waterfall_flow: ^3.1.0
-  web_socket_channel: ^3.0.3
-  webdav_client: ^1.2.2
-  win32: ^6.3.0
-  window_manager:
-    git:
-      url: https://github.com/bggRGjQaUbCoE/window_manager.git
-      path: packages/window_manager
-      ref: main
+  media_kit_video: 1.2.5+piliaurora.1
+  mime: 2.1.0
+  native_device_orientation: 2.0.5+piliaurora.1
+  path: 1.9.1
+  path_provider: 2.1.6
+  permission_handler_android: 14.1.0
+  permission_handler_platform_interface: 4.4.1
+  pretty_qr_code: 3.6.0
+  protobuf: 6.1.0
+  re_highlight: 0.0.3
+  saver_gallery: 5.1.0
+  screen_brightness_platform_interface: 2.1.2
+  screen_retriever: 0.2.2
+  share_plus: 13.3.0
+  super_sliver_list: 0.4.1+piliaurora.1
+  synchronized: 3.4.2
+  tray_manager: 0.7.0
+  url_launcher: 6.3.2
+  vector_math: 2.4.3
+  wakelock_plus: 1.8.0
+  waterfall_flow: 3.1.1
+  web_socket_channel: 3.0.3
+  win32: 6.4.0
+  window_manager: 0.5.2
 
 dependency_overrides:
+  # 定制包的来源、版本和保留原因见 third_party/dependencies.json。
+  audio_service:
+    path: third_party/audio_service
+  cached_network_image_ce:
+    path: third_party/cached_network_image_ce
+  canvas_danmaku:
+    path: third_party/canvas_danmaku
+  catcher_2:
+    path: third_party/catcher_2
+  chat_bottom_container:
+    path: third_party/chat_bottom_container
+  extended_nested_scroll_view:
+    path: third_party/extended_nested_scroll_view
+  flutter_html:
+    path: third_party/flutter_html
   flutter_inappwebview_android:
-    git:
-      url: https://github.com/bggRGjQaUbCoE/flutter_inappwebview.git
-      path: flutter_inappwebview_android
-      ref: v6.1.5
+    path: third_party/flutter_inappwebview_android
+  flutter_sortable_wrap:
+    path: third_party/flutter_sortable_wrap
+  get:
+    path: third_party/get
+  material_design_icons_flutter:
+    path: third_party/material_design_icons_flutter
+  media_kit:
+    path: third_party/media_kit
+  media_kit_libs_android_video:
+    path: third_party/media_kit_libs_android_video
+  media_kit_video:
+    path: third_party/media_kit_video
+  native_device_orientation:
+    path: third_party/native_device_orientation
+  super_sliver_list:
+    path: third_party/super_sliver_list
   flutter_inappwebview_windows:
     path: third_party/flutter_inappwebview_windows
-  media_kit:
-    git:
-      url: https://github.com/My-Responsitories/media-kit.git
-      path: media_kit
-      ref: native
-  media_kit_libs_android_video:
-    git:
-      url: https://github.com/My-Responsitories/media-kit.git
-      path: libs/android/media_kit_libs_android_video
-      ref: native
-  media_kit_libs_video:
-    git:
-      url: https://github.com/My-Responsitories/media-kit.git
-      path: libs/universal/media_kit_libs_video
-      ref: native
   media_kit_libs_windows_video:
     path: third_party/media_kit_libs_windows_video
-  media_kit_native_event_loop:
-    git:
-      url: https://github.com/My-Responsitories/media-kit.git
-      path: media_kit_native_event_loop
-      ref: native
-  media_kit_video:
-    git:
-      url: https://github.com/My-Responsitories/media-kit.git
-      path: media_kit_video
-      ref: native
-  cached_network_image_ce:
-    git:
-      url: https://github.com/My-Responsitories/flutter_cached_network_image_ce.git
-      path: cached_network_image
-      ref: develop
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
-  build_runner: ^2.10.3
-  flutter_launcher_icons: ^0.14.4
-  flutter_lints: ^6.0.0
-  flutter_native_splash: ^2.4.6
-  jnigen: ^1.0.1
+  build_runner: 2.16.1
+  flutter_launcher_icons: 0.14.4
+  flutter_lints: 6.0.0
+  flutter_native_splash: 2.4.8
+  jnigen: 1.0.1
+  # 本地 super_sliver_list 保留上游 strict 检查规则。
+  lint: 2.14.0
+  pub_semver: 2.2.1
+  yaml: 3.1.4
 
 flutter_launcher_icons:
   android: true

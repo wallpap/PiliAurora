@@ -286,7 +286,7 @@ try {
 } catch {
 }
 
-& $FlutterExecutable pub get
+& $FlutterExecutable pub get --enforce-lockfile
 if ($LASTEXITCODE -ne 0) {
     throw "flutter pub get failed with exit code $LASTEXITCODE"
 }

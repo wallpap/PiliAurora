@@ -1,0 +1,19 @@
+name: material_design_icons_flutter
+publish_to: none
+description: The Material Design Icons designed by the community for Flutter
+homepage: https://github.com/ziofat/material_design_icons_flutter
+version: 7.0.7447+piliaurora.1
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+flutter:
+  fonts:
+    - family: Material Design Icons
+      fonts:
+        - asset: lib/fonts/materialdesignicons-webfont.ttf
+
+environment:
+  sdk: ">=3.0.0 <4.0.0"
+  flutter: ">=0.1.2"

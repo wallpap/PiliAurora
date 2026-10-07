@@ -68,6 +68,43 @@ void main() {
   );
 
   test(
+    'settings backup has no application, UI or global storage dependency',
+    () {
+      final file = File('lib/services/settings/settings_backup.dart');
+      expect(
+        dependencies(file).where(
+          (uri) =>
+              uri.startsWith('package:flutter/') ||
+              uri.startsWith('package:get/') ||
+              uri.startsWith('package:dio/') ||
+              uri.contains('/pages/') ||
+              uri.contains('/http/') ||
+              uri.contains('/utils/storage') ||
+              uri.contains('/logger.dart'),
+        ),
+        isEmpty,
+      );
+    },
+  );
+
+  test('WebDAV settings sync has no UI or global configuration dependency', () {
+    final file = File('lib/services/settings/webdav_sync.dart');
+    expect(
+      dependencies(file).where(
+        (uri) =>
+            uri.startsWith('package:flutter/') ||
+            uri.startsWith('package:get/') ||
+            uri.startsWith('package:flutter_smart_dialog/') ||
+            uri.contains('/pages/') ||
+            uri.contains('/http/') ||
+            uri.contains('/utils/storage') ||
+            uri.contains('/device_utils'),
+      ),
+      isEmpty,
+    );
+  });
+
+  test(
     'download executor cannot obtain its client from the global request layer',
     () {
       final file = File('lib/services/download/download_manager.dart');

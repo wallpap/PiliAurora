@@ -169,3 +169,19 @@ fvm dart run tool/jnigen.dart
 ## 报告验证结果的格式
 
 说明实际执行的命令、开始/结束时间、目标平台、通过/失败、失败原因和未验证范围。不要把“命令未执行”写成“通过”，也不要通过删除测试或降低断言来制造绿色结果。
+
+## 草稿验收后发布
+
+正式版本使用合并到 main 的提交创建标签，再以标签运行现有双平台工作流。需要先核验全部产物时，显式传入 `draft_release=true`：
+
+```powershell
+gh workflow run build.yml --ref v1.0.7 -f tag=v1.0.7 -f build_android=true -f build_win_x64=true -f draft_release=true
+```
+
+该选项默认 false，既有自动发布行为不变。草稿模式下 Android 与 Windows 上传到同一草稿，不会各自提前发布。确认工作流两个平台都成功、标签及构建提交一致、三个 Android ABI APK 与 Windows portable / setup 共五个产物完整后，再执行：
+
+```powershell
+gh release edit v1.0.7 --draft=false --latest
+```
+
+发布说明必须区分通道/单元回归、平台构建与实机播放验收；构建成功不能替代真实 GPU 像素回归。不将本机 Debug 包混入正式 Release，也不修改或覆盖历史发布资源。

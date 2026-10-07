@@ -39,7 +39,7 @@ import 'package:pili_aurora/utils/page_utils.dart';
 import 'package:pili_aurora/utils/platform_utils.dart';
 import 'package:pili_aurora/utils/storage_pref.dart';
 import 'package:pili_aurora/utils/utils.dart';
-import 'package:easy_debounce/easy_throttle.dart';
+import 'package:pili_aurora/utils/rate_limiter.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/services.dart' show HapticFeedback;
 import 'package:get/get.dart';
@@ -525,7 +525,7 @@ class _GalleryViewerState extends State<GalleryViewer>
   }
 
   void _onTap() {
-    EasyThrottle.throttle(
+    ActionThrottle.run(
       'VIEWER_TAP',
       const Duration(milliseconds: 555),
       Get.back,
