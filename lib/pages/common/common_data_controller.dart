@@ -7,20 +7,10 @@ abstract class CommonDataController<R, T> extends CommonController<R, T> {
   Rx<LoadingState<T>> loadingState = LoadingState<T>.loading().obs;
 
   @override
-  Future<void> queryData([bool isRefresh = true]) async {
-    if (isLoading) return;
-    isLoading = true;
-    final LoadingState<R> res = await customGetData();
-    if (res is Success<R>) {
-      if (!customHandleResponse(isRefresh, res)) {
-        loadingState.value = res as LoadingState<T>;
-      }
-    } else {
-      if (isRefresh && !handleError(res is Error ? res.errMsg : null)) {
-        loadingState.value = res as Error;
-      }
+  void applyResponse(bool isRefresh, Success<R> response) {
+    if (!customHandleResponse(isRefresh, response)) {
+      loadingState.value = Success(response.response as T);
     }
-    isLoading = false;
   }
 
   @override
