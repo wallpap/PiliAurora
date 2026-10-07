@@ -2,7 +2,7 @@ import 'package:pili_aurora/common/widgets/loading_widget/http_error.dart';
 import 'package:pili_aurora/common/widgets/scaffold/simple_scaffold.dart';
 import 'package:pili_aurora/common/widgets/view_insets_safe_area.dart';
 import 'package:pili_aurora/common/widgets/view_sliver_safe_area.dart';
-import 'package:pili_aurora/pages/search/controller.dart' show DebounceStreamState;
+import 'package:pili_aurora/common/widgets/debounced_state.dart' show DebounceStreamState;
 import 'package:pili_aurora/pages/setting/models/extra_settings.dart';
 import 'package:pili_aurora/pages/setting/models/model.dart';
 import 'package:pili_aurora/pages/setting/models/play_settings.dart';

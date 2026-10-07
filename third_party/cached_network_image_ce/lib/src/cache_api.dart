@@ -1,19 +1,19 @@
-/// Platform interface for CachedNetworkImage
-library cached_network_image_platform_interface_ce;
+/// 由本地图片缓存包共同拥有的缓存模型和 IO 加载契约。
+library cached_network_image_cache_api;
 
 import 'dart:async';
 import 'dart:ui' as ui;
 
 import 'package:flutter/painting.dart';
 
-import 'src/cache_manager.dart';
+import 'cache_api/cache_manager.dart';
 
-export 'src/cache_manager.dart';
-export 'src/connection_parameters.dart';
-export 'src/file_response.dart';
-export 'src/http_exception.dart';
-export 'src/image_format_detector.dart';
-export 'src/unsupported_image_format_exception.dart';
+export 'cache_api/cache_manager.dart';
+export 'cache_api/connection_parameters.dart';
+export 'cache_api/file_response.dart';
+export 'cache_api/http_exception.dart';
+export 'cache_api/image_format_detector.dart';
+export 'cache_api/unsupported_image_format_exception.dart';
 
 /// Listener for errors
 typedef ErrorListener = void Function(Object);

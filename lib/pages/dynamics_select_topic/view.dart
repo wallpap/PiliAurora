@@ -6,7 +6,7 @@ import 'package:pili_aurora/http/loading_state.dart';
 import 'package:pili_aurora/models/remote/dynamic/dyn_topic_top/topic_item.dart';
 import 'package:pili_aurora/pages/dynamics_select_topic/controller.dart';
 import 'package:pili_aurora/pages/dynamics_select_topic/widgets/item.dart';
-import 'package:pili_aurora/pages/search/controller.dart' show DebounceStreamState;
+import 'package:pili_aurora/common/widgets/debounced_state.dart' show DebounceStreamState;
 import 'package:pili_aurora/utils/extension/context_ext.dart';
 import 'package:pili_aurora/utils/extension/scroll_controller_ext.dart';
 import 'package:get/get.dart';

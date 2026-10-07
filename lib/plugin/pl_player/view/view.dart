@@ -68,9 +68,9 @@ import 'package:pili_aurora/utils/platform_utils.dart';
 import 'package:pili_aurora/utils/storage.dart';
 import 'package:pili_aurora/utils/storage_key.dart';
 import 'package:pili_aurora/utils/utils.dart';
+import 'package:pili_aurora/utils/rate_limiter.dart';
 import 'package:canvas_danmaku/canvas_danmaku.dart';
 import 'package:collection/collection.dart';
-import 'package:easy_debounce/easy_throttle.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
@@ -1227,7 +1227,7 @@ class _PLVideoPlayerState extends State<PLVideoPlayer>
     } else if (_gestureType == .right) {
       // 右边区域
       final double level = maxHeight * 0.5;
-      EasyThrottle.throttle(
+      ActionThrottle.run(
         'setVolume',
         const Duration(milliseconds: 20),
         () {
@@ -1429,7 +1429,7 @@ class _PLVideoPlayerState extends State<PLVideoPlayer>
       }
 
       final double level = maxHeight * 0.5;
-      EasyThrottle.throttle(
+      ActionThrottle.run(
         'setVolume',
         const Duration(milliseconds: 20),
         () {

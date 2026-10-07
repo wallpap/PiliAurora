@@ -12,7 +12,7 @@ import 'package:pili_aurora/models/common/sponsor_block/skip_type.dart';
 import 'package:pili_aurora/models/remote/sponsor_block/segment_item.dart';
 import 'package:pili_aurora/utils/duration_utils.dart';
 import 'package:pili_aurora/utils/storage_pref.dart';
-import 'package:easy_debounce/easy_throttle.dart';
+import 'package:pili_aurora/utils/rate_limiter.dart';
 import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:get/get.dart';
@@ -213,7 +213,7 @@ mixin BlockMixin on GetxController {
   }
 
   void onRemoveItem(int index, Object item) {
-    EasyThrottle.throttle(
+    ActionThrottle.run(
       'onRemoveItem',
       const Duration(milliseconds: 500),
       () {

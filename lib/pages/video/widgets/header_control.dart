@@ -56,11 +56,11 @@ import 'package:pili_aurora/utils/storage_utils.dart';
 import 'package:pili_aurora/utils/subtitle_utils.dart';
 import 'package:pili_aurora/utils/utils.dart';
 import 'package:pili_aurora/utils/video_utils.dart';
+import 'package:pili_aurora/utils/rate_limiter.dart';
 import 'package:battery_plus/battery_plus.dart';
 import 'package:canvas_danmaku/canvas_danmaku.dart';
 import 'package:collection/collection.dart';
 import 'package:dio/dio.dart';
-import 'package:easy_debounce/easy_throttle.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart' show compute, kDebugMode;
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
@@ -130,7 +130,7 @@ mixin TimeBatteryMixin<T extends StatefulWidget> on State<T> {
   late final _showBatteryLevel = Pref.showBatteryLevel;
   void getBatteryLevelIfNeeded() {
     if (!_showCurrTime || !_showBatteryLevel) return;
-    EasyThrottle.throttle(
+    ActionThrottle.run(
       'getBatteryLevel$hashCode',
       const Duration(seconds: 30),
       () async {

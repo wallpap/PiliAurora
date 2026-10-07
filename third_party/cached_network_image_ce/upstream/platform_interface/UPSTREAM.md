@@ -11,3 +11,7 @@
 导入时除包版本、禁止发布声明及必要依赖声明外，不重写来源实现。
 这些包不是 pub.dev 同名版本的镜像，不可仅修改根版本号宣称已升级。
 更新流程见 `../README.md`，来源登记见 `../dependencies.json`。
+
+## 已合并的历史记录
+
+此目录只保留来源元数据、许可和说明，不再是独立 Pub 包。源码现归主包 `lib/src/cache_api` 与 `lib/src/cache_api.dart` 所有；这里的 `*.upstream.yaml` 已停用。更新流程和有效来源登记请阅读主包 `UPSTREAM.md` 及 `third_party/dependencies.json`。

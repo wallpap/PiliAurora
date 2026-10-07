@@ -5,7 +5,7 @@ import 'dart:ui' as ui;
 
 import 'package:cached_network_image_ce/src/cache/cache_entry_metadata_adapter.dart';
 import 'package:cached_network_image_ce/src/cache/extension.dart';
-import 'package:cached_network_image_platform_interface_ce/cached_network_image_platform_interface_ce.dart';
+import 'package:cached_network_image_ce/src/cache_api.dart';
 import 'package:flutter/widgets.dart';
 import 'package:hive_ce/hive.dart';
 // ignore: implementation_imports

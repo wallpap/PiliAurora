@@ -2,7 +2,7 @@ import 'dart:async';
 
 import 'package:pili_aurora/http/loading_state.dart';
 import 'package:pili_aurora/utils/extension/scroll_controller_ext.dart';
-import 'package:easy_debounce/easy_throttle.dart';
+import 'package:pili_aurora/utils/rate_limiter.dart';
 import 'package:flutter/widgets.dart' show ScrollController;
 import 'package:get/get.dart';
 
@@ -16,7 +16,7 @@ mixin ScrollOrRefreshMixin {
   void toTopOrRefresh() {
     if (scrollController.hasClients) {
       if (scrollController.position.pixels == 0) {
-        EasyThrottle.throttle(
+        ActionThrottle.run(
           'topOrRefresh',
           const Duration(milliseconds: 500),
           onRefresh,

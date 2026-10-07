@@ -21,7 +21,7 @@ import 'package:pili_aurora/common/widgets/gesture/horizontal_drag_gesture_recog
     show touchSlopH;
 import 'package:pili_aurora/common/widgets/gesture/image_horizontal_drag_gesture_recognizer.dart';
 import 'package:pili_aurora/utils/extension/num_ext.dart';
-import 'package:easy_debounce/easy_throttle.dart';
+import 'package:pili_aurora/utils/rate_limiter.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/physics.dart' show FrictionSimulation;
@@ -225,7 +225,7 @@ class _ViewerState extends State<Viewer> with SingleTickerProviderStateMixin {
   void _onDoubleTap() {
     if (!mounted) return;
     if (_animationController.isAnimating) return;
-    EasyThrottle.throttle(
+    ActionThrottle.run(
       'VIEWER_TAP',
       const Duration(milliseconds: 555),
       _handleDoubleTap,

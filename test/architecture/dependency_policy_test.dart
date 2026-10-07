@@ -98,6 +98,79 @@ void main() {
     expect(file.readAsStringSync(), before);
   });
 
+  Map<String, Object?> mergedSource() => {
+    'name': 'merged_package',
+    'upstream_version': '2.0.0',
+    'source': Map<String, Object?>.from(fixture.record['source'] as Map),
+    'path': 'lib/merged',
+    'licenses': ['LICENSE'],
+    'reason': '合并仅由主包使用的类型。',
+  };
+
+  void saveMerged(Map<String, Object?> merged) {
+    fixture
+      ..record['merged_sources'] = [merged]
+      ..save()
+      ..write(
+        'third_party/local_package/lib/merged/types.dart',
+        '// fixture',
+      );
+  }
+
+  test('accepts merged source provenance and preserved licenses', () {
+    saveMerged(mergedSource());
+    expect(fixture.check(), isEmpty);
+  });
+
+  test('rejects missing merged source commit or invalid source fields', () {
+    final merged = mergedSource();
+    (merged['source'] as Map).remove('commit');
+    saveMerged(merged);
+    expectIssue('merged_sources[0] source.commit');
+    (merged['source'] as Map)['commit'] = 'branch-name';
+    saveMerged(merged);
+    expectIssue('完整 40 位');
+  });
+
+  test('rejects merged source path escaping its owner', () {
+    saveMerged(mergedSource()..['path'] = '../other_package');
+    expectIssue('merged_sources[0] path：路径越界');
+  });
+
+  test('rejects missing merged implementation directory', () {
+    saveMerged(mergedSource()..['path'] = 'lib/missing');
+    expectIssue('合并源码目录缺失');
+  });
+
+  test('rejects missing merged source license', () {
+    saveMerged(mergedSource()..['licenses'] = ['missing-license']);
+    expectIssue('许可证');
+  });
+
+  test('rejects merged license not registered in owner', () {
+    saveMerged(mergedSource()..['licenses'] = ['MERGED_LICENSE']);
+    fixture.write('third_party/local_package/MERGED_LICENSE', 'Merged license');
+    expectIssue('许可证未登记到主包');
+  });
+
+  test('rejects empty or malformed merged source list', () {
+    for (final value in [null, 'invalid', <Object?>[]]) {
+      fixture.record['merged_sources'] = value;
+      fixture.save();
+      expectIssue('merged_sources 必须是非空列表');
+    }
+  });
+
+  test('rejects duplicate merged source names and owner as source', () {
+    final merged = mergedSource();
+    saveMerged(merged);
+    fixture.record['merged_sources'] = [merged, merged];
+    fixture.save();
+    expectIssue('来源名称重复');
+    saveMerged(merged..['name'] = 'local_package');
+    expectIssue('来源名称重复');
+  });
+
   test('accepts a consistent second local revision', () {
     const revision = '1.2.3+piliaurora.2';
     fixture.root['dependencies'] = {'local_package': revision};

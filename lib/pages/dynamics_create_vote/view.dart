@@ -10,7 +10,7 @@ import 'package:pili_aurora/utils/date_utils.dart';
 import 'package:pili_aurora/utils/extension/file_ext.dart';
 import 'package:pili_aurora/utils/platform_utils.dart';
 import 'package:pili_aurora/utils/utils.dart';
-import 'package:easy_debounce/easy_throttle.dart';
+import 'package:pili_aurora/utils/rate_limiter.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:get/get.dart';
@@ -117,7 +117,7 @@ class _CreateVotePageState extends State<CreateVotePage> {
                       },
                       showImg: showImg,
                       imgUrl: e.imgUrl,
-                      onPickImg: () => EasyThrottle.throttle(
+                      onPickImg: () => ActionThrottle.run(
                         'picImg',
                         const Duration(milliseconds: 500),
                         () => _onPickImg(i),
@@ -424,7 +424,7 @@ class _CreateVotePageState extends State<CreateVotePage> {
   );
 
   void _onPickImg(int index) {
-    EasyThrottle.throttle(
+    ActionThrottle.run(
       'imagePicker',
       const Duration(milliseconds: 500),
       () async {

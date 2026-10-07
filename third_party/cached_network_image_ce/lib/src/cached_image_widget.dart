@@ -1,7 +1,7 @@
 import 'dart:typed_data';
 
 import 'package:cached_network_image_ce/cached_network_image.dart';
-import 'package:cached_network_image_platform_interface_ce/cached_network_image_platform_interface_ce.dart';
+import 'package:cached_network_image_ce/src/cache_api.dart';
 import 'package:flutter/widgets.dart';
 import 'package:octo_image/octo_image.dart';
 

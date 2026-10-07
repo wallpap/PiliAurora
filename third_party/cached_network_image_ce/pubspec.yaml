@@ -8,14 +8,13 @@ topics:
   - cache
   - image
   - network-image
-version: 4.6.4+piliaurora.1
+version: 4.6.4+piliaurora.2
 
 environment:
   sdk: ^3.0.0
   flutter: '>=3.10.0'
 
 dependencies:
-  cached_network_image_platform_interface_ce: ^5.2.0
   crypto: ^3.0.0
   flutter:
     sdk: flutter

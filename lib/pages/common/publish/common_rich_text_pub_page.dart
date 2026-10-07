@@ -25,8 +25,8 @@ import 'package:pili_aurora/utils/feed_back.dart';
 import 'package:pili_aurora/utils/image_utils.dart';
 import 'package:pili_aurora/utils/page_utils.dart';
 import 'package:pili_aurora/utils/platform_utils.dart';
+import 'package:pili_aurora/utils/rate_limiter.dart';
 import 'package:dio/dio.dart' show CancelToken;
-import 'package:easy_debounce/easy_throttle.dart';
 import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/services.dart';
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
@@ -219,7 +219,7 @@ abstract class CommonRichTextPubPageState<T extends CommonRichTextPubPage>
   }
 
   void onPickImage([VoidCallback? callback]) {
-    EasyThrottle.throttle(
+    ActionThrottle.run(
       'imagePicker',
       const Duration(milliseconds: 500),
       () async {

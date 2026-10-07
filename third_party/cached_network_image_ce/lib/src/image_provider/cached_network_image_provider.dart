@@ -2,10 +2,10 @@ import 'dart:async' show Future, StreamController;
 import 'dart:ui' as ui show Codec;
 
 import 'package:cached_network_image_ce/cached_network_image.dart';
-import 'package:cached_network_image_platform_interface_ce/cached_network_image_platform_interface_ce.dart'
+import 'package:cached_network_image_ce/src/cache_api.dart'
     if (dart.library.io) '_image_loader.dart'
     show ImageLoader;
-import 'package:cached_network_image_platform_interface_ce/cached_network_image_platform_interface_ce.dart'
+import 'package:cached_network_image_ce/src/cache_api.dart'
     show ErrorListener, ImageRenderMethodForWeb;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/painting.dart';
