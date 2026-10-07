@@ -24,6 +24,20 @@ void main() {
   });
   tearDown(() => messenger.setMockMethodCallHandler(channel, null));
 
+  test('keeps a source buffer stable across viewport changes', () {
+    final policy = AndroidVideoOutputResizePolicy();
+
+    expect(policy.takeSourceResize(), isTrue);
+    expect(policy.takeSourceResize(), isFalse);
+
+    // 旋转/全屏只改变 Flutter 视口，不应重新配置 SurfaceTexture。
+    expect(policy.takeSourceResize(), isFalse);
+
+    policy.sourceChanged();
+    expect(policy.takeSourceResize(), isTrue);
+    expect(policy.takeSourceResize(), isFalse);
+  });
+
   test('updates the buffer before notifying mpv', () async {
     messenger.setMockMethodCallHandler(channel, (call) async {
       expect(player.options, isEmpty);
