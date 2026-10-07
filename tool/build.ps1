@@ -70,7 +70,7 @@ if ($proxy -and $proxy -match '^(?:https?://)?(?<host>[^:/]+):(?<port>\d+)$') {
     $env:JAVA_TOOL_OPTIONS = (($env:JAVA_TOOL_OPTIONS, $proxyOptions) -ne $null -join " ").Trim()
 }
 
-Invoke-Fvm @("exec", "flutter", "pub", "get")
+Invoke-Fvm @("exec", "flutter", "pub", "get", "--enforce-lockfile")
 
 if (-not $SkipPatch) {
     $patchScript = Join-Path $Workspace "lib/scripts/patch.ps1"
@@ -95,6 +95,9 @@ if (-not $SkipPatch) {
         $env:PATH = $inheritedPath
     }
 }
+
+# 解析及补丁步骤结束后检查最终锁文件，禁止重新引入 Git 来源。
+Invoke-Fvm @("exec", "dart", "run", "tool/check_dependencies.dart")
 
 $target = if ($Platform -eq "android") { "apk" } else { "windows" }
 Invoke-Fvm @("exec", "flutter", "build", $target, "--$Mode")
