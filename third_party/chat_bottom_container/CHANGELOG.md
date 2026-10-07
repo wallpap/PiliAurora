@@ -1,0 +1,59 @@
+## 0.5.2
+
+ - **FEAT**(chat_bottom_container): support Swift Package Manager for iOS (#40).
+
+## 0.5.1
+
+ - **FIX**(chat_bottom_container): bypass Flutter KGP static regex check via dynamic string concatenation.
+ - **FIX**(chat_bottom_container): Android plugin compatibility with AGP9 built-in Kotlin.
+
+## 0.5.0
+
+ - **FEAT**(chat_bottom_container): support orientation-specific keyboard height tracking.
+
+## 0.4.1
+
+ - **FIX**(chat_bottom_container): support dynamic update of safeAreaBottom.
+ - **DOCS**(chat_bottom_container): README.
+
+## 0.4.0
+
+ - **FEAT**(chat_bottom_container): allow custom panel container.
+ - **DOCS**(chat_bottom_container): README.
+
+## 0.3.2
+
+ - **FIX**(chat_bottom_container): remove listeners from inputFocusNode when ChatBottomPanelContainer is disposed.
+
+## 0.3.1
+
+ - **FEAT**(chat_bottom_container): allow switching focusNode.
+
+## 0.3.0
+
+ - **FEAT**(chat_bottom_container): add safeAreaBottom to ChatBottomPanelContainerController.
+
+## 0.2.1
+
+* Avoid conflicts with flutter engine's view event listener on Android.
+
+## 0.2.0
+
+* Support switching to other panel, the input box gets the focus and displays the cursor.
+* Record keyboard height to optimize user experience next time.
+
+## 0.1.0
+
+* Adjust keyboard height listener manager logic.
+* Add `safeAreaBottom` and `changeKeyboardPanelHeight`.
+* Adjust the logic about obtaining the bottom height of the safe area.
+* Adjust the constraints of the SDK (sdk: ">=3.0.0 <4.0.0").
+* Fix version of `FSAChatBottomContainer.xcframework`.
+
+## 0.0.2
+
+* Adjust the way to download framework.
+
+## 0.0.1
+
+* Initial release.

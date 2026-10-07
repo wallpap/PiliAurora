@@ -650,7 +650,7 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
                       child: IconButton(
                         tooltip: '返回',
                         icon: Icon(
-                          FontAwesomeIcons.arrowLeft,
+                          FontAwesomeIcons.arrowLeft.data,
                           size: 15,
                           color: colorScheme.onSurface,
                         ),
@@ -663,7 +663,7 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
                       child: IconButton(
                         tooltip: '返回主页',
                         icon: Icon(
-                          FontAwesomeIcons.house,
+                          FontAwesomeIcons.house.data,
                           size: 15,
                           color: colorScheme.onSurface,
                         ),
@@ -1085,11 +1085,11 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
                   height: 34,
                   child: IconButton(
                     tooltip: '返回',
-                    icon: const Icon(
-                      FontAwesomeIcons.arrowLeft,
+                    icon: Icon(
+                      FontAwesomeIcons.arrowLeft.data,
                       size: 15,
                       color: Colors.white,
-                      shadows: [
+                      shadows: const [
                         Shadow(
                           blurRadius: 1.5,
                           color: Colors.black,
@@ -1104,11 +1104,11 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
                   height: 34,
                   child: IconButton(
                     tooltip: '返回主页',
-                    icon: const Icon(
-                      FontAwesomeIcons.house,
+                    icon: Icon(
+                      FontAwesomeIcons.house.data,
                       size: 15,
                       color: Colors.white,
-                      shadows: [
+                      shadows: const [
                         Shadow(
                           blurRadius: 1.5,
                           color: Colors.black,

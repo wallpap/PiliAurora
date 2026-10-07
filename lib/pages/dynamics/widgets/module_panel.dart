@@ -52,7 +52,7 @@ Widget module(
       return Row(
         spacing: 4,
         children: [
-          const Icon(FontAwesomeIcons.ghost, size: 14),
+          Icon(FontAwesomeIcons.ghost.data, size: 14),
           Text(major!.none!.tips!),
         ],
       );

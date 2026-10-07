@@ -670,9 +670,9 @@ class _AudioPageState extends State<AudioPage> {
           Obx(
             () => ActionItem(
               animation: _controller.tripleAnimation,
-              icon: const Icon(FontAwesomeIcons.thumbsUp),
-              selectIcon: const Icon(
-                FontAwesomeIcons.solidThumbsUp,
+              icon: Icon(FontAwesomeIcons.thumbsUp.data),
+              selectIcon: Icon(
+                FontAwesomeIcons.solidThumbsUp.data,
               ),
               selectStatus: _controller.hasLike.value,
               semanticsLabel: '点赞',
@@ -684,8 +684,8 @@ class _AudioPageState extends State<AudioPage> {
           Obx(
             () => ActionItem(
               animation: _controller.tripleAnimation,
-              icon: const Icon(FontAwesomeIcons.b),
-              selectIcon: const Icon(FontAwesomeIcons.b),
+              icon: Icon(FontAwesomeIcons.b.data),
+              selectIcon: Icon(FontAwesomeIcons.b.data),
               onTap: _controller.actionCoinVideo,
               selectStatus: _controller.hasCoin,
               semanticsLabel: '投币',
@@ -697,9 +697,9 @@ class _AudioPageState extends State<AudioPage> {
           Obx(
             () => ActionItem(
               animation: _controller.tripleAnimation,
-              icon: const Icon(FontAwesomeIcons.star),
-              selectIcon: const Icon(
-                FontAwesomeIcons.solidStar,
+              icon: Icon(FontAwesomeIcons.star.data),
+              selectIcon: Icon(
+                FontAwesomeIcons.solidStar.data,
               ),
               onTap: () => _controller.showFavBottomSheet(context),
               onLongPress: () => _controller.showFavBottomSheet(
@@ -714,7 +714,7 @@ class _AudioPageState extends State<AudioPage> {
             ),
           ),
           ActionItem(
-            icon: const Icon(FontAwesomeIcons.comment),
+            icon: Icon(FontAwesomeIcons.comment.data),
             onTap: _controller.showReply,
             semanticsLabel: '评论',
             text: NumUtils.numFormat(
@@ -722,8 +722,8 @@ class _AudioPageState extends State<AudioPage> {
             ),
           ),
           ActionItem(
-            icon: const Icon(
-              FontAwesomeIcons.shareFromSquare,
+            icon: Icon(
+              FontAwesomeIcons.shareFromSquare.data,
             ),
             onTap: () => _controller.actionShareVideo(context),
             selectStatus: false,
@@ -735,7 +735,7 @@ class _AudioPageState extends State<AudioPage> {
           if (audioItem.associatedItem.hasOid() &&
               audioItem.associatedItem.subId.isNotEmpty)
             ActionItem(
-              icon: const Icon(FontAwesomeIcons.circlePlay),
+              icon: Icon(FontAwesomeIcons.circlePlay.data),
               onTap: () {
                 _controller.player?.pause();
                 PageUtils.toVideoPage(

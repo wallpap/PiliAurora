@@ -275,7 +275,7 @@ class _MusicDetailPageState extends CommonDynPageState<MusicDetailPage> {
                 // TODO
                 // Expanded(
                 //   child: textIconButton(
-                //     icon: FontAwesomeIcons.shareFromSquare,
+                //     icon: FontAwesomeIcons.shareFromSquare.data,
                 //     text: '转发',
                 //     count: item.musicShares,
                 //     onPressed: () {
@@ -306,8 +306,8 @@ class _MusicDetailPageState extends CommonDynPageState<MusicDetailPage> {
                 Expanded(
                   child: Builder(
                     builder: (context) => textIconButton(
-                      icon: FontAwesomeIcons.thumbsUp,
-                      activatedIcon: FontAwesomeIcons.solidThumbsUp,
+                      icon: FontAwesomeIcons.thumbsUp.data,
+                      activatedIcon: FontAwesomeIcons.solidThumbsUp.data,
                       text: '点赞',
                       count: item.wishCount,
                       status: item.wishListen ?? false,

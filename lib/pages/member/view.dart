@@ -495,12 +495,12 @@ class _MemberPageState extends State<MemberPage> {
                 const LogPage(),
                 arguments: CoinLogController(),
               ),
-              child: const Row(
+              child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(FontAwesomeIcons.b, size: 16),
-                  SizedBox(width: 10),
-                  Text('硬币记录'),
+                  Icon(FontAwesomeIcons.b.data, size: 16),
+                  const SizedBox(width: 10),
+                  const Text('硬币记录'),
                 ],
               ),
             ),

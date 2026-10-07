@@ -412,7 +412,7 @@ class _ArticlePageState extends CommonDynPageState<ArticlePage> {
                         final forward = stats.forward;
                         return textIconButton(
                           text: '转发',
-                          icon: FontAwesomeIcons.shareFromSquare,
+                          icon: FontAwesomeIcons.shareFromSquare.data,
                           stat: forward,
                           onPressed: () {
                             if (controller.opusData == null &&
@@ -460,8 +460,8 @@ class _ArticlePageState extends CommonDynPageState<ArticlePage> {
                   ),
                   Expanded(
                     child: textIconButton(
-                      icon: FontAwesomeIcons.star,
-                      activatedIcon: FontAwesomeIcons.solidStar,
+                      icon: FontAwesomeIcons.star.data,
+                      activatedIcon: FontAwesomeIcons.solidStar.data,
                       text: '收藏',
                       stat: stats.favorite,
                       onPressed: controller.onFav,
@@ -469,8 +469,8 @@ class _ArticlePageState extends CommonDynPageState<ArticlePage> {
                   ),
                   Expanded(
                     child: textIconButton(
-                      icon: FontAwesomeIcons.thumbsUp,
-                      activatedIcon: FontAwesomeIcons.solidThumbsUp,
+                      icon: FontAwesomeIcons.thumbsUp.data,
+                      activatedIcon: FontAwesomeIcons.solidThumbsUp.data,
                       text: '点赞',
                       stat: stats.like,
                       onPressed: controller.onLike,
