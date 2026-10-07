@@ -5,7 +5,7 @@
 1. 阅读根目录约定和 `doc/README.md`。
 2. 执行 `git status --short`、`git diff`，确认并保留已有改动。
 3. 从路由或页面入口沿实际 import 阅读：页面 → HTTP/Service → Model → 通用组件/平台插件。
-4. 先看同领域测试和诊断代码，再决定最小修改范围。
+4. 先看相关领域的测试和诊断入口，再确定修改范围。
 5. 修改后运行相关测试和静态分析；播放器、直播、窗口、解码器改动还需要说明实测范围。
 
 ## 典型链路
@@ -28,7 +28,7 @@
 
 ### 登录与账号
 
-`lib/pages/login/` → `lib/http/login.dart` → `lib/services/account_service.dart`、`lib/utils/accounts/` 和本地存储。任何日志或 issue 都必须脱敏，不得包含 Cookie、Token、二维码或签名信息。
+`lib/pages/login/` → `lib/http/login.dart` → `lib/services/account_service.dart`、`lib/utils/accounts/` 和本地存储。日志和 issue 需要先脱敏，去掉 Cookie、Token、二维码和签名信息。
 
 ## 诊断入口
 
@@ -37,7 +37,7 @@
 - `lib/pages/setting/pages/logs.dart`、`lib/pages/log_table/`：设置/日志相关 UI。
 - `doc/dev/README.md`：Windows 播放、硬件解码、弹幕、性能和历史实验资料。
 
-## 问题报告至少包含
+## 提交问题报告时
 
 - 应用版本、Git 提交、构建模式和目标平台；
 - 操作系统、设备/显卡、Flutter/JDK 版本；

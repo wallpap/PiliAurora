@@ -1,6 +1,6 @@
 # 本地定制依赖
 
-本项目不再从 Git 分支解析 Dart/Flutter 依赖。普通依赖使用 pub.dev 版本约束，应用提交 `pubspec.lock`；无法由发布版替代的定制实现放在本目录，随应用源码一起进行版本控制。
+Dart/Flutter 依赖已停止跟踪远端 Git 分支。普通依赖固定到 pub.dev 的发布版本，解析结果保存在 `pubspec.lock` 中；需要定制的实现放在本目录，随应用源码维护。
 
 ## 简单特性内化
 
@@ -10,7 +10,7 @@
 
 - `dependencies.json` 是本地包的登记表，记录本地版本、来源版本、仓库、完整提交 SHA、来源子目录、许可证和保留原因。
 - 根 `pubspec.yaml` 的直接定制依赖使用精确版本（例如 `1.1.11+piliaurora.1`），`dependency_overrides` 将实际源码指向本目录。传递定制包也必须登记和 override。
-- 每个本地包的 `pubspec.yaml` 使用独立的 `+piliaurora.N` 修订号，并设置 `publish_to: none`。这不是同名 pub.dev 版本的镜像。
+- 每个本地包的 `pubspec.yaml` 使用独立的 `+piliaurora.N` 修订号，并设置 `publish_to: none`。这些包包含本地修改，与同名 pub.dev 版本有所区别。
 - 根版本声明本身不能约束 path override；`dart run tool/check_dependencies.dart` 会检查登记、本地声明和锁文件的一致性，并拒绝任何 Git 来源。
 - 每个包保留原许可证和来源版权信息。新导入包收录生产源码、构建配置和必要资源，不收录上游示例、测试、开发缓存及 Git 元数据。既有两个 Windows 包保持原有补丁。导入源码清理行尾空白，并补齐字幕文档模板闭合标签，不改写实现。
 
@@ -30,7 +30,7 @@
 
 ### 普通发布依赖
 
-根 `dependencies` 和 `dev_dependencies` 的 hosted 包统一使用精确版本号，不使用 `^`、区间或 `any`；根 hosted override 也遵循相同规则。版本取自已验收的 `pubspec.lock`，不是自动选择最新发布版。SDK 包由 `.fvmrc` 管理，第三方包自己的传递约束不机械改写，传递解析结果由锁文件和 `--enforce-lockfile` 固定。
+根 `dependencies` 和 `dev_dependencies` 的 hosted 包统一使用精确版本号，不使用 `^`、区间或 `any`；根 hosted override 也遵循相同规则。版本以已验收的 `pubspec.lock` 为准，不会自动跟随最新发布版。SDK 包由 `.fvmrc` 管理，第三方包自己的传递约束不机械改写，传递解析结果由锁文件和 `--enforce-lockfile` 固定。
 
 1. 修改目标包的精确版本号，再执行 `flutter pub get`，不要仅执行 `pub upgrade`（精确约束不会自动升级）。
 2. 审核 `pubspec.lock`，避免无关依赖更新；依赖校验必须确认根声明和锁定版本逐字一致，包括预发布与 build 后缀。
@@ -54,7 +54,7 @@
 
 6. 将单个更新及其适配、测试作为可独立回滚的提交。新版本若可以去掉定制，则切回已验证的发布版，并同时移除 override、本地源码和登记。
 
-构建成功不代表后台通知、实际 GPU/MediaCodec、窗口主题及 WebView 退出已经完成实机验证；这些交互仍需人工回归。`third_party` 的上游检查告警应如实记录，不通过关闭检查或削弱测试来清零。
+后台通知、GPU/MediaCodec、窗口主题和 WebView 退出仍需人工实机回归；平台构建只验证编译和打包。`third_party` 的上游检查告警应如实记录，不通过关闭检查或削弱测试来清零。
 
 ## 原生二进制与 SDK
 

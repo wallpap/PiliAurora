@@ -90,7 +90,7 @@ Caused by: java.net.SocketException: Invalid argument: connect
 
 失败路径比成功路径更短，两者所在卷均为 NTFS；目录检查未发现重解析链接。
 因此不能把“路径太长”“8.3 别名”“普通 IPv4 环回网络”写成已确认根因。
-本次定位到可复现的**目录相关本地 socket 环境问题**，未证明更底层的 Windows
+探针复现了与目录有关的本地 socket 环境问题，但尚未确定底层 Windows
 组件或安全软件成因；不据此修改防火墙、系统代理或全局 Java 配置。
 
 ### 修复与复验
@@ -135,7 +135,7 @@ java "-Djdk.net.unixdomain.tmpdir=$gradleTemp" build/SelectorProbe.java
 第三方插件仍有 compileSdk 覆盖及 Kotlin Gradle Plugin 兼容提示，未通过升级依赖
 或关闭检查掩盖它们。APK 构建不证明真实设备的 MediaCodec/GPU 播放效果。
 
-经验：先用最小探针区分 Java 环境与项目代码，再单变量对照临时目录。
+遇到相同故障时，先用最小探针区分 Java 环境和项目代码，再只改变临时目录做对照。
 相同堆栈重复出现时停止无证据重试；`--no-daemon` 仍可能创建单次 daemon，
 也无法消除客户端自身的 Selector 初始化需求。
 
@@ -168,7 +168,7 @@ fvm dart run tool/jnigen.dart
 
 ## 报告验证结果的格式
 
-说明实际执行的命令、开始/结束时间、目标平台、通过/失败、失败原因和未验证范围。不要把“命令未执行”写成“通过”，也不要通过删除测试或降低断言来制造绿色结果。
+报告应列出执行的命令、开始和结束时间、目标平台、结果，以及失败原因和未验证的范围。没有运行的检查不要记为通过；测试和断言也不能为凑出通过结果而删减。
 
 ## 草稿验收后发布
 
@@ -178,7 +178,7 @@ fvm dart run tool/jnigen.dart
 gh workflow run build.yml --ref v1.0.7 -f tag=v1.0.7 -f build_android=true -f build_win_x64=true -f draft_release=true
 ```
 
-该选项默认 false，既有自动发布行为不变。草稿模式下 Android 与 Windows 上传到同一草稿，不会各自提前发布。确认工作流两个平台都成功、标签及构建提交一致、三个 Android ABI APK 与 Windows portable / setup 共五个产物完整后，再执行：
+该选项默认 false，原有自动发布方式不变。启用后，Android 和 Windows 会把产物上传到同一草稿。等两个平台的工作流都成功，再核对标签与构建提交，以及三个 Android ABI APK、Windows portable ZIP 和 setup 共五个附件；确认完整后再执行：
 
 ```powershell
 gh release edit v1.0.7 --draft=false --latest
