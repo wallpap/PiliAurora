@@ -173,6 +173,7 @@ class _PLVideoPlayerState extends State<PLVideoPlayer>
   StreamSubscription? _brightnessListener;
   StreamSubscription<(int, int)>? _videoSizeListener;
   late final VideoOutputResizer _videoOutputResizer;
+  late final AndroidVideoOutputResizePolicy _androidVideoOutputResizePolicy;
   StreamSubscription<bool>? _videoOutputPlayingListener;
   double _devicePixelRatio = 1.0;
   void Function()? _unregisterVideoDiagnostics;
@@ -276,6 +277,7 @@ class _PLVideoPlayerState extends State<PLVideoPlayer>
       duration: const Duration(milliseconds: 100),
     );
     videoController = plPlayerController.videoController!;
+    _androidVideoOutputResizePolicy = AndroidVideoOutputResizePolicy();
     _videoOutputResizer = VideoOutputResizer(
       enabled: !Platform.isAndroid || videoController.player.state.playing,
       settleDelay: Duration(milliseconds: Platform.isAndroid ? 250 : 100),
@@ -1000,6 +1002,10 @@ class _PLVideoPlayerState extends State<PLVideoPlayer>
     return {
       'player': 'player.${videoController.player.hashCode}',
       'adaptiveOutput': _fitVideoOutputToViewport,
+      'resizePolicy': Platform.isAndroid ? 'source-stable' : 'viewport',
+      if (Platform.isAndroid)
+        'sourceResizePending':
+            _androidVideoOutputResizePolicy.sourceResizePending,
       'fullScreen': isFullScreen,
       'playing': videoController.player.state.playing,
       'positionMs': videoController.player.state.position.inMilliseconds,
@@ -1052,6 +1058,9 @@ class _PLVideoPlayerState extends State<PLVideoPlayer>
   }
 
   void _onAndroidVideoOutputChanged() {
+    // 原生 rect 变化表示媒体输出或 Surface 重建；这是唯一允许重新
+    // 配置 SurfaceTexture buffer 的时机。普通旋转不会触发这里。
+    _androidVideoOutputResizePolicy.sourceChanged();
     _videoOutputResizer.invalidate();
     _updateVideoOutputSize();
   }
@@ -1062,6 +1071,14 @@ class _PLVideoPlayerState extends State<PLVideoPlayer>
         maxWidth <= 0 ||
         maxHeight <= 0 ||
         !mounted) {
+      return;
+    }
+
+    if (Platform.isAndroid &&
+        !_androidVideoOutputResizePolicy.sourceResizePending) {
+      // 旋转、全屏和普通布局变化只调整 Flutter 层的 Texture 变换，
+      // 不重新设置 SurfaceTexture 的生产 buffer，避免 native external
+      // resize 与 Flutter 同帧布局交错造成闪屏。
       return;
     }
 
@@ -1088,6 +1105,9 @@ class _PLVideoPlayerState extends State<PLVideoPlayer>
     );
     if (size == null) return;
     _videoOutputResizer.request(size);
+    if (Platform.isAndroid) {
+      _androidVideoOutputResizePolicy.takeSourceResize();
+    }
   }
 
   Future<bool> _applyVideoOutputSize(
