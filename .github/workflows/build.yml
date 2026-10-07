@@ -65,6 +65,12 @@ jobs:
               shell: pwsh
               run: lib/scripts/patch.ps1 android
 
+            - name: Check dependency sources and versions
+              run: dart run tool/check_dependencies.dart
+
+            - name: Test dependency migration contracts
+              run: flutter test --no-pub test/architecture/dependency_policy_test.dart test/common/widgets/font_awesome_icons_test.dart
+
             - name: Write signing key
               if: github.event_name == 'workflow_dispatch'
               run: |
