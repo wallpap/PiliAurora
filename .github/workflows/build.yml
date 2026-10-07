@@ -78,6 +78,9 @@ jobs:
                 test/common/widgets/image/image_lifecycle_test.dart
                 test/utils/random_id_test.dart
                 test/utils/rate_limiter_test.dart
+                test/services/diagnostics/app_logger_test.dart
+                test/services/diagnostics/catcher_logging_test.dart
+                test/services/settings/webdav_client_test.dart
 
             - name: Write signing key
               if: github.event_name == 'workflow_dispatch'

@@ -58,3 +58,57 @@ UUID 位布局依据：[RFC 9562 §5.4](https://www.rfc-editor.org/rfc/rfc9562.h
 ## 后续维护
 
 新增简单工具应优先使用这里的 Timer 工具和 UUID v4 生成器；新增原生功能仍由已有插件负责。不要为“依赖数更少”再造 collection、加密、图片解码或播放引擎。增加 UUID 其他版本或改变节流/防抖语义前，应先证明应用确实需要，并补充对应契约测试。
+
+
+# 第三阶段：精确版本与两个专用模块
+
+日期：2026-10-07。接手基线：`51e5e8dda`，继续使用 `chore/versioned-dependencies`。
+
+## 精确固定根声明
+
+- 将 69 个浮动 hosted 约束改为原锁文件中的精确版本，覆盖生产与开发依赖，包括原先 `material_ui` 的区间；不查找或自动升级所谓最新版。
+- 根 `dependencies`、`dev_dependencies`、hosted `dependency_overrides` 不允许范围、caret 或 `any`，锁文件的 source 和 version 必须与声明一致，预发布和 build 后缀也不能漂移。
+- 本地定制直接依赖同样必须精确对应登记版本，不能以兼容区间绕过。SDK 包仍由 `.fvmrc` 与 SDK 声明管理；第三方包的传递兼容区间保留，解析结果通过提交的锁文件和 `--enforce-lockfile` 固定。
+- 固定版本这一提交没有改变锁文件。维护更新流程见 `third_party/README.md`，新增 22 项策略测试。
+
+## 日志内化
+
+- 应用实际只使用 d/i/w/e 四个等级，统一通过 `AppLogger` 接入现有 `Diagnostics`。过滤发生在消息格式化之前，关闭等级时不构造日志字符串；结构化消息也先脱敏，再进入控制台或落盘。
+- 不再同时使用第三方 Logger 的过滤、打印与输出流水线。可选控制台回调只在 Debug 应用中注入；日志和错误信息、堆栈的敏感字段经过现有脱敏入口。
+- `catcher_2` 改为宿主 `ReportLog` 回调，不再要求传入第三方 `Logger`。仅保留页面与 Report 使用的堆栈过滤，删除未消费的颜色、边框和通用打印器实现。无回调时不默认向控制台输出异常内容。
+- 本地修订升为 `2.1.9+piliaurora.2`，同步根声明、登记、来源说明和锁文件；异常钩子、Report JSON 格式与设备信息收集未改。
+- `logger` 不仅移除直接声明，也从整个解析树移除。新增应用日志与捕获器契约测试覆盖等级、过滤前不格式化、控制台/持久化脱敏、堆栈过滤和 Report 格式。
+
+## WebDAV 设置客户端内化
+
+- `WebDavSettingsClient` 复用已有 Dio，只实现 Basic Auth、逐级 MKCOL、PUT 与 GET，不实现 XML 目录查询、Digest、文件管理或未使用的扩展接口。
+- endpoint 基路径与文件名按 URI 段组合；空格、中文、百分号、问号和井号按文件名编码。禁止路径穿越和地址中携带明文认证信息、查询或片段，不跟随重定向。
+- 设置页面已从初始化凭据的单例缓存改为每次操作快照与独占客户端；操作结束始终关闭连接池。恢复直接 GET，不在服务器上创建目录。
+- **上传不再先 DELETE。** PUT 请求直接创建/替换备份，消除客户端在上传失败前主动删除旧备份的窗口；不保证任意第三方服务器 PUT 的事务性或断电原子性。
+- 网络失败只向 UI 暴露请求方法和 HTTP 状态，不暴露 Dio 请求头、响应正文或完整 URL。URL 配置错误也走页面脱敏输出。
+- 保留原来实际使用的 Basic Auth；不新增 Digest 等历史上未启用的模式。由于只实现设置用途，公开通用文件管理接口不作为兼容目标。
+- 新增适配器契约测试和真实 Dio + 独占 loopback HttpServer 的 UTF-8 上传/恢复回归；测试不访问用户 WebDAV 或共享资源。
+- Dio 行为通过 Context7 的官方仓库文档及当前安装源码核对；MKCOL/PUT 语义对照 RFC 4918 §9.3、§9.7。未复制 webdav_client 源码。
+
+## 数量与解析变化
+
+| 指标 | 接手前 → 本轮完成 |
+| --- | --- |
+| 直接运行依赖（包含 SDK） | **78 → 76** |
+| 独立本地包 | **18 → 18** |
+| 解析树包数（包含根项目及开发依赖） | **250 → 248** |
+| 真正移除的锁文件包 | **logger、webdav_client** |
+
+除了 catcher_2 本地修订号，保留包的解析版本不变；没有新增生产或开发依赖。XML 等仍被其他依赖使用，未宣称随 WebDAV 全部移除。本轮没有做体积或性能基准，不以减少依赖数量替代性能测量。
+
+## 验证结果与边界
+
+- 全量 `flutter test --no-pub`：**442 项通过**，相对接手基线增加 **72 项**。不是仅跑新增测试。
+- `flutter analyze --no-pub lib test tool`：**0 error、0 warning、28 项既有 info**；本轮产生的提示已修复，没有关闭规则。
+- 内化模块、调用适配、相关测试及 catcher_2 生产源码的定向 Dart 分析：无诊断。
+- `dart run tool/check_dependencies.dart`：通过；精确版本、本地修订、来源和许可证保持一致。
+- `flutter pub get --offline --enforce-lockfile`：按本地缓存复现锁文件；不需要拉取浮动 Git 依赖。
+- Windows Release 与 Android Debug APK 构建成功；Android 构建仍有既有插件 compileSdk 覆盖和 flutter_volume_controller KGP 提示，没有通过改动共享 SDK 或关闭检查消除。
+- 两个平台 CI 工作流加入日志、捕获器和 WebDAV 回归测试，YAML 已解析；未运行远程 CI。
+- 未推送、合并、发布或读取签名密钥。Android Release、真实 WebDAV 厂商服务、页面手动交互和实机原生功能尚未验证。
+- 未执行会重置共享 Flutter SDK、删除 Pub 缓存的历史补丁脚本；material_ui 已精确固定，但 SDK/包缓存补丁流程本身仍属于下一步可单独治理的范围。
