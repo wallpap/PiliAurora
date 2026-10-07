@@ -8,6 +8,11 @@ on:
         required: false
         default: ""
         type: string
+      draft_release:
+        description: "Keep uploaded release assets in a draft until final verification"
+        required: false
+        default: false
+        type: boolean
   workflow_dispatch:
     inputs:
       tag:
@@ -15,6 +20,11 @@ on:
         required: false
         default: ""
         type: string
+      draft_release:
+        description: "Keep uploaded release assets in a draft until final verification"
+        required: false
+        default: false
+        type: boolean
 
 jobs:
   build-windows-app:
@@ -76,6 +86,7 @@ jobs:
           test/services/diagnostics/catcher_logging_test.dart
           test/services/settings/webdav_client_test.dart
           test/architecture/dependency_rules_test.dart
+          test/architecture/release_workflow_test.dart
           test/pages/common/common_controller_test.dart
           test/services/settings/settings_backup_test.dart
           test/services/settings/webdav_sync_test.dart
@@ -131,6 +142,7 @@ jobs:
         with:
           tag_name: ${{ github.event.inputs.tag }}
           name: ${{ github.event.inputs.tag }}
+          draft: ${{ inputs.draft_release }}
           files: |
             PiliAurora_windows_*_x64_portable.zip
             PiliAurora-Win-Setup/PiliAurora_windows_*_x64_setup.exe

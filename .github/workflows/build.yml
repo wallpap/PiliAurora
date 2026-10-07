@@ -29,6 +29,12 @@ on:
                 default: ""
                 type: string
 
+            draft_release:
+                description: "Keep uploaded release assets in a draft until final verification"
+                required: false
+                default: false
+                type: boolean
+
 jobs:
     android:
         if: ${{ (github.event_name == 'pull_request' && github.repository == 'wallpap/PiliAurora') || github.event.inputs.build_android == 'true' }}
@@ -82,6 +88,7 @@ jobs:
                 test/services/diagnostics/catcher_logging_test.dart
                 test/services/settings/webdav_client_test.dart
                 test/architecture/dependency_rules_test.dart
+                test/architecture/release_workflow_test.dart
                 test/pages/common/common_controller_test.dart
                 test/services/settings/settings_backup_test.dart
                 test/services/settings/webdav_sync_test.dart
@@ -153,6 +160,7 @@ jobs:
               with:
                   tag_name: ${{ github.event.inputs.tag }}
                   name: ${{ github.event.inputs.tag }}
+                  draft: ${{ inputs.draft_release }}
                   files: PiliAurora_android_*.apk
 
             - name: Upload arm64-v8a APK
@@ -185,3 +193,4 @@ jobs:
         permissions: write-all
         with:
             tag: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.tag || '' }}
+            draft_release: ${{ github.event_name == 'workflow_dispatch' && inputs.draft_release }}
