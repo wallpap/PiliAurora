@@ -46,6 +46,11 @@ class _Fixture {
     'description': {'path': 'third_party/local_package', 'relative': true},
   };
 
+  final Map<String, Object?> hosted = {
+    'source': 'hosted',
+    'version': '1.0.0',
+  };
+
   Map<String, Object?> get registry => {
     'schema_version': 1,
     'packages': [record],
@@ -63,7 +68,7 @@ class _Fixture {
     write(
       'pubspec.lock',
       jsonEncode({
-        'packages': {'local_package': locked},
+        'packages': {'local_package': locked, 'hosted_package': hosted},
       }),
     );
     write('third_party/dependencies.json', jsonEncode(registry));
@@ -199,18 +204,21 @@ void main() {
     });
   }
 
-  test('semver caret and range constraints match local versions', () {
-    for (final constraint in ['^1.2.3', '>=1.2.3 <2.0.0']) {
-      fixture.root['dependencies'] = {'local_package': constraint};
-      fixture.save();
-      expect(fixture.check(), isEmpty);
-    }
-  });
+  test(
+    'rejects caret and range constraints even when local versions match',
+    () {
+      for (final constraint in ['^1.2.3', '>=1.2.3 <2.0.0']) {
+        fixture.root['dependencies'] = {'local_package': constraint};
+        fixture.save();
+        expectIssue('版本约束必须精确固定');
+      }
+    },
+  );
 
   test(
     'registered transitive local package need not be a direct dependency',
     () {
-      fixture.root['dependencies'] = {'hosted_package': '^1.0.0'};
+      fixture.root['dependencies'] = {'hosted_package': '1.0.0'};
       fixture.locked['dependency'] = 'transitive';
       fixture.save();
       expect(fixture.check(), isEmpty);
@@ -360,6 +368,78 @@ void main() {
     };
     fixture.save();
     expectIssue('根 dependencies 必须声明版本约束');
+  });
+
+  for (final section in [
+    'dependencies',
+    'dev_dependencies',
+    'dependency_overrides',
+  ]) {
+    test('accepts exact hosted version in $section', () {
+      fixture.root[section] = {
+        ...fixture.root[section] as Map? ?? {},
+        'hosted_package': '1.0.0',
+      };
+      fixture.save();
+      expect(fixture.check(), isEmpty);
+    });
+
+    for (final constraint in ['^1.0.0', '>=1.0.0 <2.0.0', 'any', '', 'bad']) {
+      test('rejects floating hosted $constraint in $section', () {
+        fixture.root[section] = {
+          ...fixture.root[section] as Map? ?? {},
+          'hosted_package': constraint,
+        };
+        fixture.save();
+        expectIssue('$section.hosted_package：必须声明精确版本号');
+      });
+    }
+  }
+
+  test('accepts hosted mapping including prerelease and build version', () {
+    fixture.root['dependencies'] = {
+      'local_package': _version,
+      'hosted_package': {
+        'hosted': 'https://example.com',
+        'version': '2.0.0-beta.1+build.2',
+      },
+    };
+    fixture.hosted['version'] = '2.0.0-beta.1+build.2';
+    fixture.save();
+    expect(fixture.check(), isEmpty);
+  });
+
+  test('SDK dependencies are managed by the pinned Flutter SDK', () {
+    fixture.root['dependencies'] = {
+      'local_package': _version,
+      'flutter': {'sdk': 'flutter'},
+    };
+    fixture.save();
+    expect(fixture.check(), isEmpty);
+  });
+
+  test('rejects a missing hosted lock entry and unexpected lock source', () {
+    (fixture.root['dependencies'] as Map)['hosted_package'] = '1.0.0';
+    fixture.save();
+    fixture.write(
+      'pubspec.lock',
+      jsonEncode({
+        'packages': {'local_package': fixture.locked},
+      }),
+    );
+    expectIssue('hosted_package：lock 必须包含对应 hosted 依赖');
+    fixture.hosted['source'] = 'sdk';
+    fixture.save();
+    expectIssue('hosted_package：lock 必须包含对应 hosted 依赖');
+  });
+
+  test('rejects hosted lock version drift including build suffix', () {
+    (fixture.root['dependencies'] as Map)['hosted_package'] = '1.0.0';
+    for (final version in ['1.0.1', '1.0.0+other']) {
+      fixture.hosted['version'] = version;
+      fixture.save();
+      expectIssue('hosted_package：精确版本');
+    }
   });
 
   test('rejects missing local version suffix and publish_to none', () {

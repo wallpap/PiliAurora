@@ -22,7 +22,7 @@ void main(List<String> arguments) {
       : arguments.single;
   final issues = checkDependencyPolicy(workspace);
   if (issues.isEmpty) {
-    stdout.writeln('依赖维护验收通过：无 Git 依赖，本地版本、来源和许可证一致。');
+    stdout.writeln('依赖维护验收通过：无 Git 依赖，根依赖精确固定，本地版本、来源和许可证一致。');
     return;
   }
   stderr.writeln('依赖维护验收失败（${issues.length} 项）：');
@@ -65,6 +65,7 @@ class _DependencyPolicyChecker {
         ? <dynamic, dynamic>{}
         : requireMap(lock['packages'], 'pubspec.lock packages');
     checkLockSources(lockPackages);
+    if (root != null) checkRootHostedConstraints(root, lockPackages);
     for (final entry in registry.entries) {
       checkPackage(entry.key, entry.value, root, lockPackages);
     }
@@ -292,6 +293,45 @@ class _DependencyPolicyChecker {
     }
   }
 
+  // 应用固定已验收版本；第三方包仍保留自己的兼容约束，传递版本由 lock 管理。
+  void checkRootHostedConstraints(Map root, Map lockPackages) {
+    for (final section in const [
+      'dependencies',
+      'dev_dependencies',
+      'dependency_overrides',
+    ]) {
+      final dependencies = root[section];
+      if (dependencies is! Map) continue;
+      for (final entry in dependencies.entries) {
+        if (registry.containsKey(entry.key)) continue;
+        final spec = entry.value;
+        if (spec is Map && spec.containsKey('sdk')) continue;
+        final context = 'pubspec.yaml $section.${entry.key}';
+        final text = spec is Map ? spec['version'] : spec;
+        VersionConstraint? constraint;
+        if (text is String) {
+          try {
+            constraint = VersionConstraint.parse(text);
+          } on FormatException {
+            // 将解析失败和范围约束统一报告为固定版本策略违规。
+          }
+        }
+        if (constraint is! Version || text != constraint.toString()) {
+          issues.add('$context：必须声明精确版本号，不允许范围或浮动来源');
+          continue;
+        }
+        final locked = lockPackages[entry.key];
+        if (locked is! Map || locked['source'] != 'hosted') {
+          issues.add('$context：lock 必须包含对应 hosted 依赖');
+        } else if (locked['version'] != text) {
+          issues.add(
+            '$context：精确版本 $text 与 lock version ${locked['version']} 不一致',
+          );
+        }
+      }
+    }
+  }
+
   Version? parseVersion(Object? value, String context) {
     if (value is String) {
       try {
@@ -460,8 +500,10 @@ class _DependencyPolicyChecker {
       }
       try {
         final constraint = VersionConstraint.parse(constraintText);
-        if (constraint.isAny || !constraint.allows(version)) {
-          issues.add('$name：根 $section 版本约束 $constraintText 不匹配本地版本 $version');
+        if (constraint is! Version || constraintText != version.toString()) {
+          issues.add(
+            '$name：根 $section 版本约束必须精确固定为 $version，实际为 $constraintText',
+          );
         }
       } on FormatException {
         issues.add('$name：根 $section 版本约束无效');
