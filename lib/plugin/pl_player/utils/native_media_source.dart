@@ -36,3 +36,21 @@ Media nativeMediaSource({
   };
   return Media(source.videoSource, start: start, extras: merged);
 }
+
+/// 重载当前媒体，保留 DASH 音轨、点播位置和用户的播放/暂停状态。
+Future<bool> reloadNativeMedia({
+  required NativePlayer player,
+  required bool isLive,
+  bool Function()? isCurrent,
+}) async {
+  if (player.disposed ||
+      player.current.isEmpty ||
+      !(isCurrent?.call() ?? true)) {
+    return false;
+  }
+  var media = player.current.last;
+  if (!isLive) media = media.copyWith(start: player.state.position);
+  final playing = player.state.playing;
+  await player.open(media, play: playing);
+  return true;
+}

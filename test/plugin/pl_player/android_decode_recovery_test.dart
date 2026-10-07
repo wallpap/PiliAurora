@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pili_aurora/plugin/pl_player/utils/android_decode_recovery.dart';
 
@@ -5,12 +7,14 @@ void main() {
   late String? active;
   late List<String> applied;
   late List<Object> errors;
+  late List<String> fallbacks;
   late AndroidDecodeRecovery recovery;
 
   setUp(() {
     active = 'mediacodec';
     applied = [];
     errors = [];
+    fallbacks = [];
     recovery = AndroidDecodeRecovery(
       activeDecoder: () => active,
       applyDecoder: (value) {
@@ -18,6 +22,7 @@ void main() {
         active = value;
       },
       onError: errors.add,
+      onFallback: fallbacks.add,
     );
   });
   tearDown(() => recovery.dispose());
@@ -33,6 +38,201 @@ void main() {
     level: 'error',
     message: 'acquireLatestImage failed: -30001',
   );
+
+  testWidgets('decoder fallback notifies once per media, not once per step', (
+    tester,
+  ) async {
+    imageError();
+    surfaceError();
+    await tester.pump(const Duration(milliseconds: 200));
+    expect(fallbacks, ['mediacodec-copy']);
+    surfaceError();
+    await tester.pump(const Duration(milliseconds: 200));
+    expect(applied, ['mediacodec-copy', 'no']);
+    expect(fallbacks, ['mediacodec-copy']);
+    recovery.reset();
+    active = 'mediacodec-copy';
+    surfaceError();
+    await tester.pump(const Duration(milliseconds: 200));
+    expect(fallbacks, ['mediacodec-copy', 'no']);
+  });
+
+  testWidgets(
+    'persistent AV1 parse errors after software fallback reload once',
+    (
+      tester,
+    ) async {
+      recovery.dispose();
+      var reloads = 0;
+      recovery = AndroidDecodeRecovery(
+        activeDecoder: () => active,
+        applyDecoder: (value) {
+          applied.add(value);
+          active = value;
+        },
+        recoverSoftware: () async {
+          reloads++;
+          return true;
+        },
+        onError: errors.add,
+      );
+      imageError();
+      await tester.pump(const Duration(milliseconds: 200));
+      surfaceError();
+      await tester.pump(const Duration(milliseconds: 200));
+      expect(active, 'no');
+      for (var i = 0; i < 20; i++) {
+        recovery.onLog(
+          prefix: 'ffmpeg/video',
+          level: 'error',
+          message: 'libdav1d: Error parsing OBU data',
+        );
+      }
+      await tester.pump(const Duration(milliseconds: 200));
+      expect(reloads, 1);
+      expect(applied, ['mediacodec-copy', 'no']);
+      for (var i = 0; i < 20; i++) {
+        recovery.onLog(
+          prefix: 'ffmpeg/video',
+          level: 'error',
+          message: 'libdav1d: Error parsing OBU data',
+        );
+      }
+      await tester.pump(const Duration(milliseconds: 200));
+      expect(reloads, 1, reason: 'damaged media must not cause a reload loop');
+    },
+  );
+
+  group('software parse recovery lifecycle', () {
+    late int reloads;
+    late Future<bool> Function() reload;
+
+    setUp(() {
+      recovery.dispose();
+      active = 'no';
+      reloads = 0;
+      reload = () async => true;
+      recovery = AndroidDecodeRecovery(
+        activeDecoder: () => active,
+        applyDecoder: applied.add,
+        recoverSoftware: () {
+          reloads++;
+          return reload();
+        },
+        onError: errors.add,
+      );
+    });
+
+    void parseErrors([int count = 3]) {
+      for (var i = 0; i < count; i++) {
+        recovery.onLog(
+          prefix: 'ffmpeg/video',
+          level: 'error',
+          message: 'libdav1d: Error parsing OBU data',
+        );
+      }
+    }
+
+    testWidgets('isolated damaged frames do not reload', (tester) async {
+      parseErrors(2);
+      await tester.pump(const Duration(milliseconds: 200));
+      parseErrors(2);
+      await tester.pump(const Duration(milliseconds: 200));
+      expect(reloads, 0);
+    });
+
+    testWidgets('hardware probes and warnings do not reload', (tester) async {
+      active = 'mediacodec';
+      parseErrors(20);
+      await tester.pump(const Duration(milliseconds: 200));
+      active = 'no';
+      recovery.onLog(
+        prefix: 'ffmpeg/video',
+        level: 'warn',
+        message: 'libdav1d: Error parsing OBU data',
+      );
+      await tester.pump(const Duration(milliseconds: 200));
+      expect(reloads, 0);
+    });
+
+    testWidgets('native recovery before the timer prevents reload', (
+      tester,
+    ) async {
+      parseErrors();
+      active = 'mediacodec';
+      await tester.pump(const Duration(milliseconds: 200));
+      expect(reloads, 0);
+    });
+
+    testWidgets('reset cancels pending work and restores one retry', (
+      tester,
+    ) async {
+      parseErrors();
+      recovery.reset();
+      await tester.pump(const Duration(milliseconds: 200));
+      expect(reloads, 0);
+      parseErrors();
+      await tester.pump(const Duration(milliseconds: 200));
+      expect(reloads, 1);
+      recovery.reset();
+      parseErrors();
+      await tester.pump(const Duration(milliseconds: 200));
+      expect(reloads, 2);
+    });
+
+    testWidgets('disposal cancels a software recovery', (tester) async {
+      parseErrors();
+      recovery.dispose();
+      await tester.pump(const Duration(milliseconds: 200));
+      parseErrors();
+      await tester.pump(const Duration(milliseconds: 200));
+      expect(reloads, 0);
+    });
+
+    testWidgets('busy media load does not consume the recovery budget', (
+      tester,
+    ) async {
+      reload = () async => false;
+      parseErrors();
+      await tester.pump(const Duration(milliseconds: 200));
+      expect(reloads, 1);
+      reload = () async => true;
+      parseErrors();
+      await tester.pump(const Duration(milliseconds: 200));
+      expect(reloads, 2);
+      parseErrors();
+      await tester.pump(const Duration(milliseconds: 200));
+      expect(reloads, 2);
+    });
+
+    testWidgets('failed reload reports once without retrying', (tester) async {
+      reload = () => Future<bool>.error(StateError('reload failed'));
+      parseErrors();
+      await tester.pump(const Duration(milliseconds: 200));
+      parseErrors(20);
+      await tester.pump(const Duration(milliseconds: 200));
+      expect(reloads, 1);
+      expect(errors, hasLength(1));
+    });
+
+    testWidgets('late rejection cannot consume new media recovery', (
+      tester,
+    ) async {
+      final gate = Completer<bool>();
+      reload = () => gate.future;
+      parseErrors();
+      await tester.pump(const Duration(milliseconds: 200));
+      expect(reloads, 1);
+      recovery.reset();
+      gate.completeError(StateError('old source failed'));
+      await tester.pump();
+      reload = () async => true;
+      parseErrors();
+      await tester.pump(const Duration(milliseconds: 200));
+      expect(reloads, 2);
+      expect(errors, isEmpty);
+    });
+  });
 
   testWidgets(
     'AV1 and HEVC errors coalesce and recover through copy then software',
@@ -69,6 +269,7 @@ void main() {
         );
       await tester.pump(const Duration(milliseconds: 200));
       expect(applied, isEmpty);
+      expect(fallbacks, isEmpty);
     },
   );
 
@@ -83,6 +284,7 @@ void main() {
     imageError();
     await tester.pump(const Duration(milliseconds: 200));
     expect(applied, isEmpty);
+    expect(fallbacks, isEmpty);
   });
 
   testWidgets('new media cancels pending work and restores recovery budget', (
@@ -127,6 +329,7 @@ void main() {
     surfaceError();
     await tester.pump(const Duration(milliseconds: 200));
     expect(applied, isEmpty);
+    expect(fallbacks, isEmpty);
   });
 
   testWidgets('decoder update failures are reported without retry loops', (
@@ -137,11 +340,34 @@ void main() {
       activeDecoder: () => active,
       applyDecoder: (_) => throw StateError('decoder disposed'),
       onError: errors.add,
+      onFallback: fallbacks.add,
     );
     surfaceError();
     await tester.pump(const Duration(milliseconds: 200));
     surfaceError();
     await tester.pump(const Duration(milliseconds: 200));
+    expect(errors, hasLength(1));
+    expect(fallbacks, isEmpty);
+  });
+
+  testWidgets('notification failures do not stop the fallback chain', (
+    tester,
+  ) async {
+    recovery.dispose();
+    recovery = AndroidDecodeRecovery(
+      activeDecoder: () => active,
+      applyDecoder: (value) {
+        active = value;
+        applied.add(value);
+      },
+      onFallback: (_) => throw StateError('notification failed'),
+      onError: errors.add,
+    );
+    imageError();
+    await tester.pump(const Duration(milliseconds: 200));
+    surfaceError();
+    await tester.pump(const Duration(milliseconds: 200));
+    expect(applied, ['mediacodec-copy', 'no']);
     expect(errors, hasLength(1));
   });
 }
