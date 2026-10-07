@@ -17,3 +17,13 @@ bool hasExhaustedPlaybackBuffer({
   required Duration position,
   required Duration buffer,
 }) => buffering && buffer <= position;
+
+/// 网络错误后仍在缓冲且还有可播放内容时，暂缓重连但不要丢弃重试机会。
+///
+/// mpv 的 [buffer] 是绝对时间戳。控制器需要在这个状态下重新安排检查，
+/// 否则一次定时检查恰好早于缓冲耗尽时，后续没有新的错误事件就不会重连。
+bool shouldDeferPlaybackNetworkRecovery({
+  required bool buffering,
+  required Duration position,
+  required Duration buffer,
+}) => buffering && buffer > position;

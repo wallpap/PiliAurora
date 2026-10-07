@@ -890,11 +890,25 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
         return;
       }
       if (requireEmptyBuffer) {
+        final player = _videoPlayerController;
+        if (player == null) return;
+        final buffering = isBuffering.value;
+        final position = player.state.position;
+        final buffer = player.state.buffer;
         if (!hasExhaustedPlaybackBuffer(
-          buffering: isBuffering.value,
-          position: _videoPlayerController!.state.position,
-          buffer: _videoPlayerController!.state.buffer,
+          buffering: buffering,
+          position: position,
+          buffer: buffer,
         )) {
+          // 网络恢复后可能没有新的错误事件。只要仍在消耗剩余缓冲，
+          // 就继续检查，直到缓冲真正耗尽或播放器恢复正常并停止缓冲。
+          if (shouldDeferPlaybackNetworkRecovery(
+            buffering: buffering,
+            position: position,
+            buffer: buffer,
+          )) {
+            _scheduleRefresh(requireEmptyBuffer: true);
+          }
           return;
         }
         SmartDialog.showToast(

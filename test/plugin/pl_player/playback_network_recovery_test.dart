@@ -36,11 +36,27 @@ void main() {
         ),
         isFalse,
       );
+      expect(
+        shouldDeferPlaybackNetworkRecovery(
+          buffering: true,
+          position: const Duration(seconds: 90),
+          buffer: const Duration(seconds: 94),
+        ),
+        isTrue,
+      );
     });
 
     test('healthy playback and codec failures do not reconnect', () {
       expect(
         hasExhaustedPlaybackBuffer(
+          buffering: false,
+          position: const Duration(seconds: 90),
+          buffer: Duration.zero,
+        ),
+        isFalse,
+      );
+      expect(
+        shouldDeferPlaybackNetworkRecovery(
           buffering: false,
           position: const Duration(seconds: 90),
           buffer: Duration.zero,
