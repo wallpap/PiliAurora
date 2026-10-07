@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:media_kit/media_kit.dart';
+import 'package:media_kit_video/media_kit_video.dart';
 import 'package:pili_aurora/plugin/pl_player/utils/android_video_output.dart';
 
 void main() {
@@ -41,7 +42,6 @@ void main() {
     });
     expect(player.options, [
       ('android-surface-size', '960x540'),
-      ('vo', 'gpu'),
     ]);
   });
 
@@ -120,6 +120,115 @@ void main() {
     expect(applied, isFalse);
     expect(player.options, isEmpty);
   });
+
+  test(
+    'source and viewport updates share a single native submission queue',
+    () async {
+      final gate = Completer<void>();
+      final entered = Completer<void>();
+      messenger.setMockMethodCallHandler(channel, (call) async {
+        calls.add(call);
+        if (calls.length == 1) {
+          entered.complete();
+          await gate.future;
+        }
+        return null;
+      });
+      final viewport = setAndroidVideoOutputSize(
+        player: player,
+        size: (width: 960, height: 540),
+      );
+      await entered.future;
+      final source = setAndroidSurfaceSize(
+        player: player,
+        width: 1920,
+        height: 1080,
+        wid: 123,
+      );
+      await Future<void>.delayed(Duration.zero);
+      expect(calls, hasLength(1));
+      expect(player.options, isEmpty);
+      gate.complete();
+      await Future.wait([viewport, source]);
+      expect(calls, hasLength(2));
+      expect(player.options, [
+        ('android-surface-size', '960x540'),
+        ('android-surface-size', '1920x1080'),
+        ('wid', '123'),
+        ('vo', 'gpu'),
+      ]);
+    },
+  );
+
+  test(
+    'a source rebuild restores the buffer after an invalidated viewport',
+    () async {
+      final gate = Completer<void>();
+      final entered = Completer<void>();
+      var current = true;
+      messenger.setMockMethodCallHandler(channel, (call) async {
+        calls.add(call);
+        if (calls.length == 1) {
+          entered.complete();
+          await gate.future;
+        }
+        return null;
+      });
+      final viewport = setAndroidVideoOutputSize(
+        player: player,
+        size: (width: 960, height: 540),
+        isCurrent: () => current,
+      );
+      await entered.future;
+      current = false;
+      final source = setAndroidSurfaceSize(
+        player: player,
+        width: 1920,
+        height: 1080,
+        wid: 123,
+      );
+      gate.complete();
+      expect(await viewport, isFalse);
+      expect(await source, isTrue);
+      expect(player.options, [
+        ('android-surface-size', '1920x1080'),
+        ('wid', '123'),
+        ('vo', 'gpu'),
+      ]);
+      expect((calls.last.arguments as Map)['width'], '1920');
+    },
+  );
+
+  test(
+    'a queued source update cannot bind stale dimensions to new media',
+    () async {
+      final gate = Completer<void>();
+      final entered = Completer<void>();
+      messenger.setMockMethodCallHandler(channel, (call) async {
+        calls.add(call);
+        entered.complete();
+        await gate.future;
+        return null;
+      });
+      final viewport = setAndroidVideoOutputSize(
+        player: player,
+        size: (width: 960, height: 540),
+      );
+      await entered.future;
+      final source = setAndroidSurfaceSize(
+        player: player,
+        width: 1920,
+        height: 1080,
+        wid: 123,
+      );
+      player.current[0] = const Media('file:///new-source.mp4');
+      gate.complete();
+      expect(await viewport, isFalse);
+      expect(await source, isFalse);
+      expect(calls, hasLength(1));
+      expect(player.options, isEmpty);
+    },
+  );
 
   test('a failed channel does not reconfigure mpv', () async {
     messenger.setMockMethodCallHandler(channel, (call) {

@@ -9,6 +9,7 @@ import 'dart:collection';
 import 'package:flutter/services.dart';
 import 'package:flutter/foundation.dart';
 import 'package:synchronized/synchronized.dart';
+import 'package:media_kit_video/src/video_controller/android_video_controller/surface_size.dart';
 
 import 'package:media_kit/media_kit.dart';
 
@@ -158,17 +159,14 @@ class AndroidVideoController extends PlatformVideoController {
             // NOTE: Only required for --vo=gpu
             // With --vo=gpu, we need to update the android.graphics.SurfaceTexture size & notify libmpv to re-create vo.
             // In native Android, this kind of rendering is done with android.view.SurfaceView + android.view.SurfaceHolder, which offers onSurfaceChanged to handle this.
-            await _channel
-                .invokeMethod('VideoOutputManager.SetSurfaceTextureSize', {
-                  'handle': player.handle.toString(),
-                  'width': width.toString(),
-                  'height': height.toString(),
-                });
-
-            // ----------------------------------------------
-            player.setOption('android-surface-size', '${width}x$height');
-            player.setOption('wid', _wid.toString());
-            player.setOption('vo', 'gpu');
+            // 源参数重建和应用自适应共用队列，避免 buffer 与 mpv 两端交叉提交。
+            final accepted = await setAndroidSurfaceSize(
+              player: player,
+              width: width,
+              height: height,
+              wid: _wid,
+            );
+            if (!accepted) return;
           }
           // ----------------------------------------------
         } catch (exception, stacktrace) {

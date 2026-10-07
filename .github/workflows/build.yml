@@ -81,6 +81,10 @@ jobs:
                 test/services/diagnostics/app_logger_test.dart
                 test/services/diagnostics/catcher_logging_test.dart
                 test/services/settings/webdav_client_test.dart
+                test/services/diagnostics_test.dart
+                test/plugin/pl_player/video_output_resizer_test.dart
+                test/plugin/pl_player/android_video_output_test.dart
+                test/plugin/pl_player/video_output_size_test.dart
 
             - name: Write signing key
               if: github.event_name == 'workflow_dispatch'

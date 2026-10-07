@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:ffi';
+import 'dart:io';
 
 import 'package:ffi/ffi.dart';
 import 'package:media_kit/media_kit.dart';
@@ -33,6 +34,14 @@ class PlayerDiagnostics {
           'frame-drop-count',
         ])
           property: _property(property),
+        if (Platform.isAndroid)
+          // 源分辨率不能代表 GPU 视口；暂停旋转也需要记录实际输出几何。
+          for (final property in [
+            'android-surface-size',
+            'osd-dimensions/w',
+            'osd-dimensions/h',
+          ])
+            property: _property(property),
         ...?extra?.call(),
       },
     );
