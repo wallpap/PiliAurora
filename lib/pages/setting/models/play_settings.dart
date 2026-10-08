@@ -185,6 +185,14 @@ List<SettingsModel> get playSettings => [
     setKey: SettingBoxKey.enableVerticalExpand,
     defaultVal: false,
   ),
+  if (Platform.isAndroid)
+    const SwitchModel(
+      title: '自适应纹理输出',
+      subtitle: '根据播放器状态调整纹理输出尺寸（竖屏视频不调整）',
+      leading: Icon(Icons.aspect_ratio_outlined),
+      setKey: SettingBoxKey.enableAndroidVideoOutputSize,
+      defaultVal: true,
+    ),
   const SwitchModel(
     title: '自动全屏',
     subtitle: '视频开始播放时进入全屏',

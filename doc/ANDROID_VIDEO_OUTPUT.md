@@ -9,9 +9,10 @@
 旧实现使用请求尺寸作为成功缓存，并在 SurfaceTexture 通道调用返回后再次判断 `size == 最新请求尺寸`。如果等待期间旋转产生了新请求，buffer 已经改变，但 mpv 的尺寸同步被跳过。使用实际 Android helper 和延迟的 MethodChannel 重放该时序：旧判断断言失败，新判断通过。这项对照验证的是尺寸同步；真实 GPU 的画面仍需实机检查。
 
 - `VideoOutputResizer` 统一去抖、目标合并、串行执行、Surface 代次和关闭；分别保存目标尺寸与成功提交尺寸。
-- Android 现在把 SurfaceTexture buffer 尺寸视为媒体源状态，而不是视口状态：一个媒体源完成源参数配置后，旋转、全屏和普通布局变化不再触发原生 buffer 重配置，画面只由 Flutter 的 Texture/FittedBox 变换完成。
+- Android 现在把 SurfaceTexture buffer 尺寸交给有限状态机管理：非竖屏视频只在设备竖屏、全屏和小窗（PiP）之间切换时提交对应状态的输出尺寸，不再按每次布局帧间歇性检测；竖屏视频跳过自适应纹理输出调整。
 - 切源、视频参数重建或 Surface 重建会重新开启一次尺寸配置；提交仍与原生队列串行，旧 Surface、旧媒体和销毁状态不能污染新提交。
 - Android 暂停期间不提交新的源输出尺寸，保留现有纹理并由 Flutter 缩放；恢复播放后只完成尚未提交的源配置，不会因为旋转补发一次 native resize。
+- Android 设置页提供“自适应纹理输出”开关，默认开启；关闭后保留播放器原生输出策略。
 - 原生 buffer 修改和 mpv 更新移到本地 `media_kit_video` 的 `setAndroidSurfaceSize`，插件源参数重建与应用视口适配共用每播放器队列；排队前绑定媒体，防止旧源请求进入新媒体。
 - 失败、拒绝或部分提交不成为成功缓存。失败后恢复旧目标也必须重新同步，避免以过期成功缓存去重。
 
@@ -19,7 +20,7 @@
 
 旋转期间不再依赖 100ms/250ms 去抖来猜测系统动画何时结束。原因是即使只提交最终尺寸，`SurfaceTexture.setDefaultBufferSize` 与 mpv 的 `VOCTRL_EXTERNAL_RESIZE` 仍可能和 Flutter 的布局帧交错，产生黑帧或旧帧闪现。
 
-当前 Android 策略是“源稳定、视口变换”：源参数确定后只配置一次 SurfaceTexture buffer；旋转、全屏、画面比例和普通布局变化由 Flutter 的 Texture/FittedBox 完成。250ms 仍可用于源参数刚建立时合并原生提交，但不再承担旋转防闪屏职责。只有插件源 Surface 挂载/重建才设置 `wid` 和 `vo`。
+当前 Android 策略是“有限状态、状态内稳定”：设备竖屏、全屏和小窗（PiP）各自只在状态进入时提交一次 SurfaceTexture buffer；同一状态内的普通布局帧由 Flutter 的 Texture/FittedBox 变换完成。250ms 仍用于合并原生提交，但不承担逐帧轮询职责。插件源 Surface 挂载/重建仍会使状态机重新配置输出。
 
 ### 解码耦合与诊断
 
