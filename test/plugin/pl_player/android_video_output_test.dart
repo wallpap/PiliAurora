@@ -24,42 +24,6 @@ void main() {
   });
   tearDown(() => messenger.setMockMethodCallHandler(channel, null));
 
-  test('uses finite player states instead of viewport polling', () {
-    final machine = AndroidVideoOutputStateMachine();
-
-    expect(
-      machine.transition(isFullScreen: false, isPipMode: false),
-      AndroidVideoOutputState.devicePortrait,
-    );
-    expect(
-      machine.transition(isFullScreen: true, isPipMode: false),
-      AndroidVideoOutputState.fullscreen,
-    );
-    expect(
-      machine.transition(isFullScreen: true, isPipMode: true),
-      AndroidVideoOutputState.smallWindow,
-    );
-    // PiP 优先于可能残留的全屏标记。
-    expect(
-      machine.transition(isFullScreen: true, isPipMode: true),
-      isNull,
-    );
-    expect(
-      machine.transition(isFullScreen: false, isPipMode: false),
-      AndroidVideoOutputState.devicePortrait,
-    );
-  });
-
-  test('tracks source output independently from player state', () {
-    final machine = AndroidVideoOutputStateMachine();
-
-    expect(machine.takeSourceResize(), isTrue);
-    expect(machine.takeSourceResize(), isFalse);
-    machine.sourceChanged();
-    expect(machine.takeSourceResize(), isTrue);
-    expect(machine.takeSourceResize(), isFalse);
-  });
-
   test('updates the buffer before notifying mpv', () async {
     messenger.setMockMethodCallHandler(channel, (call) async {
       expect(player.options, isEmpty);
