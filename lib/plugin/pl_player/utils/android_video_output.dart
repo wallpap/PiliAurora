@@ -3,15 +3,38 @@ import 'package:media_kit_video/media_kit_video.dart';
 
 import 'package:pili_aurora/plugin/pl_player/utils/video_output_size.dart';
 
-/// 控制 Android 原生输出尺寸的生命周期。
+/// Android 播放器的有限输出状态。
 ///
-/// SurfaceTexture 的 buffer 尺寸属于媒体输出状态，不属于 Flutter 视口状态。
-/// 一个媒体源建立输出后，旋转、全屏和布局变化只应由 Flutter 变换处理；
-/// 只有源参数重建时才重新选择一次 buffer 尺寸。
-class AndroidVideoOutputResizePolicy {
+/// 不把每一帧布局变化当成新的原生输出请求：非竖屏视频只在这几个
+/// 播放器状态之间切换时重新选择一次 SurfaceTexture buffer 尺寸。
+enum AndroidVideoOutputState {
+  devicePortrait,
+  fullscreen,
+  smallWindow,
+}
+
+/// 管理 Android 原生输出的状态转换和媒体源生命周期。
+class AndroidVideoOutputStateMachine {
+  AndroidVideoOutputState? _state;
   bool _sourceResizePending = true;
 
+  AndroidVideoOutputState? get state => _state;
   bool get sourceResizePending => _sourceResizePending;
+
+  /// 根据优先级计算状态：PiP 可能伴随全屏标记，必须优先视为小窗。
+  AndroidVideoOutputState? transition({
+    required bool isFullScreen,
+    required bool isPipMode,
+  }) {
+    final nextState = isPipMode
+        ? AndroidVideoOutputState.smallWindow
+        : isFullScreen
+        ? AndroidVideoOutputState.fullscreen
+        : AndroidVideoOutputState.devicePortrait;
+    if (_state == nextState) return null;
+    _state = nextState;
+    return nextState;
+  }
 
   /// 标记新的媒体源或新的原生 Surface，需要重新配置一次输出 buffer。
   void sourceChanged() => _sourceResizePending = true;

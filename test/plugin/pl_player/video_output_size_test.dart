@@ -2,6 +2,12 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:pili_aurora/plugin/pl_player/utils/video_output_size.dart';
 
 void main() {
+  test('identifies portrait videos for Android output opt-out', () {
+    expect(isPortraitVideo((width: 1080, height: 1920)), isTrue);
+    expect(isPortraitVideo((width: 1920, height: 1080)), isFalse);
+    expect(isPortraitVideo(null), isFalse);
+  });
+
   test('converts the logical viewport to physical pixels', () {
     expect(
       calculateVideoOutputSize(

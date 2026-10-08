@@ -68,6 +68,7 @@ import 'package:pili_aurora/utils/mobile_observer.dart';
 import 'package:pili_aurora/utils/path_utils.dart';
 import 'package:pili_aurora/utils/platform_utils.dart';
 import 'package:pili_aurora/utils/storage.dart';
+import 'package:pili_aurora/utils/storage_pref.dart';
 import 'package:pili_aurora/utils/storage_key.dart';
 import 'package:pili_aurora/utils/utils.dart';
 import 'package:pili_aurora/utils/rate_limiter.dart';
@@ -145,7 +146,7 @@ class _PLVideoPlayerState extends State<PLVideoPlayer>
   );
 
   bool get _fitVideoOutputToViewport => Platform.isAndroid
-      ? _fitAndroidVideoOutputToViewport
+      ? _fitAndroidVideoOutputToViewport && Pref.enableAndroidVideoOutputSize
       : _fitWindowsVideoOutputToViewport;
 
   late AnimationController _animationController;
@@ -173,8 +174,9 @@ class _PLVideoPlayerState extends State<PLVideoPlayer>
   StreamSubscription? _brightnessListener;
   StreamSubscription<(int, int)>? _videoSizeListener;
   late final VideoOutputResizer _videoOutputResizer;
-  late final AndroidVideoOutputResizePolicy _androidVideoOutputResizePolicy;
+  late final AndroidVideoOutputStateMachine _androidVideoOutputStateMachine;
   StreamSubscription<bool>? _videoOutputPlayingListener;
+  StreamSubscription<bool>? _videoOutputFullscreenListener;
   double _devicePixelRatio = 1.0;
   void Function()? _unregisterVideoDiagnostics;
   void _onBrightnessChanged(double value) {
@@ -277,9 +279,11 @@ class _PLVideoPlayerState extends State<PLVideoPlayer>
       duration: const Duration(milliseconds: 100),
     );
     videoController = plPlayerController.videoController!;
-    _androidVideoOutputResizePolicy = AndroidVideoOutputResizePolicy();
+    _androidVideoOutputStateMachine = AndroidVideoOutputStateMachine();
     _videoOutputResizer = VideoOutputResizer(
-      enabled: !Platform.isAndroid || videoController.player.state.playing,
+      enabled:
+          !Platform.isAndroid ||
+          (_fitVideoOutputToViewport && videoController.player.state.playing),
       settleDelay: Duration(milliseconds: Platform.isAndroid ? 250 : 100),
       apply: _applyVideoOutputSize,
       onError: (size, error, _) {
@@ -304,23 +308,31 @@ class _PLVideoPlayerState extends State<PLVideoPlayer>
         _captureVideoOutputDiagnostics,
       );
     }
-    if (_fitVideoOutputToViewport) {
-      if (Platform.isWindows) {
-        _videoSizeListener = videoController.player.stream.size.listen((_) {
-          _updateVideoOutputSize();
-        });
-      } else if (Platform.isAndroid) {
-        // 插件先按源尺寸配置 Surface，再发布非空 Rect；此时才能覆盖输出尺寸。
-        videoController.rect.addListener(_onAndroidVideoOutputChanged);
-        _videoOutputPlayingListener = videoController.player.stream.playing
-            .listen(
-              (playing) {
-                // 暂停帧复用现有纹理，只让 Flutter 布局缩放；恢复播放后再适配。
-                _videoOutputResizer.setEnabled(playing);
-                if (playing) _updateVideoOutputSize();
-              },
-            );
-      }
+    if (Platform.isWindows && _fitWindowsVideoOutputToViewport) {
+      _videoSizeListener = videoController.player.stream.size.listen((_) {
+        _updateVideoOutputSize();
+      });
+    } else if (Platform.isAndroid && _fitAndroidVideoOutputToViewport) {
+      // 插件先按源尺寸配置 Surface，再发布非空 Rect；此时才能覆盖输出尺寸。
+      videoController.rect.addListener(_onAndroidVideoOutputChanged);
+      _videoOutputPlayingListener = videoController.player.stream.playing
+          .listen(
+            (playing) {
+              // 暂停帧复用现有纹理；恢复播放后补交当前状态尚未提交的尺寸。
+              _videoOutputResizer.setEnabled(
+                _fitVideoOutputToViewport && playing,
+              );
+              if (playing) _syncAndroidVideoOutputState(force: true);
+            },
+          );
+      _videoOutputFullscreenListener = plPlayerController.isFullScreen.listen(
+        (_) {
+          // 全屏切换先改变控制器状态，再等待布局提交新的视口尺寸。
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted) _syncAndroidVideoOutputState();
+          });
+        },
+      );
     }
 
     if (PlatformUtils.isMobile) {
@@ -441,6 +453,7 @@ class _PLVideoPlayerState extends State<PLVideoPlayer>
     _videoSizeListener?.cancel();
     videoController.rect.removeListener(_onAndroidVideoOutputChanged);
     _videoOutputPlayingListener?.cancel();
+    _videoOutputFullscreenListener?.cancel();
     _videoOutputResizer.dispose();
     _controlsListener?.cancel();
     _animationController.dispose();
@@ -1002,10 +1015,12 @@ class _PLVideoPlayerState extends State<PLVideoPlayer>
     return {
       'player': 'player.${videoController.player.hashCode}',
       'adaptiveOutput': _fitVideoOutputToViewport,
-      'resizePolicy': Platform.isAndroid ? 'source-stable' : 'viewport',
-      if (Platform.isAndroid)
+      'resizePolicy': Platform.isAndroid ? 'state-machine' : 'viewport',
+      if (Platform.isAndroid) ...{
+        'state': _androidVideoOutputStateMachine.state?.name,
         'sourceResizePending':
-            _androidVideoOutputResizePolicy.sourceResizePending,
+            _androidVideoOutputStateMachine.sourceResizePending,
+      },
       'fullScreen': isFullScreen,
       'playing': videoController.player.state.playing,
       'positionMs': videoController.player.state.position.inMilliseconds,
@@ -1058,56 +1073,89 @@ class _PLVideoPlayerState extends State<PLVideoPlayer>
   }
 
   void _onAndroidVideoOutputChanged() {
-    // 原生 rect 变化表示媒体输出或 Surface 重建；这是唯一允许重新
-    // 配置 SurfaceTexture buffer 的时机。普通旋转不会触发这里。
-    _androidVideoOutputResizePolicy.sourceChanged();
+    // 原生 rect 变化表示媒体输出或 Surface 重建；重新进入当前状态，
+    // 但普通布局变化不会触发这里。
+    _androidVideoOutputStateMachine.sourceChanged();
     _videoOutputResizer.invalidate();
-    _updateVideoOutputSize();
+    _syncAndroidVideoOutputState(force: true);
   }
 
-  void _updateVideoOutputSize() {
-    if ((!Platform.isWindows && !Platform.isAndroid) ||
-        !_fitVideoOutputToViewport ||
+  void _syncAndroidVideoOutputState({bool force = false}) {
+    if (!Platform.isAndroid) return;
+    final stateChanged = _androidVideoOutputStateMachine.transition(
+      isFullScreen: isFullScreen,
+      isPipMode: plPlayerController.isPipMode,
+    );
+    if (stateChanged != null ||
+        force ||
+        _androidVideoOutputStateMachine.sourceResizePending) {
+      _requestAndroidVideoOutputSize();
+    }
+  }
+
+  VideoOutputSize? get _androidSourceVideoSize {
+    if (videoController.player.current.isEmpty) return null;
+    final rect = videoController.rect.value;
+    if (rect != null && !rect.isEmpty) {
+      return (width: rect.width.round(), height: rect.height.round());
+    }
+    final playerState = videoController.player.state;
+    if (playerState.width > 0 && playerState.height > 0) {
+      return (width: playerState.width, height: playerState.height);
+    }
+    return null;
+  }
+
+  void _requestAndroidVideoOutputSize() {
+    if (!_fitVideoOutputToViewport ||
         maxWidth <= 0 ||
         maxHeight <= 0 ||
         !mounted) {
       return;
     }
 
-    if (Platform.isAndroid &&
-        !_androidVideoOutputResizePolicy.sourceResizePending) {
-      // 旋转、全屏和普通布局变化只调整 Flutter 层的 Texture 变换，
-      // 不重新设置 SurfaceTexture 的生产 buffer，避免 native external
-      // resize 与 Flutter 同帧布局交错造成闪屏。
-      return;
-    }
-
-    final playerState = videoController.player.state;
-    if (Platform.isAndroid &&
-        (playerState.width <= 0 ||
-            playerState.height <= 0 ||
-            videoController.player.current.isEmpty ||
-            videoController.rect.value == null ||
-            videoController.rect.value!.isEmpty)) {
+    final sourceSize = _androidSourceVideoSize;
+    if (sourceSize == null || isPortraitVideo(sourceSize)) {
+      // 竖屏视频的输出区域会随内容布局变化，保留插件的源尺寸，
+      // 不再为它改写自适应纹理 buffer。
       return;
     }
     final size = calculateVideoOutputSize(
       logicalWidth: maxWidth,
       logicalHeight: maxHeight,
       devicePixelRatio: _devicePixelRatio,
-      sourceWidth: Platform.isAndroid
-          ? videoController.rect.value?.width.round()
-          : playerState.width,
-      sourceHeight: Platform.isAndroid
-          ? videoController.rect.value?.height.round()
-          : playerState.height,
-      preserveSourceAspectRatio: Platform.isAndroid,
+      sourceWidth: sourceSize.width,
+      sourceHeight: sourceSize.height,
+      preserveSourceAspectRatio: true,
     );
     if (size == null) return;
+    _videoOutputResizer.setEnabled(
+      _fitVideoOutputToViewport && videoController.player.state.playing,
+    );
     _videoOutputResizer.request(size);
+    _androidVideoOutputStateMachine.takeSourceResize();
+  }
+
+  void _updateVideoOutputSize() {
     if (Platform.isAndroid) {
-      _androidVideoOutputResizePolicy.takeSourceResize();
+      _syncAndroidVideoOutputState();
+      return;
     }
+    if (!_fitVideoOutputToViewport ||
+        maxWidth <= 0 ||
+        maxHeight <= 0 ||
+        !mounted) {
+      return;
+    }
+    final playerState = videoController.player.state;
+    final size = calculateVideoOutputSize(
+      logicalWidth: maxWidth,
+      logicalHeight: maxHeight,
+      devicePixelRatio: _devicePixelRatio,
+      sourceWidth: playerState.width,
+      sourceHeight: playerState.height,
+    );
+    if (size != null) _videoOutputResizer.request(size);
   }
 
   Future<bool> _applyVideoOutputSize(
@@ -1142,6 +1190,11 @@ class _PLVideoPlayerState extends State<PLVideoPlayer>
     super.didUpdateWidget(oldWidget);
     if (Platform.isAndroid && AndroidHelper.isPipMode) {
       plPlayerController.controls = false;
+    }
+    if (Platform.isAndroid &&
+        (oldWidget.maxWidth != widget.maxWidth ||
+            oldWidget.maxHeight != widget.maxHeight)) {
+      _syncAndroidVideoOutputState();
     }
   }
 
@@ -1551,9 +1604,11 @@ class _PLVideoPlayerState extends State<PLVideoPlayer>
 
   @override
   Widget build(BuildContext context) {
+    final viewportChanged =
+        maxWidth != widget.maxWidth || maxHeight != widget.maxHeight;
     maxWidth = widget.maxWidth;
     maxHeight = widget.maxHeight;
-    _updateVideoOutputSize();
+    if (viewportChanged) _updateVideoOutputSize();
     final isFullScreen = this.isFullScreen;
     final primary = isFullScreen && colorScheme.isLight
         ? colorScheme.inversePrimary

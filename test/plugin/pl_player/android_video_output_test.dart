@@ -24,18 +24,40 @@ void main() {
   });
   tearDown(() => messenger.setMockMethodCallHandler(channel, null));
 
-  test('keeps a source buffer stable across viewport changes', () {
-    final policy = AndroidVideoOutputResizePolicy();
+  test('uses finite player states instead of viewport polling', () {
+    final machine = AndroidVideoOutputStateMachine();
 
-    expect(policy.takeSourceResize(), isTrue);
-    expect(policy.takeSourceResize(), isFalse);
+    expect(
+      machine.transition(isFullScreen: false, isPipMode: false),
+      AndroidVideoOutputState.devicePortrait,
+    );
+    expect(
+      machine.transition(isFullScreen: true, isPipMode: false),
+      AndroidVideoOutputState.fullscreen,
+    );
+    expect(
+      machine.transition(isFullScreen: true, isPipMode: true),
+      AndroidVideoOutputState.smallWindow,
+    );
+    // PiP 优先于可能残留的全屏标记。
+    expect(
+      machine.transition(isFullScreen: true, isPipMode: true),
+      isNull,
+    );
+    expect(
+      machine.transition(isFullScreen: false, isPipMode: false),
+      AndroidVideoOutputState.devicePortrait,
+    );
+  });
 
-    // 旋转/全屏只改变 Flutter 视口，不应重新配置 SurfaceTexture。
-    expect(policy.takeSourceResize(), isFalse);
+  test('tracks source output independently from player state', () {
+    final machine = AndroidVideoOutputStateMachine();
 
-    policy.sourceChanged();
-    expect(policy.takeSourceResize(), isTrue);
-    expect(policy.takeSourceResize(), isFalse);
+    expect(machine.takeSourceResize(), isTrue);
+    expect(machine.takeSourceResize(), isFalse);
+    machine.sourceChanged();
+    expect(machine.takeSourceResize(), isTrue);
+    expect(machine.takeSourceResize(), isFalse);
   });
 
   test('updates the buffer before notifying mpv', () async {

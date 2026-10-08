@@ -546,6 +546,11 @@ abstract final class Pref {
   static bool get enableShrinkVideoSize =>
       _setting.get(SettingBoxKey.enableShrinkVideoSize, defaultValue: true);
 
+  static bool get enableAndroidVideoOutputSize => _setting.get(
+    SettingBoxKey.enableAndroidVideoOutputSize,
+    defaultValue: true,
+  );
+
   static bool get showDynActionBar =>
       _setting.get(SettingBoxKey.showDynActionBar, defaultValue: true);
 

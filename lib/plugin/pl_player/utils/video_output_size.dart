@@ -2,6 +2,9 @@ import 'dart:math' as math;
 
 typedef VideoOutputSize = ({int width, int height});
 
+bool isPortraitVideo(VideoOutputSize? source) =>
+    source != null && source.width > 0 && source.height > source.width;
+
 VideoOutputSize? calculateVideoOutputSize({
   required double logicalWidth,
   required double logicalHeight,
