@@ -126,18 +126,46 @@ class NativeVideoController extends PlatformVideoController {
   /// * “With great power comes great responsibility”
   @override
   Future<void>? setSize({int? width, int? height}) {
-    if (this.width == width && this.height == height) {
-      // No need to resize if the requested size is same as the current size.
-      return null;
+    if (this.width == width &&
+        this.height == height &&
+        (_sizeReady || _pendingSize != null)) {
+      // A pending resize is not yet a first-frame acknowledgement.
+      return _pendingSize;
     }
+    final revision = ++_sizeRevision;
+    final previousWidth = this.width;
+    final previousHeight = this.height;
     this.width = width;
     this.height = height;
-    return _channel.invokeMethod('VideoOutputManager.SetSize', {
-      'handle': player.handle.toString(),
-      'width': width.toString(),
-      'height': height.toString(),
-    });
+    _sizeReady = false;
+    Future<void> submit() async {
+      try {
+        await _channel.invokeMethod<void>('VideoOutputManager.SetSize', {
+          'handle': player.handle.toString(),
+          'width': width.toString(),
+          'height': height.toString(),
+        });
+        if (revision == _sizeRevision) _sizeReady = true;
+      } catch (error, stack) {
+        if (revision == _sizeRevision) {
+          this.width = previousWidth;
+          this.height = previousHeight;
+          // Native geometry may already have changed. The restored values are
+          // unknown, not applied: an old-size recovery must still be submitted.
+          _sizeReady = false;
+        }
+        Error.throwWithStackTrace(error, stack);
+      } finally {
+        if (revision == _sizeRevision) _pendingSize = null;
+      }
+    }
+
+    return _pendingSize = submit();
   }
+
+  bool _sizeReady = true;
+  int _sizeRevision = 0;
+  Future<void>? _pendingSize;
 
   /// Disposes the instance. Releases allocated resources back to the system.
   Future<void> _dispose() {

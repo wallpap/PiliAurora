@@ -12,6 +12,7 @@
 #include <flutter/plugin_registrar_windows.h>
 
 #include "video_output_manager.h"
+#include "platform_thread_dispatcher.h"
 
 namespace media_kit_video {
 
@@ -32,8 +33,9 @@ class MediaKitVideoPlugin : public flutter::Plugin {
       std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>> result);
 
   flutter::PluginRegistrarWindows* registrar_ = nullptr;
-  std::unique_ptr<flutter::MethodChannel<flutter::EncodableValue>> channel_ =
+  std::shared_ptr<flutter::MethodChannel<flutter::EncodableValue>> channel_ =
       nullptr;
+  std::unique_ptr<PlatformThreadDispatcher> platform_dispatcher_;
   std::unique_ptr<VideoOutputManager> video_output_manager_ = nullptr;
 };
 

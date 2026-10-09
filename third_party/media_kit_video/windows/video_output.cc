@@ -155,8 +155,9 @@ void VideoOutput::NotifyRender() {
   thread_pool_ref_->Post(std::bind(&VideoOutput::Render, this));
 }
 
-void VideoOutput::Render() {
+bool VideoOutput::Render() {
   if (texture_id_) {
+    int render_status = -1;
     // H/W
     if (surface_manager_ != nullptr) {
       surface_manager_->Draw([&]() {
@@ -170,7 +171,7 @@ void VideoOutput::Render() {
             {MPV_RENDER_PARAM_OPENGL_FBO, &fbo},
             {MPV_RENDER_PARAM_INVALID, nullptr},
         };
-        mpv_render_context_render(render_context_, params);
+        render_status = mpv_render_context_render(render_context_, params);
       });
     }
     // S/W
@@ -187,54 +188,89 @@ void VideoOutput::Render() {
           {MPV_RENDER_PARAM_SW_POINTER, pixel_buffer_.get()},
           {MPV_RENDER_PARAM_INVALID, nullptr},
       };
-      mpv_render_context_render(render_context_, params);
+      render_status = mpv_render_context_render(render_context_, params);
     }
+    if (render_status < 0) return false;
     try {
       // Notify Flutter that a new frame is available.
-      registrar_->texture_registrar()->MarkTextureFrameAvailable(texture_id_);
+      if (!registrar_->texture_registrar()->MarkTextureFrameAvailable(texture_id_)) {
+        return false;
+      }
     } catch (...) {
-      // Prevent any redundant exceptions if the texture is unregistered etc.
+      // Keep the protective frame if rendering/registration failed.
+      return false;
     }
+    if (texture_update_pending_) {
+      texture_update_pending_ = false;
+      NotifyTextureUpdate(texture_id_, width(), height());
+    }
+    return true;
   }
+  return false;
 }
 
 void VideoOutput::SetTextureUpdateCallback(
     std::function<void(int64_t, int64_t, int64_t)> callback) {
-  texture_update_callback_ = callback;
-  texture_update_callback_(texture_id_, GetVideoWidth(), GetVideoHeight());
+  {
+    std::lock_guard<std::mutex> lock(callback_mutex_);
+    texture_update_callback_ = callback;
+  }
+  // Do not queue this behind a render: rendering may wait for playback while
+  // playback itself waits for this initial texture to create its controller.
+  NotifyTextureUpdate(texture_id_, GetVideoWidth(), GetVideoHeight());
+}
+
+void VideoOutput::NotifyTextureUpdate(int64_t id, int64_t width, int64_t height) {
+  std::function<void(int64_t, int64_t, int64_t)> callback;
+  {
+    std::lock_guard<std::mutex> lock(callback_mutex_);
+    callback = texture_update_callback_;
+  }
+  callback(id, width, height);
 }
 
 void VideoOutput::SetSize(std::optional<int64_t> width,
-                          std::optional<int64_t> height) {
-  thread_pool_ref_->Post([&, width, height]() {
-    if (width.has_value()) {
-      // H/W
-      if (surface_manager_ != nullptr) {
-        width_ = width.value();
+                          std::optional<int64_t> height,
+                          std::function<void(bool)> on_frame_ready) {
+  thread_pool_ref_->Post([&, width, height, on_frame_ready]() {
+    bool frame_ready = false;
+    try {
+      if (width.has_value()) {
+        // H/W
+        if (surface_manager_ != nullptr) {
+          width_ = width.value();
+        }
+        // S/W
+        if (pixel_buffer_ != nullptr) {
+          // Limit width if software rendering is being used.
+          width_ = std::clamp(width.value(), static_cast<int64_t>(0),
+                              static_cast<int64_t>(SW_RENDERING_MAX_WIDTH));
+        }
+      } else {
+        width_ = std::nullopt;
       }
-      // S/W
-      if (pixel_buffer_ != nullptr) {
-        // Limit width if software rendering is being used.
-        width_ = std::clamp(width.value(), static_cast<int64_t>(0),
-                            static_cast<int64_t>(SW_RENDERING_MAX_WIDTH));
+      if (height.has_value()) {
+        // H/W
+        if (surface_manager_ != nullptr) {
+          height_ = height.value();
+        }
+        // S/W
+        if (pixel_buffer_ != nullptr) {
+          // Limit width if software rendering is being used.
+          height_ = std::clamp(height.value(), static_cast<int64_t>(0),
+                               static_cast<int64_t>(SW_RENDERING_MAX_HEIGHT));
+        }
+      } else {
+        height_ = std::nullopt;
       }
-    } else {
-      width_ = std::nullopt;
+      // A platform-channel acknowledgement alone is not a ready texture. Force
+      // rendering even while paused; complete only after the new frame is marked.
+      CheckAndResize();
+      frame_ready = Render();
+    } catch (...) {
+      // Signal failure so Dart retains its protective frame and can recover.
     }
-    if (height.has_value()) {
-      // H/W
-      if (surface_manager_ != nullptr) {
-        height_ = height.value();
-      }
-      // S/W
-      if (pixel_buffer_ != nullptr) {
-        // Limit width if software rendering is being used.
-        height_ = std::clamp(height.value(), static_cast<int64_t>(0),
-                             static_cast<int64_t>(SW_RENDERING_MAX_HEIGHT));
-      }
-    } else {
-      height_ = std::nullopt;
-    }
+    on_frame_ready(frame_ready);
   });
 }
 
@@ -328,8 +364,8 @@ void VideoOutput::Resize(int64_t required_width, int64_t required_height) {
     textures_.emplace(std::make_pair(texture_id_, std::move(texture)));
     texture_variants_.emplace(
         std::make_pair(texture_id_, std::move(texture_variant)));
-    // Notify public texture update callback.
-    texture_update_callback_(texture_id_, required_width, required_height);
+    // Publish only from Render after this replacement has a valid first frame.
+    texture_update_pending_ = true;
   }
   // S/W
   if (pixel_buffer_ != nullptr) {
@@ -358,8 +394,8 @@ void VideoOutput::Resize(int64_t required_width, int64_t required_height) {
         std::make_pair(texture_id_, std::move(pixel_buffer_texture)));
     texture_variants_.emplace(
         std::make_pair(texture_id_, std::move(texture_variant)));
-    // Notify public texture update callback.
-    texture_update_callback_(texture_id_, required_width, required_height);
+    // Publish only from Render after this replacement has a valid first frame.
+    texture_update_pending_ = true;
   }
 }
 

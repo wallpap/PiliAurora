@@ -20,7 +20,8 @@ import 'package:pili_aurora/common/widgets/sliver/video_header.dart';
 import 'package:pili_aurora/common/widgets/svg/play_icon.dart';
 import 'package:pili_aurora/models/common/episode_panel_type.dart';
 import 'package:pili_aurora/models/remote/pgc/pgc_info_model/result.dart';
-import 'package:pili_aurora/models/remote/video/video_detail/episode.dart' as ugc;
+import 'package:pili_aurora/models/remote/video/video_detail/episode.dart'
+    as ugc;
 import 'package:pili_aurora/models/remote/video/video_detail/page.dart';
 import 'package:pili_aurora/models/remote/video/video_detail/ugc_season.dart';
 import 'package:pili_aurora/models/remote/video/video_tag/data.dart';
@@ -45,6 +46,7 @@ import 'package:pili_aurora/pages/video/reply/controller.dart';
 import 'package:pili_aurora/pages/video/reply/view.dart';
 import 'package:pili_aurora/pages/video/view_point/view.dart';
 import 'package:pili_aurora/pages/video/widgets/header_control.dart';
+import 'package:pili_aurora/pages/video/widgets/detail_panels.dart';
 import 'package:pili_aurora/pages/video/widgets/intro_layout.dart';
 import 'package:pili_aurora/pages/video/widgets/player_focus.dart';
 import 'package:pili_aurora/plugin/pl_player/controller.dart';
@@ -1035,32 +1037,18 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
             height: bottomHeight,
             child: MiniScaffold(
               key: videoDetailController.childKey,
-              body: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  buildTabBar(needIndicator: false),
-                  Expanded(
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Expanded(
-                          child: videoIntro(
-                            width: () {
-                              double flex = 1;
-                              if (videoDetailController.showReply) flex++;
-                              if (shouldShowSeasonPanel) flex++;
-                              return maxWidth / flex;
-                            }(),
-                            height: bottomHeight,
-                          ),
-                        ),
-                        if (videoDetailController.showReply)
-                          Expanded(child: videoReplyPanel()),
-                        if (shouldShowSeasonPanel) Expanded(child: seasonPanel),
-                      ],
-                    ),
-                  ),
+              body: VideoDetailPanels(
+                headerBuilder: (sideBySide) =>
+                    buildTabBar(needIndicator: !sideBySide),
+                panelBuilders: [
+                  (width) => videoIntro(width: width, height: bottomHeight),
+                  if (videoDetailController.showReply) (_) => videoReplyPanel(),
+                  if (shouldShowSeasonPanel) (_) => seasonPanel,
                 ],
+                tabbedBuilder: (children) => tabBarView(
+                  controller: videoDetailController.tabCtr,
+                  children: children,
+                ),
               ),
             ),
           ),

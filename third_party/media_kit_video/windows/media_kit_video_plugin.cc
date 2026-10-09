@@ -22,15 +22,19 @@ MediaKitVideoPlugin::MediaKitVideoPlugin(
     flutter::PluginRegistrarWindows* registrar)
     : registrar_(registrar),
       video_output_manager_(std::make_unique<VideoOutputManager>(registrar)) {
-  channel_ = std::make_unique<flutter::MethodChannel<flutter::EncodableValue>>(
+  channel_ = std::make_shared<flutter::MethodChannel<flutter::EncodableValue>>(
       registrar->messenger(), "com.alexmercerind/media_kit_video",
       &flutter::StandardMethodCodec::GetInstance());
+  platform_dispatcher_ = std::make_unique<PlatformThreadDispatcher>(registrar);
   channel_->SetMethodCallHandler([&](const auto& call, auto result) {
     HandleMethodCall(call, std::move(result));
   });
 }
 
-MediaKitVideoPlugin::~MediaKitVideoPlugin() {}
+MediaKitVideoPlugin::~MediaKitVideoPlugin() {
+  // In-flight worker callbacks retain dispatcher state, not this plugin.
+  platform_dispatcher_.reset();
+}
 
 void MediaKitVideoPlugin::HandleMethodCall(
     const flutter::MethodCall<flutter::EncodableValue>& method_call,
@@ -64,42 +68,45 @@ void MediaKitVideoPlugin::HandleMethodCall(
 
     video_output_manager_->Create(
         handle_value, configuration_value,
-        [channel_ptr = channel_.get(), handle = handle_value](
+        [channel_ptr = channel_, post = platform_dispatcher_->post(),
+         handle = handle_value](
             auto id, auto width, auto height) {
-          channel_ptr->InvokeMethod(
-              "VideoOutput.Resize",
-              std::make_unique<flutter::EncodableValue>(flutter::EncodableMap{
-                  {
-                      flutter::EncodableValue("handle"),
-                      flutter::EncodableValue(handle),
-                  },
-                  {
-                      flutter::EncodableValue("id"),
-                      flutter::EncodableValue(id),
-                  },
-                  {
-                      flutter::EncodableValue("rect"),
-                      flutter::EncodableValue(flutter::EncodableMap{
-                          {
-                              flutter::EncodableValue("left"),
-                              flutter::EncodableValue(0),
-                          },
-                          {
-                              flutter::EncodableValue("top"),
-                              flutter::EncodableValue(0),
-                          },
-                          {
-                              flutter::EncodableValue("width"),
-                              flutter::EncodableValue(width),
-                          },
-                          {
-                              flutter::EncodableValue("height"),
-                              flutter::EncodableValue(height),
-                          },
-                      }),
-                  },
-              }),
-              nullptr);
+          post([channel_ptr, handle, id, width, height]() {
+            channel_ptr->InvokeMethod(
+                "VideoOutput.Resize",
+                std::make_unique<flutter::EncodableValue>(flutter::EncodableMap{
+                    {
+                        flutter::EncodableValue("handle"),
+                        flutter::EncodableValue(handle),
+                    },
+                    {
+                        flutter::EncodableValue("id"),
+                        flutter::EncodableValue(id),
+                    },
+                    {
+                        flutter::EncodableValue("rect"),
+                        flutter::EncodableValue(flutter::EncodableMap{
+                            {
+                                flutter::EncodableValue("left"),
+                                flutter::EncodableValue(0),
+                            },
+                            {
+                                flutter::EncodableValue("top"),
+                                flutter::EncodableValue(0),
+                            },
+                            {
+                                flutter::EncodableValue("width"),
+                                flutter::EncodableValue(width),
+                            },
+                            {
+                                flutter::EncodableValue("height"),
+                                flutter::EncodableValue(height),
+                            },
+                        }),
+                    },
+                }),
+                nullptr);
+          });
         });
     result->Success(flutter::EncodableValue(std::monostate{}));
   } else if (method_call.method_name().compare("VideoOutputManager.Dispose") ==
@@ -128,8 +135,19 @@ void MediaKitVideoPlugin::HandleMethodCall(
     if (height.compare("null") != 0) {
       height_value = static_cast<int64_t>(std::stoll(height.c_str()));
     }
-    video_output_manager_->SetSize(handle_value, width_value, height_value);
-    result->Success(flutter::EncodableValue(std::monostate{}));
+    auto completion = std::shared_ptr<flutter::MethodResult<flutter::EncodableValue>>(
+        std::move(result));
+    video_output_manager_->SetSize(
+        handle_value, width_value, height_value,
+        [completion, post = platform_dispatcher_->post()](bool frame_ready) {
+          post([completion, frame_ready]() {
+            if (frame_ready) {
+              completion->Success(flutter::EncodableValue(std::monostate{}));
+            } else {
+              completion->Error("video_output_frame", "No rendered resize frame");
+            }
+          });
+        });
   } else if (method_call.method_name().compare("Utils.EnterNativeFullscreen") ==
              0) {
     auto window =
