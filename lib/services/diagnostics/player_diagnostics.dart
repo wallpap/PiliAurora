@@ -10,10 +10,18 @@ import 'package:pili_aurora/services/diagnostics/diagnostics.dart';
 /// 分离 mpv 原始日志、播放器状态和解码上下文；低等级只记录边界，不逐帧刷屏。
 class PlayerDiagnostics {
   PlayerDiagnostics(this.player, {this.extra}) {
-    _versions = {
-      'mpv-version': _property('mpv-version'),
-      'ffmpeg-version': _property('ffmpeg-version'),
-    };
+    for (final name in _propertyNames) {
+      _subscriptions.add(
+        player
+            .observeProperty(name)
+            .listen(
+              (value) => _properties[name] = value,
+              onError: (Object error) {
+                _properties[name] = null;
+              },
+            ),
+      );
+    }
     _unregister = Diagnostics.instance.register(playerId, snapshot);
     player.onLoadHooks.add(_onLoad);
     player.onUnloadHooks.add(_onUnload);
@@ -59,7 +67,7 @@ class PlayerDiagnostics {
 
   final NativePlayer player;
   final Map<String, Object?> Function()? extra;
-  late final Map<String, Object?> _versions;
+  final _properties = <String, String?>{};
   late final void Function() _unregister;
   final _subscriptions = <StreamSubscription>[];
   final _context = Queue<Map<String, Object?>>();
@@ -72,11 +80,43 @@ class PlayerDiagnostics {
   final _lastErrorContext = <String, int>{};
 
   String get playerId => 'player.${player.hashCode}';
-  String? _property(String name) =>
-      _disposed ? null : readMpvProperty(player, name);
+  String? property(String name) => _disposed ? null : _properties[name];
+  String? _property(String name) => property(name);
+
+  static final _propertyNames = [
+    'mpv-version',
+    'ffmpeg-version',
+    'hwdec',
+    'hwdec-current',
+    'video-codec',
+    'video-format',
+    'video-dec-params',
+    'video-params',
+    'video-out-params',
+    'vo',
+    'current-vo',
+    'gpu-api',
+    'gpu-context',
+    'estimated-vf-fps',
+    'decoder-frame-drop-count',
+    'frame-drop-count',
+    'mistimed-frame-count',
+    'vo-delayed-frame-count',
+    'avsync',
+    'demuxer-cache-state',
+    'paused-for-cache',
+    'eof-reached',
+    'seeking',
+    'video-pts',
+    if (Platform.isAndroid) ...[
+      'android-surface-size',
+      'osd-dimensions',
+      'wid',
+    ],
+  ];
 
   Map<String, Object?> snapshot() => {
-    ..._versions,
+    ..._properties,
     'playerId': playerId,
     'handle': player.disposed ? null : player.handle,
     'mediaGeneration': _mediaGeneration,
@@ -88,36 +128,6 @@ class PlayerDiagnostics {
     'width': player.state.width,
     'height': player.state.height,
     'speed': player.state.rate,
-    for (final name in [
-      'hwdec',
-      'hwdec-current',
-      'video-codec',
-      'video-format',
-      'video-dec-params',
-      'video-params',
-      'video-out-params',
-      'vo',
-      'current-vo',
-      'gpu-api',
-      'gpu-context',
-      'estimated-vf-fps',
-      'decoder-frame-drop-count',
-      'frame-drop-count',
-      'mistimed-frame-count',
-      'vo-delayed-frame-count',
-      'avsync',
-      'demuxer-cache-state',
-      'paused-for-cache',
-      'eof-reached',
-      'seeking',
-      'video-pts',
-      if (Platform.isAndroid) ...[
-        'android-surface-size',
-        'osd-dimensions',
-        'wid',
-      ],
-    ])
-      name: _property(name),
     'viewports': Diagnostics.instance.readSources(
       prefix: 'videoViewport.${player.hashCode}.',
     ),
@@ -144,6 +154,14 @@ class PlayerDiagnostics {
 
   Future<void> _onLoad() async {
     _mediaGeneration++;
+    for (final name in [
+      'hwdec-current',
+      'video-pts',
+      'eof-reached',
+      'seeking',
+    ]) {
+      _properties.remove(name);
+    }
     _context.clear();
     _lastErrorContext.clear();
     _lastDecoder = null;

@@ -31,8 +31,7 @@ void configureDecoderTestMediaHeaders(DecoderMediaHeaderWriter write) {
 
 /// 解码器兼容性测试入口。
 ///
-/// 测试沿用播放器的 media_kit 配置。每个格式和后端组合都会创建独立播放器，
-/// 并单独采集一段性能数据。
+/// 测试沿用播放器配置，检查持续播放、输出帧和实际解码后端。
 class DecoderTestDialog extends StatefulWidget {
   const DecoderTestDialog({super.key, this.sampleLoader});
 
@@ -304,7 +303,9 @@ class _DecoderTestDialogState extends State<DecoderTestDialog> {
           enableHardwareAcceleration: decoder != HwDecType.no,
           hwdec: decoder.hwdec,
           androidOutputLimit: Platform.isAndroid
-              ? () => AndroidVideoOutputLimit.detected
+              ? () => Pref.enableAndroidTextureScaling
+                    ? AndroidVideoOutputLimit.detected
+                    : null
               : null,
           onAndroidDiagnostic: (action, details) => diagnostics?.event(
             action,
@@ -350,13 +351,19 @@ class _DecoderTestDialogState extends State<DecoderTestDialog> {
   ) async {
     final player = session.player;
     StreamSubscription<String>? errorSubscription;
+    StreamSubscription<PlayerLog>? logSubscription;
     String? playbackError;
     final monitor = _PerformanceMonitor();
     try {
-      monitor.start();
       final errors = Completer<String>();
       errorSubscription = player.stream.error.listen((message) {
         if (!errors.isCompleted) errors.complete(message);
+      });
+      logSubscription = player.stream.log.listen((log) {
+        if ((log.level == 'error' || log.level == 'fatal') &&
+            log.prefix == 'vo/gpu/aimagereader') {
+          playbackError = '视频输出异常：${log.text.trim()}';
+        }
       });
       final url = codec.playUrls.firstOrNull;
       if (url == null || url.isEmpty) throw StateError('测试视频地址为空');
@@ -371,6 +378,19 @@ class _DecoderTestDialogState extends State<DecoderTestDialog> {
           (_) => throw TimeoutException('视频无法开始播放'),
         ),
       ]);
+      final firstFrame = Platform.isAndroid
+          ? await readAndroidSurfaceFrameState(player)
+          : null;
+      if (Platform.isAndroid &&
+          ((firstFrame?['consumedFrames'] as int?) ?? 0) == 0) {
+        throw StateError('尚未确认本视频输出画面');
+      }
+      if (!Platform.isAndroid) {
+        final image = await player.screenshot().timeout(_startupTimeout);
+        if (image == null) throw StateError('尚未确认本视频输出画面');
+        image.dispose();
+      }
+      monitor.start();
       final startPosition = player.state.position;
       await Future.any([
         Future<void>.delayed(_measureLength),
@@ -385,10 +405,31 @@ class _DecoderTestDialogState extends State<DecoderTestDialog> {
       if (played < const Duration(seconds: 2)) {
         throw StateError('视频未能持续播放');
       }
+      if (Platform.isAndroid) {
+        final lastFrame = await readAndroidSurfaceFrameState(player);
+        if (lastFrame?['configuredAtNs'] != firstFrame?['configuredAtNs'] ||
+            ((lastFrame?['consumedFrames'] as int?) ?? 0) <=
+                ((firstFrame?['consumedFrames'] as int?) ?? 0)) {
+          throw StateError('未确认持续输出画面');
+        }
+      }
+      final automatic =
+          decoder == HwDecType.auto ||
+          decoder == HwDecType.autoSafe ||
+          decoder == HwDecType.autoCopy;
+      final software = activeDecoder.isEmpty || activeDecoder == 'no';
+      final fallback = decoder == HwDecType.no
+          ? !software
+          : automatic
+          ? software ||
+                (decoder == HwDecType.autoCopy &&
+                    !activeDecoder.endsWith('-copy'))
+          : activeDecoder != decoder.hwdec;
       return _DecoderResult.success(
         decoder: _decoderName(activeDecoder),
         size: size,
         speed: played.inMilliseconds / _measureLength.inMilliseconds,
+        fallback: fallback,
         performance: await monitor.stop(),
       );
     } catch (error) {
@@ -404,6 +445,7 @@ class _DecoderTestDialogState extends State<DecoderTestDialog> {
       );
     } finally {
       await errorSubscription?.cancel();
+      await logSubscription?.cancel();
     }
   }
 
@@ -630,6 +672,7 @@ class _DecoderTestSession {
 class _DecoderResult {
   final bool running;
   final bool passed;
+  final bool fallback;
   final String? decoder;
   final String? size;
   final double? speed;
@@ -639,6 +682,7 @@ class _DecoderResult {
   const _DecoderResult._({
     this.running = false,
     this.passed = false,
+    this.fallback = false,
     this.decoder,
     this.size,
     this.speed,
@@ -652,9 +696,11 @@ class _DecoderResult {
     required String decoder,
     required String size,
     required double speed,
+    required bool fallback,
     required _PerformanceSummary performance,
   }) : this._(
          passed: true,
+         fallback: fallback,
          decoder: decoder,
          size: size,
          speed: speed,
@@ -683,17 +729,20 @@ class _DecoderResultTile extends StatelessWidget {
       null => '未测试',
       _ when result!.running => '测试中',
       _ when result!.passed =>
-        '${result!.decoder} · ${result!.size} · ${result!.speed!.toStringAsFixed(1)}×实时',
+        '${result!.fallback ? "回退后可播放" : "兼容"} · ${result!.decoder} · ${result!.size} · 播放进度比 ${result!.speed!.toStringAsFixed(1)}×',
       _ => result!.error ?? '不兼容',
     };
     final icon = switch (result) {
       null => Icons.circle_outlined,
       _ when result!.running => Icons.pending_outlined,
+      _ when result!.fallback => Icons.warning_amber_outlined,
       _ when result!.passed => Icons.check_circle_outline,
       _ => Icons.error_outline,
     };
     final color = result == null || result!.running
         ? theme.colorScheme.outline
+        : result!.fallback
+        ? theme.colorScheme.tertiary
         : result!.passed
         ? theme.colorScheme.primary
         : theme.colorScheme.error;

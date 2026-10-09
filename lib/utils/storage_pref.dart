@@ -555,6 +555,11 @@ abstract final class Pref {
     defaultValue: true,
   );
 
+  static bool get enableAndroidTextureScaling => _setting.get(
+    SettingBoxKey.enableAndroidTextureScaling,
+    defaultValue: false,
+  );
+
   static bool get showDynActionBar =>
       _setting.get(SettingBoxKey.showDynActionBar, defaultValue: true);
 

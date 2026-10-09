@@ -63,10 +63,14 @@ public class MediaKitVideoPlugin implements FlutterPlugin, MethodCallHandler, Ac
 
     @Override
     public void onDetachedFromActivityForConfigChanges() {
+        onDetachedFromActivity();
     }
 
     @Override
     public void onDetachedFromActivity() {
+        synchronized (lock) {
+            MediaKitVideoPlugin.activity = null;
+        }
     }
 
     @Override
@@ -140,6 +144,11 @@ public class MediaKitVideoPlugin implements FlutterPlugin, MethodCallHandler, Ac
                 case "VideoOutputManager.CanWaitForSurfaceFrame": {
                     final String handle = call.argument("handle");
                     result.success(handle != null && videoOutputManager.canWaitForSurfaceFrame(Long.parseLong(handle)));
+                    break;
+                }
+                case "VideoOutputManager.FrameState": {
+                    final String handle = call.argument("handle");
+                    result.success(handle == null ? null : videoOutputManager.frameState(Long.parseLong(handle)));
                     break;
                 }
                 case "VideoOutputManager.WaitForSurfaceFrame": {

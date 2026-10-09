@@ -2,6 +2,7 @@
 
 import 'dart:async';
 import 'dart:ffi';
+import 'dart:isolate';
 
 import 'package:pili_aurora/http/browser_ua.dart';
 import 'package:pili_aurora/services/logger.dart';
@@ -14,11 +15,16 @@ import 'package:media_kit/ffi/src/utf8.dart';
 import 'package:media_kit/generated/libmpv/bindings.dart' as generated;
 import 'package:media_kit/media_kit.dart';
 import 'package:media_kit/src/player/native/core/initializer.dart';
+import 'package:media_kit/src/player/native/core/native_library.dart';
 
 class MpvConvertWebp {
   final _mpv = NativePlayer.mpv;
-  late final Pointer<generated.mpv_handle> _ctx;
+  Pointer<generated.mpv_handle> _ctx = nullptr;
   final _completer = Completer<bool>();
+  Future<void>? _initialization;
+  Future<bool>? _conversion;
+  Future<void>? _cleanup;
+  bool _disposed = false;
 
   bool _success = false;
 
@@ -56,6 +62,7 @@ class MpvConvertWebp {
         if (enableHA) 'hwdec': '${Pref.hardwareDecoding},auto-copy', // transcode only support copy
       },
     );
+    if (_disposed) return;
     _mpv.mpv_request_event(
       _ctx,
       generated.mpv_event_id.MPV_EVENT_VIDEO_RECONFIG,
@@ -75,19 +82,63 @@ class MpvConvertWebp {
     calloc.free(level);
   }
 
-  void dispose() {
-    Initializer.dispose(_ctx);
-    _mpv.mpv_terminate_destroy(_ctx);
-    if (!_completer.isCompleted) _completer.complete(false);
+  Future<void> dispose() => _finish(false);
+
+  Future<void> _finish(bool success) {
+    _disposed = true;
+    return _cleanup ??= _release(success);
   }
 
-  Future<bool> convert() async {
-    await _init();
-    _command(['loadfile', url]);
-    return _completer.future;
+  Future<void> _release(bool success) async {
+    // SHUTDOWN 回调先归还借用事件，reader 退出后才能释放句柄。
+    await Future<void>.delayed(Duration.zero);
+    try {
+      try {
+        await _initialization;
+      } catch (_) {
+        // 初始化异常交给 convert；已创建的句柄仍需回收。
+        success = false;
+      }
+      if (_ctx != nullptr) {
+        await Initializer.dispose(_ctx);
+        final address = _ctx.address;
+        await _destroyHandle(address, NativeLibrary.path);
+        _ctx = nullptr;
+      }
+      if (!_completer.isCompleted) _completer.complete(success);
+    } catch (error, stack) {
+      logger.e('WebP 转换资源回收失败', error: error, stackTrace: stack);
+      if (!_completer.isCompleted) _completer.complete(false);
+    }
+  }
+
+  static Future<void> _destroyHandle(int address, String library) =>
+      Isolate.run(
+        () => generated
+            .MPV(DynamicLibrary.open(library))
+            .mpv_terminate_destroy(
+              Pointer<generated.mpv_handle>.fromAddress(address),
+            ),
+      );
+
+  Future<bool> convert() => _conversion ??= _convert();
+
+  Future<bool> _convert() async {
+    if (_disposed) return false;
+    try {
+      await (_initialization ??= _init());
+      if (!_disposed) _command(['loadfile', url]);
+      return await _completer.future;
+    } catch (_) {
+      final cancelled = _disposed;
+      await dispose();
+      if (cancelled) return false;
+      rethrow;
+    }
   }
 
   Future<void>? _onEvent(Pointer<generated.mpv_event> event) {
+    if (_disposed) return null;
     switch (event.ref.event_id) {
       case generated.mpv_event_id.MPV_EVENT_PROPERTY_CHANGE:
         final prop = event.ref.data.cast<generated.mpv_event_property>().ref;
@@ -113,8 +164,7 @@ class MpvConvertWebp {
         break;
       case generated.mpv_event_id.MPV_EVENT_SHUTDOWN:
         progress?.value = 1;
-        _completer.complete(_success);
-        dispose();
+        unawaited(_finish(_success));
         break;
     }
     return null;
@@ -127,10 +177,15 @@ class MpvConvertWebp {
       arr[i] = pointers[i];
     }
 
-    _mpv.mpv_command(_ctx, arr);
-
-    calloc.free(arr);
-    pointers.forEach(calloc.free);
+    try {
+      final result = _mpv.mpv_command(_ctx, arr);
+      if (result < 0) {
+        throw StateError(_mpv.mpv_error_string(result).toDartString());
+      }
+    } finally {
+      calloc.free(arr);
+      pointers.forEach(calloc.free);
+    }
   }
 
   void _observeProperty(String property) {

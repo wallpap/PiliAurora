@@ -9,6 +9,18 @@ final _locks = Expando<Lock>('Android video surface size');
 final _frameWaits = Expando<String>('Android video frame wait');
 int _nextFrameWait = 0;
 
+/// 当前 Surface 配置以来消费的纹理帧；旧图像重绘也可能产生新 buffer。
+Future<Map<String, Object?>?> readAndroidSurfaceFrameState(
+  NativePlayer player,
+) async {
+  if (player.disposed) return null;
+  final state = await _channel.invokeMapMethod<String, Object?>(
+    'VideoOutputManager.FrameState',
+    {'handle': player.handle.toString()},
+  );
+  return state;
+}
+
 /// 切源、Surface 重建或页面销毁时解除旧帧等待；请求编号防止取消新交接。
 Future<void> cancelAndroidSurfaceFrameWait(NativePlayer player) async {
   final request = _frameWaits[player];

@@ -31,6 +31,14 @@ List<SettingsModel> get videoSettings => [
     setKey: SettingBoxKey.enableHA,
     defaultVal: true,
   ),
+  if (Platform.isAndroid)
+    const SwitchModel(
+      title: '自动纹理缩放（实验性功能）',
+      subtitle: '按屏幕分辨率等比缩小视频输出，减少纹理开销。关闭时使用原生尺寸处理，下次加载视频生效',
+      leading: Icon(Icons.aspect_ratio_outlined),
+      setKey: SettingBoxKey.enableAndroidTextureScaling,
+      defaultVal: false,
+    ),
   const SwitchModel(
     title: '免登录1080P',
     subtitle: '免登录查看1080P视频',
