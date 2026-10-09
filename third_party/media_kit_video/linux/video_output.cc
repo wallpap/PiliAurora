@@ -378,8 +378,14 @@ gint64 video_output_get_width(VideoOutput* self) {
   gint64 width = 0;
   gint64 height = 0;
 
-  mpv_node params;
-  mpv_get_property(self->handle, "video-out-params", MPV_FORMAT_NODE, &params);
+  // Failed NODE queries leave undefined output during startup/reconfiguration.
+  // Only successful results are safe to inspect and owned by libmpv.
+  mpv_node params{};
+  const int status =
+      mpv_get_property(self->handle, "video-out-params", MPV_FORMAT_NODE, &params);
+  if (status < 0) {
+    return 0;
+  }
 
   int64_t dw = 0, dh = 0, rotate = 0;
   if (params.format == MPV_FORMAT_NODE_MAP) {
@@ -398,8 +404,8 @@ gint64 video_output_get_width(VideoOutput* self) {
         }
       }
     }
-    mpv_free_node_contents(&params);
   }
+  mpv_free_node_contents(&params);
 
   width = rotate == 0 || rotate == 180 ? dw : dh;
   height = rotate == 0 || rotate == 180 ? dh : dw;
@@ -428,8 +434,14 @@ gint64 video_output_get_height(VideoOutput* self) {
   gint64 width = 0;
   gint64 height = 0;
 
-  mpv_node params;
-  mpv_get_property(self->handle, "video-out-params", MPV_FORMAT_NODE, &params);
+  // Failed NODE queries leave undefined output during startup/reconfiguration.
+  // Only successful results are safe to inspect and owned by libmpv.
+  mpv_node params{};
+  const int status =
+      mpv_get_property(self->handle, "video-out-params", MPV_FORMAT_NODE, &params);
+  if (status < 0) {
+    return 0;
+  }
 
   int64_t dw = 0, dh = 0, rotate = 0;
   if (params.format == MPV_FORMAT_NODE_MAP) {
@@ -448,8 +460,8 @@ gint64 video_output_get_height(VideoOutput* self) {
         }
       }
     }
-    mpv_free_node_contents(&params);
   }
+  mpv_free_node_contents(&params);
 
   width = rotate == 0 || rotate == 180 ? dw : dh;
   height = rotate == 0 || rotate == 180 ? dh : dw;

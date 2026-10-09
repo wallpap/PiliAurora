@@ -82,7 +82,7 @@ class NativePlayer extends PlatformPlayer {
 
     await super.dispose();
 
-    Initializer.dispose(ctx);
+    await Initializer.dispose(ctx);
 
     Timer(const Duration(seconds: 5), () {
       mpv.mpv_terminate_destroy(ctx);
