@@ -6,6 +6,7 @@
 import 'dart:async';
 import 'dart:ffi';
 
+import 'event_loop_lifecycle.dart';
 import 'initializer_isolate.dart';
 import 'initializer_native_event_loop.dart';
 
@@ -25,21 +26,28 @@ abstract class Initializer {
     FutureOr<void> Function(Pointer<mpv_event> event)? callback, {
     Map<String, String> options = const {},
   }) {
-    try {
-      return InitializerNativeEventLoop.create(mpv, callback, options);
-    } catch (e, s) {
-      Zone.current.handleUncaughtError(e, s);
-      return InitializerIsolate.create(mpv, callback, options);
-    }
+    return _loops.create(
+      nativeCreate: () =>
+          InitializerNativeEventLoop.create(mpv, callback, options),
+      isolateCreate: () => InitializerIsolate.create(mpv, callback, options),
+    );
   }
 
   /// Disposes the event loop of the [Pointer<mpv_handle>] created by [create].
   /// NOTE: [Pointer<mpv_handle>] itself is not disposed.
-  static void dispose(Pointer<mpv_handle> handle) {
-    try {
-      InitializerNativeEventLoop.dispose(handle);
-    } catch (_) {
-      InitializerIsolate.dispose(handle);
-    }
-  }
+  static Future<void> dispose(Pointer<mpv_handle> handle) =>
+      _loops.dispose(handle);
+
+  static final _loops = EventLoopLifecycle<Pointer<mpv_handle>>(
+    handleId: (handle) => handle.address,
+    nativeDispose: InitializerNativeEventLoop.dispose,
+    isolateDispose: InitializerIsolate.dispose,
+    onNativeFailure: (error, stack) {
+      // An optional library/ABI miss is an expected backend selection, not an
+      // uncaught application failure. Real initialization errors remain visible.
+      if (error is! UnsupportedError) {
+        Zone.current.handleUncaughtError(error, stack);
+      }
+    },
+  );
 }

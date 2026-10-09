@@ -372,8 +372,14 @@ int64_t VideoOutput::GetVideoWidth() {
   int64_t width = 0;
   int64_t height = 0;
 
-  mpv_node params;
-  mpv_get_property(handle_, "video-out-params", MPV_FORMAT_NODE, &params);
+  // The output is undefined when video parameters are not available yet
+  // (startup, seek/reconfiguration, or shutdown). Never inspect or free it.
+  mpv_node params{};
+  const int status =
+      mpv_get_property(handle_, "video-out-params", MPV_FORMAT_NODE, &params);
+  if (status < 0) {
+    return 0;
+  }
 
   int64_t dw = 0, dh = 0, rotate = 0;
   if (params.format == MPV_FORMAT_NODE_MAP) {
@@ -392,8 +398,9 @@ int64_t VideoOutput::GetVideoWidth() {
         }
       }
     }
-    mpv_free_node_contents(&params);
   }
+  // Successful NODE results belong to libmpv, irrespective of their format.
+  mpv_free_node_contents(&params);
 
   width = rotate == 0 || rotate == 180 ? dw : dh;
   height = rotate == 0 || rotate == 180 ? dh : dw;
@@ -421,8 +428,14 @@ int64_t VideoOutput::GetVideoHeight() {
   int64_t width = 0;
   int64_t height = 0;
 
-  mpv_node params;
-  mpv_get_property(handle_, "video-out-params", MPV_FORMAT_NODE, &params);
+  // The output is undefined when video parameters are not available yet
+  // (startup, seek/reconfiguration, or shutdown). Never inspect or free it.
+  mpv_node params{};
+  const int status =
+      mpv_get_property(handle_, "video-out-params", MPV_FORMAT_NODE, &params);
+  if (status < 0) {
+    return 0;
+  }
 
   int64_t dw = 0, dh = 0, rotate = 0;
   if (params.format == MPV_FORMAT_NODE_MAP) {
@@ -441,8 +454,9 @@ int64_t VideoOutput::GetVideoHeight() {
         }
       }
     }
-    mpv_free_node_contents(&params);
   }
+  // Successful NODE results belong to libmpv, irrespective of their format.
+  mpv_free_node_contents(&params);
 
   width = rotate == 0 || rotate == 180 ? dw : dh;
   height = rotate == 0 || rotate == 180 ? dh : dw;
