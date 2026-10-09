@@ -46,6 +46,9 @@ import 'package:pili_aurora/plugin/pl_player/models/video_fit_type.dart';
 import 'package:pili_aurora/plugin/pl_player/utils/android_video_output.dart';
 import 'package:pili_aurora/plugin/pl_player/utils/preview_image_cache.dart';
 import 'package:pili_aurora/plugin/pl_player/utils/video_output_resizer.dart';
+import 'package:pili_aurora/plugin/pl_player/utils/video_output_handoff.dart';
+import 'package:pili_aurora/plugin/pl_player/utils/video_output_paint_barrier.dart';
+import 'package:pili_aurora/plugin/pl_player/widgets/video_output_handoff.dart';
 import 'package:pili_aurora/plugin/pl_player/utils/video_output_size.dart';
 import 'package:pili_aurora/plugin/pl_player/utils/video_output_state.dart';
 import 'package:pili_aurora/plugin/pl_player/widgets/app_bar_ani.dart';
@@ -79,7 +82,7 @@ import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/rendering.dart'
-    show RenderProxyBox, SemanticsConfiguration;
+    show RenderProxyBox, RenderRepaintBoundary, SemanticsConfiguration;
 import 'package:flutter/services.dart';
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:flutter_volume_controller/flutter_volume_controller.dart';
@@ -158,6 +161,9 @@ class _PLVideoPlayerState extends State<PLVideoPlayer>
 
   final _playerKey = GlobalKey();
   final _videoKey = GlobalKey();
+  final _videoFrameKey = GlobalKey();
+  late final VideoOutputHandoff _videoOutputHandoff;
+  late final VideoOutputPaintBarrier _videoOutputPaintBarrier;
 
   final RxDouble _brightnessValue = 0.0.obs;
   final RxBool _brightnessIndicator = false.obs;
@@ -284,6 +290,12 @@ class _PLVideoPlayerState extends State<PLVideoPlayer>
       duration: const Duration(milliseconds: 100),
     );
     videoController = plPlayerController.videoController!;
+    _videoOutputPaintBarrier = VideoOutputPaintBarrier();
+    _videoOutputHandoff = VideoOutputHandoff(
+      waitForProtectedFrame: _videoOutputPaintBarrier.wait,
+      capture: _captureVideoOutputFrame,
+      waitForPaint: () => WidgetsBinding.instance.endOfFrame,
+    );
     _videoOutputStateMachine = VideoOutputStateMachine(
       Platform.isAndroid
           ? VideoOutputPlatform.android
@@ -471,6 +483,9 @@ class _PLVideoPlayerState extends State<PLVideoPlayer>
     _videoOutputPlayingListener?.cancel();
     _videoOutputFullscreenListener?.cancel();
     _videoOutputResizer.dispose();
+    _cancelVideoFrameWait();
+    _videoOutputHandoff.dispose();
+    _videoOutputPaintBarrier.dispose();
     _controlsListener?.cancel();
     _animationController.dispose();
     _transformationController.dispose();
@@ -1025,6 +1040,7 @@ class _PLVideoPlayerState extends State<PLVideoPlayer>
       _videoOutputStateMachine.sourceChanged();
     }
     _devicePixelRatio = pixelRatio;
+    if (Platform.isAndroid) _deferAndroidVideoOutput();
     _scheduleVideoOutputState();
   }
 
@@ -1035,7 +1051,10 @@ class _PLVideoPlayerState extends State<PLVideoPlayer>
     return {
       'player': 'player.${videoController.player.hashCode}',
       'adaptiveOutput': _fitVideoOutputToViewport,
-      'resizePolicy': 'state-machine',
+      'resizePolicy': Platform.isAndroid
+          ? 'state-machine-frame-handoff'
+          : 'state-machine',
+      'handoffActive': _videoOutputHandoff.image != null,
       'state': _videoOutputStateMachine.state?.name,
       'resizePending': _videoOutputStateMachine.resizePending,
       if (Platform.isWindows) 'windowMaximized': _windowMaximized,
@@ -1084,7 +1103,7 @@ class _PLVideoPlayerState extends State<PLVideoPlayer>
         ..._captureVideoOutputDiagnostics(),
         'requested': {'width': size.width, 'height': size.height},
         'requestGeneration': generation,
-        // accepted 只表示调用完成，不能据此断言暂停帧已正确重绘。
+        // Android accepted 包含保护帧 raster 和新帧消费确认，不是像素级无闪保证。
         'accepted': accepted,
       },
     );
@@ -1126,7 +1145,82 @@ class _PLVideoPlayerState extends State<PLVideoPlayer>
     WidgetsBinding.instance.ensureVisualUpdate();
   }
 
-  void _onAndroidVideoOutputChanged() => _onVideoOutputSourceChanged();
+  void _onAndroidVideoOutputChanged() {
+    _videoOutputHandoff.invalidate();
+    _videoOutputPaintBarrier.cancel();
+    _cancelVideoFrameWait();
+    _onVideoOutputSourceChanged();
+  }
+
+  void _cancelVideoFrameWait() {
+    if (!Platform.isAndroid || videoController.player.disposed) return;
+    unawaited(
+      cancelAndroidSurfaceFrameWait(videoController.player)
+          .catchError((Object error) {
+            Diagnostics.instance.log(
+              DiagnosticLogLevel.warning,
+              'video.output',
+              'handoff.cancel.failed',
+              details: {'error': error},
+            );
+          }),
+    );
+  }
+
+  void _deferAndroidVideoOutput() {
+    _videoOutputHandoff.viewportChanged();
+    if (_videoOutputResizer.pending) {
+      _videoOutputStateMachine.sourceChanged();
+      _videoOutputResizer.defer();
+    }
+  }
+
+  @override
+  void didChangeMetrics() {
+    if (Platform.isAndroid) {
+      _deferAndroidVideoOutput();
+      _scheduleVideoOutputState();
+    }
+  }
+
+  Future<ui.Image?> _captureVideoOutputFrame() async {
+    if (!mounted) return null;
+    await WidgetsBinding.instance.endOfFrame;
+    if (!mounted) return null;
+    final renderObject = _videoFrameKey.currentContext?.findRenderObject();
+    if (renderObject is! RenderRepaintBoundary ||
+        !renderObject.hasSize ||
+        renderObject.size.isEmpty) {
+      return null;
+    }
+    // 独立图片最多约 1080p；只在一次交接期间持有，不常驻复制 4K 帧。
+    final ratio = math.min(
+      _devicePixelRatio,
+      1920 / renderObject.size.longestSide,
+    );
+    ui.Image? image;
+    try {
+      image = await renderObject.toImage(pixelRatio: ratio);
+      final pixels = await image.toByteData(format: ui.ImageByteFormat.rawRgba);
+      // 某些 renderer 不能 readback 外部纹理。透明快照不能充当保护帧。
+      final center =
+          ((image.height ~/ 2) * image.width + image.width ~/ 2) * 4 + 3;
+      if (pixels == null || pixels.getUint8(center) == 0) {
+        image.dispose();
+        return null;
+      }
+      return image;
+    } catch (error) {
+      image?.dispose();
+      Diagnostics.instance.log(
+        DiagnosticLogLevel.warning,
+        'video.output',
+        'handoff.capture.failed',
+        details: {'error': error},
+      );
+      return null;
+    }
+  }
 
   void _onVideoOutputSourceChanged() {
     _videoOutputStateMachine.sourceChanged();
@@ -1192,11 +1286,39 @@ class _PLVideoPlayerState extends State<PLVideoPlayer>
     if (Platform.isAndroid) {
       final generation = _videoOutputResizer.generation;
       _logVideoOutputResize('resize.requested', size, generation: generation);
-      final accepted = await setAndroidVideoOutputSize(
-        player: videoController.player,
-        size: size,
-        // 这里只检查 Surface 生命周期，不用新视口撤销已改变纹理的提交。
-        isCurrent: isCurrent,
+      final player = videoController.player;
+      if (player.current.isEmpty) return false;
+      final media = player.current.first;
+      final previousSize =
+          _videoOutputResizer.applied ?? _androidSourceVideoSize;
+      bool current() =>
+          mounted &&
+          isCurrent() &&
+          !player.disposed &&
+          player.current.isNotEmpty &&
+          identical(player.current.first, media);
+      final accepted = await _videoOutputHandoff.run(
+        isCurrent: current,
+        canStart: () =>
+            _fitVideoOutputToViewport &&
+            player.state.playing &&
+            _videoOutputResizer.target == size,
+        submit: (canStart) => setAndroidVideoOutputSize(
+          player: player,
+          size: size,
+          // 提交前检查布局 / 播放状态；buffer 已改后只检查源生命周期。
+          isCurrent: current,
+          canStart: canStart,
+          waitForFrame: true,
+        ),
+        recover: previousSize == null
+            ? null
+            : () => setAndroidVideoOutputSize(
+                player: player,
+                size: previousSize,
+                isCurrent: current,
+                waitForFrame: true,
+              ),
       );
       if (mounted && isCurrent() && !accepted) {
         _videoOutputStateMachine.sourceChanged();
@@ -1638,7 +1760,10 @@ class _PLVideoPlayerState extends State<PLVideoPlayer>
         maxWidth != widget.maxWidth || maxHeight != widget.maxHeight;
     maxWidth = widget.maxWidth;
     maxHeight = widget.maxHeight;
-    if (viewportChanged) _updateVideoOutputSize();
+    if (viewportChanged) {
+      if (Platform.isAndroid) _deferAndroidVideoOutput();
+      _updateVideoOutputSize();
+    }
     final isFullScreen = this.isFullScreen;
     final primary = isFullScreen && colorScheme.isLight
         ? colorScheme.inversePrimary
@@ -2343,11 +2468,21 @@ class _PLVideoPlayerState extends State<PLVideoPlayer>
                   child: FittedBox(
                     fit: videoFit.boxFit,
                     alignment: widget.alignment,
-                    child: SimpleVideo(
-                      controller: plPlayerController.videoController!,
-                      fill: widget.fill,
-                      aspectRatio: videoFit.aspectRatio,
-                    ),
+                    child: Platform.isAndroid
+                        ? VideoOutputHandoffView(
+                            handoff: _videoOutputHandoff,
+                            frameKey: _videoFrameKey,
+                            child: SimpleVideo(
+                              controller: plPlayerController.videoController!,
+                              fill: widget.fill,
+                              aspectRatio: videoFit.aspectRatio,
+                            ),
+                          )
+                        : SimpleVideo(
+                            controller: plPlayerController.videoController!,
+                            fill: widget.fill,
+                            aspectRatio: videoFit.aspectRatio,
+                          ),
                   ),
                 );
               },

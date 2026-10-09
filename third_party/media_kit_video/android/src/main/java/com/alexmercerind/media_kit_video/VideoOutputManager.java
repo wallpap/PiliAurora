@@ -61,9 +61,34 @@ public class VideoOutputManager {
     public void setSurfaceTextureSize(long handle, int width, int height) {
         synchronized (lock) {
             Log.i("media_kit", String.format(Locale.ENGLISH, "com.alexmercerind.media_kit_video.VideoOutputManager.setSurfaceTextureSize: %d %d %d", handle, width, height));
-            if (videoOutputs.containsKey(handle)) {
-                Objects.requireNonNull(videoOutputs.get(handle)).setSurfaceTextureSize(width, height);
+            if (!videoOutputs.containsKey(handle)) throw new IllegalStateException("Missing video output");
+            Objects.requireNonNull(videoOutputs.get(handle)).setSurfaceTextureSize(width, height);
+        }
+    }
+    public boolean canWaitForSurfaceFrame(long handle) {
+        synchronized (lock) {
+            final VideoOutput output = videoOutputs.get(handle);
+            return output != null && output.canWaitForSurfaceFrame();
+        }
+    }
+
+    public void waitForSurfaceFrame(long handle, String request, int width, int height,
+                                    MethodChannel.Result result) {
+        synchronized (lock) {
+            final VideoOutput output = videoOutputs.get(handle);
+            if (output == null) {
+                result.error("surface-missing", "Missing video output", null);
+            } else {
+                output.waitForSurfaceFrame(request, width, height, result);
             }
         }
     }
+
+    public void cancelSurfaceFrameWait(long handle, String request) {
+        synchronized (lock) {
+            final VideoOutput output = videoOutputs.get(handle);
+            if (output != null) output.cancelSurfaceFrameWait(request);
+        }
+    }
+
 }

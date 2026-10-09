@@ -125,12 +125,40 @@ public class MediaKitVideoPlugin implements FlutterPlugin, MethodCallHandler, Ac
                     final String handle = call.argument("handle");
                     final String width = call.argument("width");
                     final String height = call.argument("height");
-                    if (handle != null) {
+                    try {
                         videoOutputManager.setSurfaceTextureSize(
-                                Long.parseLong(handle),
+                                Long.parseLong(Objects.requireNonNull(handle)),
                                 Integer.parseInt(Objects.requireNonNull(width)),
                                 Integer.parseInt(Objects.requireNonNull(height))
                         );
+                        result.success(null);
+                    } catch (RuntimeException e) {
+                        result.error("surface-resize-failed", e.getMessage(), null);
+                    }
+                    break;
+                }
+                case "VideoOutputManager.CanWaitForSurfaceFrame": {
+                    final String handle = call.argument("handle");
+                    result.success(handle != null && videoOutputManager.canWaitForSurfaceFrame(Long.parseLong(handle)));
+                    break;
+                }
+                case "VideoOutputManager.WaitForSurfaceFrame": {
+                    final String handle = call.argument("handle");
+                    final String request = call.argument("request");
+                    final String width = call.argument("width");
+                    final String height = call.argument("height");
+                    videoOutputManager.waitForSurfaceFrame(
+                            Long.parseLong(Objects.requireNonNull(handle)),
+                            Objects.requireNonNull(request),
+                            Integer.parseInt(Objects.requireNonNull(width)),
+                            Integer.parseInt(Objects.requireNonNull(height)), result);
+                    break;
+                }
+                case "VideoOutputManager.CancelSurfaceFrameWait": {
+                    final String handle = call.argument("handle");
+                    final String request = call.argument("request");
+                    if (handle != null && request != null) {
+                        videoOutputManager.cancelSurfaceFrameWait(Long.parseLong(handle), request);
                     }
                     result.success(null);
                     break;

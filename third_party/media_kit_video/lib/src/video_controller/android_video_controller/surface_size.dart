@@ -6,6 +6,18 @@ const _channel = MethodChannel('com.alexmercerind/media_kit_video');
 // 插件的源尺寸重建与应用的视口适配必须共用提交队列；只串行应用请求不够。
 // Expando 不持有已销毁播放器，也不需要独立维护全局 handle 清理列表。
 final _locks = Expando<Lock>('Android video surface size');
+final _frameWaits = Expando<String>('Android video frame wait');
+int _nextFrameWait = 0;
+
+/// 切源、Surface 重建或页面销毁时解除旧帧等待；请求编号防止取消新交接。
+Future<void> cancelAndroidSurfaceFrameWait(NativePlayer player) async {
+  final request = _frameWaits[player];
+  if (request == null) return;
+  await _channel.invokeMethod<void>(
+    'VideoOutputManager.CancelSurfaceFrameWait',
+    {'handle': player.handle.toString(), 'request': request},
+  );
+}
 
 /// 串行修改 Android buffer，并同步同一媒体的 mpv 输出尺寸。
 ///
@@ -18,6 +30,8 @@ Future<bool> setAndroidSurfaceSize({
   required int height,
   bool Function()? isCurrent,
   int? wid,
+  bool waitForFrame = false,
+  bool Function()? canStart,
 }) {
   if (player.disposed || player.current.isEmpty) return Future.value(false);
   // 入队前绑定媒体，排队期间切源不能把旧尺寸提交到新媒体。
@@ -29,7 +43,17 @@ Future<bool> setAndroidSurfaceSize({
       (isCurrent?.call() ?? true);
   final lock = _locks[player] ??= Lock();
   return lock.synchronized(() async {
-    if (!current()) return false;
+    if (!current() || !(canStart?.call() ?? true)) return false;
+    if (waitForFrame) {
+      final supported = await _channel.invokeMethod<bool>(
+        'VideoOutputManager.CanWaitForSurfaceFrame',
+        {'handle': player.handle.toString()},
+      );
+      // 帧时钟 / 消费监听不可用时不改变 buffer，不能用固定延时假装成功。
+      if (supported != true || !current() || !(canStart?.call() ?? true)) {
+        return false;
+      }
+    }
     await _channel.invokeMethod<void>(
       'VideoOutputManager.SetSurfaceTextureSize',
       <String, String>{
@@ -46,6 +70,26 @@ Future<bool> setAndroidSurfaceSize({
       player.setOption('wid', wid.toString());
       player.setOption('vo', 'gpu');
     }
-    return true;
+    if (!waitForFrame) return true;
+    final request = (++_nextFrameWait).toString();
+    _frameWaits[player] = request;
+    try {
+      final consumed = await _channel
+          .invokeMethod<bool>('VideoOutputManager.WaitForSurfaceFrame', {
+            'handle': player.handle.toString(),
+            'width': width.toString(),
+            'height': height.toString(),
+            'request': request,
+          });
+      if (!current()) return false;
+      if (consumed != true) {
+        throw StateError(
+          'Frame handoff cancelled after native geometry changed',
+        );
+      }
+      return true;
+    } finally {
+      if (_frameWaits[player] == request) _frameWaits[player] = null;
+    }
   });
 }

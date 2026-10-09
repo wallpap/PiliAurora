@@ -49,6 +49,14 @@ public class VideoOutput {
     private TextureRegistry textureRegistryReference;
 
     private final Object lock = new Object();
+    private final Handler mainHandler = new Handler(Looper.getMainLooper());
+    private long surfaceGeneration;
+    private int bufferWidth;
+    private int bufferHeight;
+    private long lastConsumedTimestamp;
+    private boolean disposed;
+    private SurfaceFrameFence frameFence;
+    private MethodChannel.Result frameResult;
 
     VideoOutput(long handle, MethodChannel channelReference, TextureRegistry textureRegistryReference) {
         this.handle = handle;
@@ -70,6 +78,29 @@ public class VideoOutput {
         }
 
         surfaceTextureEntry = textureRegistryReference.createSurfaceTexture();
+        // This listener runs after Flutter's raster thread calls updateTexImage.
+        // Frame-available alone does not mean that Flutter acquired that buffer.
+        surfaceTextureEntry.setOnFrameConsumedListener(() -> {
+            synchronized (lock) {
+                if (disposed) return;
+                final long timestamp;
+                try {
+                    timestamp = surfaceTextureEntry.surfaceTexture().getTimestamp();
+                } catch (RuntimeException e) {
+                    return;
+                }
+                lastConsumedTimestamp = timestamp;
+                final SurfaceFrameFence fence = frameFence;
+                if (fence != null && fence.accepts(
+                        timestamp, bufferWidth, bufferHeight, surfaceGeneration)) {
+                    mainHandler.post(() -> {
+                        synchronized (lock) {
+                            if (frameFence == fence && !disposed) finishFrameWait(true);
+                        }
+                    });
+                }
+            }
+        });
 
         // If we call setOnFrameAvailableListener after creating SurfaceTextureEntry, the texture won't be displayed inside Flutter UI, because callback set by us will override the Flutter engine's own registered callback:
         // https://github.com/flutter/engine/blob/f47e864f2dcb9c299a3a3ed22300a1dcacbdf1fe/shell/platform/android/io/flutter/view/FlutterView.java#L942-L958
@@ -147,6 +178,11 @@ public class VideoOutput {
     }
 
     public void dispose() {
+        synchronized (lock) {
+            disposed = true;
+            surfaceGeneration++;
+            finishFrameWait(false);
+        }
         try {
             surfaceTextureEntry.release();
         } catch (Throwable e) {
@@ -175,6 +211,9 @@ public class VideoOutput {
 
     public long createSurface() {
         synchronized (lock) {
+            surfaceGeneration++;
+            lastConsumedTimestamp = 0;
+            finishFrameWait(false);
             // Delete previous android.view.Surface & object reference.
             try {
                 if (surface != null) {
@@ -201,11 +240,51 @@ public class VideoOutput {
     }
 
     public void setSurfaceTextureSize(int width, int height) {
-        try {
+        synchronized (lock) {
+            if (disposed || width <= 0 || height <= 0) {
+                throw new IllegalStateException("Invalid or disposed video surface");
+            }
+            finishFrameWait(false);
             surfaceTextureEntry.surfaceTexture().setDefaultBufferSize(width, height);
-        } catch (Throwable e) {
-            e.printStackTrace();
+            bufferWidth = width;
+            bufferHeight = height;
         }
+    }
+
+    public boolean canWaitForSurfaceFrame() {
+        synchronized (lock) {
+            return !disposed && SurfaceFrameFence.hasAutomaticEglClock(
+                    lastConsumedTimestamp, System.nanoTime());
+        }
+    }
+
+    public void waitForSurfaceFrame(String request, int width, int height,
+                                    MethodChannel.Result result) {
+        synchronized (lock) {
+            if (disposed || bufferWidth != width || bufferHeight != height) {
+                result.error("surface-invalidated", "Video surface changed before frame wait", null);
+                return;
+            }
+            finishFrameWait(false);
+            // Dart calls this only after synchronous mpv EXTERNAL_RESIZE has
+            // returned. Queued pre-configure EGL frames have older timestamps.
+            frameFence = new SurfaceFrameFence(
+                    request, width, height, surfaceGeneration, System.nanoTime());
+            frameResult = result;
+        }
+    }
+
+    public void cancelSurfaceFrameWait(String request) {
+        synchronized (lock) {
+            if (frameFence != null && frameFence.request.equals(request)) finishFrameWait(false);
+        }
+    }
+
+    private void finishFrameWait(boolean consumed) {
+        final MethodChannel.Result result = frameResult;
+        frameResult = null;
+        frameFence = null;
+        if (result != null) result.success(consumed);
     }
 
     private void clearSurface() {
