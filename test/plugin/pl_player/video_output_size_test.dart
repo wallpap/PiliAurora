@@ -39,6 +39,33 @@ void main() {
     );
   });
 
+  test('limits landscape and portrait sources to display pixels', () {
+    expect(
+      limitVideoOutputSize(
+        source: (width: 3840, height: 2160),
+        limit: (width: 1920, height: 1080),
+      ),
+      (width: 1920, height: 1080),
+    );
+    expect(
+      limitVideoOutputSize(
+        source: (width: 2160, height: 3840),
+        limit: (width: 1920, height: 1080),
+      ),
+      (width: 1080, height: 1920),
+    );
+  });
+
+  test('preserves source size when it fits the display limit', () {
+    expect(
+      limitVideoOutputSize(
+        source: (width: 1280, height: 720),
+        limit: (width: 1920, height: 1080),
+      ),
+      (width: 1280, height: 720),
+    );
+  });
+
   test('returns null for an invalid viewport', () {
     expect(
       calculateVideoOutputSize(

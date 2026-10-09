@@ -45,3 +45,27 @@ VideoOutputSize? calculateVideoOutputSize({
 
   return (width: width, height: height);
 }
+
+VideoOutputSize? limitVideoOutputSize({
+  required VideoOutputSize? source,
+  required VideoOutputSize? limit,
+}) {
+  if (source == null || source.width <= 0 || source.height <= 0) return null;
+  if (limit == null || limit.width <= 0 || limit.height <= 0) {
+    return source;
+  }
+
+  final longSide = math.max(limit.width, limit.height);
+  final shortSide = math.min(limit.width, limit.height);
+  final boundWidth = source.width >= source.height ? longSide : shortSide;
+  final boundHeight = source.width >= source.height ? shortSide : longSide;
+  final scale = math.min(
+    1.0,
+    math.min(boundWidth / source.width, boundHeight / source.height),
+  );
+  if (scale >= 1) return source;
+  return (
+    width: math.max(1, (source.width * scale).floor()),
+    height: math.max(1, (source.height * scale).floor()),
+  );
+}
