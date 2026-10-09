@@ -2,12 +2,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:pili_aurora/plugin/pl_player/utils/video_output_size.dart';
 
 void main() {
-  test('identifies portrait videos for Android output opt-out', () {
-    expect(isPortraitVideo((width: 1080, height: 1920)), isTrue);
-    expect(isPortraitVideo((width: 1920, height: 1080)), isFalse);
-    expect(isPortraitVideo(null), isFalse);
-  });
-
   test('converts the logical viewport to physical pixels', () {
     expect(
       calculateVideoOutputSize(
@@ -32,7 +26,7 @@ void main() {
     );
   });
 
-  test('keeps the source aspect ratio when the source is smaller', () {
+  test('does not upscale a source smaller than the viewport', () {
     expect(
       calculateVideoOutputSize(
         logicalWidth: 1080,
@@ -42,34 +36,6 @@ void main() {
         sourceHeight: 1920,
       ),
       (width: 1080, height: 1920),
-    );
-  });
-
-  test('Android portrait viewport retains the landscape source ratio', () {
-    expect(
-      calculateVideoOutputSize(
-        logicalWidth: 360,
-        logicalHeight: 640,
-        devicePixelRatio: 3,
-        sourceWidth: 3840,
-        sourceHeight: 2160,
-        preserveSourceAspectRatio: true,
-      ),
-      (width: 1080, height: 608),
-    );
-  });
-
-  test('Android rotated portrait source stays inside a landscape viewport', () {
-    expect(
-      calculateVideoOutputSize(
-        logicalWidth: 640,
-        logicalHeight: 360,
-        devicePixelRatio: 3,
-        sourceWidth: 1080,
-        sourceHeight: 1920,
-        preserveSourceAspectRatio: true,
-      ),
-      (width: 608, height: 1080),
     );
   });
 

@@ -18,9 +18,9 @@ VideoOutputSize? target(
 
 void main() {
   testWidgets(
-    'Windows small window restores native output once, not per layout',
+    'small-window state restores native output once, not per layout',
     (tester) async {
-      final machine = VideoOutputStateMachine(VideoOutputPlatform.windows);
+      final machine = VideoOutputStateMachine();
       final applied = <VideoOutputSize>[];
       final resizer = VideoOutputResizer(
         settleDelay: const Duration(milliseconds: 100),
@@ -59,10 +59,10 @@ void main() {
     },
   );
 
-  testWidgets('rapid Windows state events only submit the final output', (
+  testWidgets('rapid state events only submit the final output', (
     tester,
   ) async {
-    final machine = VideoOutputStateMachine(VideoOutputPlatform.windows);
+    final machine = VideoOutputStateMachine();
     final applied = <VideoOutputSize>[];
     final resizer = VideoOutputResizer(
       settleDelay: const Duration(milliseconds: 100),
@@ -86,59 +86,10 @@ void main() {
     expect(applied, [(width: 1920, height: 1080)]);
   });
 
-  testWidgets('Android paused state transitions queue only the final resize', (
-    tester,
-  ) async {
-    final machine = VideoOutputStateMachine(VideoOutputPlatform.android);
-    final applied = <VideoOutputSize>[];
-    final resizer = VideoOutputResizer(
-      enabled: false,
-      apply: (size, _) async {
-        applied.add(size);
-        return true;
-      },
-      onError: (_, error, _) => fail('$error'),
-    );
-    addTearDown(resizer.dispose);
-    machine.transition(isFullScreen: true, isPipMode: false, isLandscape: true);
-    resizer.request(target(machine)!);
-    machine
-      ..acknowledgeResize()
-      ..transition(isFullScreen: true, isPipMode: true);
-    resizer.request(target(machine, width: 320, height: 200)!);
-    machine.acknowledgeResize();
-    await tester.pump(const Duration(seconds: 1));
-    expect(applied, isEmpty);
-    resizer.setEnabled(true);
-    await tester.pump(const Duration(milliseconds: 250));
-    expect(applied, [(width: 320, height: 180)]);
-  });
-
-  test('Android defaults, fullscreen and PiP have finite transitions', () {
-    final machine = VideoOutputStateMachine(VideoOutputPlatform.android);
-    expect(
-      machine.transition(isFullScreen: false, isPipMode: false),
-      VideoOutputState.defaultPlayer,
-    );
-    expect(
-      machine.transition(isFullScreen: true, isPipMode: false),
-      VideoOutputState.fullscreen,
-    );
-    expect(
-      machine.transition(isFullScreen: true, isPipMode: true),
-      VideoOutputState.smallWindow,
-    );
-    expect(machine.transition(isFullScreen: true, isPipMode: true), isNull);
-    expect(
-      machine.transition(isFullScreen: false, isPipMode: false),
-      VideoOutputState.defaultPlayer,
-    );
-  });
-
   test(
-    'Windows prioritizes PiP, fullscreen, maximized and restored window',
+    'prioritizes PiP, fullscreen, maximized and restored window',
     () {
-      final machine = VideoOutputStateMachine(VideoOutputPlatform.windows);
+      final machine = VideoOutputStateMachine();
       expect(
         machine.transition(isFullScreen: false, isPipMode: false),
         VideoOutputState.smallWindow,
@@ -178,78 +129,70 @@ void main() {
     },
   );
 
-  test(
-    'Windows restores source output on return to a resizable small window',
-    () {
-      final machine = VideoOutputStateMachine(VideoOutputPlatform.windows)
-        ..transition(
-          isFullScreen: false,
-          isPipMode: false,
-          isMaximized: true,
-        );
-      expect(target(machine), (width: 960, height: 540));
-      machine
-        ..acknowledgeResize()
-        ..transition(
-          isFullScreen: true,
-          isPipMode: false,
-          isMaximized: true,
-        );
-      expect(target(machine, width: 1920, height: 1080), (
-        width: 1920,
-        height: 1080,
-      ));
-      machine
-        ..acknowledgeResize()
-        ..transition(
-          isFullScreen: false,
-          isPipMode: false,
-          isMaximized: true,
-        );
-      expect(target(machine), (width: 960, height: 540));
-      machine
-        ..acknowledgeResize()
-        ..transition(isFullScreen: false, isPipMode: false);
-      expect(target(machine, width: 400, height: 225), (
-        width: 1920,
-        height: 1080,
-      ));
-    },
-  );
-
-  for (final platform in VideoOutputPlatform.values) {
-    test('$platform ignores viewport changes after state configuration', () {
-      final machine = VideoOutputStateMachine(platform)
-        ..transition(
-          isFullScreen: false,
-          isPipMode: false,
-          isMaximized: true,
-        );
-      expect(target(machine), isNotNull);
-      machine.acknowledgeResize();
-      expect(
-        machine.transition(
-          isFullScreen: false,
-          isPipMode: false,
-          isMaximized: true,
-        ),
-        isNull,
+  test('restores source output when returning to a resizable window', () {
+    final machine = VideoOutputStateMachine()
+      ..transition(
+        isFullScreen: false,
+        isPipMode: false,
+        isMaximized: true,
       );
-      expect(target(machine, width: 800, height: 450), isNull);
-      expect(target(machine, width: 600, height: 338), isNull);
-      expect(machine.resizePending, isFalse);
-      machine.sourceChanged();
-      expect(target(machine, width: 800, height: 450), (
-        width: 800,
-        height: 450,
-      ));
-      machine.acknowledgeResize();
-      expect(target(machine), isNull);
-    });
-  }
+    expect(target(machine), (width: 960, height: 540));
+    machine
+      ..acknowledgeResize()
+      ..transition(
+        isFullScreen: true,
+        isPipMode: false,
+        isMaximized: true,
+      );
+    expect(target(machine, width: 1920, height: 1080), (
+      width: 1920,
+      height: 1080,
+    ));
+    machine
+      ..acknowledgeResize()
+      ..transition(
+        isFullScreen: false,
+        isPipMode: false,
+        isMaximized: true,
+      );
+    expect(target(machine), (width: 960, height: 540));
+    machine
+      ..acknowledgeResize()
+      ..transition(isFullScreen: false, isPipMode: false);
+    expect(target(machine, width: 400, height: 225), (
+      width: 1920,
+      height: 1080,
+    ));
+  });
 
-  test('Windows small-window output is independent of viewport and DPR', () {
-    final machine = VideoOutputStateMachine(VideoOutputPlatform.windows)
+  test('ignores viewport changes after state configuration', () {
+    final machine = VideoOutputStateMachine()
+      ..transition(
+        isFullScreen: false,
+        isPipMode: false,
+        isMaximized: true,
+      );
+    expect(target(machine), isNotNull);
+    machine.acknowledgeResize();
+    expect(
+      machine.transition(
+        isFullScreen: false,
+        isPipMode: false,
+        isMaximized: true,
+      ),
+      isNull,
+    );
+    expect(target(machine, width: 800, height: 450), isNull);
+    expect(target(machine, width: 600, height: 338), isNull);
+    expect(machine.resizePending, isFalse);
+    machine.sourceChanged();
+    expect(target(machine, width: 800, height: 450), (width: 800, height: 450));
+    machine.acknowledgeResize();
+    expect(target(machine), isNull);
+  });
+
+  test('small-window output is independent of viewport and DPR', () {
+    final machine = VideoOutputStateMachine()
       ..transition(isFullScreen: false, isPipMode: false);
     expect(target(machine, width: 280, height: 160, dpr: 2), (
       width: 1920,
@@ -265,7 +208,7 @@ void main() {
   });
 
   test('fullscreen works without maximization and never upscales source', () {
-    final machine = VideoOutputStateMachine(VideoOutputPlatform.windows)
+    final machine = VideoOutputStateMachine()
       ..transition(isFullScreen: true, isPipMode: false);
     expect(target(machine, width: 2560, height: 1440, dpr: 2), (
       width: 1920,
@@ -273,73 +216,14 @@ void main() {
     ));
   });
 
-  test('Android rotation reconfigures state, Windows orientation does not', () {
-    for (final platform in VideoOutputPlatform.values) {
-      final machine = VideoOutputStateMachine(platform)
-        ..transition(
-          isFullScreen: false,
-          isPipMode: false,
-          isMaximized: true,
-        )
-        ..acknowledgeResize();
-      final next = machine.transition(
-        isFullScreen: false,
-        isPipMode: false,
-        isMaximized: true,
-        isLandscape: true,
-      );
-      expect(
-        next,
-        platform == VideoOutputPlatform.android
-            ? VideoOutputState.defaultPlayer
-            : isNull,
-      );
-      expect(machine.resizePending, platform == VideoOutputPlatform.android);
-    }
-  });
-
-  test('Android PiP ignores device rotation and preserves source aspect', () {
-    final machine = VideoOutputStateMachine(VideoOutputPlatform.android)
-      ..transition(isFullScreen: true, isPipMode: true);
-    expect(target(machine, width: 320, height: 200), (width: 320, height: 180));
-    machine.acknowledgeResize();
-    expect(
-      machine.transition(
-        isFullScreen: true,
-        isPipMode: true,
-        isLandscape: true,
-      ),
-      isNull,
-    );
-    expect(target(machine), isNull);
-    expect(
-      machine.transition(
-        isFullScreen: true,
-        isPipMode: false,
-        isLandscape: true,
-      ),
-      VideoOutputState.fullscreen,
-    );
-    expect(target(machine), isNotNull);
-  });
-
-  test('portrait videos remain excluded only on Android', () {
-    for (final platform in VideoOutputPlatform.values) {
-      final machine = VideoOutputStateMachine(platform)
-        ..transition(isFullScreen: false, isPipMode: false);
-      expect(
-        target(machine, source: (width: 1080, height: 1920)),
-        platform == VideoOutputPlatform.android
-            ? isNull
-            : (width: 1080, height: 1920),
-      );
-    }
-  });
-
   test('missing source or layout does not consume pending configuration', () {
-    final machine = VideoOutputStateMachine(VideoOutputPlatform.android);
+    final machine = VideoOutputStateMachine();
     expect(target(machine), isNull);
-    machine.transition(isFullScreen: false, isPipMode: false);
+    machine.transition(
+      isFullScreen: false,
+      isPipMode: false,
+      isMaximized: true,
+    );
     expect(target(machine, source: null), isNull);
     expect(target(machine, source: (width: 0, height: 0)), isNull);
     expect(target(machine, width: 0), isNull);
@@ -350,7 +234,7 @@ void main() {
   });
 
   test('source lifecycle is independent of state transitions', () {
-    final machine = VideoOutputStateMachine(VideoOutputPlatform.android);
+    final machine = VideoOutputStateMachine();
     expect(machine.resizePending, isTrue);
     machine.acknowledgeResize();
     expect(machine.resizePending, isFalse);
