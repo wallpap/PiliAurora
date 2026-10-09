@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:collection/collection.dart';
 import 'package:hive_ce/hive.dart';
+import 'package:pili_aurora/utils/storage_key.dart';
 
 /// 设置备份的格式、校验与替换规则集中在这里，不依赖页面或全局存储初始化。
 class SettingsBackup {
@@ -13,10 +14,11 @@ class SettingsBackup {
   static const _encoder = JsonEncoder.withIndent('    ');
 
   /// 保持既有 setting/video JSON 格式，包含视频偏好但不包含账号数据。
-  String exportJson() => _encoder.convert({
-    'setting': _setting.toMap(),
-    'video': _video.toMap(),
-  });
+  String exportJson() {
+    final settings = _setting.toMap()
+      ..remove(LegacySettingBoxKey.androidFullscreenCalibration);
+    return _encoder.convert({'setting': settings, 'video': _video.toMap()});
+  }
 
   Future<void> restoreJson(String data) => restoreMap(jsonDecode(data));
 
@@ -25,7 +27,8 @@ class SettingsBackup {
       throw const FormatException('设置备份必须是 JSON 对象');
     }
     // 所有分区都在第一次写入之前校验；不完整备份不会先清空另一分区。
-    final setting = _section(document, 'setting');
+    final setting = _section(document, 'setting')
+      ..remove(LegacySettingBoxKey.androidFullscreenCalibration);
     final video = _section(document, 'video');
     final plans = [_plan(_setting, setting), _plan(_video, video)];
 

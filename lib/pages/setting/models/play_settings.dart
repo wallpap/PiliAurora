@@ -12,7 +12,6 @@ import 'package:pili_aurora/plugin/pl_player/models/bottom_progress_behavior.dar
 import 'package:pili_aurora/plugin/pl_player/models/fullscreen_mode.dart';
 import 'package:pili_aurora/plugin/pl_player/models/play_repeat.dart';
 import 'package:pili_aurora/services/service_locator.dart';
-import 'package:pili_aurora/services/android_video_calibration.dart';
 import 'package:pili_aurora/utils/extension/num_ext.dart';
 import 'package:pili_aurora/utils/platform_utils.dart';
 import 'package:pili_aurora/utils/storage.dart';
@@ -186,29 +185,6 @@ List<SettingsModel> get playSettings => [
     setKey: SettingBoxKey.enableVerticalExpand,
     defaultVal: false,
   ),
-  if (Platform.isAndroid)
-    NormalModel(
-      title: '重新校准全屏视频基准',
-      getSubtitle: () {
-        final size = AndroidVideoCalibration.saved;
-        return '${size == null ? "未校准" : "${size.width} × ${size.height} 物理像素"}；'
-            '源超过全屏基准时等比缩小，否则保留源尺寸；旋转/小窗不再改变。导入其他设备设置后可重校准。';
-      },
-      leading: const Icon(Icons.aspect_ratio_outlined),
-      onTap: (context, setState) async {
-        try {
-          final size = await AndroidVideoCalibration.recalibrate(
-            view: View.of(context),
-          );
-          setState();
-          SmartDialog.showToast(
-            '已校准 ${size.width} × ${size.height}，重新打开播放器后生效',
-          );
-        } catch (error) {
-          SmartDialog.showToast('校准失败，原基准已保留：$error');
-        }
-      },
-    ),
   const SwitchModel(
     title: '自动全屏',
     subtitle: '视频开始播放时进入全屏',

@@ -1,12 +1,11 @@
 # Android 固定输出与解码诊断（2026-10-09）
 
-## 固定的是默认全屏基准
+## Android 输出尺寸上限
 
-- 首次启动保存默认沉浸式全屏画布的**物理像素**，采用 `FlutterView.display.size`，不是当前页面的 viewport、逻辑像素或 PiP/分屏窗口大小。
-- `androidFullscreenCalibration` 位于设置 Box，参与已有设置导出/导入。导入值保持不变，不在旋转、全屏切换或启动时覆盖。
-- 设置 → 播放设置 → **重新校准全屏视频基准**可显式重测；校准失败保留旧值。重新打开播放器后采用新基准，正在使用的播放器不被突然 resize。
-- 每次加载媒体，视频参数可用时计算一次输出：基准按源的长/短边对齐，`scale = min(1, baselineWidth/sourceWidth, baselineHeight/sourceHeight)`。源任一边超过对应基准时，以常量为上限等比缩小；否则保留源尺寸。输出向下取整并至少保留 1 像素，保持源画面比例。
-- 例：全屏基准 2400×1080，1920×1080 源保持 1920×1080；3840×2160 源输出 1920×1080；4800×2160 源输出 2400×1080；1080×1920 竖屏源保持原尺寸。基准与源比例不一致时，输出按源比例适配常量范围。
+- Android 播放器自动检测设备显示区域的**物理像素**，作为 Surface 输出上限；优先读取 `FlutterView.display.size`，若引擎返回 `1×1` 无效尺寸，则回退到 Android 最大显示区域检测。检测失败时不限制源尺寸，保证播放继续。
+- 输出上限不写入用户设置，也不随设置备份导入导出；不使用当前页面 viewport、逻辑像素或 PiP/分屏窗口大小。
+- 每个媒体加载周期按源视频方向匹配设备长短边上限，超限时等比缩小，未超限则保留源尺寸。旋转、全屏切换和小窗不会改变已确定的 Surface 输出尺寸。
+- 例：设备上限 2400×1080 时，1920×1080 源保持原尺寸；3840×2160 源输出 1920×1080；4800×2160 源输出 2400×1080；1080×1920 竖屏源保持原尺寸。所有比例都按源画面适配上限，不固定为 16:9。
 - 同一媒体加载周期内不随视频参数重复通知或 Flutter 旋转/缩放/小窗而改尺寸。切源、显式重载重新确定尺寸；Surface 重新挂载可以重提交相同值。原生 GPU 输出不是改变视频编码分辨率，也不提升源细节。
 - Android 页面不再发起旧的自适应尺寸/保护帧交接。Windows 保留原路径。旧 `enableAndroidVideoOutputSize` 设置及 `ANDROID_VIDEO_OUTPUT_SIZE` define 不再控制正式 Android 输出。
 
@@ -40,7 +39,7 @@
 ## 回归命令
 
 ```powershell
-flutter test --no-pub test/plugin/pl_player test/services/diagnostics test/services/diagnostics_test.dart test/services/player_logging_test.dart test/services/android_video_calibration_test.dart
+flutter test --no-pub test/plugin/pl_player test/services/diagnostics test/services/diagnostics_test.dart test/services/player_logging_test.dart test/services/android_video_output_limit_test.dart
 flutter analyze --no-pub lib test tool
 dart run tool/check_dependencies.dart
 # 本机 Gradle 需要项目临时目录与 IPv4 loopback；仅对该终端设置，不写入仓库配置。

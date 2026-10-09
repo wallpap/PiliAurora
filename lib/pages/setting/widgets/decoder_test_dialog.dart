@@ -16,7 +16,7 @@ import 'package:pili_aurora/plugin/pl_player/models/hwdec_type.dart';
 import 'package:pili_aurora/utils/storage_pref.dart';
 import 'package:pili_aurora/services/diagnostics/diagnostics.dart';
 import 'package:pili_aurora/services/diagnostics/player_diagnostics.dart';
-import 'package:pili_aurora/services/android_video_calibration.dart';
+import 'package:pili_aurora/services/android_video_output_limit.dart';
 import 'package:pili_aurora/services/diagnostics/process_metrics.dart';
 
 typedef DecoderMediaHeaderWriter = void Function({
@@ -303,11 +303,11 @@ class _DecoderTestDialogState extends State<DecoderTestDialog> {
         configuration: VideoControllerConfiguration(
           enableHardwareAcceleration: decoder != HwDecType.no,
           hwdec: decoder.hwdec,
-          androidFullscreenWidth: Platform.isAndroid
-              ? AndroidVideoCalibration.saved?.width
+          androidOutputLimitWidth: Platform.isAndroid
+              ? AndroidVideoOutputLimit.detected?.width
               : null,
-          androidFullscreenHeight: Platform.isAndroid
-              ? AndroidVideoCalibration.saved?.height
+          androidOutputLimitHeight: Platform.isAndroid
+              ? AndroidVideoOutputLimit.detected?.height
               : null,
           onAndroidDiagnostic: (action, details) => diagnostics?.event(
             action,

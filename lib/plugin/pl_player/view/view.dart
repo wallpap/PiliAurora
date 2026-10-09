@@ -58,7 +58,7 @@ import 'package:pili_aurora/plugin/pl_player/widgets/forward_seek.dart';
 import 'package:pili_aurora/plugin/pl_player/widgets/mpv_convert_webp.dart';
 import 'package:pili_aurora/plugin/pl_player/widgets/play_pause_btn.dart';
 import 'package:pili_aurora/services/diagnostics/diagnostics.dart';
-import 'package:pili_aurora/services/android_video_calibration.dart';
+import 'package:pili_aurora/services/android_video_output_limit.dart';
 import 'package:pili_aurora/utils/android/bindings.g.dart';
 import 'package:pili_aurora/utils/cache_manager.dart';
 import 'package:pili_aurora/utils/connectivity_utils.dart';
@@ -1046,7 +1046,7 @@ class _PLVideoPlayerState extends State<PLVideoPlayer>
       'player': 'player.${videoController.player.hashCode}',
       'adaptiveOutput': _fitVideoOutputToViewport,
       'resizePolicy': Platform.isAndroid
-          ? 'fixed-fullscreen-baseline'
+          ? 'fixed-device-output-limit'
           : 'state-machine-frame-handoff',
       'handoffActive': _videoOutputHandoff.image != null,
       'state': Platform.isAndroid
@@ -1055,9 +1055,9 @@ class _PLVideoPlayerState extends State<PLVideoPlayer>
       'resizePending':
           Platform.isWindows && _videoOutputStateMachine.resizePending,
       if (Platform.isAndroid)
-        'fullscreenBaseline': {
-          'width': AndroidVideoCalibration.saved?.width,
-          'height': AndroidVideoCalibration.saved?.height,
+        'deviceOutputLimit': {
+          'width': AndroidVideoOutputLimit.detected?.width,
+          'height': AndroidVideoOutputLimit.detected?.height,
         },
       if (Platform.isWindows) 'windowMaximized': _windowMaximized,
       'fullScreen': isFullScreen,

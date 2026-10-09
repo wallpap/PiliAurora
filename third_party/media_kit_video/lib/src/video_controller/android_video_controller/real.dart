@@ -68,8 +68,8 @@ class AndroidVideoController extends PlatformVideoController {
 
   String? _current;
   late final _fixedSize = AndroidFixedSurfaceSize(
-    fullscreenWidth: configuration.androidFullscreenWidth,
-    fullscreenHeight: configuration.androidFullscreenHeight,
+    limitWidth: configuration.androidOutputLimitWidth,
+    limitHeight: configuration.androidOutputLimitHeight,
   );
   ({int width, int height})? _appliedSize;
   bool _attached = false;

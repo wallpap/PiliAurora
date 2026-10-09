@@ -37,7 +37,7 @@ import 'package:pili_aurora/plugin/pl_player/utils/playback_network_recovery.dar
 import 'package:pili_aurora/services/service_locator.dart';
 import 'package:pili_aurora/services/diagnostics/diagnostics.dart';
 import 'package:pili_aurora/services/diagnostics/player_diagnostics.dart';
-import 'package:pili_aurora/services/android_video_calibration.dart';
+import 'package:pili_aurora/services/android_video_output_limit.dart';
 import 'package:pili_aurora/services/logger.dart';
 import 'package:pili_aurora/utils/accounts.dart';
 import 'package:pili_aurora/utils/android/android_helper.dart';
@@ -784,11 +784,11 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
         configuration: hardwareVideoConfiguration(
           enabled: Pref.enableHA,
           configured: Pref.hardwareDecoding,
-          androidFullscreenWidth: Platform.isAndroid
-              ? AndroidVideoCalibration.saved?.width
+          androidOutputLimitWidth: Platform.isAndroid
+              ? AndroidVideoOutputLimit.detected?.width
               : null,
-          androidFullscreenHeight: Platform.isAndroid
-              ? AndroidVideoCalibration.saved?.height
+          androidOutputLimitHeight: Platform.isAndroid
+              ? AndroidVideoOutputLimit.detected?.height
               : null,
           onAndroidDiagnostic: (action, details) => _diagnostics?.event(
             action,
