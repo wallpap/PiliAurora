@@ -18,6 +18,7 @@ import 'package:media_kit/src/player/platform_player.dart';
 
 import 'package:media_kit/src/player/native/core/initializer.dart';
 import 'package:media_kit/src/player/native/core/native_library.dart';
+import 'package:media_kit/src/player/native/player/seek_command.dart';
 
 import 'package:media_kit/src/player/native/utils/android_helper.dart';
 
@@ -581,11 +582,9 @@ class NativePlayer extends PlatformPlayer {
     Future<void> function() async {
       throwIfDisposed();
 
-      await command([
-        'seek',
-        (duration.inMilliseconds / 1000).toStringAsFixed(3),
-        'absolute',
-      ]);
+      await command(
+        nativeSeekCommand(duration, keyframe: Platform.isAndroid),
+      );
 
       // It is self explanatory that PlayerState.completed & PlayerStream.completed must enter the false state if seek is called. Typically after EOF.
       // https://github.com/media-kit/media-kit/issues/221
