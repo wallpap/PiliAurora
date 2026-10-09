@@ -245,7 +245,7 @@
     },
     {
       "name": "media_kit_video",
-      "version": "1.2.5+piliaurora.1",
+      "version": "1.2.5+piliaurora.2",
       "upstream_version": "1.2.5",
       "path": "third_party/media_kit_video",
       "source": {

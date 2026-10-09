@@ -10,6 +10,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter/foundation.dart';
 import 'package:synchronized/synchronized.dart';
 import 'package:media_kit_video/src/video_controller/android_video_controller/surface_size.dart';
+import 'package:media_kit_video/src/video_controller/android_video_controller/fixed_surface_size.dart';
 
 import 'package:media_kit/media_kit.dart';
 
@@ -66,11 +67,40 @@ class AndroidVideoController extends PlatformVideoController {
   // ----------------------------------------------
 
   String? _current;
+  late final _fixedSize = AndroidFixedSurfaceSize(
+    fullscreenWidth: configuration.androidFullscreenWidth,
+    fullscreenHeight: configuration.androidFullscreenHeight,
+  );
+  ({int width, int height})? _appliedSize;
+  bool _attached = false;
+  int _mediaGeneration = 0;
+
+  void _diagnostic(String event, [Map<String, Object?> details = const {}]) {
+    try {
+      configuration.onAndroidDiagnostic?.call(event, {
+        'handle': player.handle,
+        'textureId': id.value,
+        'wid': _wid,
+        'mediaGeneration': _mediaGeneration,
+        'attached': _attached,
+        if (_fixedSize.size case final size?)
+          'fixedOutput': {'width': size.width, 'height': size.height},
+        ...details,
+      });
+    } catch (_) {
+      /* 诊断回调与播放控制隔离。 */
+    }
+  }
 
   /// {@macro android_video_controller}
   AndroidVideoController._(super.player, super.configuration) {
     player.onLoadHooks.add(() {
       return _lock.synchronized(() async {
+        _mediaGeneration++;
+        _fixedSize.reset();
+        _appliedSize = null;
+        _attached = false;
+        _diagnostic('surface.load');
         final mpv = NativePlayer.mpv;
         final ctx = player.ctx;
 
@@ -96,6 +126,7 @@ class AndroidVideoController extends PlatformVideoController {
           debugPrint(data.toString());
           // Save the android.view.Surface object reference for usage inside player.stream.videoParams.listen.
           _wid = data['wid'];
+          _diagnostic('surface.created');
         }
 
         // By default, android.view.Surface has a size of 1x1. If we assign --wid here, libmpv will internally start rendering & the first frame will be drawn as a solid color: https://github.com/media-kit/media-kit/issues/339
@@ -110,6 +141,10 @@ class AndroidVideoController extends PlatformVideoController {
           }
           // ----------------------------------------------
         } catch (exception, stacktrace) {
+          _diagnostic('surface.error', {
+            'error': exception.toString(),
+            'stack': stacktrace.toString(),
+          });
           debugPrint(exception.toString());
           debugPrint(stacktrace.toString());
         }
@@ -117,6 +152,9 @@ class AndroidVideoController extends PlatformVideoController {
     });
     player.onUnloadHooks.add(() {
       return _lock.synchronizedSync(() {
+        _attached = false;
+        _appliedSize = null;
+        _diagnostic('surface.unload');
         // Release any references to current android.view.Surface.
         //
         // It is important to set --vo=null here for 2 reasons:
@@ -128,14 +166,27 @@ class AndroidVideoController extends PlatformVideoController {
           player.setOption('wid', '0');
           // ----------------------------------------------
         } catch (exception, stacktrace) {
+          _diagnostic('surface.error', {
+            'error': exception.toString(),
+            'stack': stacktrace.toString(),
+          });
           debugPrint(exception.toString());
           debugPrint(stacktrace.toString());
         }
       });
     });
 
-    _subscription = player.stream.videoParams.listen(
-      (event) => _lock.synchronized(() async {
+    _subscription = player.stream.videoParams.listen((event) async {
+      // 排队前绑定媒体与代数，避免切源后使用旧参数确定固定尺寸。
+      final media = player.current.firstOrNull;
+      final generation = _mediaGeneration;
+      await _lock.synchronized(() async {
+        if (player.disposed ||
+            media == null ||
+            generation != _mediaGeneration ||
+            !identical(player.current.firstOrNull, media)) {
+          return;
+        }
         if (const [0, null].contains(event.dw) ||
             const [0, null].contains(event.dh) ||
             _wid == null) {
@@ -153,25 +204,45 @@ class AndroidVideoController extends PlatformVideoController {
           height = event.dw ?? 0;
         }
 
-        rect.value = Rect.zero;
         try {
           if (vo == 'gpu') {
             // NOTE: Only required for --vo=gpu
             // With --vo=gpu, we need to update the android.graphics.SurfaceTexture size & notify libmpv to re-create vo.
             // In native Android, this kind of rendering is done with android.view.SurfaceView + android.view.SurfaceHolder, which offers onSurfaceChanged to handle this.
-            // 源参数重建和应用自适应共用队列，避免 buffer 与 mpv 两端交叉提交。
-            final accepted = await setAndroidSurfaceSize(
-              player: player,
-              width: width,
-              height: height,
-              wid: _wid,
-            );
-            if (!accepted) return;
+            // 只在媒体加载/挂载时提交固定值；Flutter 视口不再参与此路径。
+            final size = _fixedSize.resolve(width, height);
+            if (!_attached || _appliedSize != size) {
+              final watch = Stopwatch()..start();
+              _diagnostic('surface.configure.begin', {
+                'sourceWidth': width,
+                'sourceHeight': height,
+                'requestedWidth': size.width,
+                'requestedHeight': size.height,
+              });
+              final accepted = await setAndroidSurfaceSize(
+                player: player,
+                width: size.width,
+                height: size.height,
+                wid: _wid,
+              );
+              _diagnostic('surface.configure.end', {
+                'accepted': accepted,
+                'durationUs': watch.elapsedMicroseconds,
+              });
+              if (!accepted) return;
+              _appliedSize = size;
+              _attached = true;
+            }
           }
           // ----------------------------------------------
         } catch (exception, stacktrace) {
+          _diagnostic('surface.error', {
+            'error': exception.toString(),
+            'stack': stacktrace.toString(),
+          });
           debugPrint(exception.toString());
           debugPrint(stacktrace.toString());
+          return;
         }
         rect.value = Rect.fromLTRB(
           0.0,
@@ -179,8 +250,8 @@ class AndroidVideoController extends PlatformVideoController {
           width.toDouble(),
           height.toDouble(),
         );
-      }),
-    );
+      });
+    });
   }
 
   /// {@macro android_video_controller}
@@ -259,6 +330,7 @@ class AndroidVideoController extends PlatformVideoController {
 
   /// Disposes the instance. Releases allocated resources back to the system.
   Future<void> _dispose() async {
+    _diagnostic('surface.dispose');
     // Dispose the [StreamSubscription]s.
     await _subscription?.cancel();
     // Release the native resources.
@@ -290,6 +362,16 @@ class AndroidVideoController extends PlatformVideoController {
           debugPrint(call.method.toString());
           debugPrint(call.arguments.toString());
           switch (call.method) {
+            case 'VideoOutput.Diagnostic':
+              {
+                final arguments = Map<String, Object?>.from(
+                  call.arguments as Map,
+                );
+                final handle = arguments.remove('handle') as int;
+                final event = arguments.remove('event') as String;
+                _controllers[handle]?._diagnostic(event, arguments);
+                break;
+              }
             case 'VideoOutput.WaitUntilFirstFrameRenderedNotify':
               {
                 // Notify about updated texture ID & [Rect].

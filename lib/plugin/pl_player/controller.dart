@@ -37,6 +37,7 @@ import 'package:pili_aurora/plugin/pl_player/utils/playback_network_recovery.dar
 import 'package:pili_aurora/services/service_locator.dart';
 import 'package:pili_aurora/services/diagnostics/diagnostics.dart';
 import 'package:pili_aurora/services/diagnostics/player_diagnostics.dart';
+import 'package:pili_aurora/services/android_video_calibration.dart';
 import 'package:pili_aurora/services/logger.dart';
 import 'package:pili_aurora/utils/accounts.dart';
 import 'package:pili_aurora/utils/android/android_helper.dart';
@@ -675,7 +676,7 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
     } catch (err, stackTrace) {
       if (!isCurrent()) return;
       dataStatus.value = DataStatus.error;
-      Diagnostics.instance.log(
+      Diagnostics.instance.playerLog(
         DiagnosticLogLevel.error,
         'player',
         '播放器初始化失败',
@@ -758,8 +759,20 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
       ),
     );
 
+    _diagnostics = PlayerDiagnostics(
+      player,
+      extra: () => {
+        'previewCacheBytes': previewCache.sizeBytes,
+        'previewCacheLimitBytes': previewCache.maxBytes,
+        'attachedPages': _playerCount,
+        'live': isLive,
+      },
+    );
+
     // 创建句柄与输出均跨异步边界，页面可能已退出；不能发布迟到的原生资源。
     if (_playerCount == 0) {
+      _diagnostics?.dispose();
+      _diagnostics = null;
       await player.dispose();
       return null;
     }
@@ -771,17 +784,39 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
         configuration: hardwareVideoConfiguration(
           enabled: Pref.enableHA,
           configured: Pref.hardwareDecoding,
+          androidFullscreenWidth: Platform.isAndroid
+              ? AndroidVideoCalibration.saved?.width
+              : null,
+          androidFullscreenHeight: Platform.isAndroid
+              ? AndroidVideoCalibration.saved?.height
+              : null,
+          onAndroidDiagnostic: (action, details) => _diagnostics?.event(
+            action,
+            level: action.contains('error')
+                ? DiagnosticLogLevel.error
+                : DiagnosticLogLevel.info,
+            details: details,
+          ),
         ),
       );
       player.setMediaHeader(
         userAgent: BrowserUa.pc,
         referer: HttpString.baseUrl,
       );
-    } catch (_) {
+    } catch (error, stack) {
+      _diagnostics?.event(
+        'player.create.failed',
+        level: DiagnosticLogLevel.error,
+        details: {'error': error, 'stack': stack},
+      );
+      _diagnostics?.dispose();
+      _diagnostics = null;
       await player.dispose();
       rethrow;
     }
     if (_playerCount == 0) {
+      _diagnostics?.dispose();
+      _diagnostics = null;
       await player.dispose();
       return null;
     }
@@ -847,6 +882,15 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
         configured: Pref.hardwareDecoding,
       ).hwdec!,
     );
+    _diagnostics?.event(
+      'media.open.requested',
+      details: {
+        'startMs': seekTo?.inMilliseconds,
+        'sourceType': dataSource.runtimeType.toString(),
+        'audioOnly': onlyPlayAudio.value,
+      },
+    );
+    final openWatch = Stopwatch()..start();
     await player.open(
       nativeMediaSource(
         source: dataSource,
@@ -855,6 +899,13 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
         extras: extras,
       ),
       play: false,
+    );
+    _diagnostics?.event(
+      'media.open.completed',
+      details: {
+        'durationUs': openWatch.elapsedMicroseconds,
+        'isCurrent': isCurrent(),
+      },
     );
     return isCurrent() && _playerCount != 0;
   }
@@ -979,16 +1030,6 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
   /// 播放事件监听
   void _startListeners(NativePlayer player) {
     assert(_subscriptions == null);
-    _diagnostics = PlayerDiagnostics(
-      player,
-      extra: () => {
-        'previewCacheBytes': previewCache.sizeBytes,
-        'previewCacheLimitBytes': previewCache.maxBytes,
-        'requestedHwdec': player.getProperty('hwdec'),
-        'attachedPages': _playerCount,
-        'live': isLive,
-      },
-    );
     final stream = player.stream;
     if (Platform.isAndroid) {
       _androidDecodeRecovery = AndroidDecodeRecovery(
@@ -996,8 +1037,18 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
             ? null
             : player.getProperty('hwdec-current'),
         applyDecoder: (decoder) {
+          _diagnostics?.event(
+            'decoder.apply.begin',
+            level: DiagnosticLogLevel.warning,
+            details: {'requestedDecoder': decoder},
+          );
           player.setProperty('hwdec', decoder);
-          Diagnostics.instance.log(
+          _diagnostics?.event(
+            'decoder.apply.end',
+            level: DiagnosticLogLevel.warning,
+            details: {'requestedDecoder': decoder},
+          );
+          Diagnostics.instance.playerLog(
             DiagnosticLogLevel.warning,
             'player',
             'Android video output recovery: hwdec=$decoder',
@@ -1013,7 +1064,7 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
           if (isLive || dataSource is FileSource) return false;
           final reload = refreshPlayer();
           if (reload == null) return false;
-          Diagnostics.instance.log(
+          Diagnostics.instance.playerLog(
             DiagnosticLogLevel.warning,
             'player',
             'Android AV1 software recovery: reload current media once',
@@ -1021,7 +1072,21 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
           await reload;
           return true;
         },
-        onError: Utils.reportError,
+        onDiagnostic: (action, details) => _diagnostics?.event(
+          action,
+          level: action.contains('failed')
+              ? DiagnosticLogLevel.error
+              : DiagnosticLogLevel.debug,
+          details: details,
+        ),
+        onError: (error) {
+          _diagnostics?.event(
+            'decoder.recovery.failed',
+            level: DiagnosticLogLevel.error,
+            details: {'error': error},
+          );
+          Utils.reportError(error);
+        },
       );
     }
     _subscriptions = [
@@ -1116,7 +1181,7 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
         }
       }),
       stream.error.listen((String event) {
-        Diagnostics.instance.log(DiagnosticLogLevel.error, 'player', event);
+        // PlayerDiagnostics owns error logging, including its native state snapshot.
         if (dataSource is FileSource &&
             event.startsWith("Failed to open file")) {
           return;
@@ -1182,10 +1247,32 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
       await _videoPlayerController?.stream.buffer.first;
     }
     danmakuController?.clear();
+    final watch = Stopwatch()..start();
+    _diagnostics?.event(
+      'playback.seek.begin',
+      level: DiagnosticLogLevel.debug,
+      details: {'targetMs': position.inMilliseconds, 'dragSeek': isSeek},
+    );
     try {
       await _videoPlayerController?.seek(position);
-    } catch (e) {
-      logger.d('seek failed: $e');
+      _diagnostics?.event(
+        'playback.seek.end',
+        level: DiagnosticLogLevel.debug,
+        details: {
+          'targetMs': position.inMilliseconds,
+          'durationUs': watch.elapsedMicroseconds,
+        },
+      );
+    } catch (e, stack) {
+      _diagnostics?.event(
+        'playback.seek.failed',
+        level: DiagnosticLogLevel.error,
+        details: {
+          'error': e,
+          'stack': stack,
+          'targetMs': position.inMilliseconds,
+        },
+      );
     }
   }
 

@@ -10,6 +10,7 @@ import 'package:pili_aurora/services/account_service.dart';
 import 'package:pili_aurora/services/download/download_repository.dart';
 import 'package:pili_aurora/services/download/download_service.dart';
 import 'package:pili_aurora/services/logger.dart';
+import 'package:pili_aurora/services/android_video_calibration.dart';
 import 'package:pili_aurora/utils/cache_manager.dart';
 import 'package:pili_aurora/utils/date_utils.dart';
 import 'package:pili_aurora/utils/font_utils.dart';
@@ -39,6 +40,7 @@ Future<void> bootstrapApplication() async {
   }
   ScaledWidgetsFlutterBinding.instance.scaleFactor = Pref.uiScale;
   await LoggerUtils.initialize();
+  if (Platform.isAndroid) await AndroidVideoCalibration.ensure();
   await Future.wait([
     initializeDownloadPath(),
     initializeTemporaryPath(),

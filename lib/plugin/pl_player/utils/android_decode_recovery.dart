@@ -9,7 +9,25 @@ class AndroidDecodeRecovery {
     required this.onError,
     this.recoverSoftware,
     this.onFallback,
+    this.onDiagnostic,
   });
+
+  final void Function(String action, Map<String, Object?> details)?
+  onDiagnostic;
+  void _record(String action, [Map<String, Object?> details = const {}]) {
+    try {
+      onDiagnostic?.call(action, {
+        'recoveryGeneration': _generation,
+        'copyAttempted': _copyAttempted,
+        'softwareAttempted': _softwareAttempted,
+        'softwareReloadAttempted': _softwareReloadAttempted,
+        'parseErrors': _parseErrors,
+        ...details,
+      });
+    } catch (_) {
+      /* Diagnostic observers cannot alter fallback behavior. */
+    }
+  }
 
   final String? Function() activeDecoder;
   final void Function(String decoder) applyDecoder;
@@ -50,6 +68,15 @@ class AndroidDecodeRecovery {
         prefix == 'vo/gpu/aimagereader' &&
         text.contains('acquirelatestimage failed');
     if (!surfaceFailure && !imageFailure) return;
+    _record('decoder.recovery.scheduled', {
+      'reason': surfaceFailure
+          ? 'mediacodec-null-surface'
+          : 'aimagereader-acquire-failed',
+      'prefix': prefix,
+      'nativeLevel': level,
+      'trigger': message,
+      'delayMs': 200,
+    });
 
     // 合并同一轮初始化产生的成批错误，等 mpv 自身的候选探测结束再判断。
     _pending = Timer(const Duration(milliseconds: 200), () {
@@ -57,13 +84,20 @@ class AndroidDecodeRecovery {
       if (_disposed) return;
       try {
         final decoder = activeDecoder()?.trim();
-        if (decoder != 'mediacodec' && decoder != 'mediacodec-copy') return;
+        if (decoder != 'mediacodec' && decoder != 'mediacodec-copy') {
+          _record('decoder.recovery.skipped', {
+            'activeDecoder': decoder,
+            'reason': 'native-already-recovered',
+          });
+          return;
+        }
         final next = decoder == 'mediacodec' && !_copyAttempted
             ? 'mediacodec-copy'
             : 'no';
         _copyAttempted = true;
         // copy 仍失败时只尝试一次软解，避免日志触发无限切换。
         _softwareAttempted = next == 'no';
+        _record('decoder.recovery.apply', {'from': decoder, 'to': next});
         applyDecoder(next);
         _notifyFallback(next);
       } catch (error) {
@@ -94,6 +128,7 @@ class AndroidDecodeRecovery {
       return;
     }
     _parseErrors++;
+    _record('decoder.software.parse-error');
     if (_softwarePending != null) return;
     final generation = _generation;
     // 单个坏帧由解码器自行跳过；只有短时间内持续解析失败才重建媒体。
@@ -106,7 +141,9 @@ class AndroidDecodeRecovery {
         if (activeDecoder()?.trim() != 'no') return;
         // 先消耗预算，重载过程中出现同样错误也不能形成重开循环。
         _softwareReloadAttempted = true;
+        _record('decoder.software.reload.begin');
         final reloaded = await recoverSoftware!();
+        _record('decoder.software.reload.end', {'accepted': reloaded});
         if (!reloaded && !_disposed && generation == _generation) {
           _softwareReloadAttempted = false;
         }
@@ -118,6 +155,7 @@ class AndroidDecodeRecovery {
   }
 
   void reset() {
+    _record('decoder.recovery.reset');
     _generation++;
     _softwarePending?.cancel();
     _softwarePending = null;

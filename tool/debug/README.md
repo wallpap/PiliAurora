@@ -1,3 +1,5 @@
+> **2026-10-09 方案更新：** 正式 Android 播放器已停止视口自适应尺寸提交，改为默认全屏校准常量与源尺寸的固定输出。下文自适应/保护帧交接和 `ANDROID_VIDEO_OUTPUT_SIZE` 对照步骤是旧方案的历史诊断记录，不能再作为当前正式实现的验收。当前设置、日志通道与实机流程见 `doc/android_fixed_output_diagnostics.md`。
+
 # Android 暂停旋转诊断入口
 
 `paused_rotation.dart` 是独立 Flutter 入口，只加载本地文件、原生播放器和应用实际使用的 `FittedBox + SimpleVideo` / Android Surface 调整方法和正式 VideoOutputResizer 调度器。入口不初始化账号、持久化设置或线上请求，也不加载真实视频链接。完整 PLVideoPlayer 页面的播放效果还需要实机回归。

@@ -21,9 +21,9 @@ abstract final class DiagnosticRedactor {
     r'-----BEGIN (?:[A-Z]+ )*PRIVATE KEY-----[\s\S]*?(?:-----END (?:[A-Z]+ )*PRIVATE KEY-----|$)',
   );
 
-  static String text(Object? value) {
+  static String text(Object? value, {int maxLength = 4096}) {
     final input = value.toString();
-    var result = (input.length > 16384 ? input.substring(0, 16384) : input)
+    var result = (input.length > 1048576 ? input.substring(0, 1048576) : input)
         .replaceAll(_privateKey, '<private-key>')
         .replaceAllMapped(_url, (match) {
           final uri = Uri.tryParse(match[0]!);
@@ -43,10 +43,16 @@ abstract final class DiagnosticRedactor {
       RegExp(r'/(?:Users|home)/[^\s/]+'),
       '/<user>',
     );
-    return result.length <= 4096 ? result : '${result.substring(0, 4096)}…';
+    return result.length <= maxLength
+        ? result
+        : '${result.substring(0, maxLength)}…<truncated>';
   }
 
-  static Object? clean(Object? value) => _clean(value, _Budget(), 0);
+  static Object? clean(
+    Object? value, {
+    int maxCharacters = 8192,
+    int maxStringLength = 4096,
+  }) => _clean(value, _Budget(maxCharacters, maxStringLength), 0);
 
   static Object? _clean(Object? value, _Budget budget, int depth) {
     if (depth > 8 || budget.nodes-- <= 0 || budget.characters <= 0) {
@@ -71,7 +77,10 @@ abstract final class DiagnosticRedactor {
           .map((item) => _clean(item, budget, depth + 1))
           .toList();
     }
-    final result = text(value);
+    final result = text(
+      value,
+      maxLength: budget.characters.clamp(0, budget.maxStringLength),
+    );
     final length = result.length.clamp(0, budget.characters);
     budget.characters -= length;
     return length == result.length ? result : '${result.substring(0, length)}…';
@@ -79,6 +88,8 @@ abstract final class DiagnosticRedactor {
 }
 
 class _Budget {
+  _Budget(this.characters, this.maxStringLength);
+  final int maxStringLength;
   int nodes = 256;
-  int characters = 8192;
+  int characters;
 }

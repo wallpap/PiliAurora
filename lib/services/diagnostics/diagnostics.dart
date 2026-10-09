@@ -18,7 +18,7 @@ enum DiagnosticLogLevel {
   info('信息', '主要状态变化'),
   warning('警告', '异常情况与错误（默认）'),
   error('错误', '仅记录失败'),
-  off('关闭', '停止运行日志与异常记录');
+  off('关闭', '停止此通道的日志保存');
 
   const DiagnosticLogLevel(this.label, this.description);
   final String label;
@@ -43,6 +43,11 @@ class Diagnostics extends ChangeNotifier {
   final _elapsed = Stopwatch();
   DiagnosticRecordStore? _logs;
   DiagnosticRecordStore? _trace;
+  DiagnosticRecordStore? _playerLogs;
+  final _clock = Stopwatch()..start();
+  final String _runId = DateTime.now().toUtc().toIso8601String();
+  int _logSequence = 0;
+  DiagnosticLogLevel _playerLevel = DiagnosticLogLevel.info;
   Timer? _timer;
   Timer? _notification;
   bool _tracing = false;
@@ -56,16 +61,27 @@ class Diagnostics extends ChangeNotifier {
 
   bool get tracing => _tracing;
   DiagnosticLogLevel get level => _level;
+  DiagnosticLogLevel get playerLevel => _playerLevel;
+  Map<String, Object?> get storageStatus => {
+    'runtime': _logs?.status,
+    'player': _playerLogs?.status,
+    'performance': _trace?.status,
+  };
   int get intervalMs => _intervalMs;
   String? get session => _session;
   List<Map<String, Object?>> get recentLogs =>
       _recent.toList().reversed.toList();
-  int get droppedRecords => (_logs?.dropped ?? 0) + (_trace?.dropped ?? 0);
-  String? get storageError => _logs?.lastError ?? _trace?.lastError;
+  int get droppedRecords =>
+      (_logs?.dropped ?? 0) +
+      (_trace?.dropped ?? 0) +
+      (_playerLogs?.dropped ?? 0);
+  String? get storageError =>
+      _logs?.lastError ?? _trace?.lastError ?? _playerLogs?.lastError;
 
   Future<void> initialize({
     required Directory directory,
     DiagnosticLogLevel level = DiagnosticLogLevel.warning,
+    DiagnosticLogLevel playerLevel = DiagnosticLogLevel.info,
     bool tracing = false,
     int intervalMs = 1000,
     Future<void> Function(Map<String, Object?>)? saveSettings,
@@ -73,8 +89,14 @@ class Diagnostics extends ChangeNotifier {
     _logs = DiagnosticRecordStore(File('${directory.path}/runtime.jsonl'));
     _trace = DiagnosticRecordStore(
       File('${directory.path}/performance.jsonl'),
-      maxBytes: 8 << 20,
+      maxBytes: 16 << 20,
     );
+    _playerLogs = DiagnosticRecordStore(
+      File('${directory.path}/player.jsonl'),
+      maxBytes: 16 << 20,
+      retainedFiles: 8,
+    );
+    _playerLevel = playerLevel;
     _saveSettings = saveSettings;
     _level = level;
     _intervalMs = intervals.contains(intervalMs) ? intervalMs : 1000;
@@ -84,7 +106,20 @@ class Diagnostics extends ChangeNotifier {
 
   Future<void> _loadHistory() async {
     try {
-      _recent.addAll(await readDiagnosticHistory(await _logs!.files()));
+      final records =
+          [
+            ...await readDiagnosticHistory(await _logs!.files()),
+            ...await readDiagnosticHistory(await _playerLogs!.files()),
+          ]..sort((a, b) {
+            final order = (a['time'] as String? ?? '').compareTo(
+              b['time'] as String? ?? '',
+            );
+            if (order != 0) return order;
+            return (a['sequence'] as int? ?? 0).compareTo(
+              b['sequence'] as int? ?? 0,
+            );
+          });
+      _recent.addAll(records);
       while (_recent.length > 200) {
         _recent.removeFirst();
       }
@@ -95,10 +130,12 @@ class Diagnostics extends ChangeNotifier {
 
   Future<void> configure({
     DiagnosticLogLevel? level,
+    DiagnosticLogLevel? playerLevel,
     bool? tracing,
     int? intervalMs,
   }) async {
     if (level != null) _level = level;
+    if (playerLevel != null) _playerLevel = playerLevel;
     if (intervalMs != null && intervals.contains(intervalMs)) {
       _intervalMs = intervalMs;
     }
@@ -114,6 +151,7 @@ class Diagnostics extends ChangeNotifier {
     notifyListeners();
     await _saveSettings?.call({
       'level': _level.name,
+      'playerLevel': _playerLevel.name,
       'tracing': _tracing,
       'intervalMs': _intervalMs,
     });
@@ -130,20 +168,71 @@ class Diagnostics extends ChangeNotifier {
     StackTrace? stack,
   }) {
     if (!accepts(level)) return;
+    _writeLog(_logs, level, category, message, details: details, stack: stack);
+  }
+
+  bool acceptsPlayer(DiagnosticLogLevel level) =>
+      _playerLevel != DiagnosticLogLevel.off &&
+      level.index >= _playerLevel.index;
+
+  void playerLog(
+    DiagnosticLogLevel level,
+    String category,
+    Object? message, {
+    Object? details,
+    StackTrace? stack,
+  }) {
+    if (!acceptsPlayer(level)) return;
+    _writeLog(
+      _playerLogs,
+      level,
+      category,
+      message,
+      details: details,
+      stack: stack,
+      player: true,
+    );
+  }
+
+  void _writeLog(
+    DiagnosticRecordStore? store,
+    DiagnosticLogLevel level,
+    String category,
+    Object? message, {
+    Object? details,
+    StackTrace? stack,
+    bool player = false,
+  }) {
     final record = <String, Object?>{
       'time': DateTime.now().toUtc().toIso8601String(),
+      'runId': _runId,
+      'sequence': ++_logSequence,
+      'elapsedUs': _clock.elapsedMicroseconds,
+      'channel': player ? 'player' : 'runtime',
       'level': level.name,
       'category': category,
-      'message': DiagnosticRedactor.text(message),
-      if (details != null) 'details': DiagnosticRedactor.clean(details),
-      if (stack != null) 'stack': DiagnosticRedactor.text(stack),
+      'message': DiagnosticRedactor.text(
+        message,
+        maxLength: player ? 65536 : 16384,
+      ),
+      if (details != null)
+        'details': DiagnosticRedactor.clean(
+          details,
+          maxCharacters: player ? 262144 : 8192,
+          maxStringLength: player ? 65536 : 4096,
+        ),
+      if (stack != null)
+        'stack': DiagnosticRedactor.text(
+          stack,
+          maxLength: player ? 65536 : 4096,
+        ),
       if (_tracing) 'session': _session,
     };
     _recent.add(record);
     while (_recent.length > 200) {
       _recent.removeFirst();
     }
-    _logs?.add(record);
+    store?.add(record);
     _notifySoon();
   }
 
@@ -152,6 +241,20 @@ class Diagnostics extends ChangeNotifier {
     return () {
       if (identical(_sources[name], reader)) _sources.remove(name);
     };
+  }
+
+  /// 读取指定诊断源，不开启全局性能跟踪；播放器可把 Flutter 几何加入自己的快照。
+  Map<String, Object?> readSources({required String prefix}) => {
+    for (final entry in _sources.entries.toList())
+      if (entry.key.startsWith(prefix)) entry.key: _readSource(entry.value),
+  };
+
+  static Object _readSource(Map<String, Object?> Function() reader) {
+    try {
+      return reader();
+    } catch (_) {
+      return {'available': false};
+    }
   }
 
   void gauge(String name, num value) => _gauges[name] = value;
@@ -282,16 +385,19 @@ class Diagnostics extends ChangeNotifier {
 
   Future<List<File>> files() async => [
     ...?await _logs?.files(),
+    ...?await _playerLogs?.files(),
     ...?await _trace?.files(),
   ];
   Future<void> flush() async {
     await _logs?.flush();
+    await _playerLogs?.flush();
     await _trace?.flush();
   }
 
   Future<void> clear() async {
     if (_tracing) await configure(tracing: false);
     await _logs?.clear();
+    await _playerLogs?.clear();
     await _trace?.clear();
     _recent.clear();
     latest = null;
@@ -306,15 +412,19 @@ class Diagnostics extends ChangeNotifier {
     try {
       final paths = [
         ...?await _logs?.snapshot(directory),
+        ...?await _playerLogs?.snapshot(directory),
         ...?await _trace?.snapshot(directory),
       ];
       final manifest = File('${directory.path}/manifest.json');
       await manifest.writeAsString(
         jsonEncode({
-          'schema': 1,
+          'schema': 2,
+          'runId': _runId,
+          'storage': storageStatus,
           'platform': Platform.operatingSystem,
           'created': DateTime.now().toUtc().toIso8601String(),
           'level': _level.name,
+          'playerLevel': _playerLevel.name,
           'intervalMs': _intervalMs,
           'droppedRecords': droppedRecords,
           'app': DiagnosticRedactor.clean(_sources['app']?.call()),

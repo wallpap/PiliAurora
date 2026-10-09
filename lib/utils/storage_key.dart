@@ -1,6 +1,8 @@
 // ignore_for_file: constant_identifier_names
 
 abstract final class SettingBoxKey {
+  static const androidFullscreenCalibration = 'androidFullscreenCalibration',
+      playerDiagnosticLogLevel = 'playerDiagnosticLogLevel';
   static const diagnosticLogLevel = 'diagnosticLogLevel',
       performanceTracing = 'performanceTracing',
       performanceIntervalMs = 'performanceIntervalMs';
