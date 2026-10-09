@@ -192,6 +192,21 @@ void main() {
     },
   );
 
+  testWidgets('unchanged rounded target waits for the last layout event', (
+    tester,
+  ) async {
+    resizer.request(landscape);
+    await tester.pump(const Duration(milliseconds: 200));
+    resizer.defer();
+    await tester.pump(const Duration(milliseconds: 200));
+    resizer.defer();
+    await tester.pump(const Duration(milliseconds: 249));
+    expect(surfaces, isEmpty);
+    await tester.pump(const Duration(milliseconds: 1));
+    expect(surfaces, [landscape]);
+    expect(resizer.pending, isFalse);
+  });
+
   testWidgets('only the latest waiting target follows an in-flight request', (
     tester,
   ) async {

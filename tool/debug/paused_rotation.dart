@@ -1,12 +1,17 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/services.dart';
+import 'package:flutter/rendering.dart' show RenderRepaintBoundary;
 import 'package:flutter/widgets.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
 import 'package:pili_aurora/plugin/pl_player/utils/android_video_output.dart';
 import 'package:pili_aurora/plugin/pl_player/utils/hardware_video_configuration.dart';
 import 'package:pili_aurora/plugin/pl_player/utils/video_output_resizer.dart';
+import 'package:pili_aurora/plugin/pl_player/utils/video_output_handoff.dart';
+import 'package:pili_aurora/plugin/pl_player/utils/video_output_paint_barrier.dart';
+import 'package:pili_aurora/plugin/pl_player/widgets/video_output_handoff.dart';
 import 'package:pili_aurora/plugin/pl_player/utils/video_output_size.dart';
 
 /// 只读模拟器中使用的合成视频回归入口，不初始化账号、设置或应用网络请求。
@@ -136,17 +141,45 @@ class _RotationProbe extends StatefulWidget {
 
 class _RotationProbeState extends State<_RotationProbe> {
   late final VideoOutputResizer _resizer;
+  late final VideoOutputHandoff _handoff;
+  late final VideoOutputPaintBarrier _paintBarrier;
+  final _frameKey = GlobalKey();
+  Size? _viewport;
   StreamSubscription<bool>? _playing;
 
   @override
   void initState() {
     super.initState();
+    _paintBarrier = VideoOutputPaintBarrier();
+    _handoff = VideoOutputHandoff(
+      waitForProtectedFrame: _paintBarrier.wait,
+      capture: () async {
+        await WidgetsBinding.instance.endOfFrame;
+        if (!mounted) return null;
+        final frame = _frameKey.currentContext?.findRenderObject();
+        if (frame is! RenderRepaintBoundary ||
+            !frame.hasSize ||
+            frame.size.isEmpty) {
+          return null;
+        }
+        return frame.toImage(
+          pixelRatio: math.min(3, 1920 / frame.size.longestSide),
+        );
+      },
+      waitForPaint: () => WidgetsBinding.instance.endOfFrame,
+    );
     _resizer = VideoOutputResizer(
       enabled: widget.controller.player.state.playing,
-      apply: (size, isCurrent) => setAndroidVideoOutputSize(
-        player: widget.controller.player,
-        size: size,
+      apply: (size, isCurrent) => _handoff.run(
         isCurrent: isCurrent,
+        canStart: () => mounted && widget.controller.player.state.playing,
+        submit: (canStart) => setAndroidVideoOutputSize(
+          player: widget.controller.player,
+          size: size,
+          isCurrent: isCurrent,
+          canStart: canStart,
+          waitForFrame: true,
+        ),
       ),
       onError: (_, error, _) =>
           debugPrint('PILI_PROBE resize failed: ${error.runtimeType}'),
@@ -159,12 +192,18 @@ class _RotationProbeState extends State<_RotationProbe> {
 
   void _outputChanged() {
     _resizer.invalidate();
+    _handoff.invalidate();
+    _paintBarrier.cancel();
+    unawaited(cancelAndroidSurfaceFrameWait(widget.controller.player));
     setState(() {});
   }
 
   @override
   void dispose() {
     _resizer.dispose();
+    unawaited(cancelAndroidSurfaceFrameWait(widget.controller.player));
+    _handoff.dispose();
+    _paintBarrier.dispose();
     _playing?.cancel();
     widget.controller.rect.removeListener(_outputChanged);
     super.dispose();
@@ -174,6 +213,12 @@ class _RotationProbeState extends State<_RotationProbe> {
   Widget build(BuildContext context) => LayoutBuilder(
     builder: (context, constraints) {
       final controller = widget.controller;
+      final viewport = Size(constraints.maxWidth, constraints.maxHeight);
+      if (_viewport != viewport) {
+        _viewport = viewport;
+        _handoff.viewportChanged();
+        _resizer.defer();
+      }
       final rect = controller.rect.value;
       final size = calculateVideoOutputSize(
         logicalWidth: constraints.maxWidth,
@@ -196,7 +241,11 @@ class _RotationProbeState extends State<_RotationProbe> {
         color: const Color(0xFF000000),
         child: FittedBox(
           fit: BoxFit.contain,
-          child: SimpleVideo(controller: controller),
+          child: VideoOutputHandoffView(
+            handoff: _handoff,
+            frameKey: _frameKey,
+            child: SimpleVideo(controller: controller),
+          ),
         ),
       );
     },

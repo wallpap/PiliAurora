@@ -33,6 +33,13 @@ class VideoOutputResizer {
   VideoOutputSize? get target => _target;
   VideoOutputSize? get applied => _applied;
   int get generation => _generation;
+  bool get pending => _applying || (_target != null && _target != _applied);
+
+  /// 布局仍变化时推迟尚未开始的提交，即使目标四舍五入后尺寸相同。
+  /// 正在执行的原生提交仍必须完成，不取消半次 buffer / mpv 更新。
+  void defer() {
+    if (!_disposed && pending) _schedule();
+  }
 
   void request(VideoOutputSize size) {
     if (_disposed) return;

@@ -55,3 +55,26 @@ Android 使用 250ms 的稳定窗口；暂停期间不新增自适应提交，�
 - `build/app/outputs/flutter-apk/app-debug.apk` 已恢复为开启修正路径的正常应用包。旧的 adaptive / source-size 文件不作为本轮结果，避免用不同代码版本比较。
 
 这些是 Debug 验收包，不是已签名的正式 Release 发布；未安装到实机，也未上传到远程服务。
+
+
+## 2026-10-09：保留自适应的帧交接
+
+旧 adaptive/control APK 属于旧构建，不能验收本轮行为。正式入口和隔离入口已接入 `VideoOutputHandoff`：旋转布局期间先用 Flutter 缩放旧纹理；稳定后先提交内容快照，等匹配帧编号的 Flutter raster 回执，再 resize；等提交后 EGL 帧被 Flutter 消费后移除快照。`endOfFrame` 不单独放行 resize。`ANDROID_VIDEO_OUTPUT_SIZE=false` 的单变量对照仍可使用。
+
+正常应用诊断会出现 `resizePolicy=state-machine-frame-handoff` 和 `handoffActive`。`resize.completed/accepted=true` 现在包含本次消费等待和快照移除，不再仅表示两次尺寸调用结束。无法捕获有效图片或检查帧时钟时会拒绝本次优化，不能把 `accepted=false` 误认为已执行安全交接。
+
+暂停期间不开始新提交；已经开始的交接不自动恢复播放。若等待新帧时切源、Surface 重建或销毁，取消旧请求并解除 native 队列。验收需额外覆盖快速反向旋转、交接期间暂停后恢复、4K 和交接中切源。既有 probe 仍只检查三个暂停阶段的整帧，不检查旋转中每帧黑闪。
+
+自动验证：
+
+```powershell
+flutter test --no-pub test/plugin/pl_player/video_output_paint_barrier_test.dart test/plugin/pl_player/video_output_handoff_test.dart test/plugin/pl_player/video_output_handoff_widget_test.dart test/plugin/pl_player/android_video_frame_handoff_test.dart test/plugin/pl_player/video_output_resizer_test.dart test/plugin/pl_player/android_video_output_test.dart test/plugin/pl_player/video_output_state_test.dart
+javac -d build/rotation-stable/java third_party/media_kit_video/android/src/main/java/com/alexmercerind/media_kit_video/SurfaceFrameFence.java tool/debug/SurfaceFrameFenceProbe.java
+java -cp build/rotation-stable/java com.alexmercerind.media_kit_video.SurfaceFrameFenceProbe
+```
+
+主机 Java 检查不安装应用或修改设备，只验证实际生产 fence 的判断条件。
+
+正常应用交付产物：`build/rotation-stable/PiliAurora-debug-adaptive-handoff.apk`（自适应开启，入口 `lib/main.dart`，不是隔离 probe）。构建日志为同目录 `build-final.log`，回归日志为 `all-tests-final.log`；`paint-barrier-red.log` 保存旧 UI-frame 条件提前放行的失败用例。旧 adaptive/control 包不包含本次修正。
+
+保护帧 raster 回执会被引擎批量上报；Release 中需检查可见停帧时长。正常应用实机验收同时观察黑闪、瞬时裁切、保护图是否过久停留，不能只看 native `resize.completed`。帧回执不是显示器 present fence，尺寸字段也不是每个 GraphicBuffer 的实测几何。

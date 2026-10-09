@@ -1938,9 +1938,13 @@ class NativePlayer extends PlatformPlayer {
   void setOption(String opt, String value) {
     final name = opt.toNativeUtf8();
     final data = value.toNativeUtf8();
-    mpv.mpv_set_option_string(ctx, name, data);
-    calloc.free(name);
-    calloc.free(data);
+    try {
+      final result = mpv.mpv_set_option_string(ctx, name, data);
+      if (result < 0) throw StateError('mpv option $opt failed ($result)');
+    } finally {
+      calloc.free(name);
+      calloc.free(data);
+    }
   }
 
   List<AudioDevice> getAudioDevices() {

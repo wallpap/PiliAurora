@@ -9,9 +9,13 @@ Future<bool> setAndroidVideoOutputSize({
   required NativePlayer player,
   required VideoOutputSize size,
   bool Function()? isCurrent,
+  bool Function()? canStart,
+  bool waitForFrame = false,
 }) => setAndroidSurfaceSize(
   player: player,
   width: size.width,
   height: size.height,
   isCurrent: isCurrent,
+  canStart: canStart,
+  waitForFrame: waitForFrame,
 );
