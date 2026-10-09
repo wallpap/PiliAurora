@@ -548,11 +548,17 @@ class ReplyItemGrpc extends StatelessWidget {
           ),
           const SizedBox(width: 2),
         ] else if (replyControl.cardLabels.isNotEmpty) ...[
-          Text(
-            dialogBtn != null
-                ? replyControl.cardLabels.first.textContent
-                : replyControl.cardLabels.map((e) => e.textContent).join('  '),
-            style: textStyle.copyWith(color: colorScheme.secondary),
+          Flexible(
+            child: Text(
+              dialogBtn != null
+                  ? replyControl.cardLabels.first.textContent
+                  : replyControl.cardLabels
+                        .map((e) => e.textContent)
+                        .join('  '),
+              style: textStyle.copyWith(color: colorScheme.secondary),
+              maxLines: 1,
+              overflow: .ellipsis,
+            ),
           ),
           const SizedBox(width: 2),
         ],

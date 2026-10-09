@@ -29,11 +29,14 @@ void VideoOutputManager::Create(
 
 void VideoOutputManager::SetSize(int64_t handle,
                                  std::optional<int64_t> width,
-                                 std::optional<int64_t> height) {
+                                 std::optional<int64_t> height,
+                                 std::function<void(bool)> on_frame_ready) {
   std::thread([=]() {
     std::lock_guard<std::mutex> lock(mutex_);
     if (video_outputs_.find(handle) != video_outputs_.end()) {
-      video_outputs_[handle]->SetSize(width, height);
+      video_outputs_[handle]->SetSize(width, height, on_frame_ready);
+    } else {
+      on_frame_ready(false);
     }
   }).detach();
 }

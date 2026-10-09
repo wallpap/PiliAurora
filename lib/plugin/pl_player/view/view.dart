@@ -310,7 +310,7 @@ class _PLVideoPlayerState extends State<PLVideoPlayer>
       onError: (size, error, _) {
         // 失败不算已配置；后续有效事件可以重试，但不主动循环请求。
         _videoOutputStateMachine.sourceChanged();
-        if (Platform.isAndroid) {
+        if (Platform.isAndroid || Platform.isWindows) {
           Diagnostics.instance.log(
             DiagnosticLogLevel.warning,
             'video.output',
@@ -324,7 +324,7 @@ class _PLVideoPlayerState extends State<PLVideoPlayer>
         }
       },
     );
-    if (Platform.isAndroid) {
+    if (Platform.isAndroid || Platform.isWindows) {
       // 仅在开启性能追踪时采样；页面销毁前解除，避免持有旧视口。
       _unregisterVideoDiagnostics = Diagnostics.instance.register(
         'videoViewport.$hashCode',
@@ -1051,9 +1051,7 @@ class _PLVideoPlayerState extends State<PLVideoPlayer>
     return {
       'player': 'player.${videoController.player.hashCode}',
       'adaptiveOutput': _fitVideoOutputToViewport,
-      'resizePolicy': Platform.isAndroid
-          ? 'state-machine-frame-handoff'
-          : 'state-machine',
+      'resizePolicy': 'state-machine-frame-handoff',
       'handoffActive': _videoOutputHandoff.image != null,
       'state': _videoOutputStateMachine.state?.name,
       'resizePending': _videoOutputStateMachine.resizePending,
@@ -1103,7 +1101,8 @@ class _PLVideoPlayerState extends State<PLVideoPlayer>
         ..._captureVideoOutputDiagnostics(),
         'requested': {'width': size.width, 'height': size.height},
         'requestGeneration': generation,
-        // Android accepted 包含保护帧 raster 和新帧消费确认，不是像素级无闪保证。
+        // Android 确认新帧消费；Windows 确认新帧绘制并标记可用。
+        // 两者都不是像素级无闪保证，需要实机复核。
         'accepted': accepted,
       },
     );
@@ -1223,6 +1222,10 @@ class _PLVideoPlayerState extends State<PLVideoPlayer>
   }
 
   void _onVideoOutputSourceChanged() {
+    if (Platform.isWindows) {
+      _videoOutputHandoff.invalidate();
+      _videoOutputPaintBarrier.cancel();
+    }
     _videoOutputStateMachine.sourceChanged();
     _videoOutputResizer.invalidate();
     _scheduleVideoOutputState();
@@ -1333,8 +1336,59 @@ class _PLVideoPlayerState extends State<PLVideoPlayer>
       }
       return accepted;
     }
-    await videoController.setSize(width: size.width, height: size.height);
-    return true;
+    if (!Platform.isWindows) {
+      await videoController.setSize(width: size.width, height: size.height);
+      return true;
+    }
+    final generation = _videoOutputResizer.generation;
+    _logVideoOutputResize('resize.requested', size, generation: generation);
+    final player = videoController.player;
+    if (player.current.isEmpty) return false;
+    final media = player.current.first;
+    final state = player.state;
+    final previousSize =
+        _videoOutputResizer.applied ??
+        (width: state.width, height: state.height);
+    bool current() =>
+        mounted &&
+        isCurrent() &&
+        !player.disposed &&
+        player.current.isNotEmpty &&
+        identical(player.current.first, media);
+    final accepted = await _videoOutputHandoff.run(
+      isCurrent: current,
+      canStart: () =>
+          _fitVideoOutputToViewport && _videoOutputResizer.target == size,
+      submit: (canStart) async {
+        if (!canStart()) return false;
+        // Windows completion now means a replacement frame was rendered and
+        // marked available, rather than only queued on its worker thread.
+        await videoController.setSize(width: size.width, height: size.height);
+        return true;
+      },
+      recover: previousSize.width <= 0 || previousSize.height <= 0
+          ? null
+          : () async {
+              if (!current()) return false;
+              await videoController.setSize(
+                width: previousSize.width,
+                height: previousSize.height,
+              );
+              return true;
+            },
+    );
+    if (mounted && isCurrent() && !accepted) {
+      _videoOutputStateMachine.sourceChanged();
+    }
+    if (mounted) {
+      _logVideoOutputResize(
+        'resize.completed',
+        size,
+        generation: generation,
+        accepted: accepted,
+      );
+    }
+    return accepted;
   }
 
   @override
@@ -2468,7 +2522,7 @@ class _PLVideoPlayerState extends State<PLVideoPlayer>
                   child: FittedBox(
                     fit: videoFit.boxFit,
                     alignment: widget.alignment,
-                    child: Platform.isAndroid
+                    child: (Platform.isAndroid || Platform.isWindows)
                         ? VideoOutputHandoffView(
                             handoff: _videoOutputHandoff,
                             frameKey: _videoFrameKey,

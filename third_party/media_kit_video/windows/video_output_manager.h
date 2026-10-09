@@ -38,7 +38,8 @@ class VideoOutputManager {
   // texture.
   void SetSize(int64_t handle,
                std::optional<int64_t> width,
-               std::optional<int64_t> height);
+               std::optional<int64_t> height,
+               std::function<void(bool)> on_frame_ready);
 
   // Destroys the |VideoOutput| with given handle.
   void Dispose(int64_t handle);

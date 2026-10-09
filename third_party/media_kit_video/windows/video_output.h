@@ -74,12 +74,15 @@ class VideoOutput {
   void SetTextureUpdateCallback(
       std::function<void(int64_t, int64_t, int64_t)> callback);
 
-  void SetSize(std::optional<int64_t> width, std::optional<int64_t> height);
+  void SetSize(std::optional<int64_t> width, std::optional<int64_t> height,
+               std::function<void(bool)> on_frame_ready);
 
  private:
   void NotifyRender();
 
-  void Render();
+  void NotifyTextureUpdate(int64_t id, int64_t width, int64_t height);
+
+  bool Render();
 
   void CheckAndResize();
 
@@ -96,6 +99,7 @@ class VideoOutput {
   mpv_handle* handle_ = nullptr;
   mpv_render_context* render_context_ = nullptr;
   int64_t texture_id_ = 0;
+  bool texture_update_pending_ = false;
   flutter::PluginRegistrarWindows* registrar_ = nullptr;
   ThreadPool* thread_pool_ref_ = nullptr;
   // For preventing any asynchronous operations (primarily texture objects
@@ -104,6 +108,7 @@ class VideoOutput {
   bool destroyed_ = false;
 
   std::mutex textures_mutex_ = std::mutex();
+  std::mutex callback_mutex_ = std::mutex();
 
   std::unordered_map<int64_t, std::unique_ptr<flutter::TextureVariant>>
       texture_variants_ = {};
