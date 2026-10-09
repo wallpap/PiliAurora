@@ -290,19 +290,15 @@ class _PLVideoPlayerState extends State<PLVideoPlayer>
       capture: _captureVideoOutputFrame,
       waitForPaint: () => WidgetsBinding.instance.endOfFrame,
     );
-    _videoOutputStateMachine = VideoOutputStateMachine(
-      Platform.isAndroid
-          ? VideoOutputPlatform.android
-          : VideoOutputPlatform.windows,
-    );
+    _videoOutputStateMachine = VideoOutputStateMachine();
     _videoOutputResizer = VideoOutputResizer(
-      enabled: !Platform.isAndroid,
-      settleDelay: Duration(milliseconds: Platform.isAndroid ? 250 : 100),
+      enabled: _fitVideoOutputToViewport,
+      settleDelay: const Duration(milliseconds: 100),
       apply: _applyVideoOutputSize,
       onError: (size, error, _) {
         // 失败不算已配置；后续有效事件可以重试，但不主动循环请求。
-        _videoOutputStateMachine.sourceChanged();
-        if (Platform.isAndroid || Platform.isWindows) {
+        if (Platform.isWindows) {
+          _videoOutputStateMachine.sourceChanged();
           Diagnostics.instance.playerLog(
             DiagnosticLogLevel.warning,
             'video.output',
@@ -1020,7 +1016,7 @@ class _PLVideoPlayerState extends State<PLVideoPlayer>
     }
     _devicePixelRatio = pixelRatio;
     _logAndroidLayout();
-    _scheduleVideoOutputState();
+    if (Platform.isWindows) _scheduleVideoOutputState();
   }
 
   void _logAndroidLayout() {
@@ -1193,10 +1189,8 @@ class _PLVideoPlayerState extends State<PLVideoPlayer>
   }
 
   void _onVideoOutputSourceChanged() {
-    if (Platform.isWindows) {
-      _videoOutputHandoff.invalidate();
-      _videoOutputPaintBarrier.cancel();
-    }
+    _videoOutputHandoff.invalidate();
+    _videoOutputPaintBarrier.cancel();
     _videoOutputStateMachine.sourceChanged();
     _videoOutputResizer.invalidate();
     _scheduleVideoOutputState();
@@ -1213,7 +1207,6 @@ class _PLVideoPlayerState extends State<PLVideoPlayer>
       isFullScreen: isFullScreen,
       isPipMode: plPlayerController.isPipMode,
       isMaximized: _windowMaximized,
-      isLandscape: MediaQuery.orientationOf(context) == Orientation.landscape,
     );
     _requestVideoOutputSize();
   }
@@ -1302,11 +1295,6 @@ class _PLVideoPlayerState extends State<PLVideoPlayer>
     super.didUpdateWidget(oldWidget);
     if (Platform.isAndroid && AndroidHelper.isPipMode) {
       plPlayerController.controls = false;
-    }
-    if (Platform.isAndroid &&
-        (oldWidget.maxWidth != widget.maxWidth ||
-            oldWidget.maxHeight != widget.maxHeight)) {
-      _scheduleVideoOutputState();
     }
   }
 
@@ -1720,7 +1708,7 @@ class _PLVideoPlayerState extends State<PLVideoPlayer>
         maxWidth != widget.maxWidth || maxHeight != widget.maxHeight;
     maxWidth = widget.maxWidth;
     maxHeight = widget.maxHeight;
-    if (viewportChanged) {
+    if (viewportChanged && Platform.isWindows) {
       _updateVideoOutputSize();
     }
     final isFullScreen = this.isFullScreen;

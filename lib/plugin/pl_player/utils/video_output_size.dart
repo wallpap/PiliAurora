@@ -2,16 +2,12 @@ import 'dart:math' as math;
 
 typedef VideoOutputSize = ({int width, int height});
 
-bool isPortraitVideo(VideoOutputSize? source) =>
-    source != null && source.width > 0 && source.height > source.width;
-
 VideoOutputSize? calculateVideoOutputSize({
   required double logicalWidth,
   required double logicalHeight,
   required double devicePixelRatio,
   int? sourceWidth,
   int? sourceHeight,
-  bool preserveSourceAspectRatio = false,
 }) {
   if (!logicalWidth.isFinite ||
       !logicalHeight.isFinite ||
@@ -35,21 +31,6 @@ VideoOutputSize? calculateVideoOutputSize({
   var height = requestedHeight;
   if (sourceWidth case final sourceWidth? when sourceWidth > 0) {
     if (sourceHeight case final sourceHeight? when sourceHeight > 0) {
-      if (preserveSourceAspectRatio) {
-        // Android 的 Rect 仍描述源画面；纹理需保持相同比例，不能把视口黑边
-        // 烘进纹理后再由 Flutter 按源比例缩放。
-        final scale = math.min(
-          1.0,
-          math.min(
-            requestedWidth / sourceWidth,
-            requestedHeight / sourceHeight,
-          ),
-        );
-        return (
-          width: math.max(1, (sourceWidth * scale).round()),
-          height: math.max(1, (sourceHeight * scale).round()),
-        );
-      }
       final scale = math.min(
         1.0,
         math.min(
