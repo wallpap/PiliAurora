@@ -1,6 +1,7 @@
 import 'dart:io' show Platform;
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:media_kit_video/media_kit_video.dart';
 import 'package:pili_aurora/plugin/pl_player/utils/hardware_video_configuration.dart';
 import 'package:pili_aurora/plugin/pl_player/models/hwdec_type.dart';
 
@@ -102,5 +103,27 @@ void main() {
 
     expect(first.hwdec, 'amf,nvdec-copy,no');
     expect(second.hwdec, 'nvdec-copy,amf,no');
+  });
+
+  test('defers output detection through the native fixed-size policy', () {
+    VideoOutputSize? limit;
+    var reads = 0;
+    final configuration = hardwareVideoConfiguration(
+      enabled: true,
+      configured: 'mediacodec',
+      androidOutputLimit: () {
+        reads++;
+        return limit;
+      },
+    );
+    final output = AndroidFixedSurfaceSize(
+      limitWidth: configuration.androidOutputLimitWidth,
+      limitHeight: configuration.androidOutputLimitHeight,
+      readLimit: configuration.androidOutputLimit,
+    );
+    expect(reads, 0);
+    limit = (width: 2510, height: 1156);
+    expect(output.resolve(3794, 2160), (width: 2030, height: 1156));
+    expect(reads, 1);
   });
 }

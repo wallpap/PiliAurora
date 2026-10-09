@@ -71,6 +71,7 @@ class AndroidVideoController extends PlatformVideoController {
   late final _fixedSize = AndroidFixedSurfaceSize(
     limitWidth: configuration.androidOutputLimitWidth,
     limitHeight: configuration.androidOutputLimitHeight,
+    readLimit: configuration.androidOutputLimit,
   );
   ({int width, int height})? _appliedSize;
   bool _attached = false;
@@ -84,6 +85,10 @@ class AndroidVideoController extends PlatformVideoController {
         'wid': _wid,
         'mediaGeneration': _mediaGeneration,
         'attached': _attached,
+        'outputLimit': switch (_fixedSize.resolvedLimit) {
+          final limit? => {'width': limit.width, 'height': limit.height},
+          _ => null,
+        },
         if (_fixedSize.size case final size?)
           'fixedOutput': {'width': size.width, 'height': size.height},
         ...details,

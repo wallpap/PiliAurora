@@ -8,6 +8,7 @@ import 'dart:io';
 import 'package:flutter/widgets.dart';
 
 import 'package:media_kit/media_kit.dart';
+import 'package:media_kit_video/src/video_output_size_policy.dart';
 import 'package:media_kit_video/src/video_controller/android_video_controller/android_video_controller.dart';
 import 'package:media_kit_video/src/video_controller/native_video_controller/native_video_controller.dart';
 
@@ -114,6 +115,9 @@ class VideoControllerConfiguration {
   final int? androidOutputLimitWidth;
   final int? androidOutputLimitHeight;
 
+  /// 在每份媒体首次配置 Surface 时读取，获取播放器创建后才就绪的设备上限。
+  final VideoOutputSize? Function()? androidOutputLimit;
+
   /// Sparse native surface lifecycle diagnostics; never called per frame.
   final void Function(String event, Map<String, Object?> details)?
   onAndroidDiagnostic;
@@ -135,6 +139,7 @@ class VideoControllerConfiguration {
     this.androidAttachSurfaceAfterVideoParameters,
     this.androidOutputLimitWidth,
     this.androidOutputLimitHeight,
+    this.androidOutputLimit,
     this.onAndroidDiagnostic,
   });
 }

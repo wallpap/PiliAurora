@@ -1,10 +1,20 @@
 import 'dart:async';
 
+typedef AndroidDecodeState = ({
+  String? decoder,
+  bool playing,
+  bool buffering,
+  bool seeking,
+  bool completed,
+  bool eof,
+  double? videoPts,
+});
+
 /// 处理不会进入 media_kit stream.error 的 Android 视频输出错误。
 /// 硬解失败时只改变 hwdec；软解持续解析失败时允许一次保留播放状态的重载。
 class AndroidDecodeRecovery {
   AndroidDecodeRecovery({
-    required this.activeDecoder,
+    required this.readState,
     required this.applyDecoder,
     required this.onError,
     this.recoverSoftware,
@@ -29,7 +39,8 @@ class AndroidDecodeRecovery {
     }
   }
 
-  final String? Function() activeDecoder;
+  /// 媒体卸载或播放器销毁时返回 null；暂停媒体仍保留状态。
+  final AndroidDecodeState? Function() readState;
   final void Function(String decoder) applyDecoder;
   final void Function(Object error) onError;
   final void Function(String decoder)? onFallback;
@@ -45,6 +56,7 @@ class AndroidDecodeRecovery {
   bool _fallbackNotified = false;
   bool _softwareReloadAttempted = false;
   int _parseErrors = 0;
+  int _imageErrors = 0;
 
   void onLog({
     required String prefix,
@@ -59,7 +71,7 @@ class AndroidDecodeRecovery {
       _onSoftwareParseError();
       return;
     }
-    if (_pending != null || _softwareAttempted) return;
+    if (_softwareAttempted) return;
     final surfaceFailure =
         prefix == 'ffmpeg/video' &&
         text.contains('mediacodec') &&
@@ -67,45 +79,142 @@ class AndroidDecodeRecovery {
     final imageFailure =
         prefix == 'vo/gpu/aimagereader' &&
         text.contains('acquirelatestimage failed');
-    if (!surfaceFailure && !imageFailure) return;
-    _record('decoder.recovery.scheduled', {
-      'reason': surfaceFailure
-          ? 'mediacodec-null-surface'
-          : 'aimagereader-acquire-failed',
-      'prefix': prefix,
-      'nativeLevel': level,
-      'trigger': message,
-      'delayMs': 200,
-    });
-
-    // 合并同一轮初始化产生的成批错误，等 mpv 自身的候选探测结束再判断。
-    _pending = Timer(const Duration(milliseconds: 200), () {
-      _pending = null;
-      if (_disposed) return;
-      try {
-        final decoder = activeDecoder()?.trim();
-        if (decoder != 'mediacodec' && decoder != 'mediacodec-copy') {
-          _record('decoder.recovery.skipped', {
-            'activeDecoder': decoder,
-            'reason': 'native-already-recovered',
-          });
+    final decoderFailure =
+        prefix == 'ffmpeg/video' &&
+        text.contains('mediacodec') &&
+        const [
+          'failed to configure codec',
+          'failed to start codec',
+          'failed to get output buffer',
+          'failed to dequeue output buffer',
+        ].any(text.contains);
+    if (!surfaceFailure && !imageFailure && !decoderFailure) return;
+    final emptyImage =
+        imageFailure &&
+        RegExp(r'acquirelatestimage failed:\s*-30001\b').hasMatch(text);
+    try {
+      final state = readState();
+      if (_mediaInactive(state)) return;
+      final decoder = state!.decoder?.trim();
+      if (_copyMemoryOutput(decoder, surfaceFailure, imageFailure)) return;
+      if (emptyImage && !_canObserveFrames(state)) {
+        if (_imageErrors > 0) {
+          _pending?.cancel();
+          _pending = null;
+          _imageErrors = 0;
+        }
+        _record('decoder.recovery.skipped', {'reason': 'waiting-for-video'});
+        return;
+      }
+      if (_pending != null) {
+        if (!emptyImage && _imageErrors > 0) {
+          // 明确的解码失败优先处理，避免被空队列观察窗口合并掉。
+          _pending!.cancel();
+          _pending = null;
+        } else {
+          if (emptyImage && _imageErrors > 0) _imageErrors++;
           return;
         }
-        final next = decoder == 'mediacodec' && !_copyAttempted
-            ? 'mediacodec-copy'
-            : 'no';
-        _copyAttempted = true;
-        // copy 仍失败时只尝试一次软解，避免日志触发无限切换。
-        _softwareAttempted = next == 'no';
-        _record('decoder.recovery.apply', {'from': decoder, 'to': next});
-        applyDecoder(next);
-        _notifyFallback(next);
-      } catch (error) {
-        _softwareAttempted = true;
-        onError(error);
       }
-    });
+      _imageErrors = emptyImage ? 1 : 0;
+      final initialDecoder = decoder;
+      final videoPts = state.videoPts;
+      final delay = Duration(milliseconds: emptyImage ? 500 : 200);
+      _record('decoder.recovery.scheduled', {
+        'reason': surfaceFailure
+            ? 'mediacodec-null-surface'
+            : imageFailure
+            ? 'aimagereader-acquire-failed'
+            : 'mediacodec-decoder-failed',
+        'prefix': prefix,
+        'nativeLevel': level,
+        'trigger': message,
+        'delayMs': delay.inMilliseconds,
+        if (emptyImage) 'videoPts': videoPts,
+      });
+
+      // 空队列需同时满足连续错误与视频停滞；seek、暂停和等待数据不消耗预算。
+      _pending = Timer(delay, () {
+        _pending = null;
+        final imageErrors = _imageErrors;
+        _imageErrors = 0;
+        if (_disposed) return;
+        try {
+          final state = readState();
+          if (_mediaInactive(state)) return;
+          final decoder = state!.decoder?.trim();
+          if (_copyMemoryOutput(decoder, surfaceFailure, imageFailure)) return;
+          if (decoder != initialDecoder) {
+            _record('decoder.recovery.skipped', {
+              'reason': 'output-backend-changed',
+              'previousDecoder': initialDecoder,
+              'activeDecoder': decoder,
+            });
+            return;
+          }
+          if (emptyImage &&
+              (imageErrors < 3 ||
+                  !_canObserveFrames(state) ||
+                  state.videoPts != videoPts)) {
+            _record('decoder.recovery.skipped', {
+              'reason': 'image-result-transient',
+              'imageErrors': imageErrors,
+              'previousVideoPts': videoPts,
+              'videoPts': state.videoPts,
+            });
+            return;
+          }
+          if (decoder != 'mediacodec' && decoder != 'mediacodec-copy') {
+            _record('decoder.recovery.skipped', {
+              'activeDecoder': decoder,
+              'reason': decoder == null || decoder.isEmpty
+                  ? 'decoder-unavailable'
+                  : 'native-already-recovered',
+            });
+            return;
+          }
+          final next = decoder == 'mediacodec' && !_copyAttempted
+              ? 'mediacodec-copy'
+              : 'no';
+          _copyAttempted = true;
+          _softwareAttempted = next == 'no';
+          _record('decoder.recovery.apply', {'from': decoder, 'to': next});
+          applyDecoder(next);
+          _notifyFallback(next);
+        } catch (error) {
+          _softwareAttempted = true;
+          onError(error);
+        }
+      });
+    } catch (error) {
+      _softwareAttempted = true;
+      onError(error);
+    }
   }
+
+  bool _mediaInactive(AndroidDecodeState? state) {
+    if (state != null && !state.completed && !state.eof) return false;
+    _record('decoder.recovery.skipped', {
+      'reason': state == null ? 'media-unavailable' : 'media-finished',
+    });
+    return true;
+  }
+
+  bool _copyMemoryOutput(String? decoder, bool surface, bool image) {
+    if (decoder != 'mediacodec-copy' || (!surface && !image)) return false;
+    // copy 从普通缓冲区取图像，Surface 可以为空；ImageReader 属于旧的直接输出路径。
+    _record('decoder.recovery.skipped', {
+      'reason': surface ? 'copy-memory-output' : 'output-backend-changed',
+    });
+    return true;
+  }
+
+  bool _canObserveFrames(AndroidDecodeState state) =>
+      state.playing &&
+      !state.buffering &&
+      !state.seeking &&
+      state.videoPts != null &&
+      state.videoPts!.isFinite;
 
   void _notifyFallback(String decoder) {
     if (_fallbackNotified) return;
@@ -121,7 +230,8 @@ class AndroidDecodeRecovery {
   void _onSoftwareParseError() {
     if (recoverSoftware == null || _softwareReloadAttempted) return;
     try {
-      if (activeDecoder()?.trim() != 'no') return;
+      final state = readState();
+      if (_mediaInactive(state) || state?.decoder?.trim() != 'no') return;
     } catch (error) {
       _softwareReloadAttempted = true;
       onError(error);
@@ -138,7 +248,8 @@ class AndroidDecodeRecovery {
       _parseErrors = 0;
       if (_disposed || !persistent || _softwareReloadAttempted) return;
       try {
-        if (activeDecoder()?.trim() != 'no') return;
+        final state = readState();
+        if (_mediaInactive(state) || state?.decoder?.trim() != 'no') return;
         // 先消耗预算，重载过程中出现同样错误也不能形成重开循环。
         _softwareReloadAttempted = true;
         _record('decoder.software.reload.begin');
@@ -166,6 +277,7 @@ class AndroidDecodeRecovery {
     _fallbackNotified = false;
     _softwareReloadAttempted = false;
     _parseErrors = 0;
+    _imageErrors = 0;
   }
 
   void dispose() {

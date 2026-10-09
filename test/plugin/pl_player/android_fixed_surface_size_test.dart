@@ -46,4 +46,26 @@ void main() {
     expect(() => output().resolve(0, 100), throwsArgumentError);
     expect(output().resolve(1, 100000), (width: 1, height: 2400));
   });
+
+  test('reads a late display limit when video parameters become available', () {
+    VideoOutputSize? limit;
+    var reads = 0;
+    final fixed = AndroidFixedSurfaceSize(
+      readLimit: () {
+        reads++;
+        return limit;
+      },
+    );
+    expect(reads, 0);
+    limit = (width: 2510, height: 1156);
+    expect(fixed.resolve(3794, 2160), (width: 2030, height: 1156));
+    expect(fixed.resolvedLimit, limit);
+    limit = (width: 1080, height: 2400);
+    expect(fixed.resolve(3794, 2160), (width: 2030, height: 1156));
+    expect(reads, 1);
+    fixed.reset();
+    expect(fixed.resolvedLimit, isNull);
+    expect(fixed.resolve(3840, 2160), (width: 1920, height: 1080));
+    expect(reads, 2);
+  });
 }

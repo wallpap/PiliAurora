@@ -7,6 +7,7 @@ VideoControllerConfiguration hardwareVideoConfiguration({
   required String configured,
   int? androidOutputLimitWidth,
   int? androidOutputLimitHeight,
+  VideoOutputSize? Function()? androidOutputLimit,
   void Function(String event, Map<String, Object?> details)?
   onAndroidDiagnostic,
 }) {
@@ -15,6 +16,7 @@ VideoControllerConfiguration hardwareVideoConfiguration({
     androidAttachSurfaceAfterVideoParameters: false,
     androidOutputLimitWidth: androidOutputLimitWidth,
     androidOutputLimitHeight: androidOutputLimitHeight,
+    androidOutputLimit: androidOutputLimit,
     onAndroidDiagnostic: onAndroidDiagnostic,
     // 由 mpv 顺序探测并处理运行时回退；不依赖特定等级或措辞的错误日志。
     hwdec: enabled ? HwDecType.orderedCandidates(configured).join(',') : 'no',
