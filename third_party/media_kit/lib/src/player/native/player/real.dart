@@ -599,7 +599,12 @@ class NativePlayer extends PlatformPlayer {
       throwIfDisposed();
       if (media == null || !identical(media, current.firstOrNull)) return;
 
-      await command(nativeSeekCommand(duration, keyframe: Platform.isAndroid));
+      await command(nativeSeekCommand(
+        duration,
+        keyframe: Platform.isAndroid,
+        externalAudio: state.track.audio.uri,
+        mediaExtras: media.extras,
+      ));
       if (!identical(media, current.firstOrNull)) return;
 
       // It is self explanatory that PlayerState.completed & PlayerStream.completed must enter the false state if seek is called. Typically after EOF.

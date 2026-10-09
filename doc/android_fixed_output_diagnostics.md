@@ -53,12 +53,17 @@
 ## 控制与兼容性测试
 
 - seek 请求立即提交；等待时长就绪的跳转绑定源与播放器，切源、退出或新跳转解除旧等待。原生队列执行 seek 前后核对媒体身份。
+- Android DASH 等独立音轨媒体使用 `absolute+exact`，视频与音轨定位到同一目标；同文件播放保留关键帧跳转。`audio-files-append` / `audio-files` 在原生排队执行时按当前媒体识别，外部 `AudioTrack.uri` 同样采用精确跳转。
 - 每次媒体加载读取最新缓存设置；倍速变化更新以媒体秒表示的预读目标，保留字节预算。
 - Android 保留 Flutter 引擎帧通知，使用纹理消费监听确认首帧；解码测试按本视频配置后的消费计数检查持续输出，并检查实际后端、报告映射错误。其他平台检查本视频截图是否可用。
 - 界面区分“兼容”与“回退后可播放”；播放进度比衡量当前播放节奏，CPU/内存/GPU 是短时参考采样，未用于最大解码吞吐排名。
 - WebP 转换取消与结束共用一次清理，等待初始化及 reader 退出，再在独立 isolate 销毁原生句柄。
 
 ## 回归命令
+
+2026-10-10 跳转无声排查：诊断包中视频从 725 秒关键帧恢复，音轨从 729.176 秒恢复，产生约 4.18 秒等待。[mpv v0.41.0 跳转实现](https://github.com/mpv-player/mpv/blob/v0.41.0/player/playloop.c#L310-L405) 对外部轨道使用请求位置；精确跳转让视频也定位到该位置。包中六次 `-30001` 均发生在 seeking 状态，随后播放恢复，未观察到持续硬解失败。
+
+Windows libmpv 的本地分离音视频烟测中，旧关键帧命令产生 2.368 秒音轨等待；正式精确命令在前进、后退、重复跳转中均为 0 秒。测试使用 `vo=null`、`ao=null`、软件解码，证明跳转时序修正；Android AV1/MediaCodec 的跳转耗时和 ImageReader 超时是否仍出现，需实机复测。
 
 ```powershell
 flutter test --no-pub test/plugin/pl_player test/services/diagnostics test/services/diagnostics_test.dart test/services/player_logging_test.dart test/services/android_video_output_limit_test.dart

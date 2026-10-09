@@ -22,7 +22,13 @@ Windows 构建完成后，使用已有 Python 和 libmpv 验证独立音轨、�
 python tool/native_media_smoke.py --library build/windows/x64/runner/Debug/libmpv-2.dll --video <本地视频文件>
 ```
 
-该检查不包含 GPU 渲染或完整应用性能测试。实现与测量边界见 `doc/native-playback.md`。
+增加 `--seek-target <秒数>` 可检查 Android 独立音轨的跳转命令，覆盖前进、后退与重复跳转。命令由 `tool/debug/native_seek_command.dart` 调用正式构造器生成，烟测断言视频恢复时音轨等待小于 100 ms。视频须长于目标时间且目标落在关键帧之间；`--keyframes-control` 使用旧策略作对照，预期能触发无声断言失败。
+
+```powershell
+python tool/native_media_smoke.py --library build/windows/x64/runner/Debug/libmpv-2.dll --video <本地视频文件> --seek-target 2.4
+```
+
+该检查使用 Windows libmpv、空音视频输出与软件解码，不包含 Android GPU/MediaCodec、实际扬声器或完整应用性能测试。诊断与实机验收见 `doc/android_fixed_output_diagnostics.md`。
 
 ## 依赖版本与来源检查
 
