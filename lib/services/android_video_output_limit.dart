@@ -1,7 +1,7 @@
 import 'dart:ui' as ui;
 
 import 'package:flutter/widgets.dart';
-import 'package:pili_aurora/plugin/pl_player/utils/video_output_size.dart';
+import 'package:media_kit_video/media_kit_video.dart';
 import 'package:pili_aurora/utils/android/android_helper.dart';
 
 /// 自动检测设备物理分辨率，作为 Android 视频 Surface 输出上限。
@@ -49,9 +49,8 @@ abstract final class AndroidVideoOutputLimit {
       );
     }
     if (!_isValidSize(size)) return null;
-    return (
-      width: size.longestSide.round(),
-      height: size.shortestSide.round(),
+    return VideoOutputSizePolicy.physicalDisplaySize(
+      ui.Size(size.longestSide, size.shortestSide),
     );
   }
 

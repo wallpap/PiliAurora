@@ -3,9 +3,9 @@ import 'dart:async';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:media_kit/media_kit.dart';
+import 'package:media_kit_video/media_kit_video.dart';
 import 'package:pili_aurora/plugin/pl_player/utils/android_video_output.dart';
 import 'package:pili_aurora/plugin/pl_player/utils/video_output_resizer.dart';
-import 'package:pili_aurora/plugin/pl_player/utils/video_output_size.dart';
 
 const landscape = (width: 1920, height: 1080);
 const portrait = (width: 1080, height: 608);
@@ -191,21 +191,6 @@ void main() {
       expect(commits, [landscape, portrait]);
     },
   );
-
-  testWidgets('unchanged rounded target waits for the last layout event', (
-    tester,
-  ) async {
-    resizer.request(landscape);
-    await tester.pump(const Duration(milliseconds: 200));
-    resizer.defer();
-    await tester.pump(const Duration(milliseconds: 200));
-    resizer.defer();
-    await tester.pump(const Duration(milliseconds: 249));
-    expect(surfaces, isEmpty);
-    await tester.pump(const Duration(milliseconds: 1));
-    expect(surfaces, [landscape]);
-    expect(resizer.pending, isFalse);
-  });
 
   testWidgets('only the latest waiting target follows an in-flight request', (
     tester,

@@ -1,4 +1,4 @@
-import 'dart:math' as math;
+import '../../video_output_size_policy.dart';
 
 /// 输出上限来自设备显示分辨率，不来自当前 viewport。一个媒体只确定一次输出。
 /// 上限沿长/短边与源对齐；超过上限的源等比缩小，较小的源保持原尺寸。
@@ -17,19 +17,14 @@ class AndroidFixedSurfaceSize {
   }
 
   ({int width, int height}) _calculate(int width, int height) {
-    final fw = limitWidth ?? 0;
-    final fh = limitHeight ?? 0;
-    if (fw <= 0 || fh <= 0) return (width: width, height: height);
-    final long = math.max(fw, fh);
-    final short = math.min(fw, fh);
-    final bw = width >= height ? long : short;
-    final bh = width >= height ? short : long;
-    // 设备尺寸作为上限；向下取整使两条边均落在上限内，保持源比例。
-    final scale = math.min(1.0, math.min(bw / width, bh / height));
-    return (
-      width: math.max(1, (width * scale).floor()),
-      height: math.max(1, (height * scale).floor()),
-    );
+    return VideoOutputSizePolicy.fitWithinLimit(
+          source: (width: width, height: height),
+          limit: switch ((limitWidth, limitHeight)) {
+            (final width?, final height?) => (width: width, height: height),
+            _ => null,
+          },
+        ) ??
+        (width: width, height: height);
   }
 
   void reset() => _size = null;

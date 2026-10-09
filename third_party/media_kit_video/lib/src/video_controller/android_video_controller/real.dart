@@ -11,6 +11,7 @@ import 'package:flutter/foundation.dart';
 import 'package:synchronized/synchronized.dart';
 import 'package:media_kit_video/src/video_controller/android_video_controller/surface_size.dart';
 import 'package:media_kit_video/src/video_controller/android_video_controller/fixed_surface_size.dart';
+import 'package:media_kit_video/src/video_output_size_policy.dart';
 
 import 'package:media_kit/media_kit.dart';
 
@@ -187,22 +188,10 @@ class AndroidVideoController extends PlatformVideoController {
             !identical(player.current.firstOrNull, media)) {
           return;
         }
-        if (const [0, null].contains(event.dw) ||
-            const [0, null].contains(event.dh) ||
-            _wid == null) {
-          return;
-        }
-
-        final int width;
-        final int height;
-        if (event.rotate == 0 || event.rotate == 180) {
-          width = event.dw ?? 0;
-          height = event.dh ?? 0;
-        } else {
-          // width & height are swapped for 90 or 270 degrees rotation.
-          width = event.dh ?? 0;
-          height = event.dw ?? 0;
-        }
+        final sourceSize = VideoOutputSizePolicy.videoDisplaySize(event);
+        if (sourceSize == null || _wid == null) return;
+        final width = sourceSize.width;
+        final height = sourceSize.height;
 
         try {
           if (vo == 'gpu') {

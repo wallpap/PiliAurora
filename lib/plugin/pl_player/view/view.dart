@@ -48,7 +48,6 @@ import 'package:pili_aurora/plugin/pl_player/utils/video_output_resizer.dart';
 import 'package:pili_aurora/plugin/pl_player/utils/video_output_handoff.dart';
 import 'package:pili_aurora/plugin/pl_player/utils/video_output_paint_barrier.dart';
 import 'package:pili_aurora/plugin/pl_player/widgets/video_output_handoff.dart';
-import 'package:pili_aurora/plugin/pl_player/utils/video_output_size.dart';
 import 'package:pili_aurora/plugin/pl_player/widgets/app_bar_ani.dart';
 import 'package:pili_aurora/plugin/pl_player/widgets/backward_seek.dart';
 import 'package:pili_aurora/plugin/pl_player/widgets/bottom_control.dart';
@@ -308,14 +307,17 @@ class _PLVideoPlayerState extends State<PLVideoPlayer>
       );
     }
     if (Platform.isWindows) {
-      _videoSizeListener = videoController.player.stream.videoParams
-          .distinct()
-          .listen(
-            (_) {
-              _onVideoOutputSourceChanged();
-            },
-          );
-      scheduleMicrotask(_onVideoOutputSourceChanged);
+      final sourceSizes = videoController.player.stream.videoParams
+          .map(VideoOutputSizePolicy.videoDisplaySize)
+          .distinct();
+      _videoSizeListener = sourceSizes.listen(_onVideoOutputSourceChanged);
+      scheduleMicrotask(() {
+        _onVideoOutputSourceChanged(
+          VideoOutputSizePolicy.videoDisplaySize(
+            videoController.player.state.videoParams,
+          ),
+        );
+      });
     }
     if (Platform.isAndroid) {
       _videoOutputFullscreenListener = plPlayerController.isFullScreen.listen(
@@ -1125,18 +1127,12 @@ class _PLVideoPlayerState extends State<PLVideoPlayer>
     }
   }
 
-  void _onVideoOutputSourceChanged() {
+  void _onVideoOutputSourceChanged(VideoOutputSize? sourceSize) {
     if (!_limitWindowsVideoOutput || !mounted) return;
     _videoOutputHandoff.invalidate();
     _videoOutputPaintBarrier.cancel();
     _videoOutputResizer.invalidate();
-    final params = videoController.player.state.videoParams;
-    final rotate = params.rotate ?? 0;
-    final width = rotate == 0 || rotate == 180 ? params.dw : params.dh;
-    final height = rotate == 0 || rotate == 180 ? params.dh : params.dw;
-    if (width == null || height == null) return;
-    final sourceSize = (width: width, height: height);
-    final size = limitVideoOutputSize(
+    final size = VideoOutputSizePolicy.fitWithinLimit(
       source: sourceSize,
       limit: WindowsVideoOutputLimit.detected,
     );
