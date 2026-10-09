@@ -1,79 +1,79 @@
+import 'dart:ui' as ui;
+
 import 'package:flutter_test/flutter_test.dart';
-import 'package:pili_aurora/plugin/pl_player/utils/video_output_size.dart';
+import 'package:media_kit/media_kit.dart';
+import 'package:media_kit_video/media_kit_video.dart';
 
 void main() {
-  test('converts the logical viewport to physical pixels', () {
+  test('normalizes source dimensions after display rotation', () {
     expect(
-      calculateVideoOutputSize(
-        logicalWidth: 1280,
-        logicalHeight: 720,
-        devicePixelRatio: 1.5,
+      VideoOutputSizePolicy.videoDisplaySize(
+        const VideoParams(dw: 1920, dh: 1080, rotate: 0),
       ),
       (width: 1920, height: 1080),
     );
-  });
-
-  test('caps a small source without changing the viewport aspect ratio', () {
     expect(
-      calculateVideoOutputSize(
-        logicalWidth: 1920,
-        logicalHeight: 1080,
-        devicePixelRatio: 1,
-        sourceWidth: 1280,
-        sourceHeight: 960,
+      VideoOutputSizePolicy.videoDisplaySize(
+        const VideoParams(dw: 1920, dh: 1080, rotate: 90),
       ),
-      (width: 1280, height: 720),
+      (width: 1080, height: 1920),
     );
-  });
-
-  test('does not upscale a source smaller than the viewport', () {
     expect(
-      calculateVideoOutputSize(
-        logicalWidth: 1080,
-        logicalHeight: 1920,
-        devicePixelRatio: 3,
-        sourceWidth: 1080,
-        sourceHeight: 1920,
+      VideoOutputSizePolicy.videoDisplaySize(
+        const VideoParams(dw: 1920, dh: 1080, rotate: 270),
       ),
       (width: 1080, height: 1920),
     );
   });
 
-  test('limits landscape and portrait sources to display pixels', () {
+  test('normalizes and validates physical display dimensions', () {
     expect(
-      limitVideoOutputSize(
-        source: (width: 3840, height: 2160),
-        limit: (width: 1920, height: 1080),
+      VideoOutputSizePolicy.physicalDisplaySize(const ui.Size(1920, 1080)),
+      (
+        width: 1920,
+        height: 1080,
       ),
-      (width: 1920, height: 1080),
     );
     expect(
-      limitVideoOutputSize(
-        source: (width: 2160, height: 3840),
-        limit: (width: 1920, height: 1080),
-      ),
-      (width: 1080, height: 1920),
+      VideoOutputSizePolicy.physicalDisplaySize(const ui.Size(1, 1)),
+      isNull,
     );
   });
 
-  test('preserves source size when it fits the display limit', () {
+  test(
+    'limits landscape and portrait sources while preserving their ratio',
+    () {
+      expect(
+        VideoOutputSizePolicy.fitWithinLimit(
+          source: (width: 3840, height: 2160),
+          limit: (width: 1920, height: 1080),
+        ),
+        (width: 1920, height: 1080),
+      );
+      expect(
+        VideoOutputSizePolicy.fitWithinLimit(
+          source: (width: 2160, height: 3840),
+          limit: (width: 1920, height: 1080),
+        ),
+        (width: 1080, height: 1920),
+      );
+    },
+  );
+
+  test('preserves smaller sources and leaves them unscaled', () {
     expect(
-      limitVideoOutputSize(
+      VideoOutputSizePolicy.fitWithinLimit(
         source: (width: 1280, height: 720),
         limit: (width: 1920, height: 1080),
       ),
       (width: 1280, height: 720),
     );
-  });
-
-  test('returns null for an invalid viewport', () {
     expect(
-      calculateVideoOutputSize(
-        logicalWidth: 0,
-        logicalHeight: 720,
-        devicePixelRatio: 1,
+      VideoOutputSizePolicy.fitWithinLimit(
+        source: (width: 1280, height: 720),
+        limit: null,
       ),
-      isNull,
+      (width: 1280, height: 720),
     );
   });
 }

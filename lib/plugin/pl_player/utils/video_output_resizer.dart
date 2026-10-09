@@ -1,11 +1,10 @@
 import 'dart:async';
 
-import 'package:pili_aurora/plugin/pl_player/utils/video_output_size.dart';
+import 'package:media_kit_video/media_kit_video.dart';
 
-/// 合并视口请求，并串行提交纹理尺寸；请求目标与已提交尺寸分别保存。
+/// 合并输出尺寸请求，并串行提交纹理尺寸；请求目标与已提交尺寸分别保存。
 ///
-/// 暂停只停止新提交，不撤销已进入原生通道的提交。SurfaceTexture 一旦
-/// 改变尺寸，同一 Surface 的 mpv 也必须同步，不能用更新的视口废弃半次提交。
+/// 暂停只停止新提交，不撤销已进入原生通道的提交。
 class VideoOutputResizer {
   VideoOutputResizer({
     required this._apply,
@@ -34,12 +33,6 @@ class VideoOutputResizer {
   VideoOutputSize? get applied => _applied;
   int get generation => _generation;
   bool get pending => _applying || (_target != null && _target != _applied);
-
-  /// 布局仍变化时推迟尚未开始的提交，即使目标四舍五入后尺寸相同。
-  /// 正在执行的原生提交仍必须完成，不取消半次 buffer / mpv 更新。
-  void defer() {
-    if (!_disposed && pending) _schedule();
-  }
 
   void request(VideoOutputSize size) {
     if (_disposed) return;

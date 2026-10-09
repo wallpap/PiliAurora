@@ -17,13 +17,9 @@ class VideoOutputHandoff extends ChangeNotifier {
   final Future<bool> Function() waitForProtectedFrame;
   ui.Image? _image;
   int _sourceRevision = 0;
-  int _viewportRevision = 0;
   bool _disposed = false;
 
   ui.Image? get image => _image;
-
-  /// 新布局可以取消尚未开始的提交，但不能中断已经修改 buffer 的提交。
-  void viewportChanged() => _viewportRevision++;
 
   Future<bool> run({
     required bool Function() isCurrent,
@@ -32,9 +28,8 @@ class VideoOutputHandoff extends ChangeNotifier {
     Future<bool> Function()? recover,
   }) async {
     final source = _sourceRevision;
-    final viewport = _viewportRevision;
     bool current() => !_disposed && source == _sourceRevision && isCurrent();
-    bool ready() => current() && viewport == _viewportRevision && canStart();
+    bool ready() => current() && canStart();
     if (!ready()) return false;
 
     final snapshot = _image ?? await capture();
@@ -97,7 +92,6 @@ class VideoOutputHandoff extends ChangeNotifier {
 
   void invalidate() {
     _sourceRevision++;
-    _viewportRevision++;
     final snapshot = _image;
     if (snapshot != null) {
       _image = null;

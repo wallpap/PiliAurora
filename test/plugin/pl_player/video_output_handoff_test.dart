@@ -64,10 +64,11 @@ void main() {
     },
   );
 
-  testWidgets('layout changes during snapshot preparation cancel native work', (
+  testWidgets('source changes during snapshot preparation cancel native work', (
     tester,
   ) async {
     final paint = Completer<void>();
+    var current = true;
     var submissions = 0;
     final handoff = VideoOutputHandoff(
       waitForProtectedFrame: () async => true,
@@ -76,7 +77,7 @@ void main() {
     );
     addTearDown(handoff.dispose);
     final run = handoff.run(
-      isCurrent: () => true,
+      isCurrent: () => current,
       canStart: () => true,
       submit: (_) async {
         submissions++;
@@ -84,7 +85,7 @@ void main() {
       },
     );
     await tester.pump();
-    handoff.viewportChanged();
+    current = false;
     paint.complete();
     expect(await run, isFalse);
     expect(submissions, 0);
@@ -261,7 +262,7 @@ void main() {
   });
 
   testWidgets(
-    'pause and reverse layout after commit retain protection until receipt',
+    'pause after commit retains protection until frame receipt',
     (
       tester,
     ) async {
@@ -280,10 +281,9 @@ void main() {
       );
       await tester.pump();
       playing = false;
-      handoff.viewportChanged();
       await tester.pump(const Duration(seconds: 2));
       expect(handoff.image, isNotNull);
-      // Resume produces the receipt. A new viewport cannot discard half a commit.
+      // Resume produces the receipt; paused frames retain the protective image.
       playing = true;
       frame.complete(true);
       expect(await run, isTrue);
