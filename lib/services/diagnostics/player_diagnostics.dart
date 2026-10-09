@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:collection';
 import 'dart:ffi';
 import 'dart:io';
 
@@ -6,80 +7,233 @@ import 'package:ffi/ffi.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:pili_aurora/services/diagnostics/diagnostics.dart';
 
-/// 跟随播放器生命周期注册指标和日志；取消注册后不再访问原生句柄。
+/// 分离 mpv 原始日志、播放器状态和解码上下文；低等级只记录边界，不逐帧刷屏。
 class PlayerDiagnostics {
-  PlayerDiagnostics(this.player, {Map<String, Object?> Function()? extra}) {
-    // 原生版本在播放器生命周期内固定，无须每个采样窗口重新查询。
-    final versions = {
+  PlayerDiagnostics(this.player, {this.extra}) {
+    _versions = {
       'mpv-version': _property('mpv-version'),
       'ffmpeg-version': _property('ffmpeg-version'),
     };
-    _unregister = Diagnostics.instance.register(
-      'player.${player.hashCode}',
-      () => {
-        ...versions,
-        'playing': player.state.playing,
-        'buffering': player.state.buffering,
-        'positionMs': player.state.position.inMilliseconds,
-        'bufferMs': player.state.buffer.inMilliseconds,
-        'width': player.state.width,
-        'height': player.state.height,
-        'speed': player.state.rate,
-        for (final property in [
-          'hwdec-current',
-          'video-codec',
-          'video-format',
-          'estimated-vf-fps',
-          'decoder-frame-drop-count',
-          'frame-drop-count',
-        ])
-          property: _property(property),
-        if (Platform.isAndroid)
-          // 源分辨率不能代表 GPU 视口；暂停旋转也需要记录实际输出几何。
-          for (final property in [
-            'android-surface-size',
-            'osd-dimensions/w',
-            'osd-dimensions/h',
-          ])
-            property: _property(property),
-        ...?extra?.call(),
-      },
-    );
-    _subscription = player.stream.log.listen((event) {
-      final level = switch (event.level) {
-        'fatal' || 'error' => DiagnosticLogLevel.error,
-        'warn' => DiagnosticLogLevel.warning,
-        'info' || 'status' => DiagnosticLogLevel.info,
-        'debug' || 'v' => DiagnosticLogLevel.debug,
-        _ => DiagnosticLogLevel.trace,
-      };
-      Diagnostics.instance.log(
-        level,
-        'mpv',
-        event.text,
-        details: {'prefix': event.prefix},
-      );
-    });
+    _unregister = Diagnostics.instance.register(playerId, snapshot);
+    player.onLoadHooks.add(_onLoad);
+    player.onUnloadHooks.add(_onUnload);
+    _subscriptions.addAll([
+      player.stream.log.listen(_onLog),
+      player.stream.playing.distinct().listen(
+        (value) => event('playback.playing', details: {'value': value}),
+      ),
+      player.stream.buffering.distinct().listen(
+        (value) => event('playback.buffering', details: {'value': value}),
+      ),
+      player.stream.completed.distinct().listen(
+        (value) => event('playback.completed', details: {'value': value}),
+      ),
+      player.stream.videoParams.distinct().listen(
+        (value) => event(
+          'video.parameters',
+          details: {
+            'dw': value.dw,
+            'dh': value.dh,
+            'rotate': value.rotate,
+          },
+        ),
+      ),
+      player.stream.error.listen(
+        (value) => event(
+          'playback.error',
+          level: DiagnosticLogLevel.error,
+          details: {'error': value, 'mpvContext': _context.toList()},
+        ),
+      ),
+    ]);
     Diagnostics.instance.addListener(_updateLevel);
     _updateLevel();
+    event(
+      'player.created',
+      details: {
+        'platform': Platform.operatingSystem,
+        'osVersion': Platform.operatingSystemVersion,
+      },
+    );
   }
 
   final NativePlayer player;
+  final Map<String, Object?> Function()? extra;
+  late final Map<String, Object?> _versions;
   late final void Function() _unregister;
-  late final StreamSubscription<PlayerLog> _subscription;
+  final _subscriptions = <StreamSubscription>[];
+  final _context = Queue<Map<String, Object?>>();
   DiagnosticLogLevel? _level;
+  Timer? _timer;
+  int _mediaGeneration = 0;
   bool _disposed = false;
+  Map<String, Object?>? _lastDecoder;
+  final _errorClock = Stopwatch()..start();
+  final _lastErrorContext = <String, int>{};
 
+  String get playerId => 'player.${player.hashCode}';
   String? _property(String name) =>
       _disposed ? null : readMpvProperty(player, name);
 
+  Map<String, Object?> snapshot() => {
+    ..._versions,
+    'playerId': playerId,
+    'handle': player.disposed ? null : player.handle,
+    'mediaGeneration': _mediaGeneration,
+    'playing': player.state.playing,
+    'buffering': player.state.buffering,
+    'completed': player.state.completed,
+    'positionMs': player.state.position.inMilliseconds,
+    'bufferMs': player.state.buffer.inMilliseconds,
+    'width': player.state.width,
+    'height': player.state.height,
+    'speed': player.state.rate,
+    for (final name in [
+      'hwdec',
+      'hwdec-current',
+      'video-codec',
+      'video-format',
+      'video-dec-params',
+      'video-params',
+      'video-out-params',
+      'vo',
+      'current-vo',
+      'gpu-api',
+      'gpu-context',
+      'estimated-vf-fps',
+      'decoder-frame-drop-count',
+      'frame-drop-count',
+      'mistimed-frame-count',
+      'vo-delayed-frame-count',
+      'avsync',
+      'demuxer-cache-state',
+      'paused-for-cache',
+      'eof-reached',
+      if (Platform.isAndroid) ...[
+        'android-surface-size',
+        'osd-dimensions',
+        'wid',
+      ],
+    ])
+      name: _property(name),
+    'viewports': Diagnostics.instance.readSources(
+      prefix: 'videoViewport.${player.hashCode}.',
+    ),
+    ...?extra?.call(),
+  };
+
+  void event(
+    String action, {
+    DiagnosticLogLevel level = DiagnosticLogLevel.info,
+    Map<String, Object?>? details,
+  }) {
+    if (_disposed || !Diagnostics.instance.acceptsPlayer(level)) return;
+    try {
+      Diagnostics.instance.playerLog(
+        level,
+        'player',
+        action,
+        details: {...snapshot(), ...?details},
+      );
+    } catch (_) {
+      // 诊断读取失败不参与加载与解码控制。
+    }
+  }
+
+  Future<void> _onLoad() async {
+    _mediaGeneration++;
+    _context.clear();
+    _lastErrorContext.clear();
+    _lastDecoder = null;
+    event('media.load');
+  }
+
+  Future<void> _onUnload() async => event('media.unload');
+
+  void _onLog(PlayerLog log) {
+    final level = switch (log.level) {
+      'fatal' || 'error' => DiagnosticLogLevel.error,
+      'warn' => DiagnosticLogLevel.warning,
+      'info' || 'status' => DiagnosticLogLevel.info,
+      'debug' || 'v' => DiagnosticLogLevel.debug,
+      _ => DiagnosticLogLevel.trace,
+    };
+    if (_disposed) return;
+    final details = {
+      'playerId': playerId,
+      'mediaGeneration': _mediaGeneration,
+      'prefix': log.prefix,
+      'nativeLevel': log.level,
+    };
+    if (Diagnostics.instance.playerLevel != DiagnosticLogLevel.off) {
+      _context.add({...details, 'message': log.text});
+      while (_context.length > 24) {
+        _context.removeFirst();
+      }
+    }
+    Diagnostics.instance.playerLog(level, 'mpv', log.text, details: details);
+    // 原始错误只写一次；上下文快照仅在错误边界采集，不对每条 mpv 文本读取所有属性。
+    if (level == DiagnosticLogLevel.error &&
+        Diagnostics.instance.acceptsPlayer(level)) {
+      final now = _errorClock.elapsedMilliseconds;
+      final previous = _lastErrorContext[log.prefix];
+      if (previous == null || now - previous >= 1000) {
+        _lastErrorContext[log.prefix] = now;
+        event(
+          'mpv.error.context',
+          level: level,
+          details: {
+            'prefix': log.prefix,
+            'trigger': log.text,
+            'note': '同前缀错误快照限频 1 秒；全部原始错误保留在 mpv 记录中',
+          },
+        );
+      }
+    }
+  }
+
+  void _sample() {
+    if (_disposed || player.disposed || player.current.isEmpty) return;
+    final state = {
+      for (final name in [
+        'hwdec',
+        'hwdec-current',
+        'video-codec',
+        'current-vo',
+      ])
+        name: _property(name),
+    };
+    if (_lastDecoder == null ||
+        state.entries.any((e) => _lastDecoder![e.key] != e.value)) {
+      event(
+        'decoder.state.changed',
+        details: {'previous': _lastDecoder, 'current': state},
+      );
+      _lastDecoder = state;
+    }
+    event(
+      'playback.snapshot',
+      level: Diagnostics.instance.playerLevel == DiagnosticLogLevel.trace
+          ? DiagnosticLogLevel.trace
+          : DiagnosticLogLevel.debug,
+    );
+  }
+
   void _updateLevel() {
-    final level = Diagnostics.instance.level;
+    final level = Diagnostics.instance.playerLevel;
     if (_disposed || player.disposed || level == _level) return;
     _level = level;
+    _timer?.cancel();
+    _timer = null;
+    if (level != DiagnosticLogLevel.off &&
+        level.index <= DiagnosticLogLevel.info.index) {
+      _timer = Timer.periodic(
+        Duration(milliseconds: level == DiagnosticLogLevel.trace ? 250 : 2000),
+        (_) => _sample(),
+      );
+    }
+    // 关闭保存仍请求 error：不能破坏 media_kit 的错误事件和已有恢复逻辑。
     final name = switch (level) {
-      // media_kit 还用原生 error 消息生成播放错误和解码回退事件。
-      // 关闭日志仅停止保存，不能关闭这些功能事件。
       DiagnosticLogLevel.off => 'error',
       DiagnosticLogLevel.warning => 'warn',
       _ => level.name,
@@ -90,14 +244,25 @@ class PlayerDiagnostics {
     } finally {
       calloc.free(value);
     }
+    event(
+      'logging.configured',
+      details: {'playerLogLevel': level.name, 'nativeLogLevel': name},
+    );
   }
 
   void dispose() {
     if (_disposed) return;
+    event('player.disposed');
     _disposed = true;
+    _timer?.cancel();
+    player.onLoadHooks.remove(_onLoad);
+    player.onUnloadHooks.remove(_onUnload);
     _unregister();
     Diagnostics.instance.removeListener(_updateLevel);
-    unawaited(_subscription.cancel());
+    for (final subscription in _subscriptions) {
+      unawaited(subscription.cancel());
+    }
+    _context.clear();
   }
 }
 

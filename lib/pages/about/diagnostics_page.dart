@@ -11,12 +11,13 @@ import 'package:share_plus/share_plus.dart';
 Future<void> showDiagnosticLogLevelDialog(
   BuildContext context, {
   Diagnostics? diagnostics,
+  bool player = false,
 }) async {
   final service = diagnostics ?? Diagnostics.instance;
   final selected = await showDialog<DiagnosticLogLevel>(
     context: context,
     builder: (context) => SimpleDialog(
-      title: const Text('日志等级'),
+      title: Text(player ? '播放器与解码日志等级' : '日志等级'),
       children: [
         for (final level in DiagnosticLogLevel.values)
           SimpleDialogOption(
@@ -24,7 +25,9 @@ Future<void> showDiagnosticLogLevelDialog(
             child: ListTile(
               title: Text(level.label),
               subtitle: Text(level.description),
-              trailing: level == service.level ? const Icon(Icons.check) : null,
+              trailing: level == (player ? service.playerLevel : service.level)
+                  ? const Icon(Icons.check)
+                  : null,
             ),
           ),
       ],
@@ -32,7 +35,10 @@ Future<void> showDiagnosticLogLevelDialog(
   );
   if (selected != null) {
     try {
-      await service.configure(level: selected);
+      await service.configure(
+        level: player ? null : selected,
+        playerLevel: player ? selected : null,
+      );
     } catch (_) {
       if (context.mounted) _message(context, '日志等级已调整，但设置保存失败');
     }
@@ -214,8 +220,23 @@ class _DiagnosticsPageState extends State<DiagnosticsPage> {
                         diagnostics: service,
                       ),
                     ),
+                    ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      title: const Text('播放器与解码日志等级'),
+                      subtitle: Text(
+                        '${service.playerLevel.description}；独立保存为 player.jsonl，不受通用日志等级影响。调试含 2 秒快照，跟踪含 250 毫秒快照。',
+                      ),
+                      trailing: Text(service.playerLevel.label),
+                      onTap: () => showDiagnosticLogLevelDialog(
+                        context,
+                        diagnostics: service,
+                        player: true,
+                      ),
+                    ),
                     const Text(
-                      '记录仅保存在本机。日志约 6MiB、性能记录约 24MiB，达到上限后覆盖最旧文件。导出包含已保存的记录。',
+                      '仅保存在本机。通用日志 32 MiB、播放器/解码日志 128 MiB、性能记录 64 MiB。'
+                      '达到各自上限后轮转最旧文件；突发写入队列最多 32768 条/32 MiB，单条最多 1 MiB。'
+                      '导出包含三个通道及丢弃原因、轮转计数。详细等级会增加磁盘占用和采样开销。',
                     ),
                     const SizedBox(height: 16),
                     if (service.storageError != null ||

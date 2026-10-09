@@ -1,6 +1,6 @@
 # media_kit_video 本地版本
 
-- 本地版本：`1.2.5+piliaurora.1`；来源包版本：`1.2.5`。
+- 本地版本：`1.2.5+piliaurora.2`；来源包版本：`1.2.5`。
 - 来源仓库：https://github.com/My-Responsitories/media-kit.git
 - 来源提交：`73771ec38176be2d984a3049c28177bce23b54a0`。
 - 来源子目录：`media_kit_video`。
@@ -13,3 +13,7 @@
 更新流程见 `../README.md`，来源登记见 `../dependencies.json`。
 
 本地维护修正：补齐字幕文档模板的闭合标签，不改变生产行为。
+
+2026-10-09：Android 将默认全屏物理像素校准基准作为输出上限；超出基准的源等比缩小，较小的源保持原尺寸，
+一个媒体加载周期内固定，不再由 Flutter 视口触发原生 resize。增加可选 Surface
+生命周期诊断回调、原生事件顺序与单调时钟；Windows 输出路径不变。

@@ -49,6 +49,10 @@ import 'package:hive_ce/hive.dart';
 import 'package:material_ui/material_ui.dart';
 
 abstract final class Pref {
+  static String get playerDiagnosticLogLevel => _setting.get(
+    SettingBoxKey.playerDiagnosticLogLevel,
+    defaultValue: 'info',
+  );
   static String get diagnosticLogLevel =>
       _setting.get(SettingBoxKey.diagnosticLogLevel, defaultValue: 'warning');
   static bool get performanceTracing =>

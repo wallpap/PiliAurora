@@ -51,12 +51,48 @@ public class VideoOutput {
     private final Object lock = new Object();
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
     private long surfaceGeneration;
+    private long diagnosticSequence;
+    private long lastDiagnosticErrorNs;
+    private int suppressedDiagnosticErrors;
     private int bufferWidth;
     private int bufferHeight;
     private long lastConsumedTimestamp;
     private boolean disposed;
     private SurfaceFrameFence frameFence;
     private MethodChannel.Result frameResult;
+
+
+    private void diagnostic(String event, Throwable error) {
+        final long now = android.os.SystemClock.elapsedRealtimeNanos();
+        if (error != null && lastDiagnosticErrorNs != 0 && now - lastDiagnosticErrorNs < 1000000000L) {
+            suppressedDiagnosticErrors++;
+            return;
+        }
+        if (error != null) lastDiagnosticErrorNs = now;
+        final HashMap<String, Object> data = new HashMap<>();
+        data.put("suppressedNativeErrors", suppressedDiagnosticErrors);
+        suppressedDiagnosticErrors = 0;
+        data.put("handle", handle);
+        data.put("event", event);
+        data.put("nativeSequence", ++diagnosticSequence);
+        data.put("nativeElapsedNs", android.os.SystemClock.elapsedRealtimeNanos());
+        data.put("surfaceGeneration", surfaceGeneration);
+        data.put("textureId", id);
+        data.put("bufferWidth", bufferWidth);
+        data.put("bufferHeight", bufferHeight);
+        data.put("surfaceValid", surface != null && surface.isValid());
+        data.put("flutterJNIAPIAvailable", flutterJNIAPIAvailable);
+        data.put("sdkInt", Build.VERSION.SDK_INT);
+        data.put("manufacturer", Build.MANUFACTURER);
+        data.put("model", Build.MODEL);
+        data.put("hardware", Build.HARDWARE);
+        data.put("abis", java.util.Arrays.asList(Build.SUPPORTED_ABIS));
+        if (error != null) {
+            data.put("error", error.toString());
+            data.put("stack", Log.getStackTraceString(error));
+        }
+        mainHandler.post(() -> channelReference.invokeMethod("VideoOutput.Diagnostic", data));
+    }
 
     VideoOutput(long handle, MethodChannel channelReference, TextureRegistry textureRegistryReference) {
         this.handle = handle;
@@ -119,6 +155,7 @@ public class VideoOutput {
                         try {
                             if (!waitUntilFirstFrameRenderedNotify) {
                                 waitUntilFirstFrameRenderedNotify = true;
+                                diagnostic("surface.first-frame", null);
                                 final HashMap<String, Object> data = new HashMap<>();
                                 data.put("handle", handle);
                                 channelReference.invokeMethod("VideoOutput.WaitUntilFirstFrameRenderedNotify", data);
@@ -131,7 +168,8 @@ public class VideoOutput {
                                 flutterJNI.markTextureFrameAvailable(id);
                             }
                         } catch (Throwable e) {
-                            e.printStackTrace();
+                            diagnostic("surface.native-error", e);
+                e.printStackTrace();
                         }
                     }
                 }, new Handler());
@@ -141,6 +179,7 @@ public class VideoOutput {
                         try {
                             if (!waitUntilFirstFrameRenderedNotify) {
                                 waitUntilFirstFrameRenderedNotify = true;
+                                diagnostic("surface.first-frame", null);
                                 final HashMap<String, Object> data = new HashMap<>();
                                 data.put("handle", handle);
                                 channelReference.invokeMethod("VideoOutput.WaitUntilFirstFrameRenderedNotify", data);
@@ -153,7 +192,8 @@ public class VideoOutput {
                                 flutterJNI.markTextureFrameAvailable(id);
                             }
                         } catch (Throwable e) {
-                            e.printStackTrace();
+                            diagnostic("surface.native-error", e);
+                e.printStackTrace();
                         }
                     }
                 });
@@ -201,7 +241,8 @@ public class VideoOutput {
                     deleteGlobalObjectRef.invoke(null, wid);
                     Log.i("media_kit", String.format(Locale.ENGLISH, "com.alexmercerind.mediakitandroidhelper.MediaKitAndroidHelper.deleteGlobalObjectRef: %d", wid));
                 } catch (Throwable e) {
-                    e.printStackTrace();
+                    diagnostic("surface.native-error", e);
+                e.printStackTrace();
                 }
             }, 5000);
         } catch (Throwable e) {
@@ -226,13 +267,17 @@ public class VideoOutput {
                     wid = 0;
                 }
             } catch (Throwable e) {
+                diagnostic("surface.native-error", e);
                 e.printStackTrace();
             }
             // Create new android.view.Surface & object reference.
             try {
+                waitUntilFirstFrameRenderedNotify = false;
                 surface = new Surface(surfaceTextureEntry.surfaceTexture());
                 wid = (long) newGlobalObjectRef.invoke(null, surface);
+                diagnostic("surface.native-created", null);
             } catch (Throwable e) {
+                diagnostic("surface.native-error", e);
                 e.printStackTrace();
             }
             return wid;
@@ -248,6 +293,7 @@ public class VideoOutput {
             surfaceTextureEntry.surfaceTexture().setDefaultBufferSize(width, height);
             bufferWidth = width;
             bufferHeight = height;
+            diagnostic("surface.buffer-configured", null);
         }
     }
 

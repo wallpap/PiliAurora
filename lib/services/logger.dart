@@ -33,10 +33,12 @@ abstract final class LoggerUtils {
       level: Pref.enableLog
           ? DiagnosticLogLevel.parse(Pref.diagnosticLogLevel)
           : DiagnosticLogLevel.off,
+      playerLevel: DiagnosticLogLevel.parse(Pref.playerDiagnosticLogLevel),
       tracing: Pref.performanceTracing,
       intervalMs: Pref.performanceIntervalMs,
       saveSettings: (settings) => GStorage.setting.putAll({
         SettingBoxKey.diagnosticLogLevel: settings['level'],
+        SettingBoxKey.playerDiagnosticLogLevel: settings['playerLevel'],
         SettingBoxKey.enableLog:
             settings['level'] != DiagnosticLogLevel.off.name,
         SettingBoxKey.performanceTracing: settings['tracing'],

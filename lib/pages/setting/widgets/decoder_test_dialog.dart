@@ -16,6 +16,7 @@ import 'package:pili_aurora/plugin/pl_player/models/hwdec_type.dart';
 import 'package:pili_aurora/utils/storage_pref.dart';
 import 'package:pili_aurora/services/diagnostics/diagnostics.dart';
 import 'package:pili_aurora/services/diagnostics/player_diagnostics.dart';
+import 'package:pili_aurora/services/android_video_calibration.dart';
 import 'package:pili_aurora/services/diagnostics/process_metrics.dart';
 
 typedef DecoderMediaHeaderWriter = void Function({
@@ -152,7 +153,7 @@ class _DecoderTestDialogState extends State<DecoderTestDialog> {
         if (_codecs.isEmpty) _error = '公开视频未提供可测试的 AVC、HEVC 或 AV1 格式';
       });
     } catch (error) {
-      Diagnostics.instance.log(
+      Diagnostics.instance.playerLog(
         DiagnosticLogLevel.error,
         'decoderTest',
         '测试视频加载失败',
@@ -302,6 +303,19 @@ class _DecoderTestDialogState extends State<DecoderTestDialog> {
         configuration: VideoControllerConfiguration(
           enableHardwareAcceleration: decoder != HwDecType.no,
           hwdec: decoder.hwdec,
+          androidFullscreenWidth: Platform.isAndroid
+              ? AndroidVideoCalibration.saved?.width
+              : null,
+          androidFullscreenHeight: Platform.isAndroid
+              ? AndroidVideoCalibration.saved?.height
+              : null,
+          onAndroidDiagnostic: (action, details) => diagnostics?.event(
+            action,
+            level: action.contains('error')
+                ? DiagnosticLogLevel.error
+                : DiagnosticLogLevel.info,
+            details: details,
+          ),
         ),
       );
       void writeMediaHeaders({String? userAgent, String? referer}) {
@@ -381,7 +395,7 @@ class _DecoderTestDialogState extends State<DecoderTestDialog> {
         performance: await monitor.stop(),
       );
     } catch (error) {
-      Diagnostics.instance.log(
+      Diagnostics.instance.playerLog(
         DiagnosticLogLevel.error,
         'decoderTest',
         error,

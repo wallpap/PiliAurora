@@ -237,6 +237,18 @@ Commit Hash: ${BuildConfig.commitHash}''',
               onTap: () => showDiagnosticLogLevelDialog(context),
             ),
           ),
+          AnimatedBuilder(
+            animation: Diagnostics.instance,
+            builder: (context, _) => ListTile(
+              leading: const Icon(Icons.video_settings_outlined),
+              title: const Text('播放器与解码日志等级'),
+              subtitle: Text(
+                '${Diagnostics.instance.playerLevel.label} · 独立保存与导出',
+                style: subTitleStyle,
+              ),
+              onTap: () => showDiagnosticLogLevelDialog(context, player: true),
+            ),
+          ),
           ListTile(
             onTap: () {
               if (cacheSize.value.isNotEmpty) {

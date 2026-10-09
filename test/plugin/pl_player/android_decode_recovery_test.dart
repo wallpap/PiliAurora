@@ -4,6 +4,54 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:pili_aurora/plugin/pl_player/utils/android_decode_recovery.dart';
 
 void main() {
+  testWidgets(
+    'diagnostics include fallback cause and budgets without changing recovery',
+    (tester) async {
+      var decoder = 'mediacodec';
+      final events = <(String, Map<String, Object?>)>[];
+      final recovery =
+          AndroidDecodeRecovery(
+            activeDecoder: () => decoder,
+            applyDecoder: (value) => decoder = value,
+            onError: (error) => fail(error.toString()),
+            onDiagnostic: (action, details) => events.add((action, details)),
+          )..onLog(
+            prefix: 'ffmpeg/video',
+            level: 'error',
+            message: 'mediacodec: Both surface and native_window are null',
+          );
+      await tester.pump(const Duration(milliseconds: 201));
+      expect(decoder, 'mediacodec-copy');
+      expect(events.first.$1, 'decoder.recovery.scheduled');
+      expect(events.first.$2['reason'], 'mediacodec-null-surface');
+      expect(events.last.$2, containsPair('from', 'mediacodec'));
+      expect(events.last.$2, containsPair('to', 'mediacodec-copy'));
+      recovery
+        ..reset()
+        ..dispose();
+      expect(events.last.$1, 'decoder.recovery.reset');
+    },
+  );
+  testWidgets('a failing diagnostic observer cannot block decoder fallback', (
+    tester,
+  ) async {
+    var decoder = 'mediacodec';
+    final recovery =
+        AndroidDecodeRecovery(
+          activeDecoder: () => decoder,
+          applyDecoder: (value) => decoder = value,
+          onError: (error) => fail(error.toString()),
+          onDiagnostic: (_, _) => throw StateError('observer failed'),
+        )..onLog(
+          prefix: 'vo/gpu/aimagereader',
+          level: 'error',
+          message: 'acquireLatestImage failed',
+        );
+    await tester.pump(const Duration(milliseconds: 201));
+    expect(decoder, 'mediacodec-copy');
+    recovery.dispose();
+  });
+
   late String? active;
   late List<String> applied;
   late List<Object> errors;
