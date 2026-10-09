@@ -3,8 +3,8 @@ import 'package:media_kit_video/media_kit_video.dart';
 
 void main() {
   AndroidFixedSurfaceSize output() => AndroidFixedSurfaceSize(
-    fullscreenWidth: 2400,
-    fullscreenHeight: 1080,
+    limitWidth: 2400,
+    limitHeight: 1080,
   );
 
   test('smaller and equal sources keep their original dimensions', () {

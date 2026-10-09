@@ -9,6 +9,7 @@ import 'package:pili_aurora/utils/accounts/account_type_adapter.dart';
 import 'package:pili_aurora/utils/accounts/cookie_jar_adapter.dart';
 import 'package:pili_aurora/utils/path_utils.dart';
 import 'package:pili_aurora/utils/set_int_adapter.dart';
+import 'package:pili_aurora/utils/storage_key.dart';
 import 'package:pili_aurora/utils/storage_pref.dart';
 import 'package:pili_aurora/services/settings/settings_backup.dart';
 import 'package:hive_ce/hive.dart';
@@ -62,6 +63,12 @@ abstract final class GStorage {
         },
       ).then((res) => watchProgress = res),
     ]);
+
+    if (setting.containsKey(
+      LegacySettingBoxKey.androidFullscreenCalibration,
+    )) {
+      await setting.delete(LegacySettingBoxKey.androidFullscreenCalibration);
+    }
 
     if (Pref.saveReply) {
       reply = await Hive.openBox<Uint8List>(

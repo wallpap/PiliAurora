@@ -109,10 +109,10 @@ class VideoControllerConfiguration {
   /// Default: `true`
   final bool enableHardwareAcceleration;
 
-  /// 保存的默认全屏物理像素尺寸。Android 将较大的源等比缩小到此上限，
-  /// 较小的源保持原尺寸；每次加载媒体时确定一次输出。
-  final int? androidFullscreenWidth;
-  final int? androidFullscreenHeight;
+  /// 自动检测的设备物理像素上限。Android 将超限源等比缩小，
+  /// 未超限源保持原尺寸；每次加载媒体时确定一次输出。
+  final int? androidOutputLimitWidth;
+  final int? androidOutputLimitHeight;
 
   /// Sparse native surface lifecycle diagnostics; never called per frame.
   final void Function(String event, Map<String, Object?> details)?
@@ -133,8 +133,8 @@ class VideoControllerConfiguration {
     this.height,
     this.enableHardwareAcceleration = true,
     this.androidAttachSurfaceAfterVideoParameters,
-    this.androidFullscreenWidth,
-    this.androidFullscreenHeight,
+    this.androidOutputLimitWidth,
+    this.androidOutputLimitHeight,
     this.onAndroidDiagnostic,
   });
 }

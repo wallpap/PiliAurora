@@ -1,8 +1,7 @@
 // ignore_for_file: constant_identifier_names
 
 abstract final class SettingBoxKey {
-  static const androidFullscreenCalibration = 'androidFullscreenCalibration',
-      playerDiagnosticLogLevel = 'playerDiagnosticLogLevel';
+  static const playerDiagnosticLogLevel = 'playerDiagnosticLogLevel';
   static const diagnosticLogLevel = 'diagnosticLogLevel',
       performanceTracing = 'performanceTracing',
       performanceIntervalMs = 'performanceIntervalMs';
@@ -247,6 +246,10 @@ abstract final class SettingBoxKey {
       liveCdnUrl = 'liveCdnUrl',
       saveReply = 'saveReply',
       appFont = 'appFont';
+}
+
+abstract final class LegacySettingBoxKey {
+  static const androidFullscreenCalibration = 'androidFullscreenCalibration';
 }
 
 abstract final class LocalCacheKey {

@@ -5,16 +5,16 @@ import 'package:pili_aurora/plugin/pl_player/models/hwdec_type.dart';
 VideoControllerConfiguration hardwareVideoConfiguration({
   required bool enabled,
   required String configured,
-  int? androidFullscreenWidth,
-  int? androidFullscreenHeight,
+  int? androidOutputLimitWidth,
+  int? androidOutputLimitHeight,
   void Function(String event, Map<String, Object?> details)?
   onAndroidDiagnostic,
 }) {
   return VideoControllerConfiguration(
     enableHardwareAcceleration: enabled,
     androidAttachSurfaceAfterVideoParameters: false,
-    androidFullscreenWidth: androidFullscreenWidth,
-    androidFullscreenHeight: androidFullscreenHeight,
+    androidOutputLimitWidth: androidOutputLimitWidth,
+    androidOutputLimitHeight: androidOutputLimitHeight,
     onAndroidDiagnostic: onAndroidDiagnostic,
     // 由 mpv 顺序探测并处理运行时回退；不依赖特定等级或措辞的错误日志。
     hwdec: enabled ? HwDecType.orderedCandidates(configured).join(',') : 'no',
