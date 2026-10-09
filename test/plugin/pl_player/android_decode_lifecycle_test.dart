@@ -243,6 +243,70 @@ void main() {
     await tester.pump(const Duration(milliseconds: 200));
     expect(applied, isEmpty);
   });
+  for (final unknown in [false, true]) {
+    testWidgets(
+      'sustained empty images recover with ${unknown ? "unknown" : "advancing"} PTS',
+      (tester) async {
+        recovery.dispose();
+        var now = 0;
+        recovery = AndroidDecodeRecovery(
+          readState: () => playback.state,
+          elapsedMilliseconds: () => now,
+          applyDecoder: applied.add,
+          onError: (error) => fail(error.toString()),
+        );
+        for (var i = 0; i < 20; i++) {
+          playback.videoPts = unknown ? null : i.toDouble();
+          imageError();
+          now += 100;
+          await tester.pump(const Duration(milliseconds: 100));
+          if (i < 19) expect(applied, isEmpty);
+        }
+        expect(applied, ['mediacodec-copy']);
+      },
+    );
+  }
+
+  testWidgets('HardwareBuffer mapping failures reach recovery', (tester) async {
+    recovery.onLog(
+      prefix: 'vo/gpu/aimagereader',
+      level: 'error',
+      message: 'getHardwareBuffer failed: -10000',
+    );
+    await tester.pump(const Duration(milliseconds: 200));
+    expect(applied, ['mediacodec-copy']);
+  });
+
+  testWidgets('a rejected copy request preserves copy and software budgets', (
+    tester,
+  ) async {
+    recovery.dispose();
+    var attempts = 0;
+    final errors = <Object>[];
+    recovery = AndroidDecodeRecovery(
+      readState: () => playback.state,
+      applyDecoder: (decoder) {
+        if (++attempts == 1) throw StateError('native rejected request');
+        applied.add(decoder);
+        playback.decoder = decoder;
+      },
+      onError: errors.add,
+    );
+    surfaceError();
+    await tester.pump(const Duration(milliseconds: 200));
+    expect(applied, isEmpty);
+    surfaceError();
+    await tester.pump(const Duration(milliseconds: 200));
+    expect(applied, ['mediacodec-copy']);
+    recovery.onLog(
+      prefix: 'ffmpeg/video',
+      level: 'error',
+      message: 'hevc_mediacodec: Failed to dequeue output buffer',
+    );
+    await tester.pump(const Duration(milliseconds: 200));
+    expect(applied, ['mediacodec-copy', 'no']);
+    expect(errors, hasLength(1));
+  });
 }
 
 class _Playback {

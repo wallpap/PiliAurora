@@ -20,6 +20,7 @@ class AndroidDecodeRecovery {
     this.recoverSoftware,
     this.onFallback,
     this.onDiagnostic,
+    this.elapsedMilliseconds,
   });
 
   final void Function(String action, Map<String, Object?> details)?
@@ -43,6 +44,7 @@ class AndroidDecodeRecovery {
   final AndroidDecodeState? Function() readState;
   final void Function(String decoder) applyDecoder;
   final void Function(Object error) onError;
+  final int Function()? elapsedMilliseconds;
   final void Function(String decoder)? onFallback;
 
   /// 返回是否实际执行了重载；加载忙时可拒绝且不消耗本媒体的预算。
@@ -57,6 +59,12 @@ class AndroidDecodeRecovery {
   bool _softwareReloadAttempted = false;
   int _parseErrors = 0;
   int _imageErrors = 0;
+  final _clock = Stopwatch()..start();
+  int get _nowMs => elapsedMilliseconds?.call() ?? _clock.elapsedMilliseconds;
+  int? _firstEmptyMs;
+  int? _lastEmptyMs;
+  int _consecutiveEmpty = 0;
+  int _rejectedAttempts = 0;
 
   void onLog({
     required String prefix,
@@ -71,14 +79,16 @@ class AndroidDecodeRecovery {
       _onSoftwareParseError();
       return;
     }
-    if (_softwareAttempted) return;
+    if (_softwareAttempted || _rejectedAttempts >= 2) return;
     final surfaceFailure =
         prefix == 'ffmpeg/video' &&
         text.contains('mediacodec') &&
         text.contains('both surface and native_window are null');
     final imageFailure =
         prefix == 'vo/gpu/aimagereader' &&
-        text.contains('acquirelatestimage failed');
+        (text.contains('acquirelatestimage failed') ||
+            text.contains('gethardwarebuffer failed') ||
+            text.contains('eglcreateimagekhr failed'));
     final decoderFailure =
         prefix == 'ffmpeg/video' &&
         text.contains('mediacodec') &&
@@ -98,6 +108,7 @@ class AndroidDecodeRecovery {
       final decoder = state!.decoder?.trim();
       if (_copyMemoryOutput(decoder, surfaceFailure, imageFailure)) return;
       if (emptyImage && !_canObserveFrames(state)) {
+        _clearEmptyObservation();
         if (_imageErrors > 0) {
           _pending?.cancel();
           _pending = null;
@@ -105,6 +116,17 @@ class AndroidDecodeRecovery {
         }
         _record('decoder.recovery.skipped', {'reason': 'waiting-for-video'});
         return;
+      }
+      if (emptyImage) {
+        final now = _nowMs;
+        if (_lastEmptyMs == null || now - _lastEmptyMs! > 350) {
+          _firstEmptyMs = now;
+          _consecutiveEmpty = 0;
+        }
+        _lastEmptyMs = now;
+        _consecutiveEmpty++;
+      } else {
+        _clearEmptyObservation();
       }
       if (_pending != null) {
         if (!emptyImage && _imageErrors > 0) {
@@ -133,7 +155,7 @@ class AndroidDecodeRecovery {
         if (emptyImage) 'videoPts': videoPts,
       });
 
-      // 空队列需同时满足连续错误与视频停滞；seek、暂停和等待数据不消耗预算。
+      // PTS 不能证明取图成功；持续密集错误另设有界观察，覆盖未知/推进的 PTS。
       _pending = Timer(delay, () {
         _pending = null;
         final imageErrors = _imageErrors;
@@ -145,6 +167,7 @@ class AndroidDecodeRecovery {
           final decoder = state!.decoder?.trim();
           if (_copyMemoryOutput(decoder, surfaceFailure, imageFailure)) return;
           if (decoder != initialDecoder) {
+            _clearEmptyObservation();
             _record('decoder.recovery.skipped', {
               'reason': 'output-backend-changed',
               'previousDecoder': initialDecoder,
@@ -155,7 +178,13 @@ class AndroidDecodeRecovery {
           if (emptyImage &&
               (imageErrors < 3 ||
                   !_canObserveFrames(state) ||
-                  state.videoPts != videoPts)) {
+                  !((videoPts != null &&
+                          videoPts.isFinite &&
+                          state.videoPts == videoPts) ||
+                      (_consecutiveEmpty >= 10 &&
+                          _firstEmptyMs != null &&
+                          _nowMs - _firstEmptyMs! >= 2000 &&
+                          _nowMs - _lastEmptyMs! <= 350)))) {
             _record('decoder.recovery.skipped', {
               'reason': 'image-result-transient',
               'imageErrors': imageErrors,
@@ -176,10 +205,24 @@ class AndroidDecodeRecovery {
           final next = decoder == 'mediacodec' && !_copyAttempted
               ? 'mediacodec-copy'
               : 'no';
+          _record('decoder.recovery.apply', {'from': decoder, 'to': next});
+          try {
+            applyDecoder(next);
+          } catch (error) {
+            _rejectedAttempts++;
+            _record('decoder.recovery.rejected', {
+              'from': decoder,
+              'to': next,
+              'error': error.toString(),
+              'rejectedAttempts': _rejectedAttempts,
+            });
+            onError(error);
+            return;
+          }
           _copyAttempted = true;
           _softwareAttempted = next == 'no';
-          _record('decoder.recovery.apply', {'from': decoder, 'to': next});
-          applyDecoder(next);
+          _record('decoder.recovery.accepted', {'from': decoder, 'to': next});
+          _clearEmptyObservation();
           _notifyFallback(next);
         } catch (error) {
           _softwareAttempted = true;
@@ -210,11 +253,13 @@ class AndroidDecodeRecovery {
   }
 
   bool _canObserveFrames(AndroidDecodeState state) =>
-      state.playing &&
-      !state.buffering &&
-      !state.seeking &&
-      state.videoPts != null &&
-      state.videoPts!.isFinite;
+      state.playing && !state.buffering && !state.seeking;
+
+  void _clearEmptyObservation() {
+    _firstEmptyMs = null;
+    _lastEmptyMs = null;
+    _consecutiveEmpty = 0;
+  }
 
   void _notifyFallback(String decoder) {
     if (_fallbackNotified) return;
@@ -278,6 +323,8 @@ class AndroidDecodeRecovery {
     _softwareReloadAttempted = false;
     _parseErrors = 0;
     _imageErrors = 0;
+    _rejectedAttempts = 0;
+    _clearEmptyObservation();
   }
 
   void dispose() {

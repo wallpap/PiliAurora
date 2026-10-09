@@ -72,6 +72,13 @@ public class VideoOutputManager {
         }
     }
 
+    public HashMap<String, Object> frameState(long handle) {
+        synchronized (lock) {
+            final VideoOutput output = videoOutputs.get(handle);
+            return output == null ? null : output.frameState();
+        }
+    }
+
     public void waitForSurfaceFrame(long handle, String request, int width, int height,
                                     MethodChannel.Result result) {
         synchronized (lock) {

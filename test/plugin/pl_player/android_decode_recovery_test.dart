@@ -386,7 +386,7 @@ void main() {
     expect(fallbacks, isEmpty);
   });
 
-  testWidgets('decoder update failures are reported without retry loops', (
+  testWidgets('decoder request rejection retries are bounded separately', (
     tester,
   ) async {
     recovery.dispose();
@@ -400,7 +400,9 @@ void main() {
     await tester.pump(const Duration(milliseconds: 200));
     surfaceError();
     await tester.pump(const Duration(milliseconds: 200));
-    expect(errors, hasLength(1));
+    surfaceError();
+    await tester.pump(const Duration(milliseconds: 200));
+    expect(errors, hasLength(2));
     expect(fallbacks, isEmpty);
   });
 

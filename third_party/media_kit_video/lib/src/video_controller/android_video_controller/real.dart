@@ -204,7 +204,9 @@ class AndroidVideoController extends PlatformVideoController {
             // With --vo=gpu, we need to update the android.graphics.SurfaceTexture size & notify libmpv to re-create vo.
             // In native Android, this kind of rendering is done with android.view.SurfaceView + android.view.SurfaceHolder, which offers onSurfaceChanged to handle this.
             // 只在媒体加载/挂载时提交固定值；Flutter 视口不再参与此路径。
-            final size = _fixedSize.resolve(width, height);
+            final fixed = _fixedSize.resolve(width, height);
+            // 无上限时沿用原生源尺寸更新；启用限幅后每份媒体保持固定输出。
+            final size = _fixedSize.resolvedLimit == null ? sourceSize : fixed;
             if (!_attached || _appliedSize != size) {
               final watch = Stopwatch()..start();
               _diagnostic('surface.configure.begin', {
@@ -295,11 +297,7 @@ class AndroidVideoController extends PlatformVideoController {
     };
 
     for (final entry in values.entries) {
-      final name = entry.key.toNativeUtf8();
-      final value = entry.value.toNativeUtf8();
-      NativePlayer.mpv.mpv_set_property_string(player.ctx, name, value);
-      calloc.free(name);
-      calloc.free(value);
+      player.setProperty(entry.key, entry.value);
     }
     // ----------------------------------------------
 

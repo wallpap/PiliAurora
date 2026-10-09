@@ -56,7 +56,17 @@ class NativePlayer extends PlatformPlayer {
     PlayerConfiguration configuration = const PlayerConfiguration(),
   }) async {
     final player = NativePlayer._(configuration: configuration);
-    await player.waitForPlayerInitialization;
+    try {
+      await player._future;
+      await player.waitForPlayerInitialization;
+    } catch (_) {
+      player.disposed = true;
+      if (player.ctx != nullptr) {
+        await Initializer.dispose(player.ctx);
+        mpv.mpv_terminate_destroy(player.ctx);
+      }
+      rethrow;
+    }
     return player;
   }
 
@@ -80,6 +90,11 @@ class NativePlayer extends PlatformPlayer {
     }
 
     disposed = true;
+
+    for (final observer in _propertyObservers.values) {
+      unawaited(observer.close());
+    }
+    _propertyObservers.clear();
 
     await super.dispose();
 
@@ -579,12 +594,13 @@ class NativePlayer extends PlatformPlayer {
   /// Seeks the currently playing [Media] in the [Player] by specified [Duration].
   @override
   Future<void> seek(Duration duration, {bool synchronized = true}) {
+    final media = current.firstOrNull;
     Future<void> function() async {
       throwIfDisposed();
+      if (media == null || !identical(media, current.firstOrNull)) return;
 
-      await command(
-        nativeSeekCommand(duration, keyframe: Platform.isAndroid),
-      );
+      await command(nativeSeekCommand(duration, keyframe: Platform.isAndroid));
+      if (!identical(media, current.firstOrNull)) return;
 
       // It is self explanatory that PlayerState.completed & PlayerStream.completed must enter the false state if seek is called. Typically after EOF.
       // https://github.com/media-kit/media-kit/issues/221
@@ -940,9 +956,46 @@ class NativePlayer extends PlatformPlayer {
 
     final name = property.toNativeUtf8();
     final data = value.toNativeUtf8();
-    mpv.mpv_set_property_string(ctx, name, data);
-    calloc.free(name);
-    calloc.free(data);
+    try {
+      _checkRequest(mpv.mpv_set_property_string(ctx, name, data));
+    } finally {
+      calloc.free(name);
+      calloc.free(data);
+    }
+  }
+
+  final _propertyObservers = <int, StreamController<String?>>{};
+
+  /// 属性变化由原生事件循环传递，避免 UI 同步等待 playback core。
+  Stream<String?> observeProperty(String property) {
+    throwIfDisposed();
+    final id = _asyncRequestNumber++;
+    late final StreamController<String?> controller;
+    controller = StreamController<String?>(
+      onListen: () {
+        final name = property.toNativeUtf8();
+        try {
+          _propertyObservers[id] = controller;
+          _checkRequest(
+            mpv.mpv_observe_property(
+              ctx,
+              id,
+              name,
+              generated.mpv_format.MPV_FORMAT_STRING,
+            ),
+          );
+        } catch (error, stack) {
+          controller.addError(error, stack);
+        } finally {
+          calloc.free(name);
+        }
+      },
+      onCancel: () {
+        _propertyObservers.remove(id);
+        if (!disposed) mpv.mpv_unobserve_property(ctx, id);
+      },
+    );
+    return controller.stream;
   }
 
   /// Retrieves the value of a property from the internal libmpv instance of this [Player].
@@ -970,6 +1023,20 @@ class NativePlayer extends PlatformPlayer {
 
   Future<void> _handler(Pointer<generated.mpv_event> event) async {
     final eventId = event.ref.event_id;
+    if (eventId == generated.mpv_event_id.MPV_EVENT_PROPERTY_CHANGE &&
+        event.ref.reply_userdata != 0) {
+      final observer = _propertyObservers[event.ref.reply_userdata];
+      if (observer != null && !observer.isClosed) {
+        final prop = event.ref.data.cast<generated.mpv_event_property>().ref;
+        observer.add(
+          prop.format == generated.mpv_format.MPV_FORMAT_STRING &&
+                  prop.data != nullptr
+              ? prop.data.cast<Pointer<Uint8>>().value.toDartString()
+              : null,
+        );
+      }
+      return;
+    }
     switch (eventId) {
       case generated.mpv_event_id.MPV_EVENT_PROPERTY_CHANGE:
         final prop = event.ref.data.cast<generated.mpv_event_property>();
@@ -1003,7 +1070,10 @@ class NativePlayer extends PlatformPlayer {
       return;
     }
 
-    _error(event.ref.error);
+    if (eventId != generated.mpv_event_id.MPV_EVENT_SET_PROPERTY_REPLY &&
+        eventId != generated.mpv_event_id.MPV_EVENT_COMMAND_REPLY) {
+      _error(event.ref.error);
+    }
 
     switch (eventId) {
       case generated.mpv_event_id.MPV_EVENT_START_FILE:
@@ -1589,6 +1659,8 @@ class NativePlayer extends PlatformPlayer {
       // [VideoController] internally sets --vid=auto upon attachment to enable video rendering & decoding.
       if (!test) 'vid': 'no',
       'prefetch-playlist': 'yes',
+      // osc 是初始化选项，部分 libmpv 构建没有同名运行时属性。
+      if (!configuration.osc) 'osc': 'no',
       ...?configuration.options,
     };
 
@@ -1636,7 +1708,7 @@ class NativePlayer extends PlatformPlayer {
       'subs-with-matching-audio': 'yes',
 
       // Other properties based on [PlayerConfiguration].
-      if (!configuration.osc) ...const {'osc': 'no', 'osd-level': '0'},
+      if (!configuration.osc) 'osd-level': '0',
       'title': configuration.title,
       'vo': ?configuration.vo,
       'demuxer-lavf-o': [
@@ -1719,6 +1791,13 @@ class NativePlayer extends PlatformPlayer {
     }
   }
 
+  void _checkRequest(int code, [String? operation]) {
+    if (code >= 0) return;
+    _error(code);
+    final message = mpv.mpv_error_string(code).toDartString();
+    throw StateError(operation == null ? message : '$operation: $message');
+  }
+
   int _asyncRequestNumber = 1;
   final Map<int, Completer<int>> _requests = {};
 
@@ -1740,47 +1819,68 @@ class NativePlayer extends PlatformPlayer {
       _requests.remove(requestNumber);
       completer.complete(immediate);
     }
-    return completer.future.then(_error);
+    return completer.future.then((code) => _checkRequest(code, 'set $name'));
   }
 
   Future<void> _setPropertyFlag(String name, bool value) async {
     final ptr = calloc<Bool>(1)..value = value;
-    await _setProperty(name, generated.mpv_format.MPV_FORMAT_FLAG, ptr.cast());
-    calloc.free(ptr);
+    try {
+      await _setProperty(
+        name,
+        generated.mpv_format.MPV_FORMAT_FLAG,
+        ptr.cast(),
+      );
+    } finally {
+      calloc.free(ptr);
+    }
   }
 
   Future<void> _setPropertyDouble(String name, double value) async {
     final ptr = calloc<Double>(1)..value = value;
-    await _setProperty(
-      name,
-      generated.mpv_format.MPV_FORMAT_DOUBLE,
-      ptr.cast(),
-    );
-    calloc.free(ptr);
+    try {
+      await _setProperty(
+        name,
+        generated.mpv_format.MPV_FORMAT_DOUBLE,
+        ptr.cast(),
+      );
+    } finally {
+      calloc.free(ptr);
+    }
   }
 
   Future<void> _setPropertyInt64(String name, int value) async {
     final ptr = calloc<Int64>(1)..value = value;
-    await _setProperty(name, generated.mpv_format.MPV_FORMAT_INT64, ptr.cast());
-    calloc.free(ptr);
+    try {
+      await _setProperty(
+        name,
+        generated.mpv_format.MPV_FORMAT_INT64,
+        ptr.cast(),
+      );
+    } finally {
+      calloc.free(ptr);
+    }
   }
 
   Future<void> _setPropertyString(String name, String value) async {
     final string = value.toNativeUtf8();
     // It wants char**
     final ptr = calloc<Pointer<Void>>(1)..value = string.cast();
-    await _setProperty(
-      name,
-      generated.mpv_format.MPV_FORMAT_STRING,
-      ptr.cast(),
-    );
-    calloc.free(ptr);
-    calloc.free(string);
+    try {
+      await _setProperty(
+        name,
+        generated.mpv_format.MPV_FORMAT_STRING,
+        ptr.cast(),
+      );
+    } finally {
+      calloc.free(ptr);
+      calloc.free(string);
+    }
   }
 
   /// Calls mpv command passed as [args].
   /// Automatically freeds memory after command sending.
   Future<void> command(List<String> args) {
+    throwIfDisposed();
     final pointers = args.map((e) => e.toNativeUtf8()).toList();
     final arr = calloc<Pointer<Uint8>>(pointers.length + 1);
     for (int i = 0; i < args.length; i++) {
@@ -1796,7 +1896,7 @@ class NativePlayer extends PlatformPlayer {
       _requests.remove(requestNumber);
       completer.complete(immediate);
     }
-    return completer.future.then(_error);
+    return completer.future.then(_checkRequest);
   }
 
   /// Internal generated libmpv C API bindings.

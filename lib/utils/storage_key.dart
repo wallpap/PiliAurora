@@ -125,6 +125,7 @@ abstract final class SettingBoxKey {
       showFSActionItem = 'showFSActionItem',
       enableShrinkVideoSize = 'enableShrinkVideoSize',
       enableAndroidVideoOutputSize = 'enableAndroidVideoOutputSize',
+      enableAndroidTextureScaling = 'enableAndroidTextureScaling',
       showDynActionBar = 'showDynActionBar',
       darkVideoPage = 'darkVideoPage',
       enableSlideVolumeBrightness = 'enableSlideVolumeBrightness',

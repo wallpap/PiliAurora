@@ -3,6 +3,8 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hive_ce/hive.dart';
 import 'package:pili_aurora/utils/storage.dart';
+import 'package:pili_aurora/utils/storage_key.dart';
+import 'package:pili_aurora/utils/storage_pref.dart';
 import 'package:pili_aurora/plugin/pl_player/models/play_speed.dart';
 import 'package:pili_aurora/plugin/pl_player/utils/danmaku_options.dart';
 
@@ -20,6 +22,16 @@ void main() {
     await directory.delete(recursive: true);
   });
   group('播放器时序契约', () {
+    test('实验性纹理缩放默认关闭，旧开关不启用新功能', () async {
+      await GStorage.setting.put(SettingBoxKey.enableAndroidVideoOutputSize, true);
+      expect(Pref.enableAndroidTextureScaling, isFalse);
+      await GStorage.setting.put(SettingBoxKey.enableAndroidTextureScaling, true);
+      expect(Pref.enableAndroidTextureScaling, isTrue);
+      await GStorage.setting.put(SettingBoxKey.enableAndroidTextureScaling, false);
+      expect(Pref.enableAndroidTextureScaling, isFalse);
+      await GStorage.setting.delete(SettingBoxKey.enableAndroidTextureScaling);
+      await GStorage.setting.delete(SettingBoxKey.enableAndroidVideoOutputSize);
+    });
     test('所有 UI 倍速选项均为正数且包含 1x', () {
       final values = PlaySpeed.values.map((speed) => speed.value).toList();
 

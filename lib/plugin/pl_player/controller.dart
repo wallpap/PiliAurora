@@ -1,4 +1,4 @@
-import 'dart:async' show StreamSubscription, Timer;
+import 'dart:async' show Completer, StreamSubscription, Timer;
 import 'dart:convert' show ascii;
 import 'dart:io' show Platform;
 import 'dart:math' show max, min;
@@ -160,6 +160,7 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
 
   Timer? _timer;
   StreamSubscription? _subForSeek;
+  Completer<void>? _seekCompletion;
 
   Box setting = GStorage.setting;
 
@@ -626,6 +627,7 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
       this.width = width;
       this.height = height;
       _androidDecodeRecovery?.reset();
+      _cancelSubForSeek();
       this.dataSource = dataSource;
       _av1DecodeErrorObserved = false;
       _autoPlay = autoplay;
@@ -785,7 +787,9 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
           enabled: Pref.enableHA,
           configured: Pref.hardwareDecoding,
           androidOutputLimit: Platform.isAndroid
-              ? () => AndroidVideoOutputLimit.detected
+              ? () => Pref.enableAndroidTextureScaling
+                    ? AndroidVideoOutputLimit.detected
+                    : null
               : null,
           onAndroidDiagnostic: (action, details) => _diagnostics?.event(
             action,
@@ -819,9 +823,6 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
     }
     return (player, videoController);
   }
-
-  late final buffer = Pref.initBuffer(_playbackSpeed.value);
-  late final liveBuffer = Pref.initLiveBuffer();
 
   // 配置播放器
   Future<bool> _createVideoController(
@@ -862,9 +863,9 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
       if (dataSource is FileSource)
         'cache': 'no'
       else if (isLive)
-        ...liveBuffer
+        ...Pref.initLiveBuffer()
       else
-        ...buffer,
+        ...Pref.initBuffer(_playbackSpeed.value),
     };
 
     if (dataSource.audioSource case final audio? when audio.isNotEmpty) {
@@ -1033,14 +1034,14 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
         readState: () {
           if (player.disposed || player.current.isEmpty) return null;
           return (
-            decoder: readMpvProperty(player, 'hwdec-current'),
+            decoder: _diagnostics?.property('hwdec-current'),
             playing: player.state.playing,
             buffering: player.state.buffering,
-            seeking: readMpvProperty(player, 'seeking') == 'yes',
+            seeking: _diagnostics?.property('seeking') == 'yes',
             completed: player.state.completed,
-            eof: readMpvProperty(player, 'eof-reached') == 'yes',
+            eof: _diagnostics?.property('eof-reached') == 'yes',
             videoPts: double.tryParse(
-              readMpvProperty(player, 'video-pts') ?? '',
+              _diagnostics?.property('video-pts') ?? '',
             ),
           );
         },
@@ -1052,7 +1053,7 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
           );
           player.setProperty('hwdec', decoder);
           _diagnostics?.event(
-            'decoder.apply.end',
+            'decoder.apply.accepted',
             level: DiagnosticLogLevel.warning,
             details: {'requestedDecoder': decoder},
           );
@@ -1243,6 +1244,9 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
   }
 
   void _cancelSubForSeek() {
+    final completion = _seekCompletion;
+    _seekCompletion = null;
+    if (completion != null && !completion.isCompleted) completion.complete();
     if (_subForSeek != null) {
       _subForSeek!.cancel();
       _subForSeek = null;
@@ -1250,10 +1254,6 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
   }
 
   Future<void> seek(Duration position, {bool isSeek = false}) async {
-    if (isSeek) {
-      /// 拖动进度条调节时，不等待第一帧，防止抖动
-      await _videoPlayerController?.stream.buffer.first;
-    }
     danmakuController?.clear();
     final watch = Stopwatch()..start();
     _diagnostics?.event(
@@ -1286,6 +1286,7 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
 
   /// 跳转至指定位置
   Future<void> seekTo(Duration position, {bool isSeek = true}) async {
+    _cancelSubForSeek();
     if (_playerCount == 0) {
       return;
     }
@@ -1295,14 +1296,28 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
     _heartDuration = position.inSeconds;
 
     if (duration.value != 0) {
-      seek(position, isSeek: isSeek);
+      await seek(position, isSeek: isSeek);
     } else {
-      // if (kDebugMode) debugPrint('seek duration else');
-      _subForSeek?.cancel();
-      _subForSeek = duration.listen((_) {
-        seek(position, isSeek: isSeek);
-        _cancelSubForSeek();
+      final source = dataSource;
+      final player = _videoPlayerController;
+      final completion = _seekCompletion = Completer<void>();
+      _subForSeek = duration.listen((value) {
+        if (value <= 0) return;
+        _subForSeek?.cancel();
+        _subForSeek = null;
+        _seekCompletion = null;
+        if (_playerCount == 0 ||
+            !identical(source, dataSource) ||
+            !identical(player, _videoPlayerController)) {
+          completion.complete();
+          return;
+        }
+        seek(
+          position,
+          isSeek: isSeek,
+        ).then(completion.complete, onError: completion.completeError);
       });
+      await completion.future;
     }
   }
 
@@ -1316,6 +1331,23 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
 
     await _videoPlayerController?.setRate(speed);
     _playbackSpeed.value = speed;
+    if (_videoPlayerController?.current.isNotEmpty == true &&
+        !isLive &&
+        dataSource is! FileSource) {
+      final player = _videoPlayerController;
+      final buffer = Pref.initBuffer(speed);
+      try {
+        for (final name in ['cache-secs', 'demuxer-hysteresis-secs']) {
+          player?.setProperty(name, buffer[name]!);
+        }
+      } catch (error) {
+        _diagnostics?.event(
+          'buffer.update.failed',
+          level: DiagnosticLogLevel.warning,
+          details: {'error': error},
+        );
+      }
+    }
     _updatePlaybackState();
     if (danmakuController != null) {
       try {
@@ -1341,8 +1373,7 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
   // 还原默认速度
   double playSpeedDefault = Pref.playSpeedDefault;
   Future<void> setDefaultSpeed() async {
-    await _videoPlayerController?.setRate(playSpeedDefault);
-    _playbackSpeed.value = playSpeedDefault;
+    await setPlaybackSpeed(playSpeedDefault);
   }
 
   /// 播放视频
