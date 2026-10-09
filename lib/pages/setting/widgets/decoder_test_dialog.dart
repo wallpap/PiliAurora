@@ -303,11 +303,8 @@ class _DecoderTestDialogState extends State<DecoderTestDialog> {
         configuration: VideoControllerConfiguration(
           enableHardwareAcceleration: decoder != HwDecType.no,
           hwdec: decoder.hwdec,
-          androidOutputLimitWidth: Platform.isAndroid
-              ? AndroidVideoOutputLimit.detected?.width
-              : null,
-          androidOutputLimitHeight: Platform.isAndroid
-              ? AndroidVideoOutputLimit.detected?.height
+          androidOutputLimit: Platform.isAndroid
+              ? () => AndroidVideoOutputLimit.detected
               : null,
           onAndroidDiagnostic: (action, details) => diagnostics?.event(
             action,

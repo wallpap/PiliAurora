@@ -11,7 +11,7 @@ void main() {
       final events = <(String, Map<String, Object?>)>[];
       final recovery =
           AndroidDecodeRecovery(
-            activeDecoder: () => decoder,
+            readState: () => decodeState(decoder),
             applyDecoder: (value) => decoder = value,
             onError: (error) => fail(error.toString()),
             onDiagnostic: (action, details) => events.add((action, details)),
@@ -38,7 +38,7 @@ void main() {
     var decoder = 'mediacodec';
     final recovery =
         AndroidDecodeRecovery(
-          activeDecoder: () => decoder,
+          readState: () => decodeState(decoder),
           applyDecoder: (value) => decoder = value,
           onError: (error) => fail(error.toString()),
           onDiagnostic: (_, _) => throw StateError('observer failed'),
@@ -64,7 +64,7 @@ void main() {
     errors = [];
     fallbacks = [];
     recovery = AndroidDecodeRecovery(
-      activeDecoder: () => active,
+      readState: () => decodeState(active),
       applyDecoder: (value) {
         applied.add(value);
         active = value;
@@ -84,7 +84,13 @@ void main() {
   void imageError() => recovery.onLog(
     prefix: 'vo/gpu/aimagereader',
     level: 'error',
-    message: 'acquireLatestImage failed: -30001',
+    message: 'acquireLatestImage failed: -30002',
+  );
+
+  void decoderError() => recovery.onLog(
+    prefix: 'ffmpeg/video',
+    level: 'error',
+    message: 'av1_mediacodec: Failed to dequeue output buffer (status=-1)',
   );
 
   testWidgets('decoder fallback notifies once per media, not once per step', (
@@ -94,13 +100,13 @@ void main() {
     surfaceError();
     await tester.pump(const Duration(milliseconds: 200));
     expect(fallbacks, ['mediacodec-copy']);
-    surfaceError();
+    decoderError();
     await tester.pump(const Duration(milliseconds: 200));
     expect(applied, ['mediacodec-copy', 'no']);
     expect(fallbacks, ['mediacodec-copy']);
     recovery.reset();
     active = 'mediacodec-copy';
-    surfaceError();
+    decoderError();
     await tester.pump(const Duration(milliseconds: 200));
     expect(fallbacks, ['mediacodec-copy', 'no']);
   });
@@ -113,7 +119,7 @@ void main() {
       recovery.dispose();
       var reloads = 0;
       recovery = AndroidDecodeRecovery(
-        activeDecoder: () => active,
+        readState: () => decodeState(active),
         applyDecoder: (value) {
           applied.add(value);
           active = value;
@@ -126,7 +132,7 @@ void main() {
       );
       imageError();
       await tester.pump(const Duration(milliseconds: 200));
-      surfaceError();
+      decoderError();
       await tester.pump(const Duration(milliseconds: 200));
       expect(active, 'no');
       for (var i = 0; i < 20; i++) {
@@ -161,7 +167,7 @@ void main() {
       reloads = 0;
       reload = () async => true;
       recovery = AndroidDecodeRecovery(
-        activeDecoder: () => active,
+        readState: () => decodeState(active),
         applyDecoder: applied.add,
         recoverSoftware: () {
           reloads++;
@@ -283,14 +289,14 @@ void main() {
   });
 
   testWidgets(
-    'AV1 and HEVC errors coalesce and recover through copy then software',
+    'AV1 and HEVC errors coalesce and genuine copy failures use software',
     (tester) async {
       surfaceError();
       surfaceError('hevc');
       imageError();
       await tester.pump(const Duration(milliseconds: 200));
       expect(applied, ['mediacodec-copy']);
-      imageError();
+      decoderError();
       await tester.pump(const Duration(milliseconds: 200));
       expect(applied, ['mediacodec-copy', 'no']);
       active = 'mediacodec';
@@ -343,7 +349,7 @@ void main() {
     await tester.pump(const Duration(milliseconds: 200));
     expect(applied, isEmpty);
     active = 'mediacodec-copy';
-    imageError();
+    decoderError();
     await tester.pump(const Duration(milliseconds: 200));
     expect(applied, ['no']);
     recovery.reset();
@@ -385,7 +391,7 @@ void main() {
   ) async {
     recovery.dispose();
     recovery = AndroidDecodeRecovery(
-      activeDecoder: () => active,
+      readState: () => decodeState(active),
       applyDecoder: (_) => throw StateError('decoder disposed'),
       onError: errors.add,
       onFallback: fallbacks.add,
@@ -403,7 +409,7 @@ void main() {
   ) async {
     recovery.dispose();
     recovery = AndroidDecodeRecovery(
-      activeDecoder: () => active,
+      readState: () => decodeState(active),
       applyDecoder: (value) {
         active = value;
         applied.add(value);
@@ -413,9 +419,19 @@ void main() {
     );
     imageError();
     await tester.pump(const Duration(milliseconds: 200));
-    surfaceError();
+    decoderError();
     await tester.pump(const Duration(milliseconds: 200));
     expect(applied, ['mediacodec-copy', 'no']);
     expect(errors, hasLength(1));
   });
 }
+
+AndroidDecodeState decodeState(String? decoder) => (
+  decoder: decoder,
+  playing: true,
+  buffering: false,
+  seeking: false,
+  completed: false,
+  eof: false,
+  videoPts: 0,
+);

@@ -109,6 +109,8 @@ class PlayerDiagnostics {
       'demuxer-cache-state',
       'paused-for-cache',
       'eof-reached',
+      'seeking',
+      'video-pts',
       if (Platform.isAndroid) ...[
         'android-surface-size',
         'osd-dimensions',

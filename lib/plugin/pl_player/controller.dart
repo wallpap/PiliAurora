@@ -784,11 +784,8 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
         configuration: hardwareVideoConfiguration(
           enabled: Pref.enableHA,
           configured: Pref.hardwareDecoding,
-          androidOutputLimitWidth: Platform.isAndroid
-              ? AndroidVideoOutputLimit.detected?.width
-              : null,
-          androidOutputLimitHeight: Platform.isAndroid
-              ? AndroidVideoOutputLimit.detected?.height
+          androidOutputLimit: Platform.isAndroid
+              ? () => AndroidVideoOutputLimit.detected
               : null,
           onAndroidDiagnostic: (action, details) => _diagnostics?.event(
             action,
@@ -1033,9 +1030,20 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
     final stream = player.stream;
     if (Platform.isAndroid) {
       _androidDecodeRecovery = AndroidDecodeRecovery(
-        activeDecoder: () => player.disposed || player.current.isEmpty
-            ? null
-            : player.getProperty('hwdec-current'),
+        readState: () {
+          if (player.disposed || player.current.isEmpty) return null;
+          return (
+            decoder: readMpvProperty(player, 'hwdec-current'),
+            playing: player.state.playing,
+            buffering: player.state.buffering,
+            seeking: readMpvProperty(player, 'seeking') == 'yes',
+            completed: player.state.completed,
+            eof: readMpvProperty(player, 'eof-reached') == 'yes',
+            videoPts: double.tryParse(
+              readMpvProperty(player, 'video-pts') ?? '',
+            ),
+          );
+        },
         applyDecoder: (decoder) {
           _diagnostics?.event(
             'decoder.apply.begin',
