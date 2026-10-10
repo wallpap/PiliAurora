@@ -88,6 +88,28 @@ abstract final class VideoUtils {
               .toString();
   }
 
+  /// 保留当前 CDN 选择作为首选地址，并附上接口提供的备用地址。
+  static List<String> getCdnUrls(
+    Iterable<String> urls, {
+    CDNService? defaultCDNService,
+    bool isAudio = false,
+  }) {
+    final sourceUrls = urls.where((url) => url.isNotEmpty).toList();
+    if (sourceUrls.isEmpty) return const [];
+
+    final result = <String>[
+      getCdnUrl(
+        sourceUrls,
+        defaultCDNService: defaultCDNService,
+        isAudio: isAudio,
+      ),
+    ];
+    for (final url in sourceUrls) {
+      if (!result.contains(url)) result.add(url);
+    }
+    return result;
+  }
+
   static String getLiveCdnUrl(CodecItem e, {int index = 0}) {
     final urlInfo = e.urlInfo.getOrFirst(index);
     return (liveCdnUrl ?? urlInfo.host) + e.baseUrl + urlInfo.extra;

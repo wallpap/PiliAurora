@@ -16,31 +16,41 @@ Media nativeMediaSource({
   Duration? start,
   Map<String, String> extras = const {},
 }) {
-  final audio = source.audioSource;
+  final video = source is NetworkSource
+      ? source.currentVideoSource
+      : source.videoSource;
+  final audio = source is NetworkSource
+      ? source.currentAudioSource
+      : source.audioSource;
+  // 外部音轨选项由当前媒体源生成，重建时清除上一份媒体的地址。
+  final mediaExtras = Map<String, String>.of(extras)
+    ..remove('audio-files-append');
   final hasAudio = audio != null && audio.isNotEmpty;
   if (audioOnly && hasAudio) {
-    return Media(audio, start: start, extras: extras.isEmpty ? null : extras);
+    return Media(
+      audio,
+      start: start,
+      extras: mediaExtras.isEmpty ? null : mediaExtras,
+    );
   }
   if (!hasAudio || audioOnly) {
     // audioOnly 且无独立音轨时只能退回原视频源。
     return Media(
-      source.videoSource,
+      video,
       start: start,
-      extras: extras.isEmpty ? null : extras,
+      extras: mediaExtras.isEmpty ? null : mediaExtras,
     );
   }
-  // 复制而非修改调用方传入的 map。
-  final merged = <String, String>{
-    ...extras,
-    'audio-files-append': '%${utf8.encode(audio).length}%$audio',
-  };
-  return Media(source.videoSource, start: start, extras: merged);
+  mediaExtras['audio-files-append'] = '%${utf8.encode(audio).length}%$audio';
+  return Media(video, start: start, extras: mediaExtras);
 }
 
 /// 重载当前媒体，保留 DASH 音轨、点播位置和用户的播放/暂停状态。
 Future<bool> reloadNativeMedia({
   required NativePlayer player,
   required bool isLive,
+  DataSource? source,
+  bool audioOnly = false,
   bool Function()? isCurrent,
 }) async {
   if (player.disposed ||
@@ -48,8 +58,15 @@ Future<bool> reloadNativeMedia({
       !(isCurrent?.call() ?? true)) {
     return false;
   }
-  var media = player.current.last;
-  if (!isLive) media = media.copyWith(start: player.state.position);
+  final current = player.current.last;
+  final media = source == null
+      ? (isLive ? current : current.copyWith(start: player.state.position))
+      : nativeMediaSource(
+          source: source,
+          audioOnly: audioOnly,
+          start: isLive ? null : player.state.position,
+          extras: current.extras ?? const {},
+        );
   final playing = player.state.playing;
   await player.open(media, play: playing);
   return true;

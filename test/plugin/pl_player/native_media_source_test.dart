@@ -11,6 +11,25 @@ void main() {
     String? audio = 'https://example.com/audio.m4s',
   }) => NetworkSource(videoSource: video, audioSource: audio);
 
+  test('候选数量不同时能够找到可用的音视频组合', () {
+    final source = NetworkSource(
+      videoSource: 'video-bad',
+      audioSource: 'audio-bad-1',
+      videoCandidates: const ['video-good'],
+      audioCandidates: const ['audio-bad-2', 'audio-good'],
+    );
+    final attempted = <(String, String?)>[];
+    do {
+      attempted.add((source.currentVideoSource, source.currentAudioSource));
+    } while (source.advanceCandidate());
+
+    expect(attempted, contains(('video-good', 'audio-good')));
+    expect(attempted, contains(('video-bad', 'audio-good')));
+    expect(attempted.toSet().length, 6);
+    expect(attempted.length, 6);
+    expect(source.advanceCandidate(), isFalse);
+  });
+
   group('reloadNativeMedia', () {
     test(
       'paused DASH reload preserves position and the separate audio track',
@@ -40,6 +59,84 @@ void main() {
       await reloadNativeMedia(player: player, isLive: true);
       expect(player.opened, same(media));
       expect(player.opened!.start, isNull);
+    });
+
+    test(
+      'CDN fallback keeps position, playback state and DASH audio',
+      () async {
+        const primaryVideo = 'https://cdn-a.example/video.m4s';
+        const backupVideo = 'https://cdn-b.example/video.m4s';
+        const primaryAudio = 'https://cdn-a.example/audio.m4s';
+        const backupAudio = 'https://cdn-b.example/audio.m4s';
+        final source = NetworkSource(
+          videoSource: primaryVideo,
+          audioSource: primaryAudio,
+          videoCandidates: const [primaryVideo, backupVideo],
+          audioCandidates: const [primaryAudio, backupAudio],
+        );
+        final media = nativeMediaSource(
+          source: source,
+          extras: const {'cache': 'yes'},
+        );
+        expect(media.uri, primaryVideo);
+        while (source.currentVideoSource != backupVideo ||
+            source.currentAudioSource != backupAudio) {
+          expect(source.advanceCandidate(), isTrue);
+        }
+
+        final player = _ReloadPlayer(media)
+          ..state.position = const Duration(seconds: 42)
+          ..state.playing = true;
+        expect(
+          await reloadNativeMedia(
+            player: player,
+            isLive: false,
+            source: source,
+          ),
+          isTrue,
+        );
+        expect(player.opened!.uri, backupVideo);
+        expect(player.opened!.start, const Duration(seconds: 42));
+        expect(player.openedPlaying, isTrue);
+        expect(player.opened!.extras!['cache'], 'yes');
+        expect(
+          player.opened!.extras!['audio-files-append'],
+          contains(backupAudio),
+        );
+        expect(source.advanceCandidate(), isFalse);
+      },
+    );
+
+    test('听视频回退清除旧音轨并保留其余配置和暂停位置', () async {
+      final source = NetworkSource(
+        videoSource: 'https://cdn.example/video.m4s',
+        videoCandidates: const ['https://cdn-backup.example/video.m4s'],
+        audioSource: 'https://cdn-a.example/audio.m4s',
+        audioCandidates: const ['https://cdn-b.example/audio.m4s'],
+      );
+      final media = nativeMediaSource(
+        source: source,
+        extras: const {'cache': 'yes', 'vid': 'no'},
+      );
+      final originalExtras = Map<String, String>.of(media.extras!);
+      expect(source.advanceCandidate(audioOnly: true), isTrue);
+      final player = _ReloadPlayer(media)
+        ..state.position = const Duration(seconds: 42);
+
+      await reloadNativeMedia(
+        player: player,
+        isLive: false,
+        source: source,
+        audioOnly: true,
+      );
+
+      expect(player.opened!.uri, 'https://cdn-b.example/audio.m4s');
+      expect(player.opened!.extras, {'cache': 'yes', 'vid': 'no'});
+      expect(player.opened!.start, const Duration(seconds: 42));
+      expect(player.openedPlaying, isFalse);
+      expect(media.extras, originalExtras);
+      expect(source.currentVideoSource, 'https://cdn.example/video.m4s');
+      expect(source.advanceCandidate(audioOnly: true), isFalse);
     });
 
     test('disposed, empty and stale players do not reload', () async {

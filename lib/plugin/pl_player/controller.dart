@@ -913,7 +913,7 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
     return isCurrent() && _playerCount != 0;
   }
 
-  Future<void>? refreshPlayer() {
+  Future<void>? refreshPlayer({bool tryNextCdn = false}) {
     if (dataSource is FileSource || processing || _playerCount == 0) {
       return null;
     }
@@ -928,13 +928,27 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
             !identical(media, ctr.current.last)) {
           return;
         }
-        await reloadNativeMedia(player: ctr, isLive: isLive);
+        NetworkSource? fallbackSource;
+        if (tryNextCdn &&
+            source is NetworkSource &&
+            source.advanceCandidate(audioOnly: onlyPlayAudio.value)) {
+          fallbackSource = source;
+        }
+        await reloadNativeMedia(
+          player: ctr,
+          isLive: isLive,
+          source: fallbackSource,
+          audioOnly: onlyPlayAudio.value,
+        );
       });
     }
     return null;
   }
 
-  void _scheduleRefresh({bool requireEmptyBuffer = false}) {
+  void _scheduleRefresh({
+    bool requireEmptyBuffer = false,
+    bool tryNextCdn = false,
+  }) {
     // 同一媒体的错误风暴只保留一个重连定时器，旧媒体不能重开当前播放。
     if (_reloadTimer?.isActive ?? false) return;
     final source = dataSource;
@@ -961,7 +975,10 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
             position: position,
             buffer: buffer,
           )) {
-            _scheduleRefresh(requireEmptyBuffer: true);
+            _scheduleRefresh(
+              requireEmptyBuffer: true,
+              tryNextCdn: tryNextCdn,
+            );
           }
           return;
         }
@@ -970,7 +987,7 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
           displayTime: const Duration(milliseconds: 500),
         );
       }
-      refreshPlayer()?.catchError(Utils.reportError);
+      refreshPlayer(tryNextCdn: tryNextCdn)?.catchError(Utils.reportError);
     });
   }
 
@@ -1209,15 +1226,22 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
         }
         if (isLive) {
           if (isPlaybackNetworkFailure(event)) {
-            _scheduleRefresh();
+            _scheduleRefresh(tryNextCdn: true);
           }
           return;
         }
         if (isPlaybackNetworkFailure(event)) {
+          final source = dataSource;
+          final retryTag = source is NetworkSource
+              ? 'controllerStream.error.listen.cdn.${source.candidateIndex}'
+              : 'controllerStream.error.listen';
           ActionThrottle.run(
-            'controllerStream.error.listen',
+            retryTag,
             const Duration(milliseconds: 10000),
-            () => _scheduleRefresh(requireEmptyBuffer: true),
+            () => _scheduleRefresh(
+              requireEmptyBuffer: true,
+              tryNextCdn: true,
+            ),
           );
         } else if (event.startsWith('Could not open codec')) {
           SmartDialog.showToast('无法加载解码器, $event，可能会切换至软解');

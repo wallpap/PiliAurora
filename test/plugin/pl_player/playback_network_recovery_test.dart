@@ -68,8 +68,20 @@ void main() {
         'av1_mediacodec: Both surface and native_window are NULL',
         'Error while decoding frame!',
         'http: HTTP error 403 Forbidden',
+        'Failed to open https://cdn.example/video: HTTP error 403 Forbidden',
       ]) {
         expect(isPlaybackNetworkFailure(event), isFalse);
+      }
+    });
+
+    test('missing or temporarily unavailable CDN nodes can fail over', () {
+      for (final event in [
+        'http: HTTP error 404 Not Found',
+        'http: HTTP error 408 Request Timeout',
+        'http: HTTP error 429 Too Many Requests',
+        'http: HTTP error 503 Service Unavailable',
+      ]) {
+        expect(isPlaybackNetworkFailure(event), isTrue, reason: event);
       }
     });
   });

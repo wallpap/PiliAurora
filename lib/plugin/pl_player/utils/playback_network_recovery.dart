@@ -1,15 +1,29 @@
-/// 只把原生播放器明确报告的连接/读取中断交给重连，排除解码和 HTTP 状态错误。
-bool isPlaybackNetworkFailure(String event) =>
-    event.startsWith('Failed to open https://') ||
-    event.startsWith('Can not open external file https://') ||
-    event.startsWith('tcp: ffurl_read returned ') ||
-    event.startsWith('tls: mbedtls_ssl_handshake returned ') ||
-    event.startsWith('tls: mbedtls_ssl_read returned ') ||
-    event.startsWith(
-      'tls: mbedtls_ssl_read reported connection reset by peer',
-    ) ||
-    event.startsWith('https: Error reading HTTP response:') ||
-    event.startsWith('https: Stream ends prematurely at ');
+/// 只把连接中断和 CDN 临时失效交给重试，HTTP 403 仍按权限错误处理。
+bool isPlaybackNetworkFailure(String event) {
+  final status = RegExp(r'HTTP error (\d{3})\b').firstMatch(event)?.group(1);
+  if (status != null) {
+    final code = int.parse(status);
+    return code == 404 ||
+        code == 408 ||
+        code == 429 ||
+        (code >= 500 && code < 600);
+  }
+
+  if (event.startsWith('Failed to open https://') ||
+      event.startsWith('Can not open external file https://') ||
+      event.startsWith('tcp: ffurl_read returned ') ||
+      event.startsWith('tls: mbedtls_ssl_handshake returned ') ||
+      event.startsWith('tls: mbedtls_ssl_read returned ') ||
+      event.startsWith(
+        'tls: mbedtls_ssl_read reported connection reset by peer',
+      ) ||
+      event.startsWith('https: Error reading HTTP response:') ||
+      event.startsWith('https: Stream ends prematurely at ')) {
+    return true;
+  }
+
+  return false;
+}
 
 /// mpv 的 buffer 是最后一个已缓冲时间戳，非剩余缓冲时长。
 bool hasExhaustedPlaybackBuffer({
