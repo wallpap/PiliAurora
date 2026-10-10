@@ -33,6 +33,25 @@ bool isPlaybackNetworkFailure(String event) {
   return false;
 }
 
+/// 读取已终止时，独立音轨仍可能推进播放时钟，整体 buffering 不会置位。
+bool isPlaybackStreamReadFailure({
+  required String prefix,
+  required String level,
+  required String message,
+}) {
+  if (level != 'error' && level != 'fatal') return false;
+  if (prefix == 'curl') {
+    return message.startsWith('transfer failed:') &&
+        (message.contains('Failure when receiving data from the peer') ||
+            message.contains('Failed sending data to the peer'));
+  }
+  if (prefix == 'ffmpeg') {
+    return message.startsWith('https: Stream ends prematurely at ') ||
+        message.startsWith('http: Stream ends prematurely at ');
+  }
+  return prefix == 'ffmpeg/demuxer' && message.endsWith(': partial file');
+}
+
 /// mpv 的 buffer 是最后一个已缓冲时间戳，非剩余缓冲时长。
 bool hasExhaustedPlaybackBuffer({
   required bool buffering,

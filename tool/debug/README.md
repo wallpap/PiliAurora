@@ -37,3 +37,13 @@ python tool/debug/windows_texture_frame_probe.py --compiler <g++路径>
 ```
 
 前者通过 FVM 运行 Flutter 测试；后者编译生产纹理方法，检查初始纹理、有效首帧和同尺寸提交。生成文件位于 `build/windows-playback-diagnosis/`，GPU 和播放器通道由模拟对象替代。
+
+## 播放器断流恢复回归探针
+
+`playback_network_recovery_probe.py` 回放脱敏的 Windows curl 终止错误、Android HTTPS 提前结束和 MP4 截断错误，提取生产日志分发、播放器监听和重连方法，验证独立音轨继续播放时仍能重连，保留播放进度、音轨与暂停状态，并检查错误合并、冷却窗口和 CDN 设置。
+
+```powershell
+python tool/debug/playback_network_recovery_probe.py
+```
+
+通过 FVM 运行 Flutter 测试，生成文件位于 `build/playback-network-diagnosis/`。原生播放器由状态桩替代，真实网络传输、GPU、MediaCodec 和长时间播放需要实机验证。

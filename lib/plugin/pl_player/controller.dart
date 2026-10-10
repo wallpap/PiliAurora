@@ -589,6 +589,7 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
 
   final _loadQueue = PlaybackLoadQueue();
   Timer? _reloadTimer;
+  bool _reloadRequiresEmptyBuffer = false;
   bool get processing => _loadQueue.isLoading;
 
   // offline
@@ -960,14 +961,19 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
     bool tryNextCdn = false,
   }) {
     // 同一媒体的错误风暴只保留一个重连定时器，旧媒体不能重开当前播放。
-    if (_reloadTimer?.isActive ?? false) return;
+    if (_reloadTimer?.isActive ?? false) {
+      // 终止读取的错误升级已安排的缓冲检查，避免独立音轨掩盖视频断流。
+      _reloadRequiresEmptyBuffer &= requireEmptyBuffer;
+      return;
+    }
+    _reloadRequiresEmptyBuffer = requireEmptyBuffer;
     final source = dataSource;
     _reloadTimer = Timer(const Duration(seconds: 3), () {
       _reloadTimer = null;
       if (_playerCount == 0 || processing || !identical(source, dataSource)) {
         return;
       }
-      if (requireEmptyBuffer) {
+      if (_reloadRequiresEmptyBuffer) {
         final player = _videoPlayerController;
         if (player == null) return;
         final buffering = isBuffering.value;
@@ -999,6 +1005,26 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
       }
       refreshPlayer(tryNextCdn: tryNextCdn)?.catchError(Utils.reportError);
     });
+  }
+
+  void _recoverPlaybackNetwork({bool requireEmptyBuffer = true}) {
+    if (dataSource is FileSource) return;
+    if (isLive) {
+      _scheduleRefresh(tryNextCdn: true);
+      return;
+    }
+    final source = dataSource;
+    final retryTag = Pref.enableMultiCdn && source is NetworkSource
+        ? 'controllerStream.error.listen.cdn.${source.candidateIndex}'
+        : 'controllerStream.error.listen';
+    ActionThrottle.run(
+      requireEmptyBuffer ? retryTag : '$retryTag.readFailure',
+      const Duration(milliseconds: 10000),
+      () => _scheduleRefresh(
+        requireEmptyBuffer: requireEmptyBuffer,
+        tryNextCdn: true,
+      ),
+    );
   }
 
   // 开始播放
@@ -1131,14 +1157,21 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
       );
     }
     _subscriptions = [
-      if (Platform.isAndroid)
-        stream.log.listen((event) {
-          _androidDecodeRecovery?.onLog(
-            prefix: event.prefix,
-            level: event.level,
-            message: event.text,
-          );
-        }),
+      stream.log.listen((event) {
+        _androidDecodeRecovery?.onLog(
+          prefix: event.prefix,
+          level: event.level,
+          message: event.text,
+        );
+        // curl / ffmpeg/demuxer 的错误保留在原始日志流中，不进入 stream.error。
+        if (isPlaybackStreamReadFailure(
+          prefix: event.prefix,
+          level: event.level,
+          message: event.text,
+        )) {
+          _recoverPlaybackNetwork(requireEmptyBuffer: false);
+        }
+      }),
 
       /// playing
       stream.playing.listen((bool playing) {
@@ -1236,23 +1269,12 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
         }
         if (isLive) {
           if (isPlaybackNetworkFailure(event)) {
-            _scheduleRefresh(tryNextCdn: true);
+            _recoverPlaybackNetwork();
           }
           return;
         }
         if (isPlaybackNetworkFailure(event)) {
-          final source = dataSource;
-          final retryTag = Pref.enableMultiCdn && source is NetworkSource
-              ? 'controllerStream.error.listen.cdn.${source.candidateIndex}'
-              : 'controllerStream.error.listen';
-          ActionThrottle.run(
-            retryTag,
-            const Duration(milliseconds: 10000),
-            () => _scheduleRefresh(
-              requireEmptyBuffer: true,
-              tryNextCdn: true,
-            ),
-          );
+          _recoverPlaybackNetwork();
         } else if (event.startsWith('Could not open codec')) {
           SmartDialog.showToast('无法加载解码器, $event，可能会切换至软解');
         } else if (!onlyPlayAudio.value) {
