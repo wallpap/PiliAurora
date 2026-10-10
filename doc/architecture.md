@@ -1,6 +1,6 @@
 # PiliAurora 架构说明
 
-> 供首次接手项目的开发者和 AI 代理查找代码入口。
+> 为接手项目的开发者提供代码导航。
 >
 > 本文按当前目录和实现整理。代码与配置发生变化时，以当前检出的仓库为准。
 
@@ -34,17 +34,17 @@ Flutter 应用（lib/）
 本地边界：应用支持目录、Hive 存储、缓存、下载文件、诊断日志
 ```
 
-项目基于 PiliPlus 2.1.5 继续维护，重点包括 Windows 播放和弹幕、硬件解码兼容性、Android 播放恢复，以及性能、诊断和稳定性。
+项目基于 PiliPlus 2.1.5 维护，主要投入在 Windows 播放与弹幕、硬件解码兼容、Android 播放恢复、性能和诊断。
 
 ## 2. 当前已确认的技术基线
 
-以下信息来自当前仓库的 `README.md`、`pubspec.yaml`、Android Gradle 文件和提交记录：
+工具链和版本信息以仓库配置为准：
 
 | 项目 | 当前事实 |
 | --- | --- |
 | Flutter | `3.47.5`，由 `.fvmrc` 固定 |
 | Dart | SDK `>=3.13.0` |
-| 应用版本 | `pubspec.yaml` 中为 `1.0.7+105` |
+| 应用版本 | 源码默认值为 `1.0.7+105`；发布工作流从 tag 读取版本名，并以 Git 提交数生成构建号 |
 | 状态/路由 | 使用仓库 fork 的 GetX；路由集中在 `lib/router/app_pages.dart` |
 | HTTP | Dio 及自定义初始化、重试、响应解码/转换代码 |
 | 本地存储 | Hive CE 及项目自己的 `GStorage`、`Pref`、存储键定义 |
@@ -53,7 +53,7 @@ Flutter 应用（lib/）
 | 生成代码 | protobuf/gRPC 相关 Dart 代码在 `lib/grpc/`；Android JNI bindings 由 `tool/jnigen.dart` 生成 |
 | 测试 | Flutter/Dart 测试在 `test/`，重点覆盖播放器、直播、下载、诊断、页面和账号等领域 |
 
-依赖清理后，`pubspec.yaml` 已固定根依赖版本，定制源码由 `dependency_overrides` 指向仓库内的包。排查具体行为时，请同时核对来源登记和 `pubspec.lock`，不要套用 pub.dev 上同名包的默认实现。
+`pubspec.yaml` 固定根依赖版本，定制源码由 `dependency_overrides` 指向仓库内的包。检查具体实现时，先核对依赖来源登记和 `pubspec.lock`；仓库内的 fork 可能与 pub.dev 同名包不同。
 
 ## 3. 目录地图
 
@@ -66,7 +66,7 @@ lib/
 ├─ grpc/                      Bilibili gRPC/protobuf 生成代码及相关结构
 ├─ http/                      按业务域组织的 HTTP API 与网络横切逻辑
 ├─ models/                    页面/接口使用的数据模型、枚举和共享对象
-├─ pages/                     页面功能；通常按功能域继续拆分 view/controller/widgets 等
+├─ pages/                     页面功能，按领域拆分 view/controller/widgets 等
 ├─ plugin/
 │  └─ pl_player/              播放器控制器、播放模型、UI、弹幕、解码和全屏逻辑
 ├─ router/
@@ -101,7 +101,7 @@ API 文件包括 `video.dart`、`live.dart`、`login.dart`、`member.dart`、`dy
 
 ### 3.2 `lib/models/`：数据模型，不等同于数据库实体
 
-`models/` 同时承载：
+`models/` 包含：
 
 - API JSON 的映射模型；
 - 页面之间共享的对象；
@@ -109,7 +109,7 @@ API 文件包括 `video.dart`、`live.dart`、`login.dart`、`member.dart`、`dy
 - `common/` 下的通用模型；
 - `remote/` 下按远端业务组织的模型。
 
-`lib/grpc/` 中包含生成的 gRPC/protobuf Dart 代码。除非任务明确是生成链路，否则不要直接修改生成文件；先定位源定义、生成脚本和调用方。Android JNI bindings 同样应优先通过 `tool/jnigen.dart` 重新生成，而不是手改 `bindings.g.dart`。
+`lib/grpc/` 包含生成的 gRPC/protobuf Dart 代码。修改前先定位源定义、生成脚本和调用方；Android JNI bindings 也应通过 `tool/jnigen.dart` 生成，避免直接编辑 `bindings.g.dart`。
 
 ### 3.3 `lib/pages/`：按功能组织的页面
 
@@ -123,7 +123,7 @@ lib/pages/<功能域>/
 └─ ...                    子页面、模型或功能专属逻辑
 ```
 
-页面常按这种方式组织，但没有统一的强制模板。状态管理、网络调用和生命周期处理需查看具体目录。
+很多页面按这种方式组织，但没有统一模板。状态管理、网络调用和生命周期处理以具体实现为准。
 
 ### 3.4 `lib/services/`：跨页面与长生命周期能力
 
@@ -142,7 +142,7 @@ lib/services/
 └─ webview_environment.dart 共享 WebView 环境的所有者
 ```
 
-不要把所有 controller 都称为 service。通常只有需要跨页面共享、后台持续运行、集中管理资源或连接平台能力的逻辑才应优先考虑放入 `services/`。
+`services/` 适合放置跨页面共享、持续后台运行、集中管理资源或连接平台能力的逻辑。页面状态和事件处理仍由对应 controller 管理。
 
 ### 3.5 `lib/plugin/pl_player/`：播放器边界
 
@@ -153,7 +153,7 @@ lib/services/
 - `utils/`：Android 解码恢复、解码回退、硬件视频配置、弹幕选项、预览图缓存、输出尺寸、全屏等；
 - `view/`、`widgets/`：播放器界面和控制组件。
 
-播放器问题应同时检查页面调用、播放器 controller、`media_kit` override、平台实现和诊断日志。不能只在 `pages/video/` 中寻找原因。
+排查播放器问题时，沿页面调用检查播放器 controller、`media_kit` override、平台实现和诊断日志；问题也可能出在 `pages/video/` 之外。
 
 ## 4. 启动链路：从 `main.dart` 开始
 
@@ -185,7 +185,7 @@ sequenceDiagram
 2. 通过 `path_provider` 获取应用支持目录；初始化 `GStorage`。如果存储初始化失败，会记录错误、复制错误文本后退出进程。
 3. 从 `Pref` 读取 UI 缩放，初始化日志，并并行准备下载路径、临时目录、缓存和字体。
 4. 通过 GetX lazy 注册 `AccountService` 和 `DownloadService`；下载仓库及 HTTP/1.1 客户端在装配层显式注入。下载根目录通过回调读取，使设置更改能作用于后续扫描和新任务。
-5. 安装全局 `HttpOverrides`；先初始化平台能力，再初始化 `Request`、Cookie 和历史状态同步，确保 Windows Cookie 使用已经创建的 WebView 环境。
+5. 安装全局 `HttpOverrides`。平台能力初始化后，再初始化 `Request`、Cookie 和历史状态同步；Windows Cookie 依赖已创建的 WebView 环境。
 6. 移动平台分支处理屏幕方向、Android 最大屏幕尺寸和服务定位器；Windows 分支尝试创建带应用支持目录的 WebView 环境。
 7. 移动平台设置 edge-to-edge 系统 UI；Android 读取显示模式设置，桌面平台初始化窗口、最小窗口尺寸、标题栏、位置、最大化、显示和焦点。
 8. 如果启用动态颜色，调用 `ThemeUtils.initPlatformState()`：优先读取系统核心调色板，失败后尝试读取 accent color，再失败则关闭动态颜色设置。
@@ -228,7 +228,7 @@ sequenceDiagram
 | 下载与外部能力 | `/download`、`/dlna`、`/webview` |
 | 文章/音频/扩展 | `/articlePage`、`/articleList`、`/audio`、`/sponsorBlock` |
 
-路由名使用字符串，不会随目录自动变化。新增或移动页面时，需要一起检查：
+路由名是字符串，目录调整不会自动更新路由。新增或移动页面时，一并检查：
 
 1. `app_pages.dart` 的 import 和 `GetPage` 注册；
 2. 页面构造函数及其参数；
@@ -256,7 +256,7 @@ Flutter / Android / Windows
             └───────────────► plugin/pl_player/ ────► media_kit/平台媒体库
 ```
 
-项目没有用编译器强制这些边界，也没有完整实现 Clean Architecture。代码中仍有以下依赖关系：
+编译器不会强制这些边界，项目也未完整实现 Clean Architecture。当前仍存在这些依赖关系：
 
 - 页面 controller 直接调用 `lib/http/`；
 - service 使用 HTTP、模型、存储和平台插件；
@@ -264,7 +264,7 @@ Flutter / Android / Windows
 - 播放器页面与播放器插件之间存在双向的状态/回调协作；
 - 某些跨域功能横跨页面、HTTP、service、平台和测试多个目录。
 
-因此，AI 或新人修改代码时应先从目标符号的 import、调用方和测试反向确认依赖，不要仅凭目录名称推断“只能单向依赖”。
+修改代码时，先从目标符号的 import、调用方和测试确认实际依赖；目录名称不能说明依赖方向。
 
 ### 6.1 已落实的依赖约束
 
@@ -293,7 +293,7 @@ app/bootstrap.dart
 
 ## 7. 数据、状态与本地文件
 
-当前启动代码可以确认以下本地状态入口：
+访问本地状态时，常用入口包括：
 
 - `GStorage`：本地存储初始化和具体存储 box 的访问；
 - `Pref`：对设置项的高层读取；
@@ -304,11 +304,11 @@ app/bootstrap.dart
 - `JsonFileHandler`：异常/诊断记录的文件处理；
 - `LoggerUtils`、`logger`：结构化日志入口。
 
-下载路径按平台处理：桌面优先使用设置中的自定义路径，否则使用默认路径；Android 使用 `getExternalStorageDirectory()` 下的项目下载目录；其他情况回退到默认路径。修改下载或设置功能时，不要只修改 UI：同时检查设置键、默认值、路径初始化、旧数据兼容和对应测试。
+下载路径按平台确定：桌面优先使用设置中的自定义路径，否则使用默认路径；Android 使用 `getExternalStorageDirectory()` 下的项目下载目录；其他平台回退到默认路径。修改下载或设置功能时，还要检查设置键、默认值、路径初始化、旧数据兼容和测试。
 
 ## 8. Android 与 JDK 25：当前构建事实
 
-当前 Android 配置中可以直接确认：
+Android 当前配置为：
 
 - Gradle wrapper 为 `9.6.0`；
 - Android Gradle Plugin 为 `9.2.1`；
@@ -321,9 +321,9 @@ app/bootstrap.dart
 - App 的 `compileSdk` 和 `targetSdk` 当前为 37；
 - Android Manifest 和样式文件新增了 `tools` 命名空间、`tools:targetApi` 标注以及特定 lint 忽略。
 
-README 还明确说明：当前配置会把应用和 Android 子模块（包括 Flutter 插件源码）的 Java/Kotlin 编译目标及 Java 工具链统一到 25；Flutter SDK 内部构建逻辑和第三方预编译 JAR 保持其原始字节码版本。
+应用和 Android 子模块（包括 Flutter 插件源码）的 Java/Kotlin 编译目标及 Java 工具链均为 25。Flutter SDK 的内部构建逻辑和第三方预编译 JAR 保持原有字节码版本。
 
-这里需要区分三个概念：
+这三个版本概念各自独立：
 
 ```text
 Gradle 运行时 JDK 25
@@ -331,11 +331,11 @@ Gradle 运行时 JDK 25
         ≠ 所有输入 JAR/Flutter SDK 都必须是 Java 25 字节码
 ```
 
-JDK 25 是构建工具链要求，不代表应用可以调用 Android API 25 的全部能力，也不代表可以随意改动 `minSdk`。`tools:targetApi` 主要是资源/lint 元数据，不是运行时兼容性证明。
+JDK 25 是构建工具链要求，与设备 API 级别和 `minSdk` 无关。`tools:targetApi` 是资源和 lint 元数据，不能证明设备运行时兼容。
 
 ## 9. 播放、直播、下载和诊断的横切关注点
 
-这些领域跨越多个层次，排查时建议按下表展开：
+这些问题涉及多个层次，可从下表列出的入口开始排查：
 
 | 问题 | 首先检查 | 然后检查 |
 | --- | --- | --- |
@@ -347,8 +347,8 @@ JDK 25 是构建工具链要求，不代表应用可以调用 Android API 25 的
 | 直播包/聊天解析失败 | `services/live_stream/`、`lib/http/live.dart` | 压缩响应、WebSocket/TCP 数据和服务端变更 |
 | 问题难以复现 | `services/diagnostics/`、`services/logger.dart` | 路由观察器、播放器指标、脱敏后的日志 |
 
-README 已记录项目对 Android MediaCodec 输出异常恢复、Windows 硬件解码/弹幕路径、直播包和下载写入回压、结构化诊断等方向的改动。具体回退顺序仍以当前实现和测试为准。
+项目持续维护 Android MediaCodec 异常恢复、Windows 硬件解码和弹幕、直播包处理、下载写入回压及结构化诊断。回退顺序以当前实现和测试为准。
 
 ## 阅读提示
 
-本文提供目录和调用边界的导航。修改具体功能时，沿当前源码中的 import 和调用关系确认实现；构建与验证命令见 [构建与测试](build-and-test.md)。
+修改具体功能时，沿当前源码中的 import 和调用关系确认实现。构建与验证命令见[构建与测试](build-and-test.md)。
