@@ -40,10 +40,10 @@ python tool/debug/windows_texture_frame_probe.py --compiler <g++路径>
 
 ## 播放器断流恢复回归探针
 
-`playback_network_recovery_probe.py` 回放脱敏的 Windows curl 终止错误、Android HTTPS 提前结束和 MP4 截断错误，提取生产日志分发、播放器监听和重连方法，验证独立音轨继续播放时仍能重连，保留播放进度、音轨与暂停状态，并检查错误合并、冷却窗口和 CDN 设置。
+`playback_network_recovery_probe.py` 回放脱敏的 Windows curl 终止错误、Android HTTPS 提前结束和 MP4 截断错误，提取生产日志分发、播放器监听和重连方法，检查断流恢复、缓冲检查升级、错误合并、冷却窗口和媒体切换。暂停状态与 CDN 切换由 `test/plugin/pl_player/native_media_source_test.dart` 覆盖。
 
 ```powershell
 python tool/debug/playback_network_recovery_probe.py
 ```
 
-通过 FVM 运行 Flutter 测试，生成文件位于 `build/playback-network-diagnosis/`。原生播放器由状态桩替代，真实网络传输、GPU、MediaCodec 和长时间播放需要实机验证。
+通过 FVM 运行 Flutter 测试，生成文件写入 `build/playback-network-diagnosis/` 下的临时目录，运行结束后自动清理。原生播放器由状态桩替代，真实网络传输、GPU、MediaCodec 和长时间播放需要实机验证。

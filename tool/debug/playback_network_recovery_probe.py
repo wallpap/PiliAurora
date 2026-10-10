@@ -6,6 +6,7 @@
 from pathlib import Path
 import re
 import subprocess
+import tempfile
 
 
 def block(source, start):
@@ -26,7 +27,6 @@ def method(source, signature):
 
 HEADER = r"""
 import 'dart:async';
-import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:media_kit/media_kit.dart';
@@ -190,13 +190,6 @@ void main() {
     await tester.pump(const Duration(seconds: 6));
     expect(controller.reloads, 1);
   });
-  testReplay('paused media reconnects without resuming playback', (tester, controller) async {
-    terminal(controller);
-    controller.videoPlayerController.state.playing = false;
-    await tester.pump(const Duration(seconds: 3));
-    expect(controller.reloads, 1);
-    expect(controller.restoredPlaying, isFalse);
-  });
   testReplay('old media errors do not reopen a new source', (tester, controller) async {
     terminal(controller);
     controller.dataSource = NetworkSource(videoSource: 'https://other.example/video.m4s', audioSource: null);
@@ -225,15 +218,6 @@ void main() {
     await tester.pump(const Duration(seconds: 3));
     expect(controller.reloads, 1);
   });
-  testReplay('enabled CDN fallback keeps both tracks and position', (tester, controller) async {
-    Pref.enableMultiCdn = true;
-    terminal(controller);
-    await tester.pump(const Duration(seconds: 3));
-    expect(controller.reloads, 1);
-    expect((controller.dataSource as NetworkSource).candidateIndex, greaterThan(0));
-    expect(controller.restoredPosition, const Duration(seconds: 3031));
-    expect(controller.videoPlayerController.opened!.extras!['audio-files-append'], isNotNull);
-  });
 }
 """
 
@@ -256,18 +240,23 @@ def main():
         declaration = re.search(r'  bool ' + name + r'[^;]*;', source)
         if declaration:
             fields += declaration[0]
-    fixture = root / 'build/playback-network-diagnosis/network_recovery_probe_test.dart'
-    fixture.parent.mkdir(parents=True, exist_ok=True)
+    output = (root / 'build/playback-network-diagnosis').resolve()
+    if not output.is_relative_to(root):
+        raise RuntimeError('回放输出目录必须位于当前工作区内')
+    output.mkdir(parents=True, exist_ok=True)
     content = (HEADER.replace('DISPATCH', block(native, dispatch_start))
                .replace('LOG_LISTENER', source[log_start:log_end])
                .replace('ERROR_LISTENER', block(source, error_start))
                .replace('SCHEDULE', method(source, 'void _scheduleRefresh('))
                .replace('REFRESH', method(source, 'Future<void>? refreshPlayer('))
                .replace('EXTRA_METHODS', extras).replace('EXTRA_FIELDS', fields))
-    fixture.write_text(content + MAIN, encoding='utf-8')
-    raise SystemExit(subprocess.run([
-        'fvm.bat', 'flutter', 'test', '--no-pub', str(fixture), '--reporter', 'expanded',
-    ], cwd=root).returncode)
+    with tempfile.TemporaryDirectory(prefix='network-recovery-', dir=output) as directory:
+        fixture = Path(directory) / 'network_recovery_probe_test.dart'
+        fixture.write_text(content + MAIN, encoding='utf-8')
+        result = subprocess.run([
+            'fvm.bat', 'flutter', 'test', '--no-pub', str(fixture), '--reporter', 'expanded',
+        ], cwd=root).returncode
+    raise SystemExit(result)
 
 
 if __name__ == '__main__':
