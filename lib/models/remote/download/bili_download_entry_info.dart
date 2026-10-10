@@ -19,6 +19,7 @@ class BiliDownloadEntryInfo with MultiSelectData {
   final String cover;
   int? videoQuality;
   int preferedVideoQuality;
+  int? preferredAudioQuality;
   String qualityPithyDescription;
   final int guessedTotalBytes;
   int totalTimeMilli;
@@ -134,6 +135,7 @@ class BiliDownloadEntryInfo with MultiSelectData {
     required this.cover,
     this.videoQuality,
     required this.preferedVideoQuality,
+    this.preferredAudioQuality,
     this.qualityPithyDescription = '',
     required this.guessedTotalBytes,
     required this.totalTimeMilli,
@@ -165,6 +167,7 @@ class BiliDownloadEntryInfo with MultiSelectData {
         cover: json['cover'] as String,
         videoQuality: json['video_quality'] as int?,
         preferedVideoQuality: json['prefered_video_quality'] as int,
+        preferredAudioQuality: json['preferred_audio_quality'] as int?,
         qualityPithyDescription: json['quality_pithy_description'] as String,
         guessedTotalBytes: json['guessed_total_bytes'] as int,
         totalTimeMilli: json['total_time_milli'] as int,
@@ -202,6 +205,7 @@ class BiliDownloadEntryInfo with MultiSelectData {
     'cover': cover,
     'video_quality': ?videoQuality,
     'prefered_video_quality': preferedVideoQuality,
+    'preferred_audio_quality': ?preferredAudioQuality,
     'quality_pithy_description': qualityPithyDescription,
     'guessed_total_bytes': guessedTotalBytes,
     'total_time_milli': totalTimeMilli,

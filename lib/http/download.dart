@@ -19,6 +19,7 @@ abstract final class DownloadHttp {
 
   static Future<BiliDownloadMediaInfo> getVideoUrl({
     required BiliDownloadEntryInfo entry,
+    int? preferredAudioQuality,
     SourceInfo? source,
     PageInfo? pageData,
     EpInfo? ep,
@@ -95,14 +96,16 @@ abstract final class DownloadHttp {
         List<Type2File>? audioFileList;
         final List<AudioItem>? audioDashList = dash.audio;
         if (audioDashList != null && audioDashList.isNotEmpty) {
-          final preferAudioQa = Pref.defaultAudioQa;
+          final preferAudioQa = preferredAudioQuality ?? Pref.defaultAudioQa;
           final List<int> audioIds = audioDashList
               .map((map) => map.id)
               .toList();
-          int closestNumber = audioIds.findClosestTarget(
-            (e) => e <= preferAudioQa,
-            (a, b) => a > b ? a : b,
-          );
+          int closestNumber = audioIds.contains(preferAudioQa)
+              ? preferAudioQa
+              : audioIds.findClosestTarget(
+                  (e) => e <= preferAudioQa,
+                  (a, b) => a > b ? a : b,
+                );
           if (!audioIds.contains(preferAudioQa) &&
               audioIds.any((e) => e > preferAudioQa)) {
             closestNumber = AudioQuality.k192.code;

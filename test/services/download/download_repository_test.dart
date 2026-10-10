@@ -38,7 +38,7 @@ void main() {
 
   for (final episode in [false, true]) {
     test('creates and restores ${episode ? 'PGC' : 'UGC'} records', () async {
-      final entry = downloadEntry(episode: episode);
+      final entry = downloadEntry(episode: episode, audioQuality: 30251);
       await repository.create(entry);
       final expectedPath = episode
           ? path.join(rootPath, 's_22', '33')

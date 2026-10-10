@@ -6,6 +6,7 @@ BiliDownloadEntryInfo downloadEntry({
   bool completed = false,
   int updatedAt = 0,
   bool episode = false,
+  int? audioQuality,
 }) => BiliDownloadEntryInfo(
   isCompleted: completed,
   totalBytes: 100,
@@ -13,6 +14,7 @@ BiliDownloadEntryInfo downloadEntry({
   title: '测试下载',
   cover: 'https://example.test/cover.jpg',
   preferedVideoQuality: 80,
+  preferredAudioQuality: audioQuality,
   guessedTotalBytes: 100,
   totalTimeMilli: 60000,
   danmakuCount: 0,

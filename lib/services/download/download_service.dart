@@ -4,6 +4,7 @@ import 'dart:io' show File;
 import 'package:pili_aurora/grpc/dm.dart';
 import 'package:pili_aurora/http/download.dart';
 import 'package:pili_aurora/http/init.dart';
+import 'package:pili_aurora/models/common/video/audio_quality.dart';
 import 'package:pili_aurora/models/common/video/video_quality.dart';
 import 'package:pili_aurora/models/remote/download/bili_download_entry_info.dart';
 import 'package:pili_aurora/models/remote/download/bili_download_media_file_info.dart';
@@ -88,6 +89,7 @@ class DownloadService extends GetxService {
     VideoDetailData? videoDetail,
     ugc.EpisodeItem? videoArc,
     VideoQuality videoQuality,
+    AudioQuality audioQuality,
   ) {
     final cid = page.cid!;
     if (downloadList.indexWhere((e) => e.cid == cid) != -1) {
@@ -121,6 +123,7 @@ class DownloadService extends GetxService {
       typeTag: videoQuality.code.toString(),
       cover: (videoDetail?.pic ?? videoArc!.cover!).http2https,
       preferedVideoQuality: videoQuality.code,
+      preferredAudioQuality: audioQuality.code,
       qualityPithyDescription: videoQuality.desc,
       guessedTotalBytes: 0,
       totalTimeMilli: (page.duration ?? 0) * 1000,
@@ -148,6 +151,7 @@ class DownloadService extends GetxService {
     PgcInfoModel pgcItem,
     pgc.EpisodeItem episode,
     VideoQuality quality,
+    AudioQuality audioQuality,
   ) {
     final cid = episode.cid!;
     if (downloadList.indexWhere((e) => e.cid == cid) != -1) {
@@ -189,6 +193,7 @@ class DownloadService extends GetxService {
       typeTag: quality.code.toString(),
       cover: episode.cover!,
       preferedVideoQuality: quality.code,
+      preferredAudioQuality: audioQuality.code,
       qualityPithyDescription: quality.desc,
       guessedTotalBytes: 0,
       totalTimeMilli:
@@ -322,6 +327,7 @@ class DownloadService extends GetxService {
 
       final mediaFileInfo = await DownloadHttp.getVideoUrl(
         entry: entry,
+        preferredAudioQuality: entry.preferredAudioQuality,
         ep: entry.ep,
         source: entry.source,
         pageData: entry.pageData,

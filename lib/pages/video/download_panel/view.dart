@@ -6,11 +6,14 @@ import 'package:pili_aurora/common/widgets/image/network_img_layer.dart';
 import 'package:pili_aurora/common/widgets/stat/stat.dart';
 import 'package:pili_aurora/models/common/badge_type.dart';
 import 'package:pili_aurora/models/common/stat_type.dart';
+import 'package:pili_aurora/models/common/video/audio_quality.dart';
 import 'package:pili_aurora/models/common/video/video_quality.dart';
-import 'package:pili_aurora/models/remote/pgc/pgc_info_model/episode.dart' as pgc;
+import 'package:pili_aurora/models/remote/pgc/pgc_info_model/episode.dart'
+    as pgc;
 import 'package:pili_aurora/models/remote/pgc/pgc_info_model/result.dart';
 import 'package:pili_aurora/models/remote/video/video_detail/data.dart';
-import 'package:pili_aurora/models/remote/video/video_detail/episode.dart' as ugc;
+import 'package:pili_aurora/models/remote/video/video_detail/episode.dart'
+    as ugc;
 import 'package:pili_aurora/models/remote/video/video_detail/page.dart';
 import 'package:pili_aurora/pages/download/view.dart';
 import 'package:pili_aurora/pages/video/controller.dart';
@@ -67,6 +70,7 @@ class _DownloadPanelState extends State<DownloadPanel> {
 
   late final cidSet = widget.cidSet;
   VideoQuality _quality = VideoQuality.fromCode(Pref.defaultVideoQa);
+  AudioQuality _audioQuality = AudioQuality.fromCode(Pref.defaultAudioQa);
 
   @override
   void initState() {
@@ -106,69 +110,97 @@ class _DownloadPanelState extends State<DownloadPanel> {
   Widget _buildHeader(ThemeData theme) {
     final textStyle = TextStyle(color: theme.colorScheme.onSurfaceVariant);
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 12, 0, 12),
-      child: Row(
-        spacing: 16,
+      padding: const EdgeInsets.fromLTRB(16, 12, 12, 12),
+      child: Column(
         children: [
-          Text(
-            '最高画质',
-            style: textStyle,
-          ),
-          Builder(
-            builder: (context) => PopupMenuButton<VideoQuality>(
-              initialValue: _quality,
-              onSelected: (value) {
-                _quality = value;
-                (context as Element).markNeedsBuild();
-              },
-              itemBuilder: (context) => VideoQuality.values
-                  .map(
-                    (e) => PopupMenuItem(
-                      value: e,
-                      child: Text(e.desc),
-                    ),
-                  )
-                  .toList(),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 3),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      _quality.desc,
-                      style: const TextStyle(height: 1),
-                      strutStyle: const StrutStyle(height: 1, leading: 0),
-                    ),
-                    Icon(
-                      size: 18,
-                      Icons.keyboard_arrow_down,
-                      color: theme.colorScheme.onSurfaceVariant,
-                    ),
-                  ],
+          Row(
+            spacing: 16,
+            children: [
+              Text('最高画质', style: textStyle),
+              Builder(
+                builder: (context) => PopupMenuButton<VideoQuality>(
+                  initialValue: _quality,
+                  onSelected: (value) {
+                    _quality = value;
+                    (context as Element).markNeedsBuild();
+                  },
+                  itemBuilder: (context) => VideoQuality.values
+                      .map(
+                        (e) => PopupMenuItem(
+                          value: e,
+                          child: Text(e.desc),
+                        ),
+                      )
+                      .toList(),
+                  child: _buildQualityLabel(_quality.desc, theme),
                 ),
               ),
-            ),
+              if (kDebugMode || PlatformUtils.isMobile) ...[
+                const Spacer(),
+                StreamBuilder(
+                  stream: Connectivity().onConnectivityChanged,
+                  builder: (context, snapshot) {
+                    if (snapshot.data case final data?) {
+                      final network = data.contains(ConnectivityResult.wifi)
+                          ? 'WIFI'
+                          : '数据';
+                      return Text('当前网络：$network', style: textStyle);
+                    }
+                    return const SizedBox.shrink();
+                  },
+                ),
+                const SizedBox(width: 4),
+              ],
+            ],
           ),
-          if (kDebugMode || PlatformUtils.isMobile) ...[
-            const Spacer(),
-            StreamBuilder(
-              stream: Connectivity().onConnectivityChanged,
-              builder: (context, snapshot) {
-                if (snapshot.data case final data?) {
-                  final network = data.contains(ConnectivityResult.wifi)
-                      ? 'WIFI'
-                      : '数据';
-                  return Text('当前网络：$network', style: textStyle);
-                }
-                return const SizedBox.shrink();
-              },
-            ),
-            const SizedBox(width: 4),
-          ],
+          const SizedBox(height: 4),
+          Row(
+            spacing: 16,
+            children: [
+              Text('音质', style: textStyle),
+              Builder(
+                builder: (context) => PopupMenuButton<AudioQuality>(
+                  initialValue: _audioQuality,
+                  onSelected: (value) {
+                    _audioQuality = value;
+                    (context as Element).markNeedsBuild();
+                  },
+                  itemBuilder: (context) => AudioQuality.values
+                      .map(
+                        (e) => PopupMenuItem(
+                          value: e,
+                          child: Text(e.desc),
+                        ),
+                      )
+                      .toList(),
+                  child: _buildQualityLabel(_audioQuality.desc, theme),
+                ),
+              ),
+            ],
+          ),
         ],
       ),
     );
   }
+
+  Widget _buildQualityLabel(String value, ThemeData theme) => Padding(
+    padding: const EdgeInsets.symmetric(vertical: 3),
+    child: Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          value,
+          style: const TextStyle(height: 1),
+          strutStyle: const StrutStyle(height: 1, leading: 0),
+        ),
+        Icon(
+          size: 18,
+          Icons.keyboard_arrow_down,
+          color: theme.colorScheme.onSurfaceVariant,
+        ),
+      ],
+    ),
+  );
 
   Widget _buildBody(ThemeData theme) {
     final episodes = widget.episodes;
@@ -292,6 +324,7 @@ class _DownloadPanelState extends State<DownloadPanel> {
             parent == null ? widget.videoDetail : null,
             parent,
             _quality,
+            _audioQuality,
           );
           break;
         case ugc.EpisodeItem episode:
@@ -300,6 +333,7 @@ class _DownloadPanelState extends State<DownloadPanel> {
             null,
             episode,
             _quality,
+            _audioQuality,
           );
           break;
         case pgc.EpisodeItem episode:
@@ -308,6 +342,7 @@ class _DownloadPanelState extends State<DownloadPanel> {
             widget.pgcItem!,
             episode,
             _quality,
+            _audioQuality,
           );
           break;
       }
