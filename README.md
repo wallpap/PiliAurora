@@ -1,6 +1,6 @@
 # PiliAurora
 
-PiliAurora 是基于 [PiliPlus 2.1.5](https://github.com/bggRGjQaUbCoE/PiliPlus/tree/2.1.5) 继续开发的 Bilibili 第三方客户端，当前维护 Android 和 Windows x64 版本。项目重点维护 Windows 播放与弹幕、硬件解码兼容性，以及 Android 播放恢复。
+PiliAurora 是基于 [PiliPlus 2.1.5](https://github.com/bggRGjQaUbCoE/PiliPlus/tree/2.1.5) 继续开发的 Bilibili 第三方客户端，当前维护 Android 和 Windows x64 版本。项目重点维护 Windows以及 Android 。
 
 本项目由社区独立维护，与 Bilibili 官方无隶属关系。使用时请遵守 Bilibili 服务条款及适用法律。
 
