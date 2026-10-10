@@ -498,6 +498,10 @@ class UgcIntroController extends CommonIntroController with ReloadMixin {
       }
 
       videoDetailCtr
+        ..inheritedSubtitleEnabled =
+            Pref.inheritSubtitleState && bvid == this.bvid
+            ? videoDetailCtr.vttSubtitlesIndex.value > 0
+            : null
         ..plPlayerController.pause()
         ..makeHeartBeat()
         ..updateMediaListHistory(aid)

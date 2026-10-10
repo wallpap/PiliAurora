@@ -145,6 +145,12 @@ List<SettingsModel> get playSettings => [
     getSubtitle: () => '当前选择偏好：${Pref.subtitlePreferenceV2.desc}',
     onTap: _showSubtitleDialog,
   ),
+  const SwitchModel(
+    title: '分 P 继承字幕状态',
+    subtitle: '切换同一视频的分 P 时，沿用当前字幕开关状态',
+    leading: Icon(Icons.closed_caption_outlined),
+    setKey: SettingBoxKey.inheritSubtitleState,
+  ),
   if (PlatformUtils.isDesktop)
     SwitchModel(
       title: '最小化时暂停/还原时播放',

@@ -176,6 +176,7 @@ abstract final class SettingBoxKey {
       uiScale = 'uiScale';
 
   static const String subtitlePreferenceV2 = 'subtitlePreferenceV2',
+      inheritSubtitleState = 'inheritSubtitleState',
       enableDragSubtitle = 'enableDragSubtitle',
       subtitlePaddingH = 'subtitlePaddingH',
       subtitlePaddingB = 'subtitlePaddingB',

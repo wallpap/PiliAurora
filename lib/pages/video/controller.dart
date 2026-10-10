@@ -1036,6 +1036,7 @@ class VideoDetailController extends GetxController
   RxList<Subtitle> subtitles = RxList<Subtitle>();
   final Map<int, ({bool isData, String id})> vttSubtitles = {};
   late final vttSubtitlesIndex = (-1).obs;
+  bool? inheritedSubtitleEnabled;
   late final showVP = true.obs;
   late final viewPointList = <ViewPointSegment>[].obs;
 
@@ -1194,7 +1195,7 @@ class VideoDetailController extends GetxController
 
   Future<void> _setSubtitle(List<Subtitle> sub) async {
     subtitles.value = sub;
-    final idx = switch (Pref.subtitlePreferenceV2) {
+    final preferredIndex = switch (Pref.subtitlePreferenceV2) {
       .off => 0,
       .on => 1,
       .withoutAi => sub.first.lan.startsWith('ai') ? 0 : 1,
@@ -1205,6 +1206,13 @@ class VideoDetailController extends GetxController
             ? 1
             : 0,
     };
+    final inheritedState = inheritedSubtitleEnabled;
+    inheritedSubtitleEnabled = null;
+    final idx = inheritedState == null
+        ? preferredIndex
+        : inheritedState
+        ? 1
+        : 0;
     await setSubtitle(idx);
   }
 

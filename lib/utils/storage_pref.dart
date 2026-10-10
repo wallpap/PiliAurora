@@ -233,6 +233,9 @@ abstract final class Pref {
         defaultValue: SubtitlePrefType.off.index,
       )];
 
+  static bool get inheritSubtitleState =>
+      _setting.get(SettingBoxKey.inheritSubtitleState, defaultValue: false);
+
   static bool get useRelativeSlide =>
       _setting.get(SettingBoxKey.useRelativeSlide, defaultValue: false);
 
