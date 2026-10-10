@@ -6,6 +6,38 @@ import 'package:pili_aurora/plugin/pl_player/utils/hardware_video_configuration.
 import 'package:pili_aurora/plugin/pl_player/models/hwdec_type.dart';
 
 void main() {
+  test('Windows starts 4K playback at the display-limited output size', () {
+    final configuration = hardwareVideoConfiguration(
+      enabled: true,
+      configured: 'auto-copy',
+      windowsSourceSize: (width: 3840, height: 2160),
+      windowsOutputLimit: (width: 2560, height: 1440),
+    );
+    expect(configuration.width, 2560);
+    expect(configuration.height, 1440);
+  });
+
+  test('Windows retains smaller sources and unknown sizes stay automatic', () {
+    final small = hardwareVideoConfiguration(
+      enabled: true,
+      configured: 'auto-copy',
+      windowsSourceSize: (width: 1920, height: 1080),
+      windowsOutputLimit: (width: 2560, height: 1440),
+    );
+    expect(small.width, 1920);
+    expect(small.height, 1080);
+    for (final size in [null, (width: 0, height: 0)]) {
+      final unknown = hardwareVideoConfiguration(
+        enabled: true,
+        configured: 'auto-copy',
+        windowsSourceSize: size,
+        windowsOutputLimit: (width: 2560, height: 1440),
+      );
+      expect(unknown.width, isNull);
+      expect(unknown.height, isNull);
+    }
+  });
+
   test('Windows default prefers verified d3d11va passthrough before auto', () {
     final candidates = HwDecType.orderedCandidates(HwDecType.kHwdec);
 

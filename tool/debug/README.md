@@ -26,3 +26,14 @@ python tool/debug/windows_source_size_channel_probe.py
 ```
 
 需要 Python 和支持 C++17 的 `g++`，可用 `--compiler` 指定编译器。输出保存在 `build/windows-playback-diagnosis/`。探针使用模拟播放器，不覆盖 GPU 和实际视频播放。
+
+## Windows 开播纹理回归探针
+
+`windows_playback_startup_probe.py` 提取生产视口的尺寸提交方法，使用真实的截图交接和帧确认类，验证已配置的同尺寸输出在帧统计延迟时保持活画面、真实尺寸变化仍等待对应的渲染帧。
+
+```powershell
+python tool/debug/windows_playback_startup_probe.py
+python tool/debug/windows_texture_frame_probe.py --compiler <g++路径>
+```
+
+前者通过 FVM 运行 Flutter 测试；后者编译生产纹理方法，检查初始纹理、有效首帧和同尺寸提交。生成文件位于 `build/windows-playback-diagnosis/`，GPU 和播放器通道由模拟对象替代。

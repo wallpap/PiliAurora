@@ -85,6 +85,15 @@ VideoOutput::VideoOutput(int64_t handle,
       // Allocate a "large enough" buffer ahead of time.
       pixel_buffer_ =
           std::make_unique<uint8_t[]>(SW_RENDERING_PIXEL_BUFFER_SIZE);
+      // 初始固定尺寸也必须遵守软件缓冲区容量。
+      if (width_) {
+        width_ = std::clamp(*width_, int64_t{1},
+                            int64_t{SW_RENDERING_MAX_WIDTH});
+      }
+      if (height_) {
+        height_ = std::clamp(*height_, int64_t{1},
+                             int64_t{SW_RENDERING_MAX_HEIGHT});
+      }
       Resize(width_.value_or(1), height_.value_or(1));
       mpv_render_param params[] = {
           {MPV_RENDER_PARAM_API_TYPE, MPV_RENDER_API_TYPE_SW},
@@ -200,7 +209,8 @@ bool VideoOutput::Render() {
       // Keep the protective frame if rendering/registration failed.
       return false;
     }
-    if (texture_update_pending_ && GetVideoWidth() > 0 && GetVideoHeight() > 0) {
+    if (texture_update_pending_ && source_width_ > 0 && source_height_ > 0 &&
+        GetVideoWidth() > 0 && GetVideoHeight() > 0) {
       texture_update_pending_ = false;
       NotifyTextureUpdate(texture_id_, width(), height());
     }
@@ -217,7 +227,9 @@ void VideoOutput::SetTextureUpdateCallback(
   }
   // Do not queue this behind a render: rendering may wait for playback while
   // playback itself waits for this initial texture to create its controller.
-  NotifyTextureUpdate(texture_id_, GetVideoWidth(), GetVideoHeight());
+  // 初始 ID 用于解除控制器创建等待；固定尺寸的空闲纹理尚无视频首帧。
+  NotifyTextureUpdate(texture_id_, texture_update_pending_ ? 0 : width(),
+                      texture_update_pending_ ? 0 : height());
 }
 
 void VideoOutput::NotifyTextureUpdate(int64_t id, int64_t width, int64_t height) {
@@ -263,10 +275,10 @@ void VideoOutput::SetSize(std::optional<int64_t> width,
       } else {
         height_ = std::nullopt;
       }
-      // A platform-channel acknowledgement alone is not a ready texture. Force
-      // rendering even while paused; complete only after the new frame is marked.
       CheckAndResize();
-      frame_ready = Render();
+      // 同尺寸沿用已发布的视频帧；真实替换仍需完成渲染和可用帧通知。
+      frame_ready = texture_id_ && !texture_update_pending_;
+      if (!frame_ready) frame_ready = Render() && !texture_update_pending_;
     } catch (...) {
       // Signal failure so Dart retains its protective frame and can recover.
     }
@@ -281,7 +293,8 @@ void VideoOutput::SetSourceSize(int64_t width, int64_t height) {
     source_width_ = width;
     source_height_ = height;
     CheckAndResize();
-    Render();
+    // 固定输出的参数更新沿用 mpv 帧通知，避免额外抢占渲染队列。
+    if (texture_update_pending_) Render();
   });
 }
 

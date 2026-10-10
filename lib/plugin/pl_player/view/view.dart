@@ -1164,6 +1164,27 @@ class _PLVideoPlayerState extends State<PLVideoPlayer>
         !player.disposed &&
         player.current.isNotEmpty &&
         identical(player.current.first, media);
+    final rect = videoController.rect.value;
+    final configuration = videoController.configuration;
+    if (_videoOutputHandoff.image == null &&
+        configuration.width == size.width &&
+        configuration.height == size.height &&
+        rect?.width == size.width &&
+        rect?.height == size.height) {
+      // 初始固定输出已经收到有效视频帧；保持活纹理，避免静态截图等待批量帧统计。
+      if (!current() || _videoOutputResizer.target != size) return false;
+      await videoController.setSize(width: size.width, height: size.height);
+      final accepted = current();
+      if (mounted) {
+        _logVideoOutputResize(
+          'resize.completed',
+          size,
+          generation: generation,
+          accepted: accepted,
+        );
+      }
+      return accepted;
+    }
     final accepted = await _videoOutputHandoff.run(
       isCurrent: current,
       canStart: () =>

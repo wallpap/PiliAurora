@@ -39,6 +39,7 @@ import 'package:pili_aurora/services/service_locator.dart';
 import 'package:pili_aurora/services/diagnostics/diagnostics.dart';
 import 'package:pili_aurora/services/diagnostics/player_diagnostics.dart';
 import 'package:pili_aurora/services/android_video_output_limit.dart';
+import 'package:pili_aurora/services/windows_video_output_limit.dart';
 import 'package:pili_aurora/services/logger.dart';
 import 'package:pili_aurora/utils/accounts.dart';
 import 'package:pili_aurora/utils/android/android_helper.dart';
@@ -787,6 +788,14 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
         configuration: hardwareVideoConfiguration(
           enabled: Pref.enableHA,
           configured: Pref.hardwareDecoding,
+          // 首帧直接使用限幅后的纹理，避免开播后再截图并切换输出。
+          windowsSourceSize:
+              Platform.isWindows && width != null && height != null
+              ? (width: width!, height: height!)
+              : null,
+          windowsOutputLimit: Platform.isWindows
+              ? WindowsVideoOutputLimit.detected
+              : null,
           androidOutputLimit: Platform.isAndroid
               ? () => Pref.enableAndroidTextureScaling
                     ? AndroidVideoOutputLimit.detected

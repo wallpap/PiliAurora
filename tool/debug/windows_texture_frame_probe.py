@@ -26,6 +26,7 @@ HEADER = r"""
 #include <unordered_map>
 static bool frame_drawn=false, frame_notified=false;
 static int render_status=0;
+static int render_calls=0;
 static bool reject_frame=false;
 static bool core_waiting_for_render=false;
 extern "C" int mpv_get_property(mpv_handle*, const char*, mpv_format, void*) {
@@ -34,6 +35,7 @@ extern "C" int mpv_get_property(mpv_handle*, const char*, mpv_format, void*) {
 }
 extern "C" void mpv_free_node_contents(mpv_node*) {}
 extern "C" int mpv_render_context_render(mpv_render_context*, mpv_render_param*) {
+  render_calls++;
   frame_drawn=render_status>=0; return render_status;
 }
 constexpr int kFlutterDesktopPixelFormatBGRA8888=1;
@@ -107,6 +109,34 @@ MAIN = r"""
 int main() {
   int failed=0;
   {
+    VideoOutput output;output.width_=2560;output.height_=1440;output.Resize(2560,1440);
+    int64_t reported_width=-1,reported_height=-1;
+    output.SetTextureUpdateCallback([&](auto,auto w,auto h) {reported_width=w;reported_height=h;});
+    if(reported_width!=0 || reported_height!=0) {
+      std::cout<<"FAIL configured placeholder completed first-frame readiness\n";failed++;
+    }
+    bool ready=true;
+    output.SetSize(2560,1440,[&](bool available) {ready=available;});
+    if(ready) {
+      std::cout<<"FAIL configured placeholder acknowledged a ready resize frame\n";failed++;
+    }
+    output.Render();
+    if(!output.texture_update_pending_) {
+      std::cout<<"FAIL idle configured output was published as a video frame\n";failed++;
+    }
+    output.SetSourceSize(3840,2160);
+    if(reported_width!=2560 || reported_height!=1440 || output.texture_update_pending_) {
+      std::cout<<"FAIL configured output did not publish its rendered video frame\n";failed++;
+    }
+    else std::cout<<"PASS configured startup publishes only a video frame at the limited size\n";
+    auto renders_before=render_calls;
+    output.SetSourceSize(1920,1080);
+    if(render_calls!=renders_before) {
+      std::cout<<"FAIL fixed output parameter update forced another render\n";failed++;
+    }
+    else std::cout<<"PASS fixed output source updates wait for mpv frame notifications\n";
+  }
+  {
     VideoOutput output;output.Resize(1,1);
     core_waiting_for_render=true;
     try {
@@ -149,6 +179,13 @@ int main() {
     });
     if(completions!=1 || !acknowledged) {std::cout<<"FAIL resize channel acknowledged an unready frame\n";failed++;}
     else std::cout<<"PASS SetSize acknowledges a rendered replacement\n";
+    auto renders_before=render_calls;
+    acknowledged=false;
+    output.SetSize(960,540,[&](bool ready) {acknowledged=ready;});
+    if(!acknowledged || render_calls!=renders_before) {
+      std::cout<<"FAIL unchanged geometry forced another render while pinning output\n";failed++;
+    }
+    else std::cout<<"PASS unchanged geometry reuses the published frame\n";
     auto before=published;
     output.Resize(800,450);render_status=-1;
     output.Render();

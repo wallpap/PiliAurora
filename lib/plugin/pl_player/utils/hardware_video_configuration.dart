@@ -5,13 +5,21 @@ import 'package:pili_aurora/plugin/pl_player/models/hwdec_type.dart';
 VideoControllerConfiguration hardwareVideoConfiguration({
   required bool enabled,
   required String configured,
+  VideoOutputSize? windowsSourceSize,
+  VideoOutputSize? windowsOutputLimit,
   int? androidOutputLimitWidth,
   int? androidOutputLimitHeight,
   VideoOutputSize? Function()? androidOutputLimit,
   void Function(String event, Map<String, Object?> details)?
   onAndroidDiagnostic,
 }) {
+  final windowsSize = VideoOutputSizePolicy.fitWithinLimit(
+    source: windowsSourceSize,
+    limit: windowsOutputLimit,
+  );
   return VideoControllerConfiguration(
+    width: windowsSize?.width,
+    height: windowsSize?.height,
     enableHardwareAcceleration: enabled,
     // 暂停加载时先确定 Surface 尺寸，再挂载并绘制首帧。
     androidAttachSurfaceAfterVideoParameters: true,
