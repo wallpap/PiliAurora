@@ -23,12 +23,41 @@ class _SubPageState extends State<SubPage> with GridMixin {
   @override
   Widget build(BuildContext context) {
     return SimpleScaffold(
-      appBar: AppBar(title: const Text('我的订阅')),
+      appBar: AppBar(
+        title: const Text('我的订阅'),
+        actions: [
+          Obx(
+            () => TextButton.icon(
+              onPressed: _subController.isCleaning.value
+                  ? null
+                  : _subController.cleanInvalidSubscriptions,
+              icon: _subController.isCleaning.value
+                  ? const SizedBox.square(
+                      dimension: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.cleaning_services_outlined, size: 20),
+              label: Text(_subController.isCleaning.value ? '清理中' : '清除失效内容'),
+            ),
+          ),
+          const SizedBox(width: 8),
+        ],
+      ),
       body: refreshIndicator(
         onRefresh: _subController.onRefresh,
         child: CustomScrollView(
           physics: const AlwaysScrollableScrollPhysics(),
           slivers: [
+            Obx(
+              () => _subController.cleanupProgress.value.isEmpty
+                  ? const SliverToBoxAdapter(child: SizedBox.shrink())
+                  : SliverToBoxAdapter(
+                      child: Padding(
+                        padding: const EdgeInsets.all(12),
+                        child: Text(_subController.cleanupProgress.value),
+                      ),
+                    ),
+            ),
             ViewSliverSafeArea(
               sliver: Obx(
                 () => _buildBody(_subController.loadingState.value),
@@ -54,7 +83,9 @@ class _SubPageState extends State<SubPage> with GridMixin {
                   final item = response[index];
                   return SubItem(
                     item: item,
-                    cancelSub: () => _subController.cancelSub(item),
+                    cancelSub: _subController.isCleaning.value
+                        ? null
+                        : () => _subController.cancelSub(item),
                   );
                 },
                 itemCount: response.length,

@@ -12,7 +12,7 @@ import 'package:material_ui/material_ui.dart';
 
 class SubItem extends StatelessWidget {
   final SubItemModel item;
-  final VoidCallback cancelSub;
+  final VoidCallback? cancelSub;
   const SubItem({
     super.key,
     required this.item,

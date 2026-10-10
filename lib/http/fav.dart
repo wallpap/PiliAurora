@@ -15,9 +15,24 @@ import 'package:pili_aurora/models/remote/space/space_fav/data.dart';
 import 'package:pili_aurora/models/remote/sub/sub_detail/data.dart';
 import 'package:pili_aurora/utils/accounts.dart';
 import 'package:pili_aurora/utils/app_sign.dart';
+import 'package:pili_aurora/utils/wbi_sign.dart';
 import 'package:dio/dio.dart';
 
 abstract final class FavHttp {
+  static Future<LoadingState<bool>> subscriptionVideoAvailable(int aid) async {
+    final res = await Request().get(
+      Api.videoIntro,
+      queryParameters: await WbiSign.makSign({'aid': aid}),
+    );
+    // 与播放器的“视频不存在或已被删除”判定一致，权限和风控错误保留。
+    return switch (res.data['code']) {
+      0 when res.data['data'] is Map => const Success(true),
+      -404 => const Success(false),
+      final int code => Error(res.data['message'], code: code),
+      _ => const Error('视频状态响应不完整'),
+    };
+  }
+
   static Future<LoadingState<void>> favFavFolder(Object mediaId) async {
     final res = await Request().post(
       Api.favFavFolder,

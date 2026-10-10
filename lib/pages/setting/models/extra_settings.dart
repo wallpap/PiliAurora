@@ -55,6 +55,13 @@ import 'package:material_design_icons_flutter/material_design_icons_flutter.dart
 import 'package:material_ui/material_ui.dart' hide RefreshIndicator;
 
 List<SettingsModel> get extraSettings => [
+  const SwitchModel(
+    title: '订阅清理时隐藏失效视频',
+    subtitle: '清理“我的订阅”时，本地隐藏仍有效订阅中的失效视频；关闭并刷新后恢复显示',
+    leading: Icon(Icons.hide_source_outlined),
+    setKey: SettingBoxKey.hideInvalidSubscriptionVideos,
+    defaultVal: false,
+  ),
   if (PlatformUtils.isDesktop) ...[
     SwitchModel(
       title: '退出时最小化',

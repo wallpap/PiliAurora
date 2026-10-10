@@ -1,6 +1,7 @@
 // ignore_for_file: constant_identifier_names
 
 abstract final class SettingBoxKey {
+  static const hideInvalidSubscriptionVideos = 'hideInvalidSubscriptionVideos';
   static const playerDiagnosticLogLevel = 'playerDiagnosticLogLevel';
   static const diagnosticLogLevel = 'diagnosticLogLevel',
       performanceTracing = 'performanceTracing',

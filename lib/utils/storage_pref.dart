@@ -49,6 +49,10 @@ import 'package:hive_ce/hive.dart';
 import 'package:material_ui/material_ui.dart';
 
 abstract final class Pref {
+  static bool get hideInvalidSubscriptionVideos => _setting.get(
+    SettingBoxKey.hideInvalidSubscriptionVideos,
+    defaultValue: false,
+  );
   static String get playerDiagnosticLogLevel => _setting.get(
     SettingBoxKey.playerDiagnosticLogLevel,
     defaultValue: 'info',

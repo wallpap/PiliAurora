@@ -13,6 +13,7 @@ import 'package:pili_aurora/pages/common/multi_select/base.dart';
 import 'package:pili_aurora/pages/common/multi_select/multi_select_controller.dart';
 import 'package:pili_aurora/pages/common/page_order_mixin.dart';
 import 'package:pili_aurora/pages/fav_sort/view.dart';
+import 'package:pili_aurora/pages/subscription/hidden_media.dart';
 import 'package:pili_aurora/utils/accounts.dart';
 import 'package:pili_aurora/utils/extension/scroll_controller_ext.dart';
 import 'package:pili_aurora/utils/page_utils.dart';
@@ -122,6 +123,20 @@ class FavDetailController
   bool? get hasFooter => true;
 
   @override
+  Future<void> queryData([bool isRefresh = true]) async {
+    await super.queryData(isRefresh);
+    while (Pref.hideInvalidSubscriptionVideos &&
+        !isOwner &&
+        !isClosed &&
+        !isEnd &&
+        loadingState.value.dataOrNull?.isEmpty == true) {
+      final previousPage = page;
+      await super.queryData(false);
+      if (page == previousPage) break;
+    }
+  }
+
+  @override
   List<FavDetailItemModel>? getDataList(FavDetailData response) {
     if (pageDesc) {
       if (page == 1) {
@@ -141,6 +156,18 @@ class FavDetailController
     if (length >= folderInfo.value.mediaCount) {
       isEnd = true;
     }
+  }
+
+  @override
+  void handleListResponse(List<FavDetailItemModel> dataList) {
+    if (isOwner || !Pref.hideInvalidSubscriptionVideos) return;
+    final hidden = HiddenSubscriptionMedia(
+      GStorage.localCache,
+      account.mid,
+    ).read(11, mediaId);
+    dataList.removeWhere(
+      (item) => hidden.contains('${item.type ?? 2}:${item.id}'),
+    );
   }
 
   @override
