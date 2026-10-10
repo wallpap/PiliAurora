@@ -298,6 +298,9 @@ abstract final class Pref {
     return CDNService.backupUrl;
   }
 
+  static bool get enableMultiCdn =>
+      _setting.get(SettingBoxKey.enableMultiCdn, defaultValue: false);
+
   static String get banWordForRecommend =>
       _setting.get(SettingBoxKey.banWordForRecommend, defaultValue: '');
 

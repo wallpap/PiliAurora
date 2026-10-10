@@ -84,5 +84,25 @@ void main() {
         expect(isPlaybackNetworkFailure(event), isTrue, reason: event);
       }
     });
+
+    test('in-range seek errors can trigger network recovery', () {
+      expect(
+        isPlaybackNetworkFailure(
+          'Seek failed (to 40493344, size 169462757)',
+        ),
+        isTrue,
+      );
+    });
+
+    test('invalid and unauthorized seeks do not trigger network recovery', () {
+      for (final event in [
+        'Seek failed (to 169462757, size 169462757)',
+        'Seek failed (to 200000000, size 169462757)',
+        'Seek failed (to invalid, size 169462757)',
+        'http: HTTP error 403 Forbidden\nSeek failed (to 40493344, size 169462757)',
+      ]) {
+        expect(isPlaybackNetworkFailure(event), isFalse, reason: event);
+      }
+    });
   });
 }

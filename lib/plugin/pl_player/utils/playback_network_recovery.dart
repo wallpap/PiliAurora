@@ -9,6 +9,14 @@ bool isPlaybackNetworkFailure(String event) {
         (code >= 500 && code < 600);
   }
 
+  final failedSeek = RegExp(
+    r'^Seek failed \(to (\d+), size (\d+)\)$',
+  ).firstMatch(event);
+  if (failedSeek != null) {
+    // 文件内 seek 失败可能来自下载不完整；越过文件末尾则是无效位置。
+    return int.parse(failedSeek.group(1)!) < int.parse(failedSeek.group(2)!);
+  }
+
   if (event.startsWith('Failed to open https://') ||
       event.startsWith('Can not open external file https://') ||
       event.startsWith('tcp: ffurl_read returned ') ||

@@ -930,6 +930,7 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
         }
         NetworkSource? fallbackSource;
         if (tryNextCdn &&
+            Pref.enableMultiCdn &&
             source is NetworkSource &&
             source.advanceCandidate(audioOnly: onlyPlayAudio.value)) {
           fallbackSource = source;
@@ -1232,7 +1233,7 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
         }
         if (isPlaybackNetworkFailure(event)) {
           final source = dataSource;
-          final retryTag = source is NetworkSource
+          final retryTag = Pref.enableMultiCdn && source is NetworkSource
               ? 'controllerStream.error.listen.cdn.${source.candidateIndex}'
               : 'controllerStream.error.listen';
           ActionThrottle.run(

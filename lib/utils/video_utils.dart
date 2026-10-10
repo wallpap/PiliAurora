@@ -88,7 +88,7 @@ abstract final class VideoUtils {
               .toString();
   }
 
-  /// 保留当前 CDN 选择作为首选地址，并附上接口提供的备用地址。
+  /// 默认沿用单 CDN 选择；启用多 CDN 时附上接口提供的备用地址。
   static List<String> getCdnUrls(
     Iterable<String> urls, {
     CDNService? defaultCDNService,
@@ -104,6 +104,7 @@ abstract final class VideoUtils {
         isAudio: isAudio,
       ),
     ];
+    if (!Pref.enableMultiCdn) return result;
     for (final url in sourceUrls) {
       if (!result.contains(url)) result.add(url);
     }

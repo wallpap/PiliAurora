@@ -17,6 +17,19 @@ abstract final class DownloadHttp {
   static const String referer = "https://www.bilibili.com/";
   static const String userAgent = "Bilibili Freedoooooom/MarkII";
 
+  static int selectAudioQuality(List<int> audioIds, int preferredAudioQuality) {
+    int closestNumber = audioIds.contains(preferredAudioQuality)
+        ? preferredAudioQuality
+        : audioIds.findClosestTarget(
+            (e) => e <= preferredAudioQuality,
+            (a, b) => a > b ? a : b,
+          );
+    if (audioIds.every((e) => e > preferredAudioQuality)) {
+      closestNumber = AudioQuality.k192.code;
+    }
+    return audioIds.contains(closestNumber) ? closestNumber : audioIds.first;
+  }
+
   static Future<BiliDownloadMediaInfo> getVideoUrl({
     required BiliDownloadEntryInfo entry,
     int? preferredAudioQuality,
@@ -100,19 +113,9 @@ abstract final class DownloadHttp {
           final List<int> audioIds = audioDashList
               .map((map) => map.id)
               .toList();
-          int closestNumber = audioIds.contains(preferAudioQa)
-              ? preferAudioQa
-              : audioIds.findClosestTarget(
-                  (e) => e <= preferAudioQa,
-                  (a, b) => a > b ? a : b,
-                );
-          if (!audioIds.contains(preferAudioQa) &&
-              audioIds.any((e) => e > preferAudioQa)) {
-            closestNumber = AudioQuality.k192.code;
-          }
+          final closestNumber = selectAudioQuality(audioIds, preferAudioQa);
           final AudioItem audioDash = audioDashList.firstWhere(
             (e) => e.id == closestNumber,
-            orElse: () => audioDashList.first,
           );
           final audioUrl = VideoUtils.getCdnUrl(
             audioDash.playUrls,

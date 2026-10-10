@@ -4,6 +4,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:hive_ce/hive.dart';
 import 'package:pili_aurora/models/common/video/cdn_type.dart';
 import 'package:pili_aurora/utils/storage.dart';
+import 'package:pili_aurora/utils/storage_key.dart';
+import 'package:pili_aurora/utils/storage_pref.dart';
 import 'package:pili_aurora/utils/video_utils.dart';
 
 void main() {
@@ -20,49 +22,88 @@ void main() {
     await directory.delete(recursive: true);
   });
 
-  test('preferred CDN stays first, followed by unique API backup URLs', () {
-    const primary =
-        'https://upos-sz-mirrorcos.bilivideo.com/upgcxcode/video?deadline=1';
-    const backup =
-        'https://upos-sz-mirrorali.bilivideo.com/upgcxcode/video?deadline=1';
-
-    final urls = VideoUtils.getCdnUrls(
-      [primary, backup, primary],
-      defaultCDNService: CDNService.hw,
-    );
-
-    expect(urls, [
-      'https://upos-sz-mirrorhw.bilivideo.com/upgcxcode/video?deadline=1',
-      primary,
-      backup,
-    ]);
-    expect(
-      urls.first,
-      VideoUtils.getCdnUrl([primary, backup], defaultCDNService: CDNService.hw),
-    );
+  setUp(() async {
+    await GStorage.setting.delete(SettingBoxKey.enableMultiCdn);
   });
 
-  test('audio CDN preference behavior is retained for the primary URL', () {
-    const primary =
-        'https://upos-sz-mirrorcos.bilivideo.com/upgcxcode/audio?deadline=1';
-    const backup =
-        'https://upos-sz-mirrorali.bilivideo.com/upgcxcode/audio?deadline=1';
+  test('single CDN is the default and preserves the original selection', () {
+    const urls = [
+      'https://upos-sz-mirrorcos.bilivideo.com/upgcxcode/video?deadline=1',
+      'https://upos-sz-mirrorali.bilivideo.com/upgcxcode/video?deadline=1',
+    ];
 
-    final urls = VideoUtils.getCdnUrls(
-      [primary, backup],
-      defaultCDNService: CDNService.ali,
-      isAudio: true,
-    );
+    expect(Pref.enableMultiCdn, isFalse);
+    expect(VideoUtils.getCdnUrls(urls, defaultCDNService: CDNService.hw), [
+      VideoUtils.getCdnUrl(urls, defaultCDNService: CDNService.hw),
+    ]);
+  });
 
-    expect(
-      urls.first,
-      VideoUtils.getCdnUrl(
+  test(
+    'preferred CDN stays first, followed by unique API backup URLs',
+    () async {
+      await GStorage.setting.put(SettingBoxKey.enableMultiCdn, true);
+      const primary =
+          'https://upos-sz-mirrorcos.bilivideo.com/upgcxcode/video?deadline=1';
+      const backup =
+          'https://upos-sz-mirrorali.bilivideo.com/upgcxcode/video?deadline=1';
+
+      final urls = VideoUtils.getCdnUrls(
+        [primary, backup, primary],
+        defaultCDNService: CDNService.hw,
+      );
+
+      expect(urls, [
+        'https://upos-sz-mirrorhw.bilivideo.com/upgcxcode/video?deadline=1',
+        primary,
+        backup,
+      ]);
+      expect(
+        urls.first,
+        VideoUtils.getCdnUrl([
+          primary,
+          backup,
+        ], defaultCDNService: CDNService.hw),
+      );
+    },
+  );
+
+  test(
+    'audio CDN preference behavior is retained for the primary URL',
+    () async {
+      await GStorage.setting.put(SettingBoxKey.enableMultiCdn, true);
+      const primary =
+          'https://upos-sz-mirrorcos.bilivideo.com/upgcxcode/audio?deadline=1';
+      const backup =
+          'https://upos-sz-mirrorali.bilivideo.com/upgcxcode/audio?deadline=1';
+
+      final urls = VideoUtils.getCdnUrls(
         [primary, backup],
         defaultCDNService: CDNService.ali,
         isAudio: true,
-      ),
-    );
-    expect(urls, contains(backup));
+      );
+
+      expect(
+        urls.first,
+        VideoUtils.getCdnUrl(
+          [primary, backup],
+          defaultCDNService: CDNService.ali,
+          isAudio: true,
+        ),
+      );
+      expect(urls, contains(backup));
+    },
+  );
+
+  test('disabling multi CDN restores single-source generation', () async {
+    const urls = [
+      'https://upos-sz-mirrorcos.bilivideo.com/upgcxcode/video?deadline=1',
+      'https://upos-sz-mirrorali.bilivideo.com/upgcxcode/video?deadline=1',
+    ];
+    await GStorage.setting.put(SettingBoxKey.enableMultiCdn, true);
+    expect(VideoUtils.getCdnUrls(urls).length, greaterThan(1));
+
+    await GStorage.setting.put(SettingBoxKey.enableMultiCdn, false);
+    expect(VideoUtils.getCdnUrls(urls), [VideoUtils.getCdnUrl(urls)]);
   });
 
   test('empty URL lists have no candidates', () {

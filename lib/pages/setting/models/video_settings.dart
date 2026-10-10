@@ -71,6 +71,13 @@ List<SettingsModel> get videoSettings => [
         '当前使用：${VideoUtils.cdnService.desc}，部分 CDN 可能失效，如无法播放请尝试切换',
     onTap: _showCDNDialog,
   ),
+  const SwitchModel(
+    title: '多 CDN 自动回退',
+    subtitle: '连接失败时尝试备用 CDN，重新打开视频后生效',
+    leading: Icon(Icons.cloud_sync_outlined),
+    setKey: SettingBoxKey.enableMultiCdn,
+    defaultVal: false,
+  ),
   NormalModel(
     title: '直播 CDN 设置',
     leading: const Icon(MdiIcons.cloudPlusOutline),

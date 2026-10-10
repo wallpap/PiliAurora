@@ -59,3 +59,17 @@ protobuf 和 JNI 产物应从对应源定义及生成流程更新。生成后检
 - 依赖获取失败时，检查网络、代理、缓存和 `pubspec.lock`。
 - Android 构建失败时，检查 JDK 25、`JAVA_HOME`、Android SDK 和构建脚本输出。
 - Windows 播放异常时，分别检查播放器初始化、硬件解码、渲染窗口和弹幕路径。
+
+### Gradle 本地 socket 初始化失败
+
+Windows 上若在编译前出现 `Unable to establish loopback connection`，且堆栈包含 `PipeImpl`、`UnixDomainSockets`，可将当前终端的临时目录改为仓库内 `.gradle-tmp` 后重试。`tool/build.ps1 -Platform android` 已设置这两个环境变量；直接运行 Flutter 构建时使用：
+
+```powershell
+$taskGradleTemp = Join-Path (Get-Location).Path '.gradle-tmp'
+New-Item -ItemType Directory -Path $taskGradleTemp -Force | Out-Null
+$env:TEMP = $taskGradleTemp
+$env:TMP = $taskGradleTemp
+fvm flutter build apk --debug --no-pub
+```
+
+这是本机临时目录相关的 Java socket 故障处理方式；若仍失败，检查实际堆栈并重新定位原因。IPv4 参数或 `--no-daemon` 未能解决本机这一故障。

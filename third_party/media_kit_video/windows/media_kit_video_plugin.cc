@@ -112,8 +112,9 @@ void MediaKitVideoPlugin::HandleMethodCall(
   } else if (method_call.method_name().compare("VideoOutputManager.SetSourceSize") == 0) {
     const auto arguments = std::get<flutter::EncodableMap>(*method_call.arguments());
     const auto handle = std::get<std::string>(arguments.at(flutter::EncodableValue("handle")));
-    const auto width = std::get<int64_t>(arguments.at(flutter::EncodableValue("width")));
-    const auto height = std::get<int64_t>(arguments.at(flutter::EncodableValue("height")));
+    // Dart 通道按数值范围编码 int32/int64，普通视频尺寸会走 int32。
+    const auto width = arguments.at(flutter::EncodableValue("width")).LongValue();
+    const auto height = arguments.at(flutter::EncodableValue("height")).LongValue();
     video_output_manager_->SetSourceSize(std::stoll(handle), width, height);
     result->Success(flutter::EncodableValue(std::monostate{}));
   } else if (method_call.method_name().compare("VideoOutputManager.Dispose") ==
