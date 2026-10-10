@@ -185,6 +185,7 @@ abstract final class PageUtils {
     Get.toNamed(
       '/webview',
       parameters: {'url': 'https://www.bilibili.com/appeal/?avid=$aid'},
+      arguments: const {'rewriteCopyrightReport': true},
     );
   }
 

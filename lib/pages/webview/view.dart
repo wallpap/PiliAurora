@@ -44,6 +44,7 @@ class _WebviewPageState extends State<WebviewPage> with RouteAware {
   final RxDouble _progress = 1.0.obs;
   bool _inApp = false;
   bool _off = false;
+  bool _rewriteCopyrightReport = false;
 
   InAppWebViewController? _webViewController;
 
@@ -61,6 +62,7 @@ class _WebviewPageState extends State<WebviewPage> with RouteAware {
     if (Get.arguments case final Map map) {
       _inApp = map['inApp'] ?? false;
       _off = map['off'] ?? false;
+      _rewriteCopyrightReport = map['rewriteCopyrightReport'] == true;
     }
 
     if (Platform.isAndroid) {
@@ -324,6 +326,23 @@ document.styleSheets[0].insertRule('#app__display-area > div.control-panel {disp
                   return null;
                 },
                 shouldOverrideUrlLoading: (controller, navigationAction) async {
+                  final uri = navigationAction.request.url?.uriValue;
+                  if (_rewriteCopyrightReport &&
+                      uri?.host == 'www.bilibili.com' &&
+                      uri?.path == '/h5/community/copyright/init') {
+                    final queryParameters = Map<String, String>.of(
+                      uri!.queryParameters,
+                    )..remove('navhide');
+                    final pcUrl = uri.replace(
+                      path: '/pc/community/copyright/role',
+                      queryParameters: queryParameters,
+                    );
+                    _progress.value = 0;
+                    await controller.loadUrl(
+                      urlRequest: URLRequest(url: WebUri.uri(pcUrl)),
+                    );
+                    return .CANCEL;
+                  }
                   if (!_inApp) {
                     final hasMatch = await PiliScheme.routePush(
                       navigationAction.request.url?.uriValue ?? Uri(),
