@@ -114,6 +114,14 @@ class NativeVideoController extends PlatformVideoController {
     await completer.future;
     controller.id.removeListener(listener);
 
+    if (Platform.isWindows) {
+      // 复用 mpv 已观察到的输出尺寸，避免渲染线程同步查询并等待 mpv 核心。
+      controller._sourceSizeSubscription = player.stream.size.listen(
+        controller._updateSourceSize,
+      );
+      controller._updateSourceSize((player.state.width, player.state.height));
+    }
+
     // Return the [VideoController].
     return controller;
   }
@@ -167,8 +175,29 @@ class NativeVideoController extends PlatformVideoController {
   int _sizeRevision = 0;
   Future<void>? _pendingSize;
 
+  StreamSubscription<(int, int)>? _sourceSizeSubscription;
+
+  void _updateSourceSize((int, int) size) {
+    final (width, height) = size;
+    if (width < 1 || height < 1) return;
+    unawaited(
+      _channel
+          .invokeMethod<void>('VideoOutputManager.SetSourceSize', {
+            'handle': player.handle.toString(),
+            'width': width,
+            'height': height,
+          })
+          .catchError((Object error, StackTrace stack) {
+            debugPrint(
+              'NativeVideoController: source size update failed: $error',
+            );
+          }),
+    );
+  }
+
   /// Disposes the instance. Releases allocated resources back to the system.
-  Future<void> _dispose() {
+  Future<void> _dispose() async {
+    await _sourceSizeSubscription?.cancel();
     final handle = player.handle;
     _controllers.remove(handle);
     return _channel.invokeMethod('VideoOutputManager.Dispose', {

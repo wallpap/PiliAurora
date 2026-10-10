@@ -1,15 +1,50 @@
 #!/usr/bin/env python3
-"""Compile exact production geometry methods against fake mpv only.
-
-The failure path populates an undefined/stale node deterministically. Any read
-or free of that failed result is caught without a native assertion or DLL load.
-"""
+"""Verify cached Windows geometry without synchronously accessing the mpv core."""
 import argparse
 from pathlib import Path
 import subprocess
 
-HEADER = '#include <client.h>\n#include <cstdint>\n#include <cstring>\n#include <iostream>\n#include <optional>\n#include <stdexcept>\n\nconstexpr int64_t SW_RENDERING_MAX_WIDTH=1920;\nconstexpr int64_t SW_RENDERING_MAX_HEIGHT=1080;\nstatic bool property_available=false;\nstatic int invalid_frees=0;\nstatic int valid_frees=0;\nstatic mpv_node_list stale_map{};\nstatic mpv_node_list valid_map{};\nstatic mpv_node values[3]{};\nstatic char k_dw[]="dw", k_dh[]="dh", k_rotate[]="rotate";\nstatic char* keys[]={k_dw,k_dh,k_rotate};\nextern "C" int mpv_get_property(mpv_handle*, const char*, mpv_format, void* out) {\n  auto node=static_cast<mpv_node*>(out);\n  // On failure the result is undefined: model stale stack contents safely.\n  // This is deliberately not a libmpv allocation, and must never be freed.\n  node->format=MPV_FORMAT_NODE_MAP;\n  node->u.list=property_available ? &valid_map : &stale_map;\n  return property_available ? 0 : MPV_ERROR_PROPERTY_UNAVAILABLE;\n}\nextern "C" void mpv_free_node_contents(mpv_node* node) {\n  if (!property_available) {\n    invalid_frees++;\n    throw std::runtime_error("free_node_contents called on failed/undefined property output");\n  }\n  valid_frees++;\n  node->format=MPV_FORMAT_NONE;\n}\nclass VideoOutput {\n public:\n  mpv_handle* handle_=nullptr;\n  std::optional<int64_t> width_,height_;\n  void* pixel_buffer_=nullptr;\n  int64_t GetVideoWidth();\n  int64_t GetVideoHeight();\n};\n'
-MAIN = '\nint main() {\n  int failed=0;\n  VideoOutput output;\n  for (auto axis : {0,1}) {\n    try {\n      auto actual=axis==0 ? output.GetVideoWidth() : output.GetVideoHeight();\n      if (actual != 0) throw std::runtime_error("failed property produced stale dimensions");\n      std::cout << "PASS unavailable " << (axis==0 ? "width" : "height") << \'\\n\';\n    } catch (const std::exception& error) {\n      failed++;\n      std::cout << "FAIL unavailable " << (axis==0 ? "width" : "height") << ": " << error.what() << \'\\n\';\n    }\n  }\n  property_available=true;\n  valid_map.num=3;valid_map.values=values;valid_map.keys=keys;\n  for (int i=0;i<3;i++) values[i].format=MPV_FORMAT_INT64;\n  values[0].u.int64=1920;values[1].u.int64=1080;values[2].u.int64=0;\n  if (output.GetVideoWidth()!=1920 || output.GetVideoHeight()!=1080 || valid_frees!=2) {\n    std::cout << "FAIL valid source dimensions/cleanup\\n";failed++;\n  } else std::cout << "PASS valid source dimensions and exactly-once cleanup\\n";\n  std::cout << "Invalid result frees: " << invalid_frees << \'\\n\';\n  return failed ? 1 : 0;\n}\n'
+HEADER = r"""
+#include <client.h>
+#include <cstdint>
+#include <iostream>
+#include <optional>
+#include <stdexcept>
+constexpr int64_t SW_RENDERING_MAX_WIDTH=1920, SW_RENDERING_MAX_HEIGHT=1080;
+extern "C" int mpv_get_property(mpv_handle*, const char*, mpv_format, void*) {
+  throw std::runtime_error("geometry synchronously waited for mpv core");
+}
+class VideoOutput {
+ public:
+  mpv_handle* handle_=nullptr;
+  std::optional<int64_t> width_,height_;
+  int64_t source_width_=0,source_height_=0;
+  void* pixel_buffer_=nullptr;
+  int64_t GetVideoWidth();
+  int64_t GetVideoHeight();
+};
+"""
+MAIN = r"""
+int main() {
+  VideoOutput output;
+  if(output.GetVideoWidth()!=0 || output.GetVideoHeight()!=0) return 1;
+  std::cout<<"PASS startup geometry does not wait for mpv core\n";
+  output.source_width_=1920;output.source_height_=1080;
+  if(output.GetVideoWidth()!=1920 || output.GetVideoHeight()!=1080) return 1;
+  output.source_width_=1080;output.source_height_=1920;
+  if(output.GetVideoWidth()!=1080 || output.GetVideoHeight()!=1920) return 1;
+  std::cout<<"PASS observed landscape and rotated portrait dimensions\n";
+  output.width_=640;output.height_=360;
+  if(output.GetVideoWidth()!=640 || output.GetVideoHeight()!=360) return 1;
+  output.width_.reset();output.height_.reset();
+  output.source_width_=3840;output.source_height_=2160;
+  output.pixel_buffer_=&output;
+  if(output.GetVideoWidth()!=1920 || output.GetVideoHeight()!=1080) return 1;
+  std::cout<<"PASS fixed dimensions and software output limits\n";
+  return 0;
+}
+"""
+
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)

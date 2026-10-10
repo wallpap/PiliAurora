@@ -109,6 +109,13 @@ void MediaKitVideoPlugin::HandleMethodCall(
           });
         });
     result->Success(flutter::EncodableValue(std::monostate{}));
+  } else if (method_call.method_name().compare("VideoOutputManager.SetSourceSize") == 0) {
+    const auto arguments = std::get<flutter::EncodableMap>(*method_call.arguments());
+    const auto handle = std::get<std::string>(arguments.at(flutter::EncodableValue("handle")));
+    const auto width = std::get<int64_t>(arguments.at(flutter::EncodableValue("width")));
+    const auto height = std::get<int64_t>(arguments.at(flutter::EncodableValue("height")));
+    video_output_manager_->SetSourceSize(std::stoll(handle), width, height);
+    result->Success(flutter::EncodableValue(std::monostate{}));
   } else if (method_call.method_name().compare("VideoOutputManager.Dispose") ==
              0) {
     auto arguments = std::get<flutter::EncodableMap>(*method_call.arguments());

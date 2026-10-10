@@ -77,6 +77,8 @@ class VideoOutput {
   void SetSize(std::optional<int64_t> width, std::optional<int64_t> height,
                std::function<void(bool)> on_frame_ready);
 
+  void SetSourceSize(int64_t width, int64_t height);
+
  private:
   void NotifyRender();
 
@@ -94,6 +96,8 @@ class VideoOutput {
 
   std::optional<int64_t> height_ = std::nullopt;
   std::optional<int64_t> width_ = std::nullopt;
+  int64_t source_width_ = 0;
+  int64_t source_height_ = 0;
   VideoOutputConfiguration configuration_ = VideoOutputConfiguration{};
 
   mpv_handle* handle_ = nullptr;

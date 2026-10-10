@@ -200,7 +200,7 @@ bool VideoOutput::Render() {
       // Keep the protective frame if rendering/registration failed.
       return false;
     }
-    if (texture_update_pending_) {
+    if (texture_update_pending_ && GetVideoWidth() > 0 && GetVideoHeight() > 0) {
       texture_update_pending_ = false;
       NotifyTextureUpdate(texture_id_, width(), height());
     }
@@ -271,6 +271,17 @@ void VideoOutput::SetSize(std::optional<int64_t> width,
       // Signal failure so Dart retains its protective frame and can recover.
     }
     on_frame_ready(frame_ready);
+  });
+}
+
+void VideoOutput::SetSourceSize(int64_t width, int64_t height) {
+  if (width < 1 || height < 1) return;
+  thread_pool_ref_->Post([this, width, height]() {
+    if (source_width_ == width && source_height_ == height) return;
+    source_width_ = width;
+    source_height_ = height;
+    CheckAndResize();
+    Render();
   });
 }
 
@@ -404,42 +415,11 @@ int64_t VideoOutput::GetVideoWidth() {
   if (width_) {
     return width_.value();
   }
-  // Video resolution dependent width.
-  int64_t width = 0;
-  int64_t height = 0;
-
-  // The output is undefined when video parameters are not available yet
-  // (startup, seek/reconfiguration, or shutdown). Never inspect or free it.
-  mpv_node params{};
-  const int status =
-      mpv_get_property(handle_, "video-out-params", MPV_FORMAT_NODE, &params);
-  if (status < 0) {
-    return 0;
-  }
-
-  int64_t dw = 0, dh = 0, rotate = 0;
-  if (params.format == MPV_FORMAT_NODE_MAP) {
-    for (int32_t i = 0; i < params.u.list->num; i++) {
-      char* key = params.u.list->keys[i];
-      auto value = params.u.list->values[i];
-      if (value.format == MPV_FORMAT_INT64) {
-        if (strcmp(key, "dw") == 0) {
-          dw = value.u.int64;
-        }
-        if (strcmp(key, "dh") == 0) {
-          dh = value.u.int64;
-        }
-        if (strcmp(key, "rotate") == 0) {
-          rotate = value.u.int64;
-        }
-      }
-    }
-  }
-  // Successful NODE results belong to libmpv, irrespective of their format.
-  mpv_free_node_contents(&params);
-
-  width = rotate == 0 || rotate == 180 ? dw : dh;
-  height = rotate == 0 || rotate == 180 ? dh : dw;
+  // 尺寸由 Dart 的 video-out-params 观察事件送入渲染队列。
+  // 同步查询会等待正在等待首帧渲染的 mpv 核心，触发超时卡顿。
+  const int64_t width = source_width_;
+  const int64_t height = source_height_;
+  if (width < 1 || height < 1) return 0;
 
   if (pixel_buffer_ != nullptr) {
     // Make sure |width| & |height| fit between |SW_RENDERING_MAX_WIDTH| &
@@ -460,42 +440,9 @@ int64_t VideoOutput::GetVideoHeight() {
   if (height_) {
     return height_.value();
   }
-  // Video resolution dependent height.
-  int64_t width = 0;
-  int64_t height = 0;
-
-  // The output is undefined when video parameters are not available yet
-  // (startup, seek/reconfiguration, or shutdown). Never inspect or free it.
-  mpv_node params{};
-  const int status =
-      mpv_get_property(handle_, "video-out-params", MPV_FORMAT_NODE, &params);
-  if (status < 0) {
-    return 0;
-  }
-
-  int64_t dw = 0, dh = 0, rotate = 0;
-  if (params.format == MPV_FORMAT_NODE_MAP) {
-    for (int32_t i = 0; i < params.u.list->num; i++) {
-      char* key = params.u.list->keys[i];
-      auto value = params.u.list->values[i];
-      if (value.format == MPV_FORMAT_INT64) {
-        if (strcmp(key, "dw") == 0) {
-          dw = value.u.int64;
-        }
-        if (strcmp(key, "dh") == 0) {
-          dh = value.u.int64;
-        }
-        if (strcmp(key, "rotate") == 0) {
-          rotate = value.u.int64;
-        }
-      }
-    }
-  }
-  // Successful NODE results belong to libmpv, irrespective of their format.
-  mpv_free_node_contents(&params);
-
-  width = rotate == 0 || rotate == 180 ? dw : dh;
-  height = rotate == 0 || rotate == 180 ? dh : dw;
+  const int64_t width = source_width_;
+  const int64_t height = source_height_;
+  if (width < 1 || height < 1) return 0;
 
   if (pixel_buffer_ != NULL) {
     // Make sure |width| & |height| fit between |SW_RENDERING_MAX_WIDTH| &
