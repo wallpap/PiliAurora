@@ -1188,6 +1188,7 @@ void _showCacheDialog(BuildContext context, VoidCallback setState) {
     builder: (context) => AlertDialog(
       title: const Text('最大缓存大小'),
       content: TextField(
+        maxLength: 6,
         autofocus: true,
         onChanged: (value) => valueStr = value,
         keyboardType: TextInputType.number,

@@ -13,7 +13,8 @@ VideoControllerConfiguration hardwareVideoConfiguration({
 }) {
   return VideoControllerConfiguration(
     enableHardwareAcceleration: enabled,
-    androidAttachSurfaceAfterVideoParameters: false,
+    // 暂停加载时先确定 Surface 尺寸，再挂载并绘制首帧。
+    androidAttachSurfaceAfterVideoParameters: true,
     androidOutputLimitWidth: androidOutputLimitWidth,
     androidOutputLimitHeight: androidOutputLimitHeight,
     androidOutputLimit: androidOutputLimit,

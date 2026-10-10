@@ -31,7 +31,8 @@ import 'package:pili_aurora/models/remote/download/bili_download_entry_info.dart
 import 'package:pili_aurora/models/remote/media_list/media_list.dart';
 import 'package:pili_aurora/models/remote/pgc/pgc_info_model/result.dart';
 import 'package:pili_aurora/models/remote/video/video_detail/data.dart';
-import 'package:pili_aurora/models/remote/video/video_detail/episode.dart' as ugc;
+import 'package:pili_aurora/models/remote/video/video_detail/episode.dart'
+    as ugc;
 import 'package:pili_aurora/models/remote/video/video_detail/page.dart';
 import 'package:pili_aurora/models/remote/video/video_pbp/data.dart';
 import 'package:pili_aurora/models/remote/video/video_play_info/subtitle.dart';
@@ -1501,7 +1502,7 @@ class VideoDetailController extends GetxController
               scrollController: scrollController,
               videoDetailController: this,
               heroTag: heroTag,
-              ugcIntroController: ugcIntroController,
+              ugcIntroController: isUgc ? ugcIntroController : null,
               cidSet: cidSet,
             ),
           );

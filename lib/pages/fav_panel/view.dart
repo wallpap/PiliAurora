@@ -54,6 +54,9 @@ class _FavPanelState extends State<FavPanel> {
               child: Builder(
                 builder: (context) {
                   final isChecked = item.favState == 1;
+                  final isFull =
+                      BiliUtils.isFavFolderFull(item.attr, item.mediaCount) &&
+                      !isChecked;
 
                   void onTap() {
                     item
@@ -63,7 +66,7 @@ class _FavPanelState extends State<FavPanel> {
                   }
 
                   return ListTile(
-                    onTap: onTap,
+                    onTap: isFull ? null : onTap,
                     dense: true,
                     leading: BiliUtils.isPublicFav(item.attr)
                         ? const Icon(Icons.folder_outlined)
@@ -71,13 +74,15 @@ class _FavPanelState extends State<FavPanel> {
                     minLeadingWidth: 0,
                     title: Text(item.title),
                     subtitle: Text(
-                      '${item.mediaCount}个内容 . ${BiliUtils.isPublicFavText(item.attr)}',
+                      '${item.mediaCount}个内容${isFull ? '(已满)' : ''} · ${BiliUtils.isPublicFavText(item.attr)}',
                     ),
                     trailing: Transform.scale(
                       scale: 0.9,
                       child: Checkbox(
                         value: isChecked,
-                        onChanged: (bool? checkValue) => onTap(),
+                        onChanged: isFull
+                            ? null
+                            : (bool? checkValue) => onTap(),
                       ),
                     ),
                   );

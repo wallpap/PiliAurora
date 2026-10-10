@@ -8,8 +8,14 @@ mixin InitialPositionMixin on GestureRecognizer {
 
   @override
   void addAllowedPointer(PointerDownEvent event) {
-    super.addAllowedPointer(event);
     _initialPosition = event.position;
+    super.addAllowedPointer(event);
+  }
+
+  @override
+  void addAllowedPointerPanZoom(PointerPanZoomStartEvent event) {
+    _initialPosition = event.position;
+    super.addAllowedPointerPanZoom(event);
   }
 }
 
@@ -63,7 +69,8 @@ bool _computeHitSlop(
       return globalDistanceMoved > settings.touchSlop! &&
           _calcAngle(initialPosition!, lastPosition);
     case .trackpad:
-      return globalDistanceMoved > settings.touchSlop!;
+      return globalDistanceMoved > settings.touchSlop! &&
+          _calcAngle(initialPosition!, lastPosition);
   }
 }
 

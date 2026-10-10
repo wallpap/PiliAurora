@@ -15,6 +15,7 @@ import 'package:pili_aurora/pages/main/controller.dart';
 import 'package:pili_aurora/plugin/pl_player/controller.dart';
 import 'package:pili_aurora/utils/android/android_helper.dart';
 import 'package:pili_aurora/utils/app_scheme.dart';
+import 'package:pili_aurora/utils/device_utils.dart';
 import 'package:pili_aurora/utils/extension/context_ext.dart';
 import 'package:pili_aurora/utils/extension/size_ext.dart';
 import 'package:pili_aurora/utils/extension/theme_ext.dart';
@@ -26,7 +27,6 @@ import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:tray_manager/tray_manager.dart' as tray;
-import 'package:win32/win32.dart' as kernel32;
 import 'package:window_manager/window_manager.dart';
 
 class MainApp extends StatefulWidget {
@@ -173,15 +173,7 @@ class _MainAppState extends PopScopeState<MainApp>
     _disposeTray();
     await GStorage.compact();
     await GStorage.close();
-    if (Platform.isWindows) {
-      // flutter_inappwebview
-      // 6.2.0-beta.2+ https://github.com/pichillilorenzo/flutter_inappwebview/issues/2482
-      // 6.1.5 https://github.com/pichillilorenzo/flutter_inappwebview/issues/2512#issuecomment-3031039587
-      final hProcess = kernel32.GetCurrentProcess();
-      kernel32.TerminateProcess(hProcess, 0);
-    } else {
-      exit(0);
-    }
+    DeviceUtils.exitApp();
   }
 
   @override

@@ -1,4 +1,4 @@
-import 'dart:async' show StreamSubscription;
+import 'dart:async' show StreamSubscription, Timer;
 
 import 'package:pili_aurora/http/loading_state.dart';
 import 'package:pili_aurora/http/search.dart';
@@ -109,7 +109,7 @@ class SearchPanelController<R extends SearchNumData<T>, T>
     gaiaVtoken: gaiaVtoken,
     onSuccess: (String gaiaVtoken) {
       this.gaiaVtoken = gaiaVtoken;
-      queryData(page == 1);
+      Timer(const Duration(milliseconds: 200), _onRequery);
     },
   );
 
@@ -117,5 +117,9 @@ class SearchPanelController<R extends SearchNumData<T>, T>
   Future<void> onReload() {
     scrollController.jumpToTop();
     return super.onReload();
+  }
+
+  void _onRequery() {
+    if (!isClosed) queryData(page == 1);
   }
 }

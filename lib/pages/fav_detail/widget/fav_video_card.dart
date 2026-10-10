@@ -62,7 +62,8 @@ class FavVideoCardH extends StatelessWidget {
             : enableMultiSelect
             ? () => ctr!.onSelect(item)
             : () {
-                if (!const [0, 16].contains(item.attr)) {
+                // 1、9 表示已删除，其他状态仍允许打开视频。
+                if (const [1, 9].contains(item.attr)) {
                   Get.toNamed('/member?mid=${item.upper?.mid}');
                   return;
                 }

@@ -24,6 +24,10 @@ abstract final class BiliUtils {
     return tagid != null && tagid != 0 && tagid != -10 && tagid != -2;
   }
 
+  static bool isFavFolderFull(int attr, int count) {
+    return count >= (isDefaultFav(attr) ? 50000 : 1000);
+  }
+
   // https://s1.hdslb.com/bfs/svg-next/font/2025-10-27/freshspace-zpjpp3aqht.css
   static Widget levelPicture(
     int level, {

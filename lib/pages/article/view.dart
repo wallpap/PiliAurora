@@ -6,6 +6,7 @@ import 'package:pili_aurora/common/widgets/flutter/refresh_indicator.dart';
 import 'package:pili_aurora/common/widgets/gesture/horizontal_drag_gesture_recognizer.dart';
 import 'package:pili_aurora/common/widgets/image/cached_image.dart';
 import 'package:pili_aurora/common/widgets/image/network_img_layer.dart';
+import 'package:pili_aurora/common/widgets/loading_widget/http_error.dart';
 import 'package:pili_aurora/common/widgets/scaffold/mini_scaffold.dart';
 import 'package:pili_aurora/common/widgets/scaffold/simple_scaffold.dart';
 import 'package:pili_aurora/common/widgets/scroll_physics.dart'
@@ -19,6 +20,7 @@ import 'package:pili_aurora/pages/article/controller.dart';
 import 'package:pili_aurora/pages/article/widgets/article_ops.dart';
 import 'package:pili_aurora/pages/article/widgets/html_render.dart';
 import 'package:pili_aurora/pages/article/widgets/opus_content.dart';
+import 'package:pili_aurora/pages/article/widgets/sliver_to_box_adapter.dart';
 import 'package:pili_aurora/pages/common/dyn/common_dyn_page.dart';
 import 'package:pili_aurora/pages/dynamics_repost/view.dart';
 import 'package:pili_aurora/utils/date_utils.dart';
@@ -44,6 +46,19 @@ class ArticlePage extends StatefulWidget {
 }
 
 class _ArticlePageState extends CommonDynPageState<ArticlePage> {
+  @override
+  bool get isArticle => true;
+
+  @override
+  Widget httpError({String? errMsg, VoidCallback? onReload}) =>
+      ArticleSliverToBoxAdapter(
+        child: HttpError(
+          isSliver: false,
+          errMsg: errMsg,
+          onReload: onReload,
+        ),
+      );
+
   @override
   final ArticleController controller = Get.putOrFind(
     ArticleController.new,

@@ -26,6 +26,7 @@ import 'package:pili_aurora/plugin/pl_player/models/heart_beat_type.dart';
 import 'package:pili_aurora/plugin/pl_player/models/play_repeat.dart';
 import 'package:pili_aurora/plugin/pl_player/models/play_status.dart';
 import 'package:pili_aurora/plugin/pl_player/models/video_fit_type.dart';
+import 'package:pili_aurora/plugin/pl_player/utils/danmaku_options.dart';
 import 'package:pili_aurora/plugin/pl_player/utils/fullscreen.dart';
 import 'package:pili_aurora/plugin/pl_player/utils/decode_fallback.dart';
 import 'package:pili_aurora/plugin/pl_player/utils/android_decode_recovery.dart';
@@ -562,9 +563,9 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
 
     if (Platform.isAndroid && autoPiP) {
       if (DeviceUtils.sdkInt < 31) {
-        AndroidHelper$ToDart.onUserLeaveHint = Runnable.implement(
-          $Runnable(run: _onUserLeaveHint),
-        );
+        final callback = Runnable.implement($Runnable(run: _onUserLeaveHint));
+        AndroidHelper$ToDart.onUserLeaveHint = callback;
+        callback.release();
       } else {
         _isAutoEnterPip = true;
       }
@@ -800,6 +801,10 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
           ),
         ),
       );
+      if (Platform.isAndroid) {
+        // 输出初始化后关闭空闲窗口，避免其参数污染下一份媒体的首帧尺寸。
+        player.setProperty('force-window', 'no');
+      }
       player.setMediaHeader(
         userAgent: BrowserUa.pc,
         referer: HttpString.baseUrl,
@@ -1352,12 +1357,9 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
     if (danmakuController != null) {
       try {
         DanmakuOption currentOption = danmakuController!.option;
-        double defaultDuration = currentOption.duration * lastPlaybackSpeed;
-        double defaultStaticDuration =
-            currentOption.staticDuration * lastPlaybackSpeed;
         DanmakuOption updatedOption = currentOption.copyWith(
-          duration: defaultDuration / speed,
-          staticDuration: defaultStaticDuration / speed,
+          duration: DanmakuOptions.danmakuDuration / speed,
+          staticDuration: DanmakuOptions.danmakuStaticDuration / speed,
         );
         danmakuController!.updateOption(updatedOption);
       } catch (error, stackTrace) {
@@ -1830,7 +1832,6 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
       _clearPreview();
     }
     if (Platform.isAndroid) {
-      AndroidHelper$ToDart.onUserLeaveHint?.release();
       AndroidHelper$ToDart.onUserLeaveHint = null;
     }
     _timer?.cancel();
@@ -1942,56 +1943,83 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
     }
   }
 
+  bool _takingScreenshot = false;
   Future<void> takeScreenshot() async {
+    if (_takingScreenshot) return;
+    _takingScreenshot = true;
+    try {
+      await _showScreenshot();
+    } finally {
+      _takingScreenshot = false;
+    }
+  }
+
+  Future<void> _showScreenshot() async {
     SmartDialog.showToast('截图中');
     final image = await videoPlayerController?.screenshot();
     if (image != null) {
+      Future<void>? saveTask;
       SmartDialog.showToast('点击弹窗保存截图');
-      final dispose = await showDialog<bool>(
-        context: Get.context!,
-        builder: (context) => GestureDetector(
-          onTap: () async {
-            Get.back(result: false);
-            final bytes = await image.toByteData(format: .png);
-            image.dispose();
-            if (bytes != null) {
-              final time = DurationUtils.formatDuration(
-                positionInMilliseconds / 1000,
-              ).replaceAll(':', '-');
-              ImageUtils.saveByteImg(
-                bytes: bytes.buffer.asUint8List(),
-                fileName: 'screenshot_${cid}_$time',
-              );
-            } else {
-              SmartDialog.showToast('保存失败');
-            }
-          },
-          child: Align(
-            alignment: Alignment.centerRight,
-            child: Padding(
-              padding: const EdgeInsets.only(right: 12),
-              child: ConstrainedBox(
-                constraints: BoxConstraints(
-                  maxWidth: min(MediaQuery.widthOf(context) / 3, 350),
-                ),
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    border: Border.all(
-                      width: 5,
-                      color: ColorScheme.of(context).surface,
-                    ),
+      try {
+        await showDialog<void>(
+          context: Get.context!,
+          builder: (context) => GestureDetector(
+            onTap: () {
+              if (saveTask != null) return;
+              saveTask = () async {
+                try {
+                  final bytes = await image.toByteData(format: .png);
+                  if (bytes != null) {
+                    final time = DurationUtils.formatDuration(
+                      positionInMilliseconds / 1000,
+                    ).replaceAll(':', '-');
+                    await ImageUtils.saveByteImg(
+                      bytes: bytes.buffer.asUint8List(),
+                      fileName: 'screenshot_${cid}_$time',
+                    );
+                  } else {
+                    SmartDialog.showToast('保存失败');
+                  }
+                } catch (error, stackTrace) {
+                  logger.w('保存截图失败', error: error, stackTrace: stackTrace);
+                  SmartDialog.showToast('保存失败');
+                } finally {
+                  if (context.mounted) Navigator.of(context).pop();
+                }
+              }();
+            },
+            child: Align(
+              alignment: Alignment.centerRight,
+              child: Padding(
+                padding: const EdgeInsets.only(right: 12),
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(
+                    maxWidth: min(MediaQuery.widthOf(context) / 3, 350),
                   ),
-                  child: Padding(
-                    padding: const EdgeInsets.all(5),
-                    child: RawImage(image: image),
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      border: Border.all(
+                        width: 5,
+                        color: ColorScheme.of(context).surface,
+                      ),
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.all(5),
+                      child: RawImage(image: image),
+                    ),
                   ),
                 ),
               ),
             ),
           ),
-        ),
-      );
-      if (dispose ?? true) image.dispose();
+        );
+      } finally {
+        try {
+          await saveTask;
+        } finally {
+          image.dispose();
+        }
+      }
     } else {
       SmartDialog.showToast('截图失败');
     }

@@ -32,7 +32,7 @@ void main() {
     );
 
     expect(configuration.hwdec, 'auto-copy,no');
-    expect(configuration.androidAttachSurfaceAfterVideoParameters, isFalse);
+    expect(configuration.androidAttachSurfaceAfterVideoParameters, isTrue);
   }, skip: !Platform.isWindows);
 
   test('Windows auto-copy preserves explicitly configured direct backends', () {
