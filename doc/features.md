@@ -55,14 +55,14 @@ flowchart TD
 - 页面：`lib/pages/danmaku/`、`danmaku_block/`、`main_reply/`、`my_reply/`。
 - API/模型：`lib/http/danmaku.dart`、`reply.dart`，`lib/models/remote/danmaku/`、`reply/`。
 - 渲染：通用组件和播放器插件；直播弹幕另走直播间链路。
-- 风险：视频弹幕和直播消息不是同一种生命周期；高密度 Windows 场景必须结合 `doc/dev/windows-danmaku-experiments.md`。
+- 风险：视频弹幕和直播消息采用不同的生命周期；修改渲染或消息队列时分别检查对应代码和回归测试。
 
 ## 直播
 
 - 页面：`lib/pages/live/`、`live_room/`、`live_search/`、`live_follow/`、`live_dm_block/`。
 - API：`lib/http/live.dart`。
 - 服务：`lib/services/live_stream/live.dart`、`live_packet.dart`、`live_packet_decoder.dart`。
-- 排障：拆分连接、包解码、历史/未读积压、消息渲染和退出清理；容量边界参见 `doc/dev/live-chat-limits-2026-09-30.md`。
+- 排障：分别检查连接、包解码、历史与未读消息、渲染和退出清理。
 
 ## 账号、登录与会员
 

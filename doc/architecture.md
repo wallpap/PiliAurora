@@ -2,7 +2,7 @@
 
 > 供首次接手项目的开发者和 AI 代理查找代码入口。
 >
-> 架构记录始于 2026-10-06 的启动层和下载持久化重构。接口及分支状态会继续变化，使用时请核对当前检出的代码。
+> 本文按当前目录和实现整理。代码与配置发生变化时，以当前检出的仓库为准。
 
 ## 1. 项目定位
 
@@ -44,7 +44,7 @@ Flutter 应用（lib/）
 | --- | --- |
 | Flutter | `3.47.5`，由 `.fvmrc` 固定 |
 | Dart | SDK `>=3.13.0` |
-| 应用版本 | `pubspec.yaml` 中为 `1.0.0+39` |
+| 应用版本 | `pubspec.yaml` 中为 `1.0.7+105` |
 | 状态/路由 | 使用仓库 fork 的 GetX；路由集中在 `lib/router/app_pages.dart` |
 | HTTP | Dio 及自定义初始化、重试、响应解码/转换代码 |
 | 本地存储 | Hive CE 及项目自己的 `GStorage`、`Pref`、存储键定义 |
@@ -308,13 +308,6 @@ app/bootstrap.dart
 
 ## 8. Android 与 JDK 25：当前构建事实
 
-`origin/main` 最近的相关提交为：
-
-- `0ee496629`（2026-10-05）：将 Android 构建迁移到 JDK 25；
-- `41f7c740b`（2026-10-06）：将 Android 模块的 Java/Kotlin target 统一为 25；
-- `8b4ef00bc`（2026-10-06）：为 Android 资源增加 `tools:targetApi` 标注并抑制特定 lint 的 `MissingClass`；
-- `0467272a3`（2026-10-06）：合并上述重建分支后的当前 `origin/main`。
-
 当前 Android 配置中可以直接确认：
 
 - Gradle wrapper 为 `9.6.0`；
@@ -356,58 +349,6 @@ JDK 25 是构建工具链要求，不代表应用可以调用 Android API 25 的
 
 README 已记录项目对 Android MediaCodec 输出异常恢复、Windows 硬件解码/弹幕路径、直播包和下载写入回压、结构化诊断等方向的改动。具体回退顺序仍以当前实现和测试为准。
 
-## 10. 给新人的推荐阅读路径
+## 阅读提示
 
-1. 先读根目录 `README.md`，确认平台范围、构建要求和项目与上游的关系。
-2. 阅读本文，建立目录、启动链路和平台边界的整体模型。
-3. 从 `lib/main.dart` 进入 `lib/app/bootstrap.dart` 与 `lib/app/app.dart`，理解启动顺序、服务装配和根 Widget；再按需阅读平台准备、主题和视口模块。
-4. 阅读 `lib/router/app_pages.dart`，确认目标功能的路由名和页面入口。
-5. 进入目标 `lib/pages/<功能域>/`，从 `view.dart`、`controller.dart`、私有 `widgets/` 开始。
-6. 沿 controller/view 的 import 查找对应 `lib/http/`、`lib/models/`、`lib/services/` 和 `lib/utils/`。
-7. 如果涉及播放、直播、下载、账号或诊断，再阅读对应 service、平台代码和 `test/`。
-8. 修改后运行与改动匹配的检查，至少考虑 `fvm flutter analyze`、相关 Flutter 测试和对应平台构建。
-
-## 11. 给 AI/自动化修改的工作约定
-
-### 11.1 先确认事实
-
-- 先读取目标文件及其直接调用方，不要凭目录名臆测职责。
-- 先检查 `git status`，保留现有改动，不要覆盖无关文件。
-- 需要判断“最新配置”时，以当前 `origin/main`、实际 Gradle 文件和 `pubspec.yaml` 为准。
-- 依赖行为以 `pubspec.yaml`、`dependency_overrides`、`pubspec.lock` 和实际 import 共同确认。
-
-### 11.2 修改边界
-
-- 页面行为改动通常同时检查 route、view、controller、models/API 和测试。
-- 设置改动同时检查 `Pref`、`GStorage`、`SettingBoxKey`、默认值和迁移/兼容。
-- 播放器改动同时检查 Android/Windows 差异、回退路径和诊断；不要只修 UI 表象。
-- 不直接手改 `lib/grpc/` 和 JNI 生成文件，除非任务明确要求修改生成结果；优先修改源定义或生成脚本后重新生成。
-- 不把 JDK 25 与 Android API level 25 混为一谈。
-- 不把 `tools:targetApi` 或 lint 抑制当作运行时兼容性验证。
-- 不为让检查“通过”而删除测试、降低断言、关闭 lint 或吞掉异常。
-
-### 11.3 验证与报告
-
-报告中请分别说明：
-
-- 已实际修改的文件；
-- 实际执行过的检查及结果；
-- 仅根据代码推断、尚未实测的内容；
-- 仍需设备、驱动、网络、凭据或发布环境才能确认的风险。
-
-## 12. 待核实项
-
-以下问题需要在相关改动中重新确认：
-
-1. 跨平台实测范围：本文根据仓库配置记录 Android 和 Windows x64 为维护目标；没有在本文中验证每个版本的真实设备、显卡、驱动、WebView 和音频环境。
-2. JDK 25 发布构建兼容性：仓库已固定 Gradle/AGP/Kotlin/JDK 配置，但具体 CI、签名发布和每个 Flutter 插件在当前环境的构建结果仍应通过实际构建确认。
-3. 定制依赖行为：根依赖已固定版本，定制包也已纳入仓库；排查时仍须核对来源和本地修改，不能只依据 `pubspec.yaml` 中的包名判断行为。
-4. 远端 API 契约：Bilibili 接口、直播协议、弹幕格式、登录流程和第三方服务可能变化，模型文件不能代替在线接口验证。
-5. 页面生命周期：GetX controller 的创建、复用、销毁和返回栈行为需要按具体页面确认，本文不假设所有页面采用相同生命周期。
-6. 本地数据兼容：具体 Hive box、存储键、缓存格式、下载记录和历史诊断文件的迁移策略需要查看对应实现，本文没有替代迁移文档。
-7. 生成代码来源：`lib/grpc/` 和 JNI bindings 的完整源定义、生成参数和版本约束需要在相关任务中沿 `tool/`、Android 工程和依赖仓库进一步确认。
-8. 平台回退顺序：播放器硬解、MediaCodec、AV1、音频和 WebView 的最终回退顺序以代码、日志和真实设备/媒体文件测试为准。
-
----
-
-定位代码时，先从 `main.dart` 进入 `app/` 理解启动装配和全局边界，再用 `app_pages.dart` 找页面入口，沿实际 import 连接 `pages → http/services/models/common/utils/plugin`；涉及播放器、生成代码、Android/JDK 25 或本地数据时，不要只改表面文件，必须把对应的平台配置、生成链路和测试一起核对。
+本文提供目录和调用边界的导航。修改具体功能时，沿当前源码中的 import 和调用关系确认实现；构建与验证命令见 [构建与测试](build-and-test.md)。

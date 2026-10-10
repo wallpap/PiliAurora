@@ -28,13 +28,13 @@ python tool/native_media_smoke.py --library build/windows/x64/runner/Debug/libmp
 python tool/native_media_smoke.py --library build/windows/x64/runner/Debug/libmpv-2.dll --video <本地视频文件> --seek-target 2.4
 ```
 
-该检查使用 Windows libmpv、空音视频输出与软件解码，不包含 Android GPU/MediaCodec、实际扬声器或完整应用性能测试。诊断与实机验收见 `doc/android_fixed_output_diagnostics.md`。
+该检查使用 Windows libmpv、空音视频输出与软件解码，不包含 Android GPU/MediaCodec、实际扬声器或完整应用性能测试。涉及设备画面和硬件解码的结果仍需在目标设备上验证。
 
 ## 依赖版本与来源检查
 
 ```powershell
-dart run tool/check_dependencies.dart
-flutter test --no-pub test/architecture/dependency_policy_test.dart test/common/widgets/font_awesome_icons_test.dart
+fvm dart run tool/check_dependencies.dart
+fvm flutter test --no-pub test/architecture/dependency_policy_test.dart test/common/widgets/font_awesome_icons_test.dart
 ```
 
 该工具只读取工作区文件，检查 Git 来源、path 范围、来源 SHA、许可证、版本登记与锁文件一致性，也检查合并来源的目录和许可证登记。可用位置参数检查指定工作区。普通更新与本地定制包更新流程见 `third_party/README.md`。本地构建和 CI 会在解析依赖后检查；构建使用 `--enforce-lockfile`，版本更新需显式运行 `flutter pub get` 或针对包执行 `flutter pub upgrade` 后提交锁文件。
