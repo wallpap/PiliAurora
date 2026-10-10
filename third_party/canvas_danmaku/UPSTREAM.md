@@ -1,6 +1,6 @@
 # canvas_danmaku 本地版本
 
-- 本地版本：`0.2.6+piliaurora.1`；来源包版本：`0.2.6`。
+- 本地版本：`0.2.6+piliaurora.2`；来源包版本：`0.2.6`。
 - 来源仓库：https://github.com/bggRGjQaUbCoE/canvas_danmaku.git
 - 来源提交：`275046d8647a6a26cba1d0dadb9e28688cb3dbf1`。
 - 来源子目录：`.`。

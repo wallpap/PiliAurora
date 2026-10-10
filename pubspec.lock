@@ -221,7 +221,7 @@ packages:
       path: "third_party/canvas_danmaku"
       relative: true
     source: path
-    version: "0.2.6+piliaurora.1"
+    version: "0.2.6+piliaurora.2"
   catcher_2:
     dependency: "direct main"
     description:

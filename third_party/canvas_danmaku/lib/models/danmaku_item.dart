@@ -37,6 +37,7 @@ class DanmakuItem<T> {
   void dispose() {
     image?.dispose();
     image = null;
+    content.dispose();
   }
 
   DanmakuItem({

@@ -1,9 +1,24 @@
 import 'dart:math' show pi;
+import 'dart:ui' as ui;
 
 import 'package:flutter/foundation.dart' show objectRuntimeType;
 import 'package:material_ui/material_ui.dart';
 
 enum DanmakuItemType { scroll, top, bottom, special }
+
+class DanmakuInlineImage {
+  const DanmakuInlineImage({
+    required this.placeholder,
+    required this.image,
+    required this.width,
+    required this.height,
+  });
+
+  final String placeholder;
+  final ui.Image image;
+  final double width;
+  final double height;
+}
 
 class DanmakuContentItem<T> {
   /// 弹幕文本
@@ -26,6 +41,9 @@ class DanmakuContentItem<T> {
 
   final T? extra;
 
+  final List<DanmakuInlineImage> inlineImages;
+  bool _disposed = false;
+
   DanmakuContentItem(
     this.text, {
     this.color = Colors.white,
@@ -34,7 +52,16 @@ class DanmakuContentItem<T> {
     this.isColorful = false,
     this.count,
     this.extra,
+    this.inlineImages = const [],
   });
+
+  void dispose() {
+    if (_disposed) return;
+    _disposed = true;
+    for (final item in inlineImages) {
+      item.image.dispose();
+    }
+  }
 
   @override
   String toString() {

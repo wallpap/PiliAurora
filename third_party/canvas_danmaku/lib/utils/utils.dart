@@ -18,6 +18,61 @@ abstract final class DmUtils {
 
   static String? fontFamily;
 
+  static List<DanmakuInlineImage> _imagesInText(
+    String text,
+    List<DanmakuInlineImage> inlineImages,
+  ) {
+    if (inlineImages.isEmpty) return const [];
+    final byPlaceholder = {
+      for (final image in inlineImages)
+        if (image.placeholder.isNotEmpty) image.placeholder: image,
+    };
+    if (byPlaceholder.isEmpty) return const [];
+    final pattern = RegExp(
+      (byPlaceholder.keys.map(RegExp.escape).toList()
+            ..sort((a, b) => b.length.compareTo(a.length)))
+          .join('|'),
+    );
+    return [
+      for (final match in pattern.allMatches(text)) byPlaceholder[match[0]]!,
+    ];
+  }
+
+  static void _addText(
+    ui.ParagraphBuilder builder,
+    DanmakuContentItem content,
+  ) {
+    final byPlaceholder = {
+      for (final image in content.inlineImages)
+        if (image.placeholder.isNotEmpty) image.placeholder: image,
+    };
+    if (byPlaceholder.isEmpty) {
+      builder.addText(content.text);
+      return;
+    }
+    final pattern = RegExp(
+      (byPlaceholder.keys.map(RegExp.escape).toList()
+            ..sort((a, b) => b.length.compareTo(a.length)))
+          .join('|'),
+    );
+    var offset = 0;
+    for (final match in pattern.allMatches(content.text)) {
+      if (match.start > offset) {
+        builder.addText(content.text.substring(offset, match.start));
+      }
+      final image = byPlaceholder[match[0]]!;
+      builder.addPlaceholder(
+        image.width,
+        image.height,
+        ui.PlaceholderAlignment.middle,
+      );
+      offset = match.end;
+    }
+    if (offset < content.text.length) {
+      builder.addText(content.text.substring(offset));
+    }
+  }
+
   static ui.Paragraph generateParagraph({
     required DanmakuContentItem content,
     required double fontSize,
@@ -41,9 +96,8 @@ abstract final class DmUtils {
         ..pop();
     }
 
-    builder
-      ..pushStyle(ui.TextStyle(color: content.color, fontSize: fontSize))
-      ..addText(content.text);
+    builder.pushStyle(ui.TextStyle(color: content.color, fontSize: fontSize));
+    _addText(builder, content);
 
     return builder.build()
       ..layout(const ui.ParagraphConstraints(width: double.infinity));
@@ -101,9 +155,8 @@ abstract final class DmUtils {
           ..pop();
       }
 
-      builder
-        ..pushStyle(ui.TextStyle(fontSize: fontSize, foreground: strokePaint))
-        ..addText(content.text);
+      builder.pushStyle(ui.TextStyle(fontSize: fontSize, foreground: strokePaint));
+      _addText(builder, content);
 
       final strokeParagraph = builder.build()
         ..layout(const ui.ParagraphConstraints(width: double.infinity));
@@ -113,6 +166,17 @@ abstract final class DmUtils {
     }
 
     canvas.drawParagraph(contentParagraph, offset);
+    final boxes = contentParagraph.getBoxesForPlaceholders();
+    final images = _imagesInText(content.text, content.inlineImages);
+    for (var i = 0; i < min(boxes.length, images.length); i++) {
+      final image = images[i].image;
+      canvas.drawImageRect(
+        image,
+        Rect.fromLTWH(0, 0, image.width.toDouble(), image.height.toDouble()),
+        boxes[i].toRect().shift(offset),
+        Paint()..filterQuality = FilterQuality.medium,
+      );
+    }
 
     if (content.selfSend) {
       w += 4;

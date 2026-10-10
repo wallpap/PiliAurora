@@ -1,7 +1,7 @@
 name: canvas_danmaku
 publish_to: none
 description: "A high performance danmaku lib for flutter."
-version: 0.2.6+piliaurora.1
+version: 0.2.6+piliaurora.2
 #author: Predidit <i@predidit.com>
 homepage: https://github.com/Predidit/canvas_danmaku
 

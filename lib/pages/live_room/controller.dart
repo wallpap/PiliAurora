@@ -1,9 +1,12 @@
-import 'dart:async' show Timer, StreamSubscription;
+import 'dart:async' show Completer, Timer, StreamSubscription, unawaited;
 import 'dart:convert' show jsonDecode;
 import 'dart:io' show Platform;
 import 'dart:math' as math;
+import 'dart:ui' as ui;
 
 import 'package:pili_aurora/common/widgets/dialog/report.dart';
+import 'package:pili_aurora/common/widgets/image/cached_image.dart'
+    show CachedImageProvider;
 import 'package:pili_aurora/common/widgets/flutter/text_field/controller.dart';
 import 'package:pili_aurora/http/live.dart';
 import 'package:pili_aurora/http/loading_state.dart';
@@ -36,6 +39,7 @@ import 'package:pili_aurora/utils/danmaku_utils.dart';
 import 'package:pili_aurora/utils/duration_utils.dart';
 import 'package:pili_aurora/utils/extension/iterable_ext.dart';
 import 'package:pili_aurora/utils/global_data.dart';
+import 'package:pili_aurora/utils/image_utils.dart';
 import 'package:pili_aurora/utils/num_utils.dart';
 import 'package:pili_aurora/utils/platform_utils.dart';
 import 'package:pili_aurora/utils/storage_pref.dart';
@@ -598,6 +602,114 @@ class LiveRoomController extends GetxController {
     _scheduleMessageRefresh();
   }
 
+  void _addEmoteDanmaku(
+    String text, {
+    required LiveDanmaku extra,
+    required Map<String, BaseEmote> emotes,
+    required Color color,
+    required DanmakuItemType type,
+    required bool selfSend,
+  }) {
+    if (!plPlayerController.showDanmaku ||
+        !plPlayerController.enableShowLiveDanmaku.value ||
+        danmakuController == null) {
+      return;
+    }
+    unawaited(() async {
+      final fontSize = danmakuController?.option.fontSize ?? 25.0;
+      final inlineImages = <DanmakuInlineImage>[];
+      DanmakuContentItem<DanmakuExtra>? item;
+      try {
+        for (final entry in emotes.entries) {
+          if (entry.key.isEmpty || !text.contains(entry.key)) continue;
+          final emote = entry.value;
+          final naturalWidth = emote.width.isFinite && emote.width > 0
+              ? emote.width
+              : fontSize;
+          final naturalHeight = emote.height.isFinite && emote.height > 0
+              ? emote.height
+              : fontSize;
+          final scale = math.min(
+            1.0,
+            fontSize * 1.5 / math.max(naturalWidth, naturalHeight),
+          );
+          final width = naturalWidth * scale;
+          final height = naturalHeight * scale;
+          final image = await _loadDanmakuEmote(emote.url);
+          if (image != null) {
+            inlineImages.add(
+              DanmakuInlineImage(
+                placeholder: entry.key,
+                image: image,
+                width: width,
+                height: height,
+              ),
+            );
+          }
+        }
+        item = DanmakuContentItem<DanmakuExtra>(
+          text,
+          color: color,
+          type: type,
+          selfSend: selfSend,
+          extra: extra,
+          inlineImages: inlineImages,
+        );
+        final controller = danmakuController;
+        if (isClosed ||
+            !plPlayerController.showDanmaku ||
+            !plPlayerController.enableShowLiveDanmaku.value ||
+            controller == null ||
+            !controller.addDanmaku(item)) {
+          item.dispose();
+        }
+      } catch (_) {
+        if (item != null) {
+          item.dispose();
+        } else {
+          for (final image in inlineImages) {
+            image.image.dispose();
+          }
+        }
+      }
+    }());
+  }
+
+  Future<ui.Image?> _loadDanmakuEmote(String url) async {
+    try {
+      final stream = CachedImageProvider(
+        ImageUtils.thumbnailUrl(url),
+        maxDecodePixels: 1 << 16,
+      ).resolve(ImageConfiguration.empty);
+      final completer = Completer<ui.Image?>();
+      late final ImageStreamListener listener;
+      late final Timer timeout;
+      void finish(ui.Image? image) {
+        if (completer.isCompleted) {
+          image?.dispose();
+          return;
+        }
+        completer.complete(image);
+        timeout.cancel();
+        stream.removeListener(listener);
+      }
+
+      listener = ImageStreamListener(
+        (info, _) {
+          final image = info.image.clone();
+          info.dispose();
+          finish(image);
+        },
+        onError: (Object _, StackTrace? _) => finish(null),
+      );
+      timeout = Timer(const Duration(seconds: 5), () => finish(null));
+      stream.addListener(listener);
+      return await completer.future;
+    } catch (_) {
+      return null;
+    }
+  }
+
   @pragma('vm:notify-debugger-on-exception')
   void _danmakuListener(dynamic obj) {
     try {
@@ -636,31 +748,46 @@ class LiveRoomController extends GetxController {
               name: extra['reply_uname'],
             );
           }
-          addDm(
-            DanmakuMsg(
-              name: name,
-              text: msg,
-              emots: (extra['emots'] as Map<String, dynamic>?)?.map(
-                (k, v) => MapEntry(k, BaseEmote.fromJson(v)),
-              ),
-              uemote: uemote,
-              extra: liveExtra,
-              reply: reply,
-              medalInfo: !GlobalData().showMedal || user['medal'] == null
-                  ? null
-                  : UinfoMedal.fromJson(user['medal']),
-            ),
-            DanmakuContentItem(
-              msg,
-              color: DanmakuOptions.blockColorful
-                  ? Colors.white
-                  : DmUtils.decimalToColor(extra['color']),
-              type: DmUtils.getPosition(extra['mode']),
-              // extra['send_from_me'] is invalid
-              selfSend: isLogin && uid == mid,
-              extra: liveExtra,
-            ),
+          final emots = (extra['emots'] as Map<String, dynamic>?)?.map(
+            (k, v) => MapEntry(k, BaseEmote.fromJson(v)),
           );
+          final danmaku = DanmakuMsg(
+            name: name,
+            text: msg,
+            emots: emots,
+            uemote: uemote,
+            extra: liveExtra,
+            reply: reply,
+            medalInfo: !GlobalData().showMedal || user['medal'] == null
+                ? null
+                : UinfoMedal.fromJson(user['medal']),
+          );
+          final danmakuContent = DanmakuContentItem<DanmakuExtra>(
+            msg,
+            color: DanmakuOptions.blockColorful
+                ? Colors.white
+                : DmUtils.decimalToColor(extra['color']),
+            type: DmUtils.getPosition(extra['mode']),
+            // extra['send_from_me'] is invalid
+            selfSend: isLogin && uid == mid,
+            extra: liveExtra,
+          );
+          if (uemote != null || emots?.isNotEmpty == true) {
+            addDm(danmaku);
+            final emoteText = msg.isEmpty && uemote != null
+                ? uemote.emoticonUnique
+                : msg;
+            _addEmoteDanmaku(
+              emoteText,
+              extra: liveExtra,
+              emotes: uemote == null ? emots! : {emoteText: uemote},
+              color: danmakuContent.color,
+              type: danmakuContent.type,
+              selfSend: danmakuContent.selfSend,
+            );
+          } else {
+            addDm(danmaku, danmakuContent);
+          }
           break;
         case 'SUPER_CHAT_MESSAGE' when showSuperChat:
           final item = SuperChatItem.fromJson(obj['data'], roomId);
