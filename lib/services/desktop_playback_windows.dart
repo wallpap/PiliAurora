@@ -388,12 +388,17 @@ class DesktopPlaybackWindows with WindowListener {
     if (_closing) return;
     _closing = true;
     _boundsTimer?.cancel();
-    final bounds = await windowManager.getBounds();
+    final bounds =
+        await windowManager.isMinimized() || await windowManager.isFullScreen()
+        ? null
+        : await windowManager.getBounds();
     await onPlayerClose?.call();
     if (_childSocket?.readyState == WebSocket.open) {
-      _childSocket!.add(
-        jsonEncode({'type': 'bounds', 'bounds': _rectValues(bounds)}),
-      );
+      if (bounds != null) {
+        _childSocket!.add(
+          jsonEncode({'type': 'bounds', 'bounds': _rectValues(bounds)}),
+        );
+      }
       await _childSocket!.close();
     }
     await _childSubscription?.cancel();

@@ -37,6 +37,7 @@ import 'package:pili_aurora/pages/video/introduction/ugc/widgets/menu_row.dart';
 import 'package:pili_aurora/pages/video/widgets/header_mixin.dart';
 import 'package:pili_aurora/plugin/pl_player/controller.dart';
 import 'package:pili_aurora/plugin/pl_player/widgets/desktop_playback_menu.dart';
+import 'package:pili_aurora/plugin/pl_player/widgets/desktop_window_controls.dart';
 import 'package:pili_aurora/plugin/pl_player/models/data_source.dart';
 import 'package:pili_aurora/plugin/pl_player/models/play_repeat.dart';
 import 'package:pili_aurora/services/shutdown_timer_service.dart'
@@ -1723,6 +1724,9 @@ class HeaderControlState extends State<HeaderControl>
       title = const Spacer();
     }
 
+    final compactWindow =
+        plPlayerController.isDesktopPip &&
+        MediaQuery.sizeOf(context).width < 640;
     const btnWidth = 42.0;
     const btnHeight = 34.0;
     const btnStyle = ButtonStyle(padding: WidgetStatePropertyAll(.zero));
@@ -1732,23 +1736,32 @@ class HeaderControlState extends State<HeaderControl>
       child: Column(
         mainAxisSize: .min,
         children: [
+          if (compactWindow)
+            Row(
+              children: [
+                title,
+                ...?timeBatteryWidgets,
+                DesktopWindowControls(controller: plPlayerController),
+              ],
+            ),
           Row(
             children: [
-              SizedBox(
-                width: btnWidth,
-                height: btnHeight,
-                child: IconButton(
-                  tooltip: '返回',
-                  style: btnStyle,
-                  icon: Icon(
-                    FontAwesomeIcons.arrowLeft.data,
-                    size: 15,
-                    color: Colors.white,
+              if (!plPlayerController.isDesktopPip)
+                SizedBox(
+                  width: btnWidth,
+                  height: btnHeight,
+                  child: IconButton(
+                    tooltip: '返回',
+                    style: btnStyle,
+                    icon: Icon(
+                      FontAwesomeIcons.arrowLeft.data,
+                      size: 15,
+                      color: Colors.white,
+                    ),
+                    onPressed: () =>
+                        plPlayerController.onPopInvokedWithResult(false, null),
                   ),
-                  onPressed: () =>
-                      plPlayerController.onPopInvokedWithResult(false, null),
                 ),
-              ),
               if (!plPlayerController.isDesktopPip &&
                   (!isFullScreen || !isPortrait))
                 SizedBox(
@@ -1765,9 +1778,11 @@ class HeaderControlState extends State<HeaderControl>
                     onPressed: plPlayerController.onCloseAll,
                   ),
                 ),
-              title,
-              // show current datetime
-              ...?timeBatteryWidgets,
+              if (!compactWindow) ...[
+                title,
+                ...?timeBatteryWidgets,
+              ] else
+                const Spacer(),
               if (PlatformUtils.isDesktop)
                 Obx(() {
                   final isAlwaysOnTop = plPlayerController.isAlwaysOnTop.value;
@@ -1963,6 +1978,8 @@ class HeaderControlState extends State<HeaderControl>
                   ),
                 ),
               ),
+              if (plPlayerController.isDesktopPip && !compactWindow)
+                DesktopWindowControls(controller: plPlayerController),
             ],
           ),
           if (showFSActionItem)

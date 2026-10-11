@@ -1298,6 +1298,7 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
   void setControlsMenuOpen(bool value) {
     controlsMenuOpen = value;
     if (value) {
+      controls = true;
       _timer?.cancel();
     } else {
       hideTaskControls();
@@ -1392,6 +1393,8 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
   }
 
   set controls(bool visible) {
+    // 浮层会使画面收到鼠标离开事件；菜单操作期间保持锚点所在的控件栏可见。
+    if (!visible && controlsMenuOpen) return;
     showControls.value = visible;
     _timer?.cancel();
     if (visible) {
@@ -1551,14 +1554,15 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
     DeviceOrientation? orientation,
     bool isManualFS = true,
   }) async {
-    if (isDesktopPip) return;
     if (isFullScreen.value == status) return;
 
     if (_fsProcessing) return;
     _fsProcessing = true;
     this.isManualFS = isManualFS;
     try {
-      if (status) {
+      if (isDesktopPip) {
+        await windowManager.setFullScreen(status);
+      } else if (status) {
         if (PlatformUtils.isMobile) {
           hideSystemBar();
           await changeOrientation(
@@ -1945,12 +1949,12 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
       onLockControl(false);
       return;
     }
-    if (isDesktopPip) {
-      exitDesktopPip();
-      return;
-    }
     if (isFullScreen.value) {
       triggerFullScreen(status: false);
+      return;
+    }
+    if (isDesktopPip) {
+      exitDesktopPip();
       return;
     }
     Get.back();
