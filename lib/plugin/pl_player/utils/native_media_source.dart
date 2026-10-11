@@ -52,6 +52,7 @@ Future<bool> reloadNativeMedia({
   DataSource? source,
   bool audioOnly = false,
   bool Function()? isCurrent,
+  bool Function()? shouldPlay,
 }) async {
   if (player.disposed ||
       player.current.isEmpty ||
@@ -68,6 +69,8 @@ Future<bool> reloadNativeMedia({
           extras: current.extras ?? const {},
         );
   final playing = player.state.playing;
-  await player.open(media, play: playing);
+  await player.open(media, play: false);
+  if (player.disposed || !(isCurrent?.call() ?? true)) return false;
+  if (shouldPlay?.call() ?? playing) await player.play();
   return true;
 }

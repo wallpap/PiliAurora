@@ -45,7 +45,6 @@ VideoOutput::VideoOutput(int64_t handle,
             static_cast<int32_t>(width_.value_or(1)),
             static_cast<int32_t>(height_.value_or(1)));
         surface_manager_->MakeCurrent(true);
-        Resize(width_.value_or(1), height_.value_or(1));
         mpv_opengl_init_params gl_init_params{
             [](auto, auto name) {
               return reinterpret_cast<void*>(eglGetProcAddress(name));
@@ -59,16 +58,6 @@ VideoOutput::VideoOutput(int64_t handle,
         };
         // Create render context.
         if (mpv_render_context_create(&render_context_, handle_, params) == 0) {
-          mpv_render_context_set_update_callback(
-              render_context_,
-              [](void* context) {
-                // Notify Flutter that a new frame is available. The actual
-                // rendering will take place in the |Render| method, which will
-                // be called by Flutter on the render thread.
-                auto that = reinterpret_cast<VideoOutput*>(context);
-                that->NotifyRender();
-              },
-              reinterpret_cast<void*>(this));
           // Set flag to true, indicating that H/W rendering is supported.
           is_hardware_acceleration_enabled = true;
           std::cout << "media_kit: VideoOutput: Using H/W rendering."
@@ -81,6 +70,12 @@ VideoOutput::VideoOutput(int64_t handle,
       }
     }
     if (!is_hardware_acceleration_enabled) {
+      // 后端确定前不注册纹理；回退时释放 GL 资源，保持软硬输出互斥。
+      if (render_context_ != nullptr) {
+        mpv_render_context_free(render_context_);
+        render_context_ = nullptr;
+      }
+      surface_manager_.reset();
       std::cout << "media_kit: VideoOutput: Using S/W rendering." << std::endl;
       // Allocate a "large enough" buffer ahead of time.
       pixel_buffer_ =
@@ -94,23 +89,21 @@ VideoOutput::VideoOutput(int64_t handle,
         height_ = std::clamp(*height_, int64_t{1},
                              int64_t{SW_RENDERING_MAX_HEIGHT});
       }
-      Resize(width_.value_or(1), height_.value_or(1));
       mpv_render_param params[] = {
           {MPV_RENDER_PARAM_API_TYPE, MPV_RENDER_API_TYPE_SW},
           {MPV_RENDER_PARAM_INVALID, nullptr},
       };
-      if (mpv_render_context_create(&render_context_, handle_, params) == 0) {
-        mpv_render_context_set_update_callback(
-            render_context_,
-            [](void* context) {
-              // Notify Flutter that a new frame is available. The actual
-              // rendering will take place in the |Render| method, which will be
-              // called by Flutter on the render thread.
-              auto that = reinterpret_cast<VideoOutput*>(context);
-              that->NotifyRender();
-            },
-            reinterpret_cast<void*>(this));
-      }
+      mpv_render_context_create(&render_context_, handle_, params);
+    }
+    Resize(width_.value_or(1), height_.value_or(1));
+    if (render_context_ != nullptr) {
+      mpv_render_context_set_update_callback(
+          render_context_,
+          [](void* context) {
+            auto that = reinterpret_cast<VideoOutput*>(context);
+            that->NotifyRender();
+          },
+          reinterpret_cast<void*>(this));
     }
   });
   future.wait();
@@ -165,7 +158,7 @@ void VideoOutput::NotifyRender() {
 }
 
 bool VideoOutput::Render() {
-  if (texture_id_) {
+  if (texture_id_ && render_context_ != nullptr) {
     int render_status = -1;
     // H/W
     if (surface_manager_ != nullptr) {

@@ -209,6 +209,7 @@ abstract final class VideoHttp {
     required VideoType videoType,
     String? language,
     bool voiceBalance = false,
+    CancelToken? cancelToken,
   }) async {
     final dmImgStr = Utils.base64EncodeRandomString(16, 64);
     final dmCoverImgStr = Utils.base64EncodeRandomString(32, 128);
@@ -237,7 +238,12 @@ abstract final class VideoHttp {
     });
 
     try {
-      final res = await Request().get(videoType.api, queryParameters: params);
+      if (cancelToken?.isCancelled == true) return const Error('请求已取消');
+      final res = await Request().get(
+        videoType.api,
+        queryParameters: params,
+        cancelToken: cancelToken,
+      );
 
       if (res.data['code'] == 0) {
         late PlayUrlModel data;
@@ -268,6 +274,7 @@ abstract final class VideoHttp {
           seasonId: seasonId,
           tryLook: tryLook,
           videoType: .pgc,
+          cancelToken: cancelToken,
         );
       }
       return Error(_parseVideoErr(res.data['code'], res.data['message']));

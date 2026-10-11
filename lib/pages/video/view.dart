@@ -395,6 +395,7 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
   @override
   // 返回当前页面时
   void didPopNext() {
+    videoDetailController.playbackOwner.activate();
     super.didPopNext();
 
     if (videoDetailController.plPlayerController.isCloseAll) {

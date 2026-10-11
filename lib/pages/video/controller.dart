@@ -45,6 +45,8 @@ import 'package:pili_aurora/pages/video/download_panel/view.dart';
 import 'package:pili_aurora/pages/video/introduction/pgc/controller.dart';
 import 'package:pili_aurora/pages/video/introduction/ugc/controller.dart';
 import 'package:pili_aurora/pages/video/medialist/view.dart';
+import 'package:pili_aurora/pages/video/playback_source.dart';
+import 'package:pili_aurora/plugin/pl_player/playback/playback_session.dart';
 import 'package:pili_aurora/pages/video/note/view.dart';
 import 'package:pili_aurora/pages/video/post_panel/view.dart';
 import 'package:pili_aurora/pages/video/send_danmaku/view.dart';
@@ -57,7 +59,6 @@ import 'package:pili_aurora/services/download/download_service.dart';
 import 'package:pili_aurora/utils/accounts.dart';
 import 'package:pili_aurora/utils/connectivity_utils.dart';
 import 'package:pili_aurora/utils/extension/context_ext.dart';
-import 'package:pili_aurora/utils/extension/iterable_ext.dart';
 import 'package:pili_aurora/utils/extension/nested_scroll_ext.dart';
 import 'package:pili_aurora/utils/extension/num_ext.dart';
 import 'package:pili_aurora/utils/extension/size_ext.dart';
@@ -69,7 +70,7 @@ import 'package:pili_aurora/utils/theme_utils.dart';
 import 'package:pili_aurora/utils/utils.dart';
 import 'package:pili_aurora/utils/video_utils.dart';
 import 'package:collection/collection.dart';
-import 'package:dio/dio.dart' show Options;
+import 'package:dio/dio.dart' show Options, CancelToken;
 import 'package:extended_nested_scroll_view/extended_nested_scroll_view.dart'
     show ExtendedNestedScrollViewState;
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
@@ -132,10 +133,11 @@ class VideoDetailController extends GetxController
   double get uiScale => plPlayerController.uiScale;
 
   late VideoItem firstVideo;
-  String? videoUrl;
-  String? audioUrl;
-  List<String> _videoCandidates = const [];
-  List<String> _audioCandidates = const [];
+  NetworkSource? _networkSource;
+  String? get videoUrl => _networkSource?.videoSource;
+  String? get audioUrl =>
+      _networkSource == null ? null : _networkSource!.audioSource ?? '';
+  late final PlaybackOwner playbackOwner;
   Duration? defaultST;
   Duration? playedTime;
   String playedTimePos(bool hasParams) {
@@ -359,6 +361,7 @@ class VideoDetailController extends GetxController
   @override
   void onInit() {
     super.onInit();
+    playbackOwner = plPlayerController.attachPlaybackOwner();
     args = Get.arguments;
     videoType = args['videoType'];
     if (videoType == VideoType.pgc) {
@@ -650,79 +653,64 @@ class VideoDetailController extends GetxController
   }
 
   VideoItem findVideoByQa(int qa, {bool setCodecs = false}) {
-    /// 根据currentVideoQa和currentDecodeFormats 重新设置videoUrl
-    final videoList = data.dash!.video!.where((i) => i.id == qa).toList();
-
-    final currentCodes = currentDecodeFormats.codes;
-    VideoItem? bestVideo;
-    int bestIndex = preferCodecs.length;
-    for (final video in videoList) {
-      final c = video.codecs!;
-      if (currentCodes.any(c.startsWith)) {
-        return video;
-      }
-      for (int i = 0; i < bestIndex; i++) {
-        if (preferCodecs[i].codes.any(c.startsWith)) {
-          bestIndex = i;
-          bestVideo = video;
-          break;
-        }
-      }
-    }
-
+    final video = VideoPlaybackSource.selectVideoTrack(
+      data.dash!.video!,
+      quality: qa,
+      codec: currentDecodeFormats,
+      preferredCodecs: preferCodecs,
+    );
     if (setCodecs) {
-      if (bestIndex < preferCodecs.length) {
-        currentDecodeFormats = preferCodecs[bestIndex];
-      } else {
-        currentDecodeFormats = VideoDecodeFormatType.fromString(
-          videoList.first.codecs!,
-        );
-      }
+      currentDecodeFormats = VideoDecodeFormatType.fromString(video.codecs!);
     }
-
-    return bestVideo ?? videoList.first;
+    return video;
   }
 
-  /// 更新画质、音质
+  void _applyPlaybackSource(VideoPlaybackSource selection) {
+    _networkSource = selection.source;
+    firstVideo = selection.video;
+    currentVideoQa.value = selection.video.quality;
+    currentDecodeFormats = selection.codec;
+    currentAudioQa = selection.audio == null
+        ? null
+        : AudioQuality.fromCode(selection.audio!.id);
+  }
+
+  /// 切换质量沿用播放意图，原生 open 期间的短暂暂停不改变用户选择。
   void updatePlayer() {
-    final currentVideoQa = this.currentVideoQa.value;
-    if (currentVideoQa == null) return;
-    _autoPlay.value = true;
-    playedTime = plPlayerController.videoPlayerController?.state.position;
-    plPlayerController
-      ..isBuffering.value = false
-      ..buffered.value = 0;
-
-    firstVideo = findVideoByQa(currentVideoQa.code, setCodecs: true);
-    _videoCandidates = VideoUtils.getCdnUrls(firstVideo.playUrls);
-    videoUrl = _videoCandidates.firstOrNull ?? '';
-
-    /// 根据currentAudioQa 重新设置audioUrl
-    if (currentAudioQa != null) {
-      final firstAudio = data.dash!.audio!.firstWhere(
-        (i) => i.id == currentAudioQa!.code,
-        orElse: () => data.dash!.audio!.first,
-      );
-      _audioCandidates = VideoUtils.getCdnUrls(
-        firstAudio.playUrls,
-        isAudio: true,
-      );
-      audioUrl = _audioCandidates.firstOrNull ?? '';
-    } else {
-      _audioCandidates = const [];
-    }
-
+    final quality = currentVideoQa.value;
+    if (quality == null || isClosed || !playbackOwner.isActive) return;
+    _rememberPlaybackState();
+    _applyPlaybackSource(
+      VideoPlaybackSource.resolve(
+        data,
+        videoQuality: quality.code,
+        audioQuality: currentAudioQa?.code ?? plPlayerController.cacheAudioQa,
+        codec: currentDecodeFormats,
+        preferredCodecs: preferCodecs,
+      ),
+    );
     playerInit();
   }
 
-  Future<void>? _initPlayerIfNeeded(bool autoFullScreenFlag) {
-    if (_autoPlay.value ||
+  void _rememberPlaybackState() {
+    _autoPlay.value = plPlayerController.wantsToPlay;
+    playedTime = plPlayerController.videoPlayerController?.state.position;
+  }
+
+  Future<void>? _initPlayerIfNeeded(
+    bool autoFullScreenFlag, {
+    bool Function()? isCurrent,
+    bool force = false,
+  }) {
+    if (force ||
+        _autoPlay.value ||
         (plPlayerController.preInitPlayer && !plPlayerController.processing) &&
             (isFileSource
                 ? true
                 : videoPlayerKey.currentState?.mounted == true)) {
       return playerInit(
         autoFullScreenFlag: autoFullScreenFlag && _autoPlay.value,
+        isCurrent: isCurrent,
       );
     }
     return null;
@@ -731,7 +719,15 @@ class VideoDetailController extends GetxController
   Future<void> playerInit({
     bool? autoplay,
     bool autoFullScreenFlag = false,
+    bool Function()? isCurrent,
   }) async {
+    if (isClosed || !playbackOwner.isActive || !(isCurrent?.call() ?? true)) {
+      return;
+    }
+    final currentMedia = _mediaGuard();
+    final source = _networkSource;
+    if (!isFileSource && source == null) return;
+    bool valid() => currentMedia() && (isCurrent?.call() ?? true);
     Duration? seek = defaultST ?? playedTime;
     if (seek == .zero) seek = null;
     seek ??= getFirstSegment();
@@ -743,12 +739,9 @@ class VideoDetailController extends GetxController
               isMp4: entry.mediaType == 1,
               hasDashAudio: entry.hasDashAudio,
             )
-          : NetworkSource(
-              videoSource: videoUrl!,
-              audioSource: audioUrl,
-              videoCandidates: _videoCandidates,
-              audioCandidates: _audioCandidates,
-            ),
+          : source!,
+      owner: playbackOwner,
+      isValid: valid,
       seekTo: seek,
       duration: data.timeLength == null
           ? null
@@ -763,6 +756,7 @@ class VideoDetailController extends GetxController
       pgcType: isUgc ? null : pgcType,
       videoType: videoType,
       onInit: () {
+        if (!valid()) return;
         videoState.value = true;
         setSubtitle(vttSubtitlesIndex.value);
       },
@@ -772,7 +766,7 @@ class VideoDetailController extends GetxController
       autoFullScreenFlag: autoFullScreenFlag,
     );
 
-    if (isClosed) return;
+    if (!valid()) return;
 
     if (!isFileSource) {
       if (plPlayerController.enableBlock) {
@@ -780,18 +774,29 @@ class VideoDetailController extends GetxController
       }
 
       if (vttSubtitlesIndex.value == -1) {
-        _queryPlayInfo();
+        _queryPlayInfo(isCurrent: valid);
       }
 
       if (plPlayerController.showDmChart && dmTrend.value == null) {
-        _getDmTrend();
+        _getDmTrend(isCurrent: valid);
       }
     }
 
     defaultST = null;
   }
 
-  bool isQuerying = false;
+  bool get isQuerying => playbackOwner.isQuerying;
+
+  bool Function() _mediaGuard() {
+    final identity = (bvid, cid.value);
+    final source = _networkSource;
+    final ownsPlayback = playbackOwner.guard();
+    return () =>
+        !isClosed &&
+        ownsPlayback() &&
+        identity == (bvid, cid.value) &&
+        identical(source, _networkSource);
+  }
 
   final languages = Rxn<List<LanguageItem>>();
   final currLang = Rxn<String>();
@@ -805,26 +810,42 @@ class VideoDetailController extends GetxController
     queryVideoUrl(fromReset: true);
   }
 
-  Future<LoadingState<PlayUrlModel>> _getVideoUrl(int quality) {
-    return VideoHttp.videoUrl(
+  Future<LoadingState<PlayUrlModel>> Function(int) _captureVideoQuery(
+    CancelToken cancelToken,
+  ) {
+    final request = (
       cid: cid.value,
       bvid: bvid,
-      qn: quality,
       epid: epId,
       seasonId: seasonId,
-      tryLook: plPlayerController.tryLook,
       videoType: _actualVideoType ?? videoType,
       language: currLang.value,
+    );
+    return (quality) => VideoHttp.videoUrl(
+      cid: request.cid,
+      bvid: request.bvid,
+      qn: quality,
+      epid: request.epid,
+      seasonId: request.seasonId,
+      tryLook: plPlayerController.tryLook,
+      videoType: request.videoType,
+      language: request.language,
       voiceBalance: plPlayerController.enableAudioNormalization,
+      cancelToken: cancelToken,
     );
   }
 
-  Future<void> _supplementVideoQualities() async {
-    final quality = data.missingVideoQualityBelowHighest;
-    if (quality == -1) return;
-    final result = await _getVideoUrl(quality);
-    if (result case Success(:final response)) {
-      data.dash!.video!.merge(response.dash?.video);
+  Future<void> _supplementVideoQualities(
+    PlayUrlModel response,
+    Future<LoadingState<PlayUrlModel>> Function(int) fetch,
+    bool Function() isCurrent,
+  ) async {
+    final quality = response.missingVideoQualityBelowHighest;
+    if (quality == -1 || !isCurrent()) return;
+    final result = await fetch(quality);
+    if (!isCurrent()) return;
+    if (result case Success(response: final supplement)) {
+      response.dash!.video!.merge(supplement.dash?.video);
     }
   }
 
@@ -836,27 +857,35 @@ class VideoDetailController extends GetxController
     bool fromReset = false,
     bool autoFullScreenFlag = false,
   }) async {
-    if (isFileSource) {
-      return _initPlayerIfNeeded(autoFullScreenFlag);
-    }
-    if (isQuerying) {
-      return;
-    }
-    isQuerying = true;
-    try {
-      await _queryVideoUrl(fromReset, autoFullScreenFlag);
-    } finally {
-      isQuerying = false;
-    }
+    if (isClosed || !playbackOwner.isActive) return;
+    if (isFileSource) return _initPlayerIfNeeded(autoFullScreenFlag);
+    if (fromReset && _networkSource != null) _rememberPlaybackState();
+    final identity = (bvid, cid.value, epId, seasonId);
+    final cancelToken = CancelToken();
+    final fetch = _captureVideoQuery(cancelToken);
+    await playbackOwner.query(
+      (isCurrent) =>
+          _queryVideoUrl(fromReset, autoFullScreenFlag, fetch, isCurrent),
+      isValid: () =>
+          !isClosed &&
+          playbackOwner.isActive &&
+          identity == (bvid, cid.value, epId, seasonId),
+      cancel: cancelToken.cancel,
+    );
   }
 
-  @pragma('vm:prefer-inline')
-  Future<void> _queryVideoUrl(bool fromReset, bool autoFullScreenFlag) async {
+  Future<void> _queryVideoUrl(
+    bool fromReset,
+    bool autoFullScreenFlag,
+    Future<LoadingState<PlayUrlModel>> Function(int) fetch,
+    bool Function() isCurrent,
+  ) async {
     if (plPlayerController.enableSponsorBlock && isBlock && !fromReset) {
-      querySponsorBlock(bvid: bvid, cid: cid.value);
+      querySponsorBlock(bvid: bvid, cid: cid.value, isCurrent: isCurrent);
     }
     if (plPlayerController.cacheVideoQa == null) {
       final isWiFi = await ConnectivityUtils.isWiFi;
+      if (!isCurrent()) return;
       plPlayerController
         ..cacheVideoQa = isWiFi
             ? Pref.defaultVideoQa
@@ -867,11 +896,16 @@ class VideoDetailController extends GetxController
       preferCodecs = isWiFi ? Pref.preferCodecs : Pref.preferCodecsCellular;
     }
 
-    final result = await _getVideoUrl(VideoQuality.hdrVivid.code);
+    if (!isCurrent()) return;
+    final result = await fetch(VideoQuality.hdrVivid.code);
+    if (!isCurrent()) return;
 
     if (result case Success(:final response)) {
+      if (response.dash != null) {
+        await _supplementVideoQualities(response, fetch, isCurrent);
+      }
+      if (!isCurrent()) return;
       data = response;
-      if (data.dash != null) await _supplementVideoQualities();
 
       languages.value = data.language?.items;
       currLang.value = data.curLanguage;
@@ -901,38 +935,21 @@ class VideoDetailController extends GetxController
         );
       }
       if (data.dash == null) {
-        if (data.durl case final durl?) {
-          // it will cause all files to be opened simultaneously
-          if (durl.length > 1) {
-            // TODO: refa
-            final sb = StringBuffer('edl://!no_chapters;');
-            for (var i in durl) {
-              final video = VideoUtils.getCdnUrl(i.playUrls);
-              sb.write('%${video.length}%$video,length=${i.length! / 1000};');
-            }
-            videoUrl = sb.toString();
-            _videoCandidates = [videoUrl!];
-          } else {
-            _videoCandidates = VideoUtils.getCdnUrls(durl.single.playUrls);
-            videoUrl = _videoCandidates.firstOrNull ?? '';
-          }
-
-          audioUrl = '';
-          _audioCandidates = const [];
-
-          // 实际为FLV/MP4格式，但已被淘汰，这里仅做兜底处理
-          final videoQuality = VideoQuality.fromCode(data.quality!);
-          firstVideo = VideoItem(
-            id: data.quality!,
-            baseUrl: videoUrl,
-            codecs: 'avc1',
-            quality: videoQuality,
+        if (data.durl?.isNotEmpty == true) {
+          _applyPlaybackSource(
+            VideoPlaybackSource.resolve(
+              data,
+              videoQuality: data.quality!,
+              audioQuality: plPlayerController.cacheAudioQa,
+              preferredCodecs: preferCodecs,
+            ),
           );
           _setVideoHeight();
-          currentDecodeFormats = VideoDecodeFormatType.AVC;
-          currentVideoQa.value = videoQuality;
-          await _initPlayerIfNeeded(autoFullScreenFlag);
-          return;
+          await _initPlayerIfNeeded(
+            autoFullScreenFlag,
+            isCurrent: isCurrent,
+            force: fromReset,
+          );
         } else {
           SmartDialog.showToast('视频资源不存在');
           _autoPlay.value = false;
@@ -940,72 +957,26 @@ class VideoDetailController extends GetxController
           if (plPlayerController.isFullScreen.value) {
             plPlayerController.triggerFullScreen(status: false);
           }
-          return;
         }
+        return;
       }
 
-      // if (kDebugMode) debugPrint("allVideosList:${allVideosList}");
-      final cacheVideoQa = plPlayerController.cacheVideoQa!;
-      final targetVideoQa = data.findAvailableVideoQuality(cacheVideoQa);
-      currentVideoQa.value = VideoQuality.fromCode(targetVideoQa);
-
-      /// 优先顺序 设置中指定解码格式 -> 当前可选的首个解码格式
-      final supportFormats = data.supportFormats!;
-
-      // 根据画质选编码格式
-      currentDecodeFormats = VideoUtils.selectCodec(
-        supportFormats
-            .firstWhere(
-              (e) => e.quality == targetVideoQa,
-              orElse: () => supportFormats.first,
-            )
-            .codecs!,
-        preferCodecs,
-      );
-
-      /// 取出符合当前画质的videoList
-      final videosList = data.dash!.video!
-          .where((e) => e.quality.code == targetVideoQa)
-          .toList();
-
-      /// 取出符合当前解码格式的videoItem
-      firstVideo = videosList.firstWhere(
-        (e) => currentDecodeFormats.codes.any(e.codecs!.startsWith),
-        orElse: () => videosList.first,
+      _applyPlaybackSource(
+        VideoPlaybackSource.resolve(
+          data,
+          videoQuality: data.findAvailableVideoQuality(
+            plPlayerController.cacheVideoQa!,
+          ),
+          audioQuality: plPlayerController.cacheAudioQa,
+          preferredCodecs: preferCodecs,
+        ),
       );
       _setVideoHeight();
-
-      _videoCandidates = VideoUtils.getCdnUrls(firstVideo.playUrls);
-      videoUrl = _videoCandidates.firstOrNull ?? '';
-
-      /// 优先顺序 设置中指定质量 -> 当前可选的最高质量
-      AudioItem? firstAudio;
-      final audioList = data.dash?.audio;
-      if (audioList != null && audioList.isNotEmpty) {
-        final audioIds = audioList.map((map) => map.id).toList();
-        int closestNumber = audioIds.findClosestTarget(
-          (e) => e <= plPlayerController.cacheAudioQa,
-          (a, b) => a > b ? a : b,
-        );
-        if (!audioIds.contains(plPlayerController.cacheAudioQa) &&
-            audioIds.any((e) => e > plPlayerController.cacheAudioQa)) {
-          closestNumber = AudioQuality.k192.code;
-        }
-        firstAudio = audioList.firstWhere(
-          (e) => e.id == closestNumber,
-          orElse: () => audioList.first,
-        );
-        _audioCandidates = VideoUtils.getCdnUrls(
-          firstAudio.playUrls,
-          isAudio: true,
-        );
-        audioUrl = _audioCandidates.firstOrNull ?? '';
-        currentAudioQa = AudioQuality.fromCode(firstAudio.id);
-      } else {
-        audioUrl = '';
-        _audioCandidates = const [];
-      }
-      await _initPlayerIfNeeded(autoFullScreenFlag);
+      await _initPlayerIfNeeded(
+        autoFullScreenFlag,
+        isCurrent: isCurrent,
+        force: fromReset,
+      );
     } else {
       _autoPlay.value = false;
       videoState.value = false;
@@ -1061,39 +1032,36 @@ class VideoDetailController extends GetxController
   late final viewPointList = <ViewPointSegment>[].obs;
 
   // 设定字幕轨道
+  int _subtitleGeneration = 0;
   Future<void> setSubtitle(int index) async {
+    final generation = ++_subtitleGeneration;
+    final currentMedia = _mediaGuard();
+    bool valid() => currentMedia() && generation == _subtitleGeneration;
+    if (!valid()) return;
+    final player = plPlayerController.videoPlayerController;
     if (index <= 0) {
-      await plPlayerController.videoPlayerController?.setSubtitleTrack(.no());
-      vttSubtitlesIndex.value = index;
+      await player?.setSubtitleTrack(.no());
+      if (valid()) vttSubtitlesIndex.value = index;
       return;
     }
-
-    Future<void> setSub(({bool isData, String id}) subtitle) async {
-      final sub = subtitles[index - 1];
-
-      String subUri = subtitle.id;
-      if (subtitle.isData) {
-        subUri = 'memory://$subUri';
-      }
-      await plPlayerController.videoPlayerController?.setSubtitleTrack(
-        SubtitleTrack(subUri, sub.lanDoc, sub.lan, uri: true),
-      );
-      vttSubtitlesIndex.value = index;
-    }
-
+    final item = subtitles[index - 1];
     var subtitle = vttSubtitles[index - 1];
     if (subtitle == null) {
-      final result = await VideoHttp.getSubtitles(
-        subtitles[index - 1].subtitleUrl!,
-      );
-      if (!isClosed && result != null) {
-        subtitle = (isData: true, id: result);
-        vttSubtitles[index - 1] = subtitle;
-      } else {
-        return;
-      }
+      final result = await VideoHttp.getSubtitles(item.subtitleUrl!);
+      if (!valid() || result == null) return;
+      subtitle = (isData: true, id: result);
+      vttSubtitles[index - 1] = subtitle;
     }
-    await setSub(subtitle);
+    if (!valid()) return;
+    await player?.setSubtitleTrack(
+      SubtitleTrack(
+        subtitle.isData ? 'memory://${subtitle.id}' : subtitle.id,
+        item.lanDoc,
+        item.lan,
+        uri: true,
+      ),
+    );
+    if (valid()) vttSubtitlesIndex.value = index;
   }
 
   // interactive video
@@ -1102,6 +1070,9 @@ class VideoDetailController extends GetxController
   late final RxBool showSteinEdgeInfo = false.obs;
 
   Future<void> getSteinEdgeInfo([int? edgeId]) async {
+    final currentMedia = _mediaGuard();
+    if (!currentMedia()) return;
+    final version = graphVersion;
     steinEdgeInfo = null;
     try {
       final res = await Request().get(
@@ -1112,6 +1083,7 @@ class VideoDetailController extends GetxController
           'edge_id': ?edgeId,
         },
       );
+      if (!currentMedia() || version != graphVersion) return;
       if (res.data['code'] == 0) {
         steinEdgeInfo = EdgeInfoData.fromJson(res.data['data']);
       } else {
@@ -1124,7 +1096,8 @@ class VideoDetailController extends GetxController
 
   late bool continuePlayingPart = Pref.continuePlayingPart;
 
-  Future<void> _queryPlayInfo() async {
+  Future<void> _queryPlayInfo({required bool Function() isCurrent}) async {
+    if (!isCurrent()) return;
     vttSubtitles.clear();
     vttSubtitlesIndex.value = 0;
     if (plPlayerController.showViewPoints) {
@@ -1136,6 +1109,7 @@ class VideoDetailController extends GetxController
       seasonId: seasonId,
       epId: epId,
     );
+    if (!isCurrent()) return;
     if (res case Success(:final response)) {
       // interactive video
       late final introCtr = Get.find<UgcIntroController>(tag: heroTag);
@@ -1166,6 +1140,7 @@ class VideoDetailController extends GetxController
         }
       }
 
+      if (!isCurrent()) return;
       if (plPlayerController.showViewPoints &&
           response.viewPoints?.firstOrNull?.type == 2) {
         try {
@@ -1183,9 +1158,10 @@ class VideoDetailController extends GetxController
       }
 
       if (response.subtitle?.subtitles case final sub? when (sub.isNotEmpty)) {
-        _setSubtitle(sub);
+        _setSubtitle(sub, isCurrent: isCurrent);
       } else if (!Accounts.main.isLogin) {
         final res = await DmGrpc.dmView(aid, cid.value);
+        if (!isCurrent()) return;
         if (res case Success(:final response)) {
           if (response.hasSubtitle() &&
               response.subtitle.subtitles.isNotEmpty) {
@@ -1204,6 +1180,7 @@ class VideoDetailController extends GetxController
                   )
                   .toList()
                 ..sort(),
+              isCurrent: isCurrent,
             );
           }
         } else {
@@ -1213,8 +1190,13 @@ class VideoDetailController extends GetxController
     }
   }
 
-  Future<void> _setSubtitle(List<Subtitle> sub) async {
+  Future<void> _setSubtitle(
+    List<Subtitle> sub, {
+    required bool Function() isCurrent,
+  }) async {
+    if (!isCurrent()) return;
     subtitles.value = sub;
+    final selectionGeneration = _subtitleGeneration;
     final preferredIndex = switch (Pref.subtitlePreferenceV2) {
       .off => 0,
       .on => 1,
@@ -1226,6 +1208,7 @@ class VideoDetailController extends GetxController
             ? 1
             : 0,
     };
+    if (!isCurrent() || selectionGeneration != _subtitleGeneration) return;
     final inheritedState = inheritedSubtitleEnabled;
     inheritedSubtitleEnabled = null;
     final idx = inheritedState == null
@@ -1273,6 +1256,8 @@ class VideoDetailController extends GetxController
 
   @override
   void onClose() {
+    _subtitleGeneration++;
+    playbackOwner.close();
     cid.close();
     if (isFileSource) {
       cacheLocalProgress();
@@ -1290,14 +1275,16 @@ class VideoDetailController extends GetxController
   }
 
   void onReset({bool isStein = false}) {
+    _subtitleGeneration++;
+    playbackOwner.invalidateRequests();
     if (isFileSource) {
       cacheLocalProgress();
     }
 
     playedTime = null;
     defaultST = null;
-    videoUrl = null;
-    audioUrl = null;
+    _networkSource = null;
+    currentAudioQa = null;
 
     // danmaku
     savedDanmaku = null;
@@ -1340,7 +1327,8 @@ class VideoDetailController extends GetxController
       Rx<LoadingState<List<double>>?>(null);
   late final RxBool showDmTrendChart = true.obs;
 
-  Future<void> _getDmTrend() async {
+  Future<void> _getDmTrend({required bool Function() isCurrent}) async {
+    if (!isCurrent()) return;
     dmTrend.value = LoadingState<List<double>>.loading();
     try {
       final res = await Request().get(
@@ -1359,6 +1347,7 @@ class VideoDetailController extends GetxController
           },
         ),
       );
+      if (!isCurrent()) return;
       dynamic json;
       try {
         json = (res.data['modules'] as List).first['params']['data'];
@@ -1373,6 +1362,7 @@ class VideoDetailController extends GetxController
       }
       dmTrend.value = const Error(null);
     } catch (e) {
+      if (!isCurrent()) return;
       dmTrend.value = const Error(null);
       logger.d('_getDmTrend: $e');
     }
@@ -1582,10 +1572,10 @@ class VideoDetailController extends GetxController
           TextButton(
             onPressed: () {
               Get.back();
-              this.videoUrl = videoUrl;
-              this.audioUrl = audioUrl;
-              _videoCandidates = [videoUrl];
-              _audioCandidates = audioUrl.isNotEmpty ? [audioUrl] : const [];
+              _networkSource = NetworkSource(
+                videoSource: videoUrl,
+                audioSource: audioUrl,
+              );
               playerInit();
             },
             child: const Text('确定'),

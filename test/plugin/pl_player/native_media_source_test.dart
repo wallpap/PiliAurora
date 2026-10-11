@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -54,7 +55,8 @@ void main() {
         ..state.position = const Duration(seconds: 90)
         ..state.playing = true;
       await reloadNativeMedia(player: player, isLive: false);
-      expect(player.openedPlaying, isTrue);
+      expect(player.openedPlaying, isFalse);
+      expect(player.resumed, isTrue);
       expect(player.opened!.start, const Duration(seconds: 90));
       await reloadNativeMedia(player: player, isLive: true);
       expect(player.opened, same(media));
@@ -97,7 +99,8 @@ void main() {
         );
         expect(player.opened!.uri, backupVideo);
         expect(player.opened!.start, const Duration(seconds: 42));
-        expect(player.openedPlaying, isTrue);
+        expect(player.openedPlaying, isFalse);
+        expect(player.resumed, isTrue);
         expect(player.opened!.extras!['cache'], 'yes');
         expect(
           player.opened!.extras!['audio-files-append'],
@@ -156,6 +159,34 @@ void main() {
       player.current.clear();
       expect(await reloadNativeMedia(player: player, isLive: false), isFalse);
       expect(player.opened, isNull);
+    });
+
+    test('重载期间暂停不恢复播放，过期重载也不能启动旧媒体', () async {
+      var current = true;
+      var playing = true;
+      final player = _ReloadPlayer(nativeMediaSource(source: net()))
+        ..state.playing = true
+        ..openCompletion = Completer<void>();
+      final reload = reloadNativeMedia(
+        player: player,
+        isLive: false,
+        isCurrent: () => current,
+        shouldPlay: () => playing,
+      );
+      playing = false;
+      player.openCompletion!.complete();
+      expect(await reload, isTrue);
+      expect(player.resumed, isFalse);
+      player.openCompletion = Completer<void>();
+      final stale = reloadNativeMedia(
+        player: player,
+        isLive: false,
+        isCurrent: () => current,
+      );
+      current = false;
+      player.openCompletion!.complete();
+      expect(await stale, isFalse);
+      expect(player.resumed, isFalse);
     });
 
     test('open failures propagate to the recovery error handler', () async {
@@ -245,6 +276,8 @@ class _ReloadPlayer implements NativePlayer {
   Media? opened;
   bool? openedPlaying;
   Object? openError;
+  Completer<void>? openCompletion;
+  bool resumed = false;
 
   @override
   Future<void> open(
@@ -255,6 +288,12 @@ class _ReloadPlayer implements NativePlayer {
     if (openError case final error?) throw error;
     opened = playable as Media;
     openedPlaying = play;
+    await openCompletion?.future;
+  }
+
+  @override
+  Future<void> play({bool synchronized = true}) async {
+    resumed = true;
   }
 
   @override

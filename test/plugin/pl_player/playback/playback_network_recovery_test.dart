@@ -2,6 +2,24 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:pili_aurora/plugin/pl_player/utils/playback_network_recovery.dart';
 
 void main() {
+  group('Android TLS 握手失败', () {
+    test('通用握手失败进入网络恢复', () {
+      expect(
+        isPlaybackNetworkFailure('tls: TLS handshake failed.'),
+        isTrue,
+      );
+    });
+
+    test('握手失败伴随 HTTP 403 时保留权限错误处理', () {
+      expect(
+        isPlaybackNetworkFailure(
+          'tls: TLS handshake failed.\nhttp: HTTP error 403 Forbidden',
+        ),
+        isFalse,
+      );
+    });
+  });
+
   group('分离音视频断流日志', () {
     test('终止传输和截断媒体需要恢复', () {
       for (final (prefix, message) in [

@@ -67,7 +67,10 @@ flowchart LR
 - `services/` 负责跨页面共享或需显式管理生命周期的工作。页面状态通常留在对应 controller。
 - `DownloadRepository` 负责下载目录布局和记录读写；`DownloadService` 负责队列、状态和任务调度；`DownloadManager` 负责单路媒体传输。详情见[下载流程](runtime-flows.md#下载)。
 - `DownloadRepository.load()` 跳过损坏的单条记录并通过回调报告；写入在进入串行队列前编码数据快照。它是文件存储，不提供事务或崩溃原子性。
-- `pl_player/` 是项目与 `media_kit`、mpv 及平台输出之间的协调层。播放器控制器会调用平台能力；不要仅凭 Dart 静态检查推断 GPU、MediaCodec 或最终显示行为。
+- `pl_player/` 是项目与 `media_kit`、mpv 及平台输出之间的协调层。`PlPlayerController` 保留交互、可观察状态和事件接线；`playback/` 管理页面借用、查询有效性、串行加载、原生资源与网络恢复。平台渲染行为仍需在目标设备验证。
+- `PlaybackSession` 与网络恢复模块通过操作及状态回调连接调用者，不依赖 GetX、页面、HTTP 或全局设置。`NativePlaybackRuntime` 集中处理原生初始化、平台配置与资源释放；点播来源选择集中在 `pages/video/playback_source.dart`。
+- 播放状态区分用户的播放意图与原生加载过程中的短暂暂停。切画质、音质和网络恢复沿用播放意图；字幕等媒体附属请求提交前检查当前媒体与页面归属。
+- 快速切源共享一套 Player、VideoController、事件订阅和纹理输出。会话协调发生在查询、切源和恢复路径，不新增每帧状态广播；过期排队加载跳过原生操作。
 - protobuf 与 Android JNI 属于生成产物。修改源定义或生成脚本，再运行项目生成流程；不要直接维护生成文件。
 - 定制依赖通过 `dependency_overrides` 指向 fork 或仓库目录。来源、版本和许可证以 `pubspec.yaml`、`pubspec.lock` 与 [`third_party/README.md`](../third_party/README.md) 为准。
 
@@ -81,7 +84,7 @@ flowchart LR
 | 下载记录与媒体索引 | `DownloadRepository` | 文件位于下载根目录；目录格式与 JSON 字段由仓库维护。 |
 | 临时目录、缓存、字体 | `app/app_paths.dart`、`CacheManager`、`FontUtils` | 初始化先于页面使用。 |
 | 诊断记录 | `services/diagnostics/`、`JsonFileHandler` | 记录会按设置脱敏；导出前仍应确认没有账号凭据。 |
-| 播放器状态 | `PlPlayerController` 与原生播放器实例 | 页面通过监听和回调消费；切源任务可能过期，控制器用代次检查阻止旧结果写回。 |
+| 播放器状态 | `PlaybackSession`、`NativePlaybackRuntime` 与 `PlPlayerController` | 会话拥有页面归属与加载代次，运行时拥有原生资源，控制器负责 UI 状态与事件接线。 |
 
 ## 平台边界
 

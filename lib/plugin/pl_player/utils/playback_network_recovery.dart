@@ -20,6 +20,7 @@ bool isPlaybackNetworkFailure(String event) {
   if (event.startsWith('Failed to open https://') ||
       event.startsWith('Can not open external file https://') ||
       event.startsWith('tcp: ffurl_read returned ') ||
+      event.startsWith('tls: TLS handshake failed.') ||
       event.startsWith('tls: mbedtls_ssl_handshake returned ') ||
       event.startsWith('tls: mbedtls_ssl_read returned ') ||
       event.startsWith(

@@ -29,6 +29,7 @@ import 'package:pili_aurora/pages/live_room/send_danmaku/view.dart';
 import 'package:pili_aurora/pages/video/widgets/header_control.dart';
 import 'package:pili_aurora/plugin/pl_player/controller.dart';
 import 'package:pili_aurora/plugin/pl_player/models/data_source.dart';
+import 'package:pili_aurora/plugin/pl_player/playback/playback_session.dart';
 import 'package:pili_aurora/plugin/pl_player/utils/danmaku_options.dart';
 import 'package:pili_aurora/services/service_locator.dart';
 import 'package:pili_aurora/services/live_stream/live.dart';
@@ -48,6 +49,7 @@ import 'package:pili_aurora/utils/utils.dart';
 import 'package:pili_aurora/utils/video_utils.dart';
 import 'package:pili_aurora/utils/rate_limiter.dart';
 import 'package:canvas_danmaku/canvas_danmaku.dart';
+import 'package:dio/dio.dart' show CancelToken;
 import 'package:flutter/foundation.dart' show kDebugMode, kReleaseMode;
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:get/get.dart';
@@ -63,6 +65,9 @@ class LiveRoomController extends GetxController {
   final plPlayerController = PlPlayerController.getInstance(
     isLive: true,
   );
+
+  late final PlaybackOwner playbackOwner;
+  NetworkSource? _networkSource;
 
   final isLoaded = false.obs;
   final roomInfoH5 = Rxn<RoomInfoH5Data>();
@@ -218,6 +223,7 @@ class LiveRoomController extends GetxController {
   @override
   void onInit() {
     super.onInit();
+    playbackOwner = plPlayerController.attachPlaybackOwner();
     scrollController = ScrollController()..addListener(listener);
     final account = Accounts.main;
     isLogin = account.isLogin;
@@ -235,12 +241,23 @@ class LiveRoomController extends GetxController {
   Future<void>? playerInit({
     bool autoplay = true,
     bool autoFullScreenFlag = false,
+    bool Function()? isCurrent,
   }) {
-    if (videoUrl == null) {
+    if (isClosed || !playbackOwner.isActive || !(isCurrent?.call() ?? true)) {
+      return null;
+    }
+    final source = _networkSource;
+    if (source == null) {
       return null;
     }
     return plPlayerController.setDataSource(
-      NetworkSource(videoSource: videoUrl!, audioSource: null),
+      source,
+      owner: playbackOwner,
+      isValid: () =>
+          !isClosed &&
+          playbackOwner.isActive &&
+          identical(source, _networkSource) &&
+          (isCurrent?.call() ?? true),
       isLive: true,
       autoplay: autoplay,
       isVertical: isPortrait.value,
@@ -248,15 +265,35 @@ class LiveRoomController extends GetxController {
     );
   }
 
-  Future<void> queryLiveUrl({bool autoFullScreenFlag = false}) async {
-    currentQn ??= await ConnectivityUtils.isWiFi
-        ? Pref.liveQuality
-        : Pref.liveQualityCellular;
+  Future<void> queryLiveUrl({bool autoFullScreenFlag = false}) {
+    final cancelToken = CancelToken();
+    final autoplay = _networkSource == null || plPlayerController.wantsToPlay;
+    return playbackOwner.query(
+      (isCurrent) =>
+          _queryLiveUrl(autoFullScreenFlag, autoplay, cancelToken, isCurrent),
+      isValid: () => !isClosed && playbackOwner.isActive,
+      cancel: cancelToken.cancel,
+    );
+  }
+
+  Future<void> _queryLiveUrl(
+    bool autoFullScreenFlag,
+    bool autoplay,
+    CancelToken cancelToken,
+    bool Function() isCurrent,
+  ) async {
+    if (currentQn == null) {
+      final isWiFi = await ConnectivityUtils.isWiFi;
+      if (!isCurrent()) return;
+      currentQn = isWiFi ? Pref.liveQuality : Pref.liveQualityCellular;
+    }
     final res = await LiveHttp.liveRoomInfo(
       roomId: roomId,
       qn: currentQn,
       onlyAudio: plPlayerController.onlyPlayAudio.value,
+      cancelToken: cancelToken,
     );
+    if (!isCurrent()) return;
     if (res case Success(:final response)) {
       if (response.liveStatus != 1) {
         _showDialog('当前直播间未开播');
@@ -282,10 +319,13 @@ class LiveRoomController extends GetxController {
           formatIndex: formatIndex,
           codecIndex: codecIndex,
           liveUrlIndex: liveUrlIndex,
+          autoFullScreenFlag: autoFullScreenFlag,
+          autoplay: autoplay,
+          isCurrent: isCurrent,
         ),
         if (!isLoaded.value && Accounts.heartbeat.isLogin) _fetchBlockRules(),
       ]);
-      isLoaded.value = true;
+      if (isCurrent()) isLoaded.value = true;
     } else {
       _showDialog(res.toString());
     }
@@ -329,7 +369,14 @@ class LiveRoomController extends GetxController {
     int formatIndex = 0,
     int codecIndex = 0,
     int liveUrlIndex = 0,
+    bool autoFullScreenFlag = false,
+    bool? autoplay,
+    bool Function()? isCurrent,
   }) {
+    if (isClosed || !playbackOwner.isActive || !(isCurrent?.call() ?? true)) {
+      return null;
+    }
+    if (isCurrent == null) playbackOwner.invalidateRequests();
     this.streamIndex = streamIndex;
     this.formatIndex = formatIndex;
     this.codecIndex = codecIndex;
@@ -351,12 +398,31 @@ class LiveRoomController extends GetxController {
     }).toList();
     currentQnDesc.value =
         LiveQuality.fromCode(currentQn)?.desc ?? currentQn.toString();
-    videoUrl = VideoUtils.getLiveCdnUrl(item, index: liveUrlIndex);
-    return playerInit()?.whenComplete(_startSizeSub);
+    final urls = VideoUtils.getLiveCdnUrls(item, index: liveUrlIndex);
+    final source = _networkSource = NetworkSource(
+      videoSource: urls.first,
+      audioSource: null,
+      videoCandidates: urls,
+    );
+    videoUrl = source.videoSource;
+    return playerInit(
+      autoplay: autoplay ?? plPlayerController.wantsToPlay,
+      autoFullScreenFlag: autoFullScreenFlag,
+      isCurrent: isCurrent,
+    )?.whenComplete(() {
+      if (!isClosed &&
+          playbackOwner.isActive &&
+          identical(source, _networkSource)) {
+        _startSizeSub();
+      }
+    });
   }
 
   Future<void> queryLiveInfoH5() async {
+    final ownsPlayback = playbackOwner.guard();
+    if (isClosed || !ownsPlayback()) return;
     final res = await LiveHttp.liveRoomInfoH5(roomId: roomId);
+    if (isClosed || !ownsPlayback()) return;
     if (res case Success(:final response)) {
       roomInfoH5.value = response;
       title.value = response.roomInfo?.title ?? '';
@@ -528,6 +594,7 @@ class LiveRoomController extends GetxController {
 
   @override
   void onClose() {
+    playbackOwner.close();
     _stopSizeSub();
     closeLiveMsg();
     cancelLikeTimer();

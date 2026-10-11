@@ -25,6 +25,27 @@ String? localDependency(File file, String uri) {
 
 void main() {
   test(
+    'playback scheduling and recovery are independent of UI and network',
+    () {
+      for (final name in ['playback_session', 'network_recovery']) {
+        final file = File('lib/plugin/pl_player/playback/$name.dart');
+        expect(
+          dependencies(file).where(
+            (uri) =>
+                uri.startsWith('package:flutter/') ||
+                uri.startsWith('package:get/') ||
+                uri.startsWith('package:dio/') ||
+                uri.contains('/pages/') ||
+                uri.contains('/http/') ||
+                uri.contains('/storage'),
+          ),
+          isEmpty,
+          reason: file.path,
+        );
+      }
+    },
+  );
+  test(
     'main and app composition modules are never imported by lower layers',
     () {
       final violations = <String>[];

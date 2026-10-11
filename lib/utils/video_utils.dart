@@ -116,6 +116,19 @@ abstract final class VideoUtils {
     return (liveCdnUrl ?? urlInfo.host) + e.baseUrl + urlInfo.extra;
   }
 
+  static List<String> getLiveCdnUrls(CodecItem item, {int index = 0}) {
+    final primary = getLiveCdnUrl(item, index: index);
+    final urls = <String>[primary];
+    if (Pref.enableMultiCdn) {
+      // 备用源使用接口原始 host，避免自定义 CDN 把所有候选改成同一地址。
+      for (final info in item.urlInfo) {
+        final url = info.host + item.baseUrl + info.extra;
+        if (!urls.contains(url)) urls.add(url);
+      }
+    }
+    return urls;
+  }
+
   static VideoDecodeFormatType selectCodec(
     Iterable<String> codecs,
     List<VideoDecodeFormatType> preferCodecs,

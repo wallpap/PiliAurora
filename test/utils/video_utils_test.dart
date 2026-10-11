@@ -3,6 +3,8 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hive_ce/hive.dart';
 import 'package:pili_aurora/models/common/video/cdn_type.dart';
+import 'package:pili_aurora/models/remote/live/live_room_play_info/codec.dart';
+import 'package:pili_aurora/models/remote/live/live_room_play_info/url_info.dart';
 import 'package:pili_aurora/utils/storage.dart';
 import 'package:pili_aurora/utils/storage_key.dart';
 import 'package:pili_aurora/utils/storage_pref.dart';
@@ -24,6 +26,30 @@ void main() {
 
   setUp(() async {
     await GStorage.setting.delete(SettingBoxKey.enableMultiCdn);
+  });
+
+  test('直播备用源保留当前选择，按当前编码提供原始备用 host', () async {
+    final codec = CodecItem(
+      currentQn: 10000,
+      acceptQn: [10000],
+      baseUrl: '/stream.flv',
+      urlInfo: [
+        UrlInfo(host: 'https://a.example.com', extra: '?a=1'),
+        UrlInfo(host: 'https://b.example.com', extra: '?b=2'),
+      ],
+    );
+    VideoUtils.liveCdnUrl = null;
+    expect(VideoUtils.getLiveCdnUrls(codec, index: 1), [
+      'https://b.example.com/stream.flv?b=2',
+    ]);
+    await GStorage.setting.put(SettingBoxKey.enableMultiCdn, true);
+    VideoUtils.liveCdnUrl = 'https://custom.example.com';
+    expect(VideoUtils.getLiveCdnUrls(codec, index: 1), [
+      'https://custom.example.com/stream.flv?b=2',
+      'https://a.example.com/stream.flv?a=1',
+      'https://b.example.com/stream.flv?b=2',
+    ]);
+    VideoUtils.liveCdnUrl = null;
   });
 
   test('single CDN is the default and preserves the original selection', () {

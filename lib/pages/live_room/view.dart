@@ -116,6 +116,7 @@ class _LiveRoomPageState extends State<LiveRoomPage>
 
   @override
   Future<void> didPopNext() async {
+    _liveRoomController.playbackOwner.activate();
     addObserverMobile(this);
     if (!plPlayerController.isLive) {
       plPlayerController.isLive = true;

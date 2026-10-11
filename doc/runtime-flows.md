@@ -72,41 +72,48 @@ sequenceDiagram
 
 ## 播放器切源与网络恢复
 
-### 切源时序
+### 请求、切源与页面归属
 
-`setDataSource()` 将加载任务交给 `PlaybackLoadQueue`。队列按序执行，并用代次使旧任务停止后续副作用。已发出的原生操作不会被队列中断；操作返回后会检查代次并丢弃旧结果。
+视频页与直播页通过 `PlaybackSession.attach()` 借用共享播放器。最近进入的页面拥有加载权；返回上一页面时显式激活其 `PlaybackOwner`，关闭页面时释放借用。页面被替换时，其在途查询同步失效，返回该页面后也不会重新接受这些旧结果。
+
+地址查询绑定请求开始时的媒体标识。新查询立即执行，并取消上一轮在途 HTTP 请求；响应与补充画质结果提交前检查请求代次及页面归属。`VideoPlaybackSource` 将画质、编码、独立音轨与 CDN 地址解析成一次选择；页面用这份选择提交加载，字幕和播放信息沿用该媒体的有效性检查。
 
 ```mermaid
 sequenceDiagram
     participant Page as 视频页 / 直播页
+    participant Owner as PlaybackOwner
+    participant Http as 播放地址 API
+    participant Session as PlaybackSession / LoadQueue
     participant C as PlPlayerController
-    participant Q as PlaybackLoadQueue
-    participant P as media_kit Player
-    participant Native as mpv / 平台输出
+    participant Runtime as NativePlaybackRuntime
+    participant P as media_kit / 平台输出
 
-    Page->>C: setDataSource(source, autoplay, seekTo)
-    C->>Q: run(operation)
-    Q->>Q: 分配新代次并串行等待
-    Q->>C: 执行 operation(isCurrent)
-    C->>C: 暂停旧播放、更新媒体元数据
-    alt 首次创建播放器
-        C->>P: Player.create()
-        C->>Native: 创建 VideoController 与输出
-        Native-->>C: 输出初始化完成
+    Page->>Owner: query(请求快照)
+    Owner->>Http: 查询地址 / 补充画质
+    Http-->>Owner: 响应
+    Owner->>Owner: 校验代次、媒体标识与归属
+    Owner-->>Page: 提交当前来源选择
+    Page->>C: setDataSource(source, owner, autoplay, seekTo)
+    C->>Session: load(owner, operation)
+    Session->>Session: 新代次、跳过旧排队任务、串行执行
+    Session->>C: operation(isCurrent)
+    C->>C: 更新元数据，暂停旧播放
+    C->>Runtime: initialize / open
+    opt 首次加载
+        Runtime->>P: 创建 Player 与 VideoController
     end
-    C->>C: 检查代次与页面生命周期
-    C->>P: 设置解码选项并构造媒体源
-    C->>Native: open(media, play: false)
-    Native-->>C: open 完成
-    C->>C: 再次检查代次，更新时长、位置与 loaded 状态
-    alt autoplay 且请求仍有效
-        C->>P: 应用倍速 / 画面适配并开始播放
-    else 已过期或不自动播放
-        C->>C: 不启动旧请求的后续副作用
+    Runtime->>P: open(media, play: false)
+    P-->>Runtime: open 完成
+    Runtime-->>C: 校验当前请求后返回
+    C->>C: 更新时长、位置、loaded 与画面适配
+    opt 播放意图允许且请求有效
+        C->>P: 开始播放
     end
 ```
 
-只有当前代次的加载失败会更新错误状态并写入诊断。实现见 [`controller.dart`](../lib/plugin/pl_player/controller.dart) 和 [`playback_load_queue.dart`](../lib/plugin/pl_player/utils/playback_load_queue.dart)。
+已发出的原生操作保留在串行链中，返回后再检查代次。快速切源复用原生资源；释放最后一份借用后，先使会话与资源不可见，再等待在途加载结束并销毁播放器，避免 `open` 与 `dispose` 并发。
+
+实现见 [`playback_session.dart`](../lib/plugin/pl_player/playback/playback_session.dart)、[`native_playback_runtime.dart`](../lib/plugin/pl_player/playback/native_playback_runtime.dart) 和 [`playback_source.dart`](../lib/pages/video/playback_source.dart)。
 
 ### 网络错误恢复
 
@@ -115,7 +122,7 @@ flowchart TD
     Error[收到播放器网络错误]
     Local{本地文件源?}
     Live{直播源?}
-    Throttle[按错误类型限频]
+    Throttle[按当前媒体、CDN 候选和错误类型限频]
     Wait[等待 3 秒]
     Current{播放器仍存活且媒体源未变化?}
     NeedBuffer{是否要求等缓冲耗尽?}
@@ -140,7 +147,11 @@ flowchart TD
     Defer -->|否| Stop
 ```
 
-只有可恢复的网络错误才进入该链；HTTP 403 不按 CDN 故障重试。`playback_network_recovery.dart` 识别错误，`PlPlayerController` 管理限频、缓冲检查和媒体重载。GPU、MediaCodec 与 Surface 恢复需在目标设备验证。
+只有可恢复的网络错误才进入该链；HTTP 403 不按 CDN 故障重试。`utils/playback_network_recovery.dart` 识别错误，[`playback/network_recovery.dart`](../lib/plugin/pl_player/playback/network_recovery.dart) 管理当前媒体的计时器、限频与缓冲等待。切源会释放恢复状态，当前媒体的错误风暴合并为一个计时器，终止读取的错误可升级已有的缓冲等待。加载队列繁忙时继续等待，保留本轮恢复机会。
+
+点播重载保留位置，直播重载不设置起始位置。切换画质、音质或重新解析已加载媒体时保留位置与播放意图。两者先暂停加载，完成后检查媒体有效性与最新播放意图；加载期间用户主动暂停时不会被恢复操作覆盖。开启多 CDN 时，直播仅使用当前协议、格式和编码提供的候选地址。
+
+Windows 在确定硬件或软件后端后注册纹理，硬件初始化失败时先释放 GL 资源再进入软件路径。Android 保留既有 MediaCodec、Surface 与解码恢复实现。GPU、MediaCodec、Surface 行为和帧率仍需在目标设备验证。
 
 ## 下载
 

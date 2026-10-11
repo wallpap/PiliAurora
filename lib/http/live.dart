@@ -82,9 +82,11 @@ abstract final class LiveHttp {
     required Object roomId,
     Object? qn,
     bool onlyAudio = false,
+    CancelToken? cancelToken,
   }) async {
     final res = await Request().get(
       Api.liveRoomInfo,
+      cancelToken: cancelToken,
       queryParameters: await WbiSign.makSign({
         'room_id': roomId,
         'protocol': '0,1',

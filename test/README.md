@@ -11,7 +11,7 @@
 | `plugin/pl_player/` | 原生媒体源、跳转、硬解配置、解码分类和预览缓存。 |
 | `plugin/pl_player/android/` | Android 解码恢复、Surface 输出与帧交接。 |
 | `plugin/pl_player/video_output/` | 跨平台尺寸策略、输出调度、截图桥和绘制确认。 |
-| `plugin/pl_player/playback/` | 播放加载队列、网络恢复与时序契约。 |
+| `plugin/pl_player/playback/` | 页面归属、请求代次、播放加载队列、网络恢复与时序契约。 |
 | `services/` | 下载、直播、设置同步及平台服务。 |
 | `services/diagnostics/` | 诊断编排、脱敏、HTTP 接线、历史读取、记录存储、日志和进程采样。 |
 | `utils/` | 工具函数与账号状态。 |

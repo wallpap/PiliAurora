@@ -20,6 +20,14 @@ class PlaybackLoadQueue {
   /// 是否处于加载状态。
   bool get isLoading => _isLoading;
 
+  /// 保留串行执行链，使尚未结束的原生操作完成后再执行下一次加载。
+  void invalidate() {
+    _generation++;
+    _isLoading = false;
+  }
+
+  Future<void> get drained => _tail;
+
   /// 排队并执行一次加载任务。
   ///
   /// 传入的 `isCurrent()` 用于在 await 之后判断自身是否已被更新请求覆盖；
