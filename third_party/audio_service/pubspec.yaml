@@ -25,6 +25,11 @@ dependencies:
   flutter_web_plugins:
     sdk: flutter
 
+dependency_overrides:
+  # 独立分析本地 fork 时使用仓库中的缓存接口实现。
+  cached_network_image_ce:
+    path: ../cached_network_image_ce
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

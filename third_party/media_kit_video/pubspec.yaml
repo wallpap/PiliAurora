@@ -32,6 +32,10 @@ dependencies:
 dev_dependencies:
   flutter_lints: ^6.0.0
 
+dependency_overrides:
+  # 独立分析本地 fork 时使用仓库中的播放器 API 实现。
+  media_kit:
+    path: ../media_kit
 
 
 flutter:
