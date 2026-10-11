@@ -8,6 +8,7 @@ import 'package:material_ui/material_ui.dart' hide RefreshIndicator;
 import 'package:pili_aurora/common/widgets/dialog/simple_dialog_option.dart';
 import 'package:pili_aurora/pages/main/controller.dart';
 import 'package:pili_aurora/pages/setting/models/model.dart';
+import 'package:pili_aurora/pages/setting/widgets/clear_cache_item.dart';
 import 'package:pili_aurora/pages/setting/widgets/slider_dialog.dart';
 import 'package:pili_aurora/services/download/download_service.dart';
 import 'package:pili_aurora/utils/android/bindings.g.dart';
@@ -98,6 +99,7 @@ List<SettingsModel> get systemSettings => [
           defaultVal: Pref.enableDocProvider,
           onChanged: AndroidHelper.updateDocProvider,
         ),
+      const _ClearCacheModel(),
       NormalModel(
         title: '最大缓存大小',
         getSubtitle: () =>
@@ -108,6 +110,13 @@ List<SettingsModel> get systemSettings => [
     ],
   ),
 ];
+
+class _ClearCacheModel extends NormalModel {
+  const _ClearCacheModel() : super(title: '清除缓存', subtitle: '图片及网络缓存');
+
+  @override
+  Widget get widget => const ClearCacheItem();
+}
 
 List<SettingsModel> get diagnosticSettings => [
   NormalModel(

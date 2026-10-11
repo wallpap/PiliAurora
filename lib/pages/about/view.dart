@@ -5,7 +5,6 @@ import 'package:pili_aurora/build_config.dart';
 import 'package:pili_aurora/common/assets.dart';
 import 'package:pili_aurora/common/constants.dart';
 import 'package:pili_aurora/common/style.dart';
-import 'package:pili_aurora/common/widgets/dialog/dialog.dart';
 import 'package:pili_aurora/common/widgets/dialog/export_import.dart';
 import 'package:pili_aurora/common/widgets/dialog/simple_dialog_option.dart';
 import 'package:pili_aurora/common/widgets/flutter/list_tile.dart';
@@ -16,7 +15,6 @@ import 'package:pili_aurora/utils/accounts.dart';
 import 'package:pili_aurora/utils/accounts/account.dart';
 import 'package:pili_aurora/utils/android/android_helper.dart';
 import 'package:pili_aurora/utils/app_scheme.dart';
-import 'package:pili_aurora/utils/cache_manager.dart';
 import 'package:pili_aurora/utils/date_utils.dart';
 import 'package:pili_aurora/utils/device_utils.dart';
 import 'package:pili_aurora/utils/extension/num_ext.dart';
@@ -43,29 +41,8 @@ class AboutPage extends StatefulWidget {
 class _AboutPageState extends State<AboutPage> {
   final currentVersion =
       '${BuildConfig.versionName}+${BuildConfig.versionCode}';
-  RxString cacheSize = ''.obs;
 
   late int _pressCount = 0;
-
-  @override
-  void initState() {
-    super.initState();
-    getCacheSize();
-  }
-
-  @override
-  void dispose() {
-    cacheSize.close();
-    super.dispose();
-  }
-
-  void getCacheSize() {
-    CacheManager.loadApplicationCache().then((res) {
-      if (mounted) {
-        cacheSize.value = CacheManager.formatSize(res);
-      }
-    });
-  }
 
   void _showDialog() => showDialog(
     context: context,
@@ -192,37 +169,6 @@ Commit Hash: ${BuildConfig.commitHash}''',
             leading: const Icon(Icons.feedback_outlined),
             title: const Text('问题反馈'),
             trailing: Icon(Icons.arrow_forward, size: 16, color: outline),
-          ),
-          ListTile(
-            onTap: () {
-              if (cacheSize.value.isNotEmpty) {
-                showConfirmDialog(
-                  context: context,
-                  title: const Text('提示'),
-                  content: const Text('该操作将清除图片及网络请求缓存数据，确认清除？'),
-                  onConfirm: () async {
-                    SmartDialog.showLoading(msg: '正在清除...');
-                    try {
-                      await CacheManager.clearLibraryCache();
-                      SmartDialog.showToast('清除成功');
-                    } catch (err) {
-                      SmartDialog.showToast(err.toString());
-                    } finally {
-                      SmartDialog.dismiss();
-                    }
-                    getCacheSize();
-                  },
-                );
-              }
-            },
-            leading: const Icon(Icons.delete_outline),
-            title: const Text('清除缓存'),
-            subtitle: Obx(
-              () => Text(
-                '图片及网络缓存 ${cacheSize.value}',
-                style: subTitleStyle,
-              ),
-            ),
           ),
           ListTile(
             title: const Text('导入/导出登录信息'),
