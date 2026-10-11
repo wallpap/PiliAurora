@@ -102,7 +102,9 @@ abstract mixin class WindowsStorage implements PlatformStorage {
 
     try {
       return json.decode(itemValue);
-    } catch (e) {}
+    } catch (_) {
+      // Web Storage values may be plain strings; return them unchanged.
+    }
 
     return itemValue;
   }

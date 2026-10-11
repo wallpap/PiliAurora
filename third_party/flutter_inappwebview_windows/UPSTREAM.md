@@ -7,6 +7,7 @@
 - 仅复制该包的 lib、windows、pubspec、analysis_options 与许可/版本说明；不复制 example、开发缓存或 Git 仓库。
 - 不升级 Dart/WebView2/WIL 版本，不修改共享 Pub 缓存。
 - 补丁目的：在最后一个 manager 销毁时释放静态图形资源，不留到 DLL 静态析构阶段。
+- Dart 维护修正：方法通道异常使用 Flutter 日志输出；补充本地 HTML 资源与 JavaScript 纯文本回退的说明。
 - 实验结果和多 engine/队列关闭边界由 tool/reports 的 20261003 跟进报告记录。
 
 ## 补丁范围与边界

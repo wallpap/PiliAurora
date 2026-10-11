@@ -1009,7 +1009,7 @@ class AudioService {
     assert(config.fastForwardInterval > Duration.zero);
     assert(config.rewindInterval > Duration.zero);
     WidgetsFlutterBinding.ensureInitialized();
-    _cacheManager = (cacheManager ??= DefaultCacheManager());
+    _cacheManager = cacheManager ?? DefaultCacheManager.instance!;
     final callbacks = _HandlerCallbacks();
     _platform.setHandlerCallbacks(callbacks);
     await _platform.configure(ConfigureRequest(config: config._toMessage()));
@@ -1058,9 +1058,9 @@ class AudioService {
         if (artUri.scheme == 'file') {
           sendToPlatform(artUri.toFilePath()).catchError(_asyncError.add);
         } else {
-          // Try to load a cached file from memory.
+          // Try to load the artwork from cache before sending it to the platform.
           final fileInfo =
-              await cacheManager.getFileFromMemory(artUri.toString());
+              await cacheManager.getFileFromCache(artUri.toString());
           final filePath = fileInfo?.file.path;
           if (operationId != artFetchOperationId) {
             return;

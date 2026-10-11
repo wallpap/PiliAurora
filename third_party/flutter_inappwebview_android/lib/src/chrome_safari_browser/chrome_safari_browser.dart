@@ -50,7 +50,7 @@ class AndroidChromeSafariBrowser extends PlatformChromeSafariBrowser
   }
 
   ChromeSafariBrowserActionButton? _actionButton;
-  Map<int, ChromeSafariBrowserMenuItem> _menuItems = new HashMap();
+  final Map<int, ChromeSafariBrowserMenuItem> _menuItems = new HashMap();
   ChromeSafariBrowserSecondaryToolbar? _secondaryToolbar;
   bool _isOpened = false;
   static const MethodChannel _staticChannel =

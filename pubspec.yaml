@@ -31,7 +31,7 @@ dependencies:
 
   app_links: 7.2.1
   archive: 4.3.0
-  audio_service: 0.18.19+piliaurora.1
+  audio_service: 0.18.19+piliaurora.2
   audio_session: 0.2.4
   battery_plus: 7.1.1
   brotli: 0.6.0

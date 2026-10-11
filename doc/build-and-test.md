@@ -36,9 +36,11 @@ pwsh -File tool/build.ps1 -Platform android -Mode debug
 ## 静态检查与测试
 
 ```powershell
-fvm flutter analyze
+fvm flutter analyze --no-pub lib test tool
 fvm flutter test
 ```
+
+常规分析覆盖应用、测试和工具代码。本地依赖包有各自的依赖上下文；更新依赖包时，按 [`third_party/README.md`](../third_party/README.md) 单独检查。
 
 依赖已准备后，可用统一入口运行 GitHub Actions 当前选择的测试文件：
 

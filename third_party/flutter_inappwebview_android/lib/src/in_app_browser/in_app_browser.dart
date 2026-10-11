@@ -81,7 +81,7 @@ class AndroidInAppBrowser extends PlatformInAppBrowser with ChannelController {
   @override
   ContextMenu? get contextMenu => _contextMenu;
 
-  Map<int, InAppBrowserMenuItem> _menuItems = HashMap();
+  final Map<int, InAppBrowserMenuItem> _menuItems = HashMap();
   bool _isOpened = false;
   AndroidInAppWebViewController? _webViewController;
 

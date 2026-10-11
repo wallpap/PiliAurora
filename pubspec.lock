@@ -103,7 +103,7 @@ packages:
       path: "third_party/audio_service"
       relative: true
     source: path
-    version: "0.18.19+piliaurora.1"
+    version: "0.18.19+piliaurora.2"
   audio_service_platform_interface:
     dependency: transitive
     description:
@@ -629,7 +629,7 @@ packages:
       path: "third_party/flutter_inappwebview_android"
       relative: true
     source: path
-    version: "1.1.3+piliaurora.1"
+    version: "1.1.3+piliaurora.2"
   flutter_inappwebview_internal_annotations:
     dependency: transitive
     description:
@@ -676,7 +676,7 @@ packages:
       path: "third_party/flutter_inappwebview_windows"
       relative: true
     source: path
-    version: "0.6.0+piliaurora.1"
+    version: "0.6.0+piliaurora.2"
   flutter_launcher_icons:
     dependency: "direct dev"
     description:
