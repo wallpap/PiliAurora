@@ -40,6 +40,14 @@ pwsh -File tool/build.ps1 -Platform windows -Mode debug
 pwsh -File tool/build.ps1 -Platform android -Mode debug
 ```
 
+Android 默认构建包含所有受支持的 ABI。可通过 `-Abi` 只构建一种架构，减少 APK 中的原生库体积：
+
+```powershell
+pwsh -File tool/build.ps1 -Platform android -Mode release -Abi arm64-v8a
+```
+
+支持 `armeabi-v7a`、`arm64-v8a` 和 `x86_64`。省略 `-Abi` 时保持通用 APK；指定 Windows 平台和 `-Abi` 会报错。
+
 构建脚本统一执行一次 `pub get --enforce-lockfile`，随后检查并补齐补丁、验收依赖来源，最后通过 `--no-pub` 构建。已应用的补丁会复用；切换到 Windows 时会移除项目的 Android 专用补丁。补丁目标按 `.dart_tool/package_config.json` 的实际解析结果定位。
 
 常规输出显示准备步骤的汇总和构建进度。使用 `-Verbose` 可查看完整依赖解析输出和逐项补丁状态；步骤失败时会显示错误详情。依赖声明和锁文件未改动、依赖已准备时，可传入 `-SkipPubGet`；补丁已准备时，可再传入 `-SkipPatch`：

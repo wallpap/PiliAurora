@@ -4,6 +4,8 @@ param(
     [string]$Platform = "windows",
     [ValidateSet("debug", "profile", "release")]
     [string]$Mode = "debug",
+    [ValidateSet("armeabi-v7a", "arm64-v8a", "x86_64")]
+    [string]$Abi,
     [switch]$SkipPatch,
     [switch]$SkipPubGet
 )
@@ -11,6 +13,10 @@ param(
 $ErrorActionPreference = "Stop"
 $Workspace = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 Set-Location $Workspace
+
+if ($Abi -and $Platform -ne "android") {
+    throw "-Abi 仅适用于 Android 构建。"
+}
 
 $dart = Get-Command dart -ErrorAction SilentlyContinue
 if (-not $dart) {
@@ -121,4 +127,14 @@ if (-not $SkipPatch) {
 Invoke-Fvm @("exec", "dart", "--packages=.dart_tool/package_config.json", "tool/check_dependencies.dart")
 
 $target = if ($Platform -eq "android") { "apk" } else { "windows" }
-Invoke-Fvm @("exec", "flutter", "build", $target, "--$Mode", "--no-pub")
+$buildArguments = @("exec", "flutter", "build", $target, "--$Mode")
+if ($Abi) {
+    $targetPlatform = switch ($Abi) {
+        "armeabi-v7a" { "android-arm" }
+        "arm64-v8a" { "android-arm64" }
+        "x86_64" { "android-x64" }
+    }
+    $buildArguments += "--target-platform=$targetPlatform"
+}
+$buildArguments += "--no-pub"
+Invoke-Fvm -Arguments $buildArguments

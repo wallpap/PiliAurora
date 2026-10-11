@@ -33,6 +33,8 @@ pwsh -File tool/build.ps1 -Platform android -Mode debug
 
 将 `-Mode debug` 改为 `-Mode release` 可构建发布版。默认输出显示准备步骤汇总和构建进度，`-Verbose` 显示详细输出。已准备的环境可按需使用 `-SkipPubGet` 和 `-SkipPatch`，参数条件与依赖来源检查见 [`tool/README.md`](../tool/README.md)。
 
+Android 默认生成包含所有 ABI 的通用 APK。可使用 `-Abi arm64-v8a`、`-Abi armeabi-v7a` 或 `-Abi x86_64` 只打包指定架构；省略参数时保留通用 APK 行为。
+
 ## 静态检查与测试
 
 ```powershell
