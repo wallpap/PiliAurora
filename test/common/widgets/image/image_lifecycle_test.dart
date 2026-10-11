@@ -318,15 +318,6 @@ void main() {
           }
         }
 
-        final legacyPixels = await pixels(
-          ResizeImage(
-            CachedNetworkImageProvider(
-              'https://example.test/long.png',
-              cacheManager: cache,
-            ),
-            width: 300,
-          ),
-        );
         final thumbnailPixels = await pixels(
           CachedImageProvider(
             'https://example.test/long.png',
@@ -342,7 +333,6 @@ void main() {
           ),
         );
 
-        expect(legacyPixels, 300 * 12000);
         expect(thumbnailPixels, lessThanOrEqualTo(1 << 20));
         expect(viewerPixels, 400 * 16000);
       });

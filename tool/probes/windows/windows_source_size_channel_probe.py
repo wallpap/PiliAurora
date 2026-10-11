@@ -75,7 +75,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--compiler', default='g++')
     args = parser.parse_args()
-    root = Path(__file__).resolve().parents[2]
+    root = Path(__file__).resolve().parents[3]
     source = (root / 'third_party/media_kit_video/windows/media_kit_video_plugin.cc').read_text(encoding='utf-8')
     branch = method(source, '} else if (method_call.method_name().compare("VideoOutputManager.SetSourceSize")')
     branch = branch[branch.index('{'):]

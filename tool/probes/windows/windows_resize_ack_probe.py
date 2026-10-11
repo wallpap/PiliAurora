@@ -44,7 +44,7 @@ Future<void> main() async {
 """
 
 def main():
-    root=Path(__file__).resolve().parents[2]
+    root=Path(__file__).resolve().parents[3]
     source=(root/'third_party/media_kit_video/lib/src/video_controller/native_video_controller/real.dart').read_text(encoding='utf-8')
     start=source.index('  Future<void>? setSize(')
     opening=source.index('}) {',start)+3

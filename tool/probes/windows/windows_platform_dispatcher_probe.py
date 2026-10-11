@@ -72,7 +72,7 @@ def main():
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--compiler',default='g++')
     args=parser.parse_args()
-    root=Path(__file__).resolve().parents[2]
+    root=Path(__file__).resolve().parents[3]
     build=root/'build/windows-playback-diagnosis/dispatcher-probe'
     (build/'flutter').mkdir(parents=True,exist_ok=True)
     (build/'flutter/plugin_registrar_windows.h').write_text(FAKE,encoding='utf-8')

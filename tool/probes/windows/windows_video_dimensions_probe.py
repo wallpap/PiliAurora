@@ -51,7 +51,7 @@ def main():
     parser.add_argument('--compiler', default='g++')
     parser.add_argument('--headers', type=Path)
     args = parser.parse_args()
-    root = Path(__file__).resolve().parents[2]
+    root = Path(__file__).resolve().parents[3]
     candidates = [root/'build/windows/x64/libmpv/include',
                   root/'build/windows/x64/libmpv-20260819/include/mpv']
     headers = args.headers or next((p for p in candidates if (p/'client.h').exists()), None)

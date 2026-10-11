@@ -15,5 +15,6 @@
 - manager_count_ 归零时释放 compositor、graphics_context、dispatcher_queue_controller、rohelper。
 - 引用计数保留同进程多个顺序 engine 的共享资源寿命；不改变已有静态资源设计，不提供跨线程支持。
 - 未新增异步队列 drain，当前验证覆盖本机顺序重建、DOM/容器清理和短播放退出。
+- 移除仅用于上游 example 的可选 GoogleTest target 和测试夹具；不属于应用生产插件目标。
 - 功能补丁仅修改 3 个生产 C++ 文件；另清理 4 个上游文件中的 5 行尾空白（空行或注释）。Dart 业务逻辑、NuGet 版本及原许可证保持不变。
 - 完整结果：tool/reports/windows-webview-cache-experiment-20261003.md。

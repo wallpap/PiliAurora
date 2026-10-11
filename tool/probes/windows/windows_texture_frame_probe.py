@@ -233,7 +233,7 @@ def main():
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--compiler',default='g++')
     args=parser.parse_args()
-    root=Path(__file__).resolve().parents[2]
+    root=Path(__file__).resolve().parents[3]
     source=(root/'third_party/media_kit_video/windows/video_output.cc').read_text(encoding='utf-8')
     render=method(source,'VideoOutput::Render()')
     resize=method(source,'VideoOutput::Resize(')

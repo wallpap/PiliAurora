@@ -223,7 +223,7 @@ void main() {
 
 
 def main():
-    root = Path(__file__).resolve().parents[2]
+    root = Path(__file__).resolve().parents[3]
     source = (root / 'lib/plugin/pl_player/controller.dart').read_text(encoding='utf-8')
     native = (root / 'third_party/media_kit/lib/src/player/native/player/real.dart').read_text(encoding='utf-8')
     dispatch_start = native.index('if (!logController.isClosed)', native.index('case generated.mpv_event_id.MPV_EVENT_LOG_MESSAGE:'))

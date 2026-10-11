@@ -36,15 +36,16 @@ Future<void> main(List<String> args) async {
               : NativeEventLoopAbi.wakeupCallback),
       '${index == 0 ? "registered" : "legacy"} complete ABI resolves',
     );
-    api.initialize(NativeApi.postCObject.cast(), 123);
-    api.register(
-      mpv,
-      Pointer<mpv_handle>.fromAddress(42),
-      NativeApi.postCObject.cast(),
-      123,
-    );
-    api.acknowledge(42);
-    api.dispose(mpv, Pointer<mpv_handle>.fromAddress(42));
+    api
+      ..initialize(NativeApi.postCObject.cast(), 123)
+      ..register(
+        mpv,
+        Pointer<mpv_handle>.fromAddress(42),
+        NativeApi.postCObject.cast(),
+        123,
+      )
+      ..acknowledge(42)
+      ..dispose(mpv, Pointer<mpv_handle>.fromAddress(42));
     check(
       read(0) == 1 &&
           (index == 0

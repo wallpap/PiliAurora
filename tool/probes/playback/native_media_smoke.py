@@ -35,7 +35,7 @@ def main():
                         help='使用旧关键帧策略复现无声，作为单变量对照')
     args = parser.parse_args()
     library = args.library.resolve(strict=True)
-    workspace = Path(__file__).resolve().parent.parent
+    workspace = Path(__file__).resolve().parents[3]
     output = workspace / "build" / "native-playback-smoke"
     output.mkdir(parents=True, exist_ok=True)
     video = args.video.resolve(strict=True)
@@ -158,7 +158,7 @@ def main():
                     'request log messages failed')
             seeks = []
             for target in [args.seek_target, args.seek_target / 2, args.seek_target]:
-                argv = [dart, 'run', str(workspace / 'tool/debug/native_seek_command.dart'),
+                argv = [dart, 'run', str(workspace / 'tool/probes/playback/native_seek_command.dart'),
                         str(target)]
                 if args.keyframes_control:
                     argv.append('--keyframes-control')

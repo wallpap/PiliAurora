@@ -122,48 +122,6 @@ void main() {
     },
   );
 
-  testWidgets('baseline records animation rebuilds', (tester) async {
-    late DanmakuController<void> controller;
-    await tester.pumpWidget(
-      _host(
-        DanmakuScreen<void>(
-          option: _option,
-          size: _size,
-          createdController: (value) => controller = value,
-        ),
-      ),
-    );
-    for (var index = 0; index < 120; index++) {
-      controller.addDanmaku(
-        DanmakuContentItem(
-          '已缓冲弹幕 ${index % 12}',
-          color: const Color(0xFFFFFFFF),
-        ),
-      );
-    }
-    await tester.pump();
-    var rebuilds = 0;
-    final previousCallback = debugOnRebuildDirtyWidget;
-    debugOnRebuildDirtyWidget = (element, builtOnce) {
-      if (element.widget is ValueListenableBuilder) rebuilds++;
-    };
-    final stopwatch = Stopwatch()..start();
-    try {
-      for (var frame = 0; frame < 120; frame++) {
-        await tester.pump(const Duration(milliseconds: 16));
-      }
-    } finally {
-      stopwatch.stop();
-      debugOnRebuildDirtyWidget = previousCallback;
-    }
-    debugPrint(
-      'DANMAKU_BASELINE frames=120 rebuilds=$rebuilds '
-      'pumpMicroseconds=${stopwatch.elapsedMicroseconds}',
-    );
-    expect(rebuilds, greaterThanOrEqualTo(120));
-    await tester.pumpWidget(const SizedBox.shrink());
-  });
-
   testWidgets(
     'prepared renderer does not rebuild widgets per animation frame',
     (tester) async {
@@ -189,20 +147,13 @@ void main() {
       var rebuilds = 0;
       final previousCallback = debugOnRebuildDirtyWidget;
       debugOnRebuildDirtyWidget = (element, builtOnce) => rebuilds++;
-      final stopwatch = Stopwatch()..start();
       try {
         for (var frame = 0; frame < 120; frame++) {
           await tester.pump(const Duration(milliseconds: 16));
         }
       } finally {
-        stopwatch.stop();
         debugOnRebuildDirtyWidget = previousCallback;
       }
-      debugPrint(
-        'DANMAKU_PREPARED frames=120 rebuilds=$rebuilds '
-        'rasterizations=${renderer.rasters.rasterizations} '
-        'pumpMicroseconds=${stopwatch.elapsedMicroseconds}',
-      );
       expect(rebuilds, 0);
       expect(renderer.rasters.rasterizations, 12);
       await tester.pumpWidget(const SizedBox.shrink());

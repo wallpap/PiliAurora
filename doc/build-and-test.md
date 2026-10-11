@@ -32,7 +32,23 @@ fvm flutter analyze
 fvm flutter test
 ```
 
-定位单个功能时，可将相关测试文件或目录传给 `fvm flutter test`。测试按业务领域放在 `test/` 下。
+依赖已准备后，可用统一入口运行 GitHub Actions 当前选择的测试文件：
+
+```powershell
+pwsh -NoProfile -File tool/run-ci-tests.ps1
+```
+
+`tool/run-ci-tests.ps1` 只调用 `fvm flutter test --no-pub`，不会运行 `pub get`、修改 Flutter SDK、应用补丁或构建应用。运行前需准备好依赖；依赖来源检查和补丁由 GitHub Actions 的独立步骤执行。
+
+定位单个功能时，可将相关测试文件或目录传给 `fvm flutter test`。测试按业务领域放在 `test/` 下，目录索引见 [`test/README.md`](../test/README.md)。
+
+弹幕容量对照和旧渲染器重建测量位于 `tool/experiments/danmaku/`，按需单独运行：
+
+```powershell
+fvm flutter test tool/experiments/danmaku/
+```
+
+实验入口、测量范围和结果解释见 [`tool/experiments/README.md`](../tool/experiments/README.md)。
 
 | 改动范围 | 建议验证 |
 | --- | --- |

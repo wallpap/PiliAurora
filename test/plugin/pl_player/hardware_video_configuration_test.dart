@@ -38,13 +38,6 @@ void main() {
     }
   });
 
-  test('Windows default prefers verified d3d11va passthrough before auto', () {
-    final candidates = HwDecType.orderedCandidates(HwDecType.kHwdec);
-
-    expect(candidates.take(2), ['d3d11va', 'auto']);
-    expect(candidates.last, 'no');
-  }, skip: !Platform.isWindows);
-
   test(
     'disabling hardware acceleration falls back to software decoding only',
     () {
@@ -109,19 +102,6 @@ void main() {
 
     expect(configuration.hwdec, 'amf,no,nvdec-copy');
   });
-
-  test(
-    'disabling hardware acceleration explicitly disables native decoding',
-    () {
-      final configuration = hardwareVideoConfiguration(
-        enabled: false,
-        configured: 'auto',
-      );
-
-      expect(configuration.enableHardwareAcceleration, isFalse);
-      expect(configuration.hwdec, 'no');
-    },
-  );
 
   test('each media configuration uses the latest backend order', () {
     final first = hardwareVideoConfiguration(

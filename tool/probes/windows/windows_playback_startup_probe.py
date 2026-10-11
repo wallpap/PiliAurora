@@ -136,7 +136,7 @@ void main() {
 
 
 def main():
-    root = Path(__file__).resolve().parents[2]
+    root = Path(__file__).resolve().parents[3]
     source = (root / 'lib/plugin/pl_player/view/view.dart').read_text(encoding='utf-8')
     caller = method(source, 'Future<bool> _applyVideoOutputSize(')
     fixture = root / 'build/windows-playback-diagnosis/playback_startup_probe_test.dart'
