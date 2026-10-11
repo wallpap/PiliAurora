@@ -40,6 +40,16 @@ pwsh -File tool/build.ps1 -Platform windows -Mode debug
 pwsh -File tool/build.ps1 -Platform android -Mode debug
 ```
 
+构建脚本统一执行一次 `pub get --enforce-lockfile`，随后检查并补齐补丁、验收依赖来源，最后通过 `--no-pub` 构建。已应用的补丁会复用；切换到 Windows 时会移除项目的 Android 专用补丁。补丁目标按 `.dart_tool/package_config.json` 的实际解析结果定位。
+
+常规输出显示准备步骤的汇总和构建进度。使用 `-Verbose` 可查看完整依赖解析输出和逐项补丁状态；步骤失败时会显示错误详情。依赖声明和锁文件未改动、依赖已准备时，可传入 `-SkipPubGet`；补丁已准备时，可再传入 `-SkipPatch`：
+
+```powershell
+pwsh -File tool/build.ps1 -Platform windows -Mode debug -SkipPubGet -SkipPatch
+```
+
+CI 直接调用 `lib/scripts/patch.ps1` 时，补丁脚本会先准备依赖；调用方已执行依赖解析时可传入 `-SkipPubGet`。
+
 重新生成 Android JNI bindings：
 
 ```powershell
@@ -70,4 +80,4 @@ fvm dart run tool/check_dependencies.dart
 fvm flutter test --no-pub test/architecture/dependency_policy_test.dart test/common/widgets/font_awesome_icons_test.dart
 ```
 
-该工具只读工作区，检查 Git 来源、path 范围、来源 SHA、许可证、版本登记与锁文件，并核对合并依赖的目录和许可证信息。可用位置参数指定工作区。普通依赖更新和定制包维护流程见 `third_party/README.md`。本地构建和 CI 会在依赖解析后执行检查，构建命令使用 `--enforce-lockfile`。更新版本时，运行 `flutter pub get` 或针对目标包执行 `flutter pub upgrade`，再提交锁文件。
+该工具只读工作区，检查 Git 来源、path 范围、来源 SHA、许可证、版本登记与锁文件，并核对合并依赖的目录和许可证信息。可用位置参数指定工作区。普通依赖更新和定制包维护流程见 `third_party/README.md`。本地构建和 CI 会在依赖解析后执行检查，依赖解析使用 `--enforce-lockfile`。更新版本时，运行 `flutter pub get` 或针对目标包执行 `flutter pub upgrade`，再提交锁文件。

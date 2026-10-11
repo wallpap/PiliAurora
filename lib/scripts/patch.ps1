@@ -1,5 +1,8 @@
+[CmdletBinding()]
 param(
-    [string]$platform = ""
+    [ValidateSet("", "android", "windows")]
+    [string]$platform = "",
+    [switch]$SkipPubGet
 )
 
 $ErrorActionPreference = "Stop"
@@ -54,24 +57,44 @@ function Resolve-FlutterRoot {
     throw "Flutter SDK not found. Set FLUTTER_ROOT or install the version in .fvmrc."
 }
 
-function Apply-Patch([string]$PatchPath) {
-    git apply --check --quiet $PatchPath 2>$null
-    if ($LASTEXITCODE -eq 0) {
-        git apply $PatchPath
-        if ($LASTEXITCODE -ne 0) {
-            throw "Failed to apply patch: $PatchPath"
-        }
-        Write-Host "$PatchPath applied"
-        return
-    }
-
+function Apply-Patch([string]$PatchPath, [switch]$Reverse) {
     git apply --reverse --check --quiet $PatchPath 2>$null
-    if ($LASTEXITCODE -eq 0) {
-        Write-Host "$PatchPath already applied"
+    $applied = $LASTEXITCODE -eq 0
+    if ($applied -and -not $Reverse) {
+        Write-Verbose "$PatchPath already applied"
         return
     }
 
-    throw "Patch does not apply cleanly: $PatchPath"
+    if (-not $applied) {
+        git apply --check --quiet $PatchPath 2>$null
+        if ($LASTEXITCODE -ne 0) {
+            throw "Patch does not apply cleanly: $PatchPath"
+        }
+        if ($Reverse) { return }
+    }
+
+    [string[]]$options = if ($Reverse) { @("--reverse") } else { @() }
+    git apply @options $PatchPath
+    if ($LASTEXITCODE -ne 0) {
+        throw "Failed to update patch: $PatchPath"
+    }
+    $script:PatchChanges++
+    Write-Verbose "$PatchPath $(if ($Reverse) { 'removed' } else { 'applied' })"
+}
+
+function Resolve-PackageRoot([string]$Name) {
+    $configPath = Join-Path $Workspace ".dart_tool/package_config.json"
+    if (-not (Test-Path -LiteralPath $configPath)) {
+        throw "Package configuration missing. Run flutter pub get first."
+    }
+    $config = Get-Content -LiteralPath $configPath -Raw -Encoding UTF8 | ConvertFrom-Json
+    $package = $config.packages | Where-Object name -eq $Name | Select-Object -First 1
+    if (-not $package) { throw "Package not resolved: $Name" }
+    $root = [Uri]::new([Uri]::new($configPath), $package.rootUri).LocalPath
+    if (-not (Test-Path -LiteralPath $root -PathType Container)) {
+        throw "Resolved package directory missing: $root"
+    }
+    return (Resolve-Path -LiteralPath $root).Path
 }
 
 $FlutterRoot = Resolve-FlutterRoot
@@ -83,10 +106,6 @@ if ($IsWindowsPlatform -and (Test-Path "$FlutterExecutable.bat")) {
 if (-not (Test-Path $FlutterExecutable)) {
     throw "Flutter executable not found under $FlutterRoot"
 }
-
-# TODO: remove
-# https://github.com/flutter/flutter/issues/182281
-$NewOverScrollIndicator = "362b1de29974ffc1ed6faa826e1df870d7bec75f";
 
 # set `gestureSettings`
 $BottomSheetAndroidPatch = "lib/scripts/bottom_sheet_android.patch"
@@ -174,10 +193,19 @@ $ModalBarrierPatch = "lib/scripts/modal_barrier.patch"
 # https://github.com/flutter/flutter/issues/182466
 $MouseCursorPatch = "lib/scripts/mouse_cursor.patch"
 
-Set-Location $FlutterRoot
+Set-Location $Workspace
+if (-not $SkipPubGet) {
+    $pubOutput = & $FlutterExecutable pub get --enforce-lockfile 2>&1
+    if ($LASTEXITCODE -ne 0) {
+        $pubOutput | ForEach-Object { Write-Host $_ }
+        throw "flutter pub get failed with exit code $LASTEXITCODE"
+    }
+    $pubOutput | ForEach-Object { Write-Verbose $_ }
+    Write-Host "依赖解析完成。"
+}
 
-$picks   = @()
-$reverts = @()
+Set-Location $FlutterRoot
+$script:PatchChanges = 0
 $patches = @($ModalBarrierPatch, $TextSelectionPatch, $MouseCursorPatch,
             $ImageAnimPatch, $LayoutBuilderPatch, $NavigationDrawerPatch,
             $PopupMenuPatch, $FABPatch, $NullSafetySelectableRegionPatch,
@@ -186,48 +214,22 @@ $patches = @($ModalBarrierPatch, $TextSelectionPatch, $MouseCursorPatch,
             $DraggableScrollableSheetPatch, $ScaffoldPatch, $TextPatch,
             $TextPainterPatch, $SliverPatch, $RefreshIndicatorPatch)
 
-switch ($platform.ToLower()) {
-    "android" {
-        $patches += $BottomSheetAndroidPatch
-        $patches += $ScrollViewPatch
-        $patches += $NavigatorPatch
-
-        git reset --hard HEAD
-    }
-    "windows" {
-        git reset --hard HEAD
-    }
-    default {}
+$androidPatches = @($BottomSheetAndroidPatch, $ScrollViewPatch, $NavigatorPatch)
+if ($platform -eq "android") {
+    $patches += $androidPatches
 }
-
-foreach ($pick in $picks) {
-    git stash
-    git cherry-pick $pick --no-edit
-    if ($LASTEXITCODE -eq 0) {
-        git reset --soft HEAD~1
-        Write-Host "$pick picked"
-    } else {
-        throw "$LASTEXITCODE"
+elseif ($platform -eq "windows") {
+    # 切换平台时恢复项目的 Android 专用补丁，保留 SDK 中的其它改动。
+    foreach ($patch in $androidPatches) {
+        Apply-Patch (Join-Path $Workspace $patch) -Reverse
     }
-    git stash pop
-}
-
-foreach ($revert in $reverts) {
-    git stash
-    git revert $revert --no-edit
-    if ($LASTEXITCODE -eq 0) {
-        git reset --soft HEAD~1
-        Write-Host "$revert reverted"
-    } else {
-        throw "$LASTEXITCODE"
-    }
-    git stash pop
 }
 
 foreach ($patch in $patches) {
     Apply-Patch (Join-Path $Workspace $patch)
 }
 
+Write-Host "Flutter 补丁就绪（变更 $script:PatchChanges 项）。"
 Set-Location $Workspace
 
 $BottomSheetAndroidPatchMaterial = "lib/scripts/material/bottom_sheet_android.patch"
@@ -252,15 +254,6 @@ $patches_material = @($ModalBarrierPatchMaterial, $NavigationDrawerPatchMaterial
                     $FABPatchMaterial, $TextFieldPatchMaterial, $ScaffoldPatchMaterial, $RefreshIndicatorPatchMaterial,
                     $TabsPatchMaterial)
 
-$PubCacheDir = $env:PUB_CACHE
-if (-not $PubCacheDir) {
-    $PubCacheDir = if ($IsWindowsPlatform) {
-        Join-Path $env:LOCALAPPDATA "Pub/Cache"
-    } else {
-        Join-Path $HOME ".pub-cache"
-    }
-}
-
 switch ($platform.ToLower()) {
     "android" {
         $patches_material += $BottomSheetAndroidPatchMaterial
@@ -268,88 +261,17 @@ switch ($platform.ToLower()) {
     default {}
 }
 
-if (-not (Test-Path -LiteralPath $PubCacheDir -PathType Container)) {
-    New-Item -ItemType Directory -Path $PubCacheDir -Force | Out-Null
+$MaterialUiRoot = Resolve-PackageRoot "material_ui"
+Write-Verbose "material_ui dir: $MaterialUiRoot"
+Set-Location $MaterialUiRoot
+$script:PatchChanges = 0
+if ($platform -eq "windows") {
+    Apply-Patch (Join-Path $Workspace $BottomSheetAndroidPatchMaterial) -Reverse
 }
-$PubCacheDir = (Resolve-Path -LiteralPath $PubCacheDir).Path
-$HostedPubDir = Join-Path $PubCacheDir "hosted/pub.dev"
-
-try {
-    $MaterialUiDir = Get-ChildItem $HostedPubDir -Directory |
-        Where-Object { $_.Name -like "material_ui-*" } |
-        Sort-Object LastWriteTime |
-        Select-Object -Last 1
-
-    if ($MaterialUiDir) {
-        Remove-Item -Path $MaterialUiDir.FullName -Recurse -Force
-    }
-} catch {
-}
-
-& $FlutterExecutable pub get --enforce-lockfile
-if ($LASTEXITCODE -ne 0) {
-    throw "flutter pub get failed with exit code $LASTEXITCODE"
-}
-
-if (-not (Test-Path -LiteralPath $HostedPubDir -PathType Container)) {
-    throw "flutter pub get completed but Pub cache directory was not created: $HostedPubDir"
-}
-
-$MaterialUiDir = Get-ChildItem $HostedPubDir -Directory |
-    Where-Object { $_.Name -like "material_ui-*" } |
-    Sort-Object LastWriteTime |
-    Select-Object -Last 1
-
-if (-not $MaterialUiDir) {
-    throw "material_ui package not found in pub cache"
-}
-
-Write-Host "material_ui dir: $($MaterialUiDir.FullName)"
-
-Get-ChildItem -Path (Join-Path $Workspace "lib/scripts/material") -Filter *.patch | ForEach-Object {
-    (Get-Content $_.FullName -Raw) -replace "`r`n", "`n" | 
-        Set-Content -NoNewline $_.FullName
-}
-
-cd $MaterialUiDir.FullName
 
 foreach ($patch in $patches_material) {
     Apply-Patch (Join-Path $Workspace $patch)
 }
 
-$patches_cupertino = @()
-
-switch ($platform.ToLower()) {
-    "android" {
-    }
-    "windows" {
-    }
-    default {}
-}
-
-if ($patches_cupertino.Count -gt 0) {
-    $CupertinoUiDir = Get-ChildItem $HostedPubDir -Directory |
-        Where-Object { $_.Name -like "cupertino_ui-*" } |
-        Sort-Object LastWriteTime |
-        Select-Object -Last 1
-
-    if (-not $CupertinoUiDir) {
-        throw "cupertino_ui package not found in pub cache"
-    }
-
-    Write-Host "cupertino_ui dir: $($CupertinoUiDir.FullName)"
-
-    $cupertinoPatchDir = Join-Path $Workspace "lib/scripts/cupertino"
-    if (Test-Path $cupertinoPatchDir) {
-        Get-ChildItem -Path $cupertinoPatchDir -Filter *.patch | ForEach-Object {
-            (Get-Content $_.FullName -Raw) -replace "`r`n", "`n" |
-                Set-Content -NoNewline $_.FullName
-        }
-    }
-
-    Set-Location $CupertinoUiDir.FullName
-
-    foreach ($patch in $patches_cupertino) {
-        Apply-Patch (Join-Path $Workspace $patch)
-    }
-}
+Write-Host "material_ui 补丁就绪（变更 $script:PatchChanges 项）。"
+Set-Location $Workspace

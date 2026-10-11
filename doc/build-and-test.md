@@ -24,14 +24,14 @@ fvm flutter pub get
 
 ## 构建
 
-仓库脚本会准备 Flutter 补丁和依赖，再调用对应平台的构建工具：
+仓库脚本统一准备一次依赖，复用已应用的 Flutter 和 `material_ui` 补丁，再调用对应平台的构建工具：
 
 ```powershell
 pwsh -File tool/build.ps1 -Platform windows -Mode debug
 pwsh -File tool/build.ps1 -Platform android -Mode debug
 ```
 
-将 `-Mode debug` 改为 `-Mode release` 可构建发布版。脚本参数和依赖来源检查见 [`tool/README.md`](../tool/README.md)。
+将 `-Mode debug` 改为 `-Mode release` 可构建发布版。默认输出显示准备步骤汇总和构建进度，`-Verbose` 显示详细输出。已准备的环境可按需使用 `-SkipPubGet` 和 `-SkipPatch`，参数条件与依赖来源检查见 [`tool/README.md`](../tool/README.md)。
 
 ## 静态检查与测试
 

@@ -1,9 +1,11 @@
+[CmdletBinding()]
 param(
     [ValidateSet("android", "windows")]
     [string]$Platform = "windows",
     [ValidateSet("debug", "profile", "release")]
     [string]$Mode = "debug",
-    [switch]$SkipPatch
+    [switch]$SkipPatch,
+    [switch]$SkipPubGet
 )
 
 $ErrorActionPreference = "Stop"
@@ -28,10 +30,22 @@ $fvmEntryPoint = @("pub", "global", "run", "fvm:main")
 function Invoke-Fvm {
     param(
         [Parameter(Mandatory = $true)]
-        [string[]]$Arguments
+        [string[]]$Arguments,
+        [switch]$Quiet
     )
 
-    & $dart.Source @fvmEntryPoint @Arguments
+    if ($Quiet) {
+        $output = & $dart.Source @fvmEntryPoint @Arguments 2>&1
+        if ($LASTEXITCODE -ne 0) {
+            $output | ForEach-Object { Write-Host $_ }
+        }
+        else {
+            $output | ForEach-Object { Write-Verbose $_ }
+        }
+    }
+    else {
+        & $dart.Source @fvmEntryPoint @Arguments
+    }
     if ($LASTEXITCODE -ne 0) {
         throw "FVM command failed with exit code $($LASTEXITCODE): fvm $($Arguments -join ' ')"
     }
@@ -70,7 +84,13 @@ if ($proxy -and $proxy -match '^(?:https?://)?(?<host>[^:/]+):(?<port>\d+)$') {
     $env:JAVA_TOOL_OPTIONS = (($env:JAVA_TOOL_OPTIONS, $proxyOptions) -ne $null -join " ").Trim()
 }
 
-Invoke-Fvm @("exec", "flutter", "pub", "get", "--enforce-lockfile")
+if (-not $SkipPubGet) {
+    Invoke-Fvm -Arguments @("exec", "flutter", "pub", "get", "--enforce-lockfile") -Quiet
+    Write-Host "依赖解析完成。"
+}
+elseif (-not (Test-Path -LiteralPath (Join-Path $Workspace ".dart_tool/package_config.json"))) {
+    throw "依赖尚未准备，请先运行构建脚本而不传 -SkipPubGet。"
+}
 
 if (-not $SkipPatch) {
     $patchScript = Join-Path $Workspace "lib/scripts/patch.ps1"
@@ -80,7 +100,8 @@ if (-not $SkipPatch) {
     $env:FLUTTER_ROOT = $selectedFlutterRoot
     $env:PATH = "$(Join-Path $selectedFlutterRoot 'bin');$inheritedPath"
     try {
-        & pwsh -NoProfile -File $patchScript $Platform
+        [string[]]$patchOptions = if ($VerbosePreference -eq "Continue") { @("-Verbose") } else { @() }
+        & pwsh -NoProfile -File $patchScript $Platform -SkipPubGet @patchOptions
         if ($LASTEXITCODE -ne 0) {
             throw "Flutter patch step failed with exit code $LASTEXITCODE"
         }
@@ -97,7 +118,7 @@ if (-not $SkipPatch) {
 }
 
 # 解析及补丁步骤结束后检查最终锁文件，禁止重新引入 Git 来源。
-Invoke-Fvm @("exec", "dart", "run", "tool/check_dependencies.dart")
+Invoke-Fvm @("exec", "dart", "--packages=.dart_tool/package_config.json", "tool/check_dependencies.dart")
 
 $target = if ($Platform -eq "android") { "apk" } else { "windows" }
-Invoke-Fvm @("exec", "flutter", "build", $target, "--$Mode")
+Invoke-Fvm @("exec", "flutter", "build", $target, "--$Mode", "--no-pub")
