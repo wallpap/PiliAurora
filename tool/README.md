@@ -20,7 +20,7 @@
 pwsh -NoProfile -File tool/run-ci-tests.ps1
 ```
 
-`run-ci-tests.ps1` 默认使用 FVM，只通过 `flutter test --no-pub` 执行 GitHub Actions 选择的测试文件。依赖需预先准备；脚本不解析或安装依赖、不修改 Flutter SDK、不应用补丁，也不构建应用。GitHub Actions 在独立步骤中准备 SDK、应用补丁和检查依赖来源，然后调用同一测试脚本。
+`run-ci-tests.ps1` 默认使用 FVM，只通过 `flutter test --no-pub` 执行 GitHub Actions 选择的测试文件，覆盖异常日志接入、设置导航和 CDN／播放源回退。依赖需预先准备；脚本不解析或安装依赖、不修改 Flutter SDK、不应用补丁，也不构建应用。GitHub Actions 由补丁步骤统一解析一次依赖，随后直接运行依赖验收工具并调用同一测试脚本；测试和构建阶段均使用 `--no-pub`。
 
 ## Python 工具环境
 

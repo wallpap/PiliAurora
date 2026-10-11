@@ -70,7 +70,7 @@ jobs:
         run: lib/scripts/patch.ps1 windows
 
       - name: Check dependency sources and versions
-        run: dart run tool/check_dependencies.dart
+        run: dart --packages=.dart_tool/package_config.json tool/check_dependencies.dart
 
       - name: Run CI tests
         shell: pwsh
