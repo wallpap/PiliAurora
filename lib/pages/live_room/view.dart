@@ -1,4 +1,7 @@
 import 'dart:io';
+
+import 'package:pili_aurora/services/desktop_playback_request.dart';
+
 import 'dart:math';
 import 'dart:ui';
 
@@ -88,6 +91,8 @@ class _LiveRoomPageState extends State<LiveRoomPage>
       tag: heroTag,
     );
     plPlayerController = _liveRoomController.plPlayerController
+      ..desktopPlaybackRequest = (() =>
+          DesktopPlaybackRequest.live(_liveRoomController.roomId))
       ..addStatusLister(playerListener);
     PlPlayerController.setPlayCallBack(plPlayerController.play);
     if (plPlayerController.removeSafeArea) {

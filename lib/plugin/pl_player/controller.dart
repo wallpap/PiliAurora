@@ -35,6 +35,8 @@ import 'package:pili_aurora/plugin/pl_player/playback/native_playback_runtime.da
 import 'package:pili_aurora/plugin/pl_player/playback/network_recovery.dart';
 import 'package:pili_aurora/plugin/pl_player/utils/playback_network_recovery.dart';
 import 'package:pili_aurora/services/service_locator.dart';
+import 'package:pili_aurora/services/desktop_playback_windows.dart';
+import 'package:pili_aurora/services/desktop_playback_request.dart';
 import 'package:pili_aurora/services/diagnostics/diagnostics.dart';
 import 'package:pili_aurora/services/diagnostics/player_diagnostics.dart';
 import 'package:pili_aurora/services/logger.dart';
@@ -187,7 +189,7 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
   /// [videoController] instance of Player
   VideoController? get videoController => _videoController;
 
-  final RxBool muted = false.obs;
+  final RxBool muted = DesktopPlaybackWindows.isPlayerWindow.obs;
   bool get isMuted => muted.value;
 
   Future<void> setMuted(bool value) async {
@@ -223,72 +225,39 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
   bool get isPipMode =>
       (Platform.isAndroid && AndroidHelper.isPipMode) ||
       (PlatformUtils.isDesktop && isDesktopPip);
-  late bool isDesktopPip = false;
-  late Rect _lastWindowBounds;
+  bool get isDesktopPip => DesktopPlaybackWindows.isPlayerWindow;
+  DesktopPlaybackRequest Function()? desktopPlaybackRequest;
+  bool _openingDesktopWindow = false;
 
-  late final showWindowTitleBar = Pref.showWindowTitleBar;
-  late final RxBool isAlwaysOnTop = false.obs;
+  late final RxBool isAlwaysOnTop = isDesktopPip.obs;
   Future<void> setAlwaysOnTop(bool value) {
     isAlwaysOnTop.value = value;
     return windowManager.setAlwaysOnTop(value);
   }
 
-  Future<void> exitDesktopPip() {
-    isDesktopPip = false;
-    return Future.wait([
-      if (showWindowTitleBar)
-        windowManager.setTitleBarStyle(TitleBarStyle.normal),
-      windowManager.setMinimumSize(const Size(400, 700)),
-      windowManager.setBounds(_lastWindowBounds),
-      setAlwaysOnTop(false),
-      windowManager.setAspectRatio(0),
-    ]);
-  }
+  Future<void> exitDesktopPip() => windowManager.close();
 
-  Future<void> enterDesktopPip() async {
-    if (isFullScreen.value) return;
-
-    isDesktopPip = true;
-
-    _lastWindowBounds = await windowManager.getBounds();
-
-    if (showWindowTitleBar) {
-      windowManager.setTitleBarStyle(TitleBarStyle.hidden);
+  Future<void> openDesktopWindow() async {
+    if (_openingDesktopWindow || desktopPlaybackRequest == null) return;
+    _openingDesktopWindow = true;
+    try {
+      await DesktopPlaybackWindows.instance.open(
+        desktopPlaybackRequest!(),
+        volume: volume.value,
+      );
+      await pause();
+    } catch (_) {
+      SmartDialog.showToast('播放窗口启动失败，请重试');
+    } finally {
+      _openingDesktopWindow = false;
     }
-
-    const shortSide = 280.0;
-    const minShortSide = 160.0;
-    final Size size;
-    final Size minimumSize;
-    final state = videoPlayerController!.state;
-    int width = state.width;
-    int height = state.height;
-    if (width == 0) {
-      width = this.width ?? 16;
-    }
-    if (height == 0) {
-      height = this.height ?? 9;
-    }
-    if (height > width) {
-      size = Size(shortSide, shortSide * height / width);
-      minimumSize = Size(minShortSide, minShortSide * height / width);
-    } else {
-      size = Size(shortSide * width / height, shortSide);
-      minimumSize = Size(minShortSide * width / height, minShortSide);
-    }
-
-    await windowManager.setMinimumSize(minimumSize);
-    setAlwaysOnTop(true);
-    windowManager
-      ..setSize(size)
-      ..setAspectRatio(width / height);
   }
 
   void toggleDesktopPip() {
     if (isDesktopPip) {
       exitDesktopPip();
     } else {
-      enterDesktopPip();
+      openDesktopWindow();
     }
   }
 
@@ -560,6 +529,15 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
 
   // 添加一个私有构造函数
   PlPlayerController._() {
+    if (isDesktopPip) {
+      var ready = false;
+      _statusListeners.add((status) {
+        if (status.isPlaying && !ready) {
+          ready = true;
+          DesktopPlaybackWindows.instance.playerReady();
+        }
+      });
+    }
     if (PlatformUtils.isMobile) {
       _orientationListener = NativeDeviceOrientationPlatform.instance
           .onOrientationChanged(
@@ -1757,6 +1735,7 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
     }
     _timer?.cancel();
     // _position.close();
+    volumeTimer?.cancel();
     // _playerEventSubs?.cancel();
     // _sliderPosition.close();
     // _sliderTempPosition.close();

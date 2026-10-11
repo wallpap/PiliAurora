@@ -36,6 +36,7 @@ import 'package:pili_aurora/pages/video/introduction/ugc/widgets/action_item.dar
 import 'package:pili_aurora/pages/video/introduction/ugc/widgets/menu_row.dart';
 import 'package:pili_aurora/pages/video/widgets/header_mixin.dart';
 import 'package:pili_aurora/plugin/pl_player/controller.dart';
+import 'package:pili_aurora/plugin/pl_player/widgets/desktop_playback_menu.dart';
 import 'package:pili_aurora/plugin/pl_player/models/data_source.dart';
 import 'package:pili_aurora/plugin/pl_player/models/play_repeat.dart';
 import 'package:pili_aurora/services/shutdown_timer_service.dart'
@@ -1767,7 +1768,7 @@ class HeaderControlState extends State<HeaderControl>
               title,
               // show current datetime
               ...?timeBatteryWidgets,
-              if (PlatformUtils.isDesktop && !plPlayerController.isDesktopPip)
+              if (PlatformUtils.isDesktop)
                 Obx(() {
                   final isAlwaysOnTop = plPlayerController.isAlwaysOnTop.value;
                   return SizedBox(
@@ -1923,8 +1924,9 @@ class HeaderControlState extends State<HeaderControl>
                   ),
                 ),
               ),
-              if (Platform.isAndroid ||
-                  (PlatformUtils.isDesktop && !isFullScreen))
+              if (PlatformUtils.isDesktop)
+                DesktopPlaybackMenu(controller: plPlayerController),
+              if (Platform.isAndroid)
                 SizedBox(
                   width: btnWidth,
                   height: btnHeight,

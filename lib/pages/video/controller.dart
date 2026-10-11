@@ -387,6 +387,9 @@ class VideoDetailController extends GetxController
     isPlayAll = sourceType != SourceType.normal && !isFileSource;
     if (isFileSource) {
       initFileSource(args['entry']);
+      if (args['progress'] case final int progress) {
+        defaultST = Duration(milliseconds: progress);
+      }
     } else if (isPlayAll) {
       watchLaterTitle = args['favTitle'];
       _mediaDesc = args['desc'];

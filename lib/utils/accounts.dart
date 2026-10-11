@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:pili_aurora/http/init.dart';
 import 'package:pili_aurora/models/common/account_type.dart';
 import 'package:pili_aurora/pages/mine/controller.dart';
@@ -24,9 +26,10 @@ abstract final class Accounts {
   }
   // static set main(Account account) => set(AccountType.main, account);
 
-  static Future<void> init() async {
+  static Future<void> init({Uint8List? bytes}) async {
     account = await Hive.openBox(
       'account',
+      bytes: bytes,
       compactionStrategy: (int entries, int deletedEntries) {
         return deletedEntries > 2;
       },

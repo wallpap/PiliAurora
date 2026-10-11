@@ -4,6 +4,7 @@ import 'package:pili_aurora/app/back_navigation.dart';
 import 'package:pili_aurora/common/constants.dart';
 import 'package:pili_aurora/plugin/pl_player/utils/fullscreen.dart';
 import 'package:pili_aurora/services/service_locator.dart';
+import 'package:pili_aurora/services/desktop_playback_windows.dart';
 import 'package:pili_aurora/services/webview_environment.dart';
 import 'package:pili_aurora/utils/calc_window_position.dart';
 import 'package:pili_aurora/utils/max_screen_size.dart';
@@ -67,6 +68,23 @@ Future<void> initializePlatformWindow() async {
     FocusManager.instance.addEarlyKeyEventHandler(handleAppKeyEvent);
 
     await windowManager.ensureInitialized();
+    if (DesktopPlaybackWindows.isPlayerWindow) {
+      final windows = DesktopPlaybackWindows.instance;
+      await windowManager.waitUntilReadyToShow(
+        const WindowOptions(
+          minimumSize: Size(320, 180),
+          titleBarStyle: TitleBarStyle.hidden,
+          title: 'PiliAurora Player',
+        ),
+        () async {
+          await windowManager.setBounds(windows.initialBounds!);
+          await windowManager.setAlwaysOnTop(true);
+          await windowManager.show();
+          await windowManager.focus();
+        },
+      );
+      return;
+    }
 
     final windowOptions = WindowOptions(
       minimumSize: const Size(400, 720),

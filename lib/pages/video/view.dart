@@ -56,6 +56,8 @@ import 'package:pili_aurora/plugin/pl_player/models/play_status.dart';
 import 'package:pili_aurora/plugin/pl_player/utils/fullscreen.dart';
 import 'package:pili_aurora/plugin/pl_player/view/view.dart';
 import 'package:pili_aurora/services/service_locator.dart';
+import 'package:pili_aurora/services/desktop_playback_request.dart';
+import 'package:pili_aurora/models/common/video/source_type.dart';
 import 'package:pili_aurora/services/shutdown_timer_service.dart'
     show shutdownTimerService;
 import 'package:pili_aurora/utils/accounts.dart';
@@ -144,6 +146,28 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
 
     PlPlayerController.setPlayCallBack(playCallBack);
     videoDetailController = Get.put(VideoDetailController(), tag: heroTag);
+    videoDetailController.plPlayerController.desktopPlaybackRequest = () =>
+        DesktopPlaybackRequest.video({
+          'aid': videoDetailController.aid,
+          'bvid': videoDetailController.bvid,
+          'cid': videoDetailController.cid.value,
+          'epId': videoDetailController.epId,
+          'seasonId': videoDetailController.seasonId,
+          'pgcType': videoDetailController.pgcType,
+          'videoType': videoDetailController.videoType,
+          'pgcApi': videoDetailController.args['pgcApi'],
+          'isVertical': videoDetailController.isVertical.value,
+          'cover': videoDetailController.cover.value,
+          'title': videoDetailController.args['title'] ?? '',
+          'progress':
+              videoDetailController.plPlayerController.positionInMilliseconds,
+          'heroTag': 'desktop-${videoDetailController.cid.value}',
+          if (videoDetailController.isFileSource) ...{
+            'sourceType': SourceType.file,
+            'entry': videoDetailController.entry,
+            'dirPath': videoDetailController.args['dirPath'],
+          },
+        });
 
     if (videoDetailController.removeSafeArea) {
       hideSystemBar();

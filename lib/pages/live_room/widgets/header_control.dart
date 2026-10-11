@@ -10,6 +10,7 @@ import 'package:pili_aurora/pages/setting/models/play_settings.dart'
     show showPlayerVolumeDialog;
 import 'package:pili_aurora/pages/video/widgets/header_control.dart';
 import 'package:pili_aurora/plugin/pl_player/controller.dart';
+import 'package:pili_aurora/plugin/pl_player/widgets/desktop_playback_menu.dart';
 import 'package:pili_aurora/plugin/pl_player/widgets/common_btn.dart';
 import 'package:pili_aurora/services/shutdown_timer_service.dart'
     show shutdownTimerService;
@@ -132,7 +133,7 @@ class _LiveHeaderControlState extends State<LiveHeaderControl>
           child,
           ...?timeBatteryWidgets,
           const SizedBox(width: 10),
-          if (PlatformUtils.isDesktop && !plPlayerController.isDesktopPip)
+          if (PlatformUtils.isDesktop)
             Obx(() {
               final isAlwaysOnTop = plPlayerController.isAlwaysOnTop.value;
               return ComBtn(
@@ -163,7 +164,9 @@ class _LiveHeaderControlState extends State<LiveHeaderControl>
               ),
               onTap: widget.onSendDanmaku,
             ),
-          if (Platform.isAndroid || (PlatformUtils.isDesktop && !isFullScreen))
+          if (PlatformUtils.isDesktop)
+            DesktopPlaybackMenu(controller: plPlayerController),
+          if (Platform.isAndroid)
             ComBtn(
               height: btnHeight,
               tooltip: '画中画',

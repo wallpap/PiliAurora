@@ -4,6 +4,7 @@ import 'package:pili_aurora/pages/common/common_intro_controller.dart';
 import 'package:pili_aurora/pages/download/controller.dart';
 import 'package:pili_aurora/plugin/pl_player/models/play_repeat.dart';
 import 'package:pili_aurora/services/service_locator.dart';
+import 'package:pili_aurora/services/desktop_playback_windows.dart';
 import 'package:pili_aurora/utils/platform_utils.dart';
 import 'package:extended_nested_scroll_view/extended_nested_scroll_view.dart';
 import 'package:flutter/foundation.dart' show kDebugMode;
@@ -50,6 +51,11 @@ class LocalIntroController extends CommonIntroController {
   void onInit() {
     super.onInit();
     videoDetail.value.title = videoDetailCtr.args['title'];
+    if (DesktopPlaybackWindows.isPlayerWindow) {
+      this.list.value = [videoDetailCtr.entry];
+      this.index.value = 0;
+      return;
+    }
     final controller = Get.find<DownloadPageController>();
     final list = <BiliDownloadEntryInfo>[];
     for (final e in controller.pages) {

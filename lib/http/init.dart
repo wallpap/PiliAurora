@@ -29,17 +29,18 @@ class Request {
   static final _enableHttp2 = Pref.enableHttp2;
   static late final Dio dio;
   static Dio? _http11Dio;
+
   /// 返回 HTTP/1.1 客户端，HTTP/2 开启时复用其 fallback adapter。
   static Dio get http11Dio =>
       _http11Dio ??= _enableHttp2 ? _cloneHttp11Dio() : dio;
   factory Request() => _instance;
 
   /// 设置cookie
-  static void setCookie() {
+  static void setCookie({bool syncWebView = true}) {
     accountManager = AccountManager();
     dio.interceptors.add(accountManager);
     Accounts.refresh();
-    LoginUtils.setWebCookie();
+    if (syncWebView) LoginUtils.setWebCookie();
 
     if (Accounts.main.isLogin) {
       final coin = Pref.userInfoCache?.money;

@@ -9,9 +9,13 @@ import 'package:path_provider/path_provider.dart';
 abstract final class CacheManager {
   static late final DefaultCacheManager manager;
 
-  static Future<void> ensureInitialized() => DefaultCacheManager.init(
-    maxNrOfCacheLength: Pref.maxCacheSize.toInt(),
-  ).then((i) => manager = i);
+  static Future<void> ensureInitialized({Directory? directory}) =>
+      DefaultCacheManager.init(
+        maxNrOfCacheLength: Pref.maxCacheSize.toInt(),
+        cacheDirectoryProvider: directory == null
+            ? getTemporaryDirectory
+            : () async => directory,
+      ).then((i) => manager = i);
 
   // 获取缓存目录
   @pragma('vm:notify-debugger-on-exception')

@@ -1,3 +1,4 @@
+import 'dart:io' show File;
 import 'dart:typed_data';
 
 import 'package:pili_aurora/models/model_owner.dart';
@@ -24,14 +25,18 @@ abstract final class GStorage {
   static late final Box<int> watchProgress;
   static late final Box<Uint8List>? reply;
 
-  static Future<void> init() async {
+  static Future<void> init({Map<String, Uint8List>? memorySnapshot}) async {
     Hive.init(path.join(appSupportDirPath, 'hive'));
     regAdapter();
+    Uint8List? bytes(String name) => memorySnapshot == null
+        ? null
+        : memorySnapshot[name.toLowerCase()] ?? Uint8List(0);
 
     await Future.wait([
       // 登录用户信息
       Hive.openBox<UserInfoData>(
         'userInfo',
+        bytes: bytes('userInfo'),
         compactionStrategy: (int entries, int deletedEntries) {
           return deletedEntries > 2;
         },
@@ -39,24 +44,30 @@ abstract final class GStorage {
       // 本地缓存
       Hive.openBox(
         'localCache',
+        bytes: bytes('localCache'),
         compactionStrategy: (int entries, int deletedEntries) {
           return deletedEntries > 4;
         },
       ).then((res) => localCache = res),
       // 设置
-      Hive.openBox('setting').then((res) => setting = res),
+      Hive.openBox(
+        'setting',
+        bytes: bytes('setting'),
+      ).then((res) => setting = res),
       // 搜索历史
       Hive.openBox(
         'historyWord',
+        bytes: bytes('historyWord'),
         compactionStrategy: (int entries, int deletedEntries) {
           return deletedEntries > 10;
         },
       ).then((res) => historyWord = res),
       // 视频设置
-      Hive.openBox('video').then((res) => video = res),
-      Accounts.init(),
+      Hive.openBox('video', bytes: bytes('video')).then((res) => video = res),
+      Accounts.init(bytes: bytes('account')),
       Hive.openBox<int>(
         'watchProgress',
+        bytes: bytes('watchProgress'),
         keyComparator: _intStrDescKeyComparator,
         compactionStrategy: (entries, deletedEntries) {
           return deletedEntries > 4;
@@ -73,6 +84,7 @@ abstract final class GStorage {
     if (Pref.saveReply) {
       reply = await Hive.openBox<Uint8List>(
         'reply',
+        bytes: bytes('reply'),
         keyComparator: _intStrDescKeyComparator,
         compactionStrategy: (entries, deletedEntries) {
           return deletedEntries > 10;
@@ -81,6 +93,22 @@ abstract final class GStorage {
     } else {
       reply = null;
     }
+  }
+
+  /// 子进程通过内存 Box 读取快照，避免争用主进程的 Hive 文件锁。
+  static Future<Map<String, Uint8List>> playbackSnapshot() async {
+    final boxes = <Box>[
+      userInfo,
+      localCache,
+      setting,
+      video,
+      Accounts.account,
+      watchProgress,
+    ];
+    await Future.wait(boxes.map((box) => box.flush()));
+    return {
+      for (final box in boxes) box.name: File(box.path!).readAsBytesSync(),
+    };
   }
 
   static SettingsBackup get settingsBackup =>
