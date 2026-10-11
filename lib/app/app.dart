@@ -14,6 +14,7 @@ import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:get/get.dart';
 import 'package:material_ui/material_ui.dart';
 
+/// 提供应用主题、本地化、路由、全局对话框和导航观察器。
 class PiliAuroraApp extends StatelessWidget {
   const PiliAuroraApp({super.key});
 

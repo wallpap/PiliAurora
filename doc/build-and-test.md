@@ -2,10 +2,18 @@
 
 ## 环境
 
-- 使用仓库根目录 `.fvmrc` 指定的 Flutter 版本，并通过 FVM 调用。
-- Windows 构建需要安装 Visual Studio，并启用“使用 C++ 的桌面开发”工作负载。
-- Android 构建需要 Android SDK 和 JDK 25。Android Studio 的 Gradle JDK 与 `JAVA_HOME` 都应指向 JDK 25。
-- Windows 开发建议使用 PowerShell 7。
+| 工具 | 当前配置 | 来源 |
+| --- | --- | --- |
+| Flutter | 3.47.5 | `.fvmrc`、`pubspec.yaml` |
+| Dart | SDK `>=3.13.0` | `pubspec.yaml` |
+| Gradle | 9.6.0 | `android/gradle/wrapper/gradle-wrapper.properties` |
+| Android Gradle Plugin / Kotlin | 9.2.1 / 2.4.20 | `android/settings.gradle.kts` |
+| JDK | 25，Gradle 与 Java/Kotlin 编译使用 | `android/gradle/gradle-daemon-jvm.properties`、`android/build.gradle.kts` |
+| Android SDK | compileSdk / targetSdk 37；minSdk 由 Flutter 配置 | `android/app/build.gradle.kts` |
+
+Android Studio 的 Gradle JDK 和 `JAVA_HOME` 都设为 25。JDK 25 是构建工具链要求，不决定 `minSdk`、`targetSdk` 或设备运行时版本。
+
+Windows 构建需要安装 Visual Studio，并启用“使用 C++ 的桌面开发”工作负载。Windows 开发建议使用 PowerShell 7。
 
 ## 安装依赖
 

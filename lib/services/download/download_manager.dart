@@ -8,6 +8,10 @@ import 'package:pili_aurora/utils/extension/file_ext.dart';
 import 'package:pili_aurora/utils/extension/string_ext.dart';
 import 'package:dio/dio.dart';
 
+/// 传输单条媒体流，并按已有文件长度请求剩余字节以支持续传。
+///
+/// 文件 sink 消费速度会反压响应流；调用方负责在暂停、删除和结束时统一
+/// 管理任务生命周期。
 class DownloadManager {
   final String url;
   final String path;

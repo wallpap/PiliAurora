@@ -26,6 +26,7 @@ import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:get/get.dart';
 import 'package:media_kit/media_kit.dart';
 
+/// 初始化本地资源和平台服务，配置异常捕获后挂载应用根 Widget。
 Future<void> bootstrapApplication() async {
   ScaledWidgetsFlutterBinding.ensureInitialized();
   MediaKit.ensureInitialized();
@@ -62,6 +63,7 @@ Future<void> bootstrapApplication() async {
     );
   HttpOverrides.global = _CustomHttpOverrides();
 
+  // Windows Cookie 同步依赖 WebView 环境，因此先完成平台服务初始化。
   await initializePlatformServices();
 
   Request();

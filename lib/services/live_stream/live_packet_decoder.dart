@@ -4,7 +4,9 @@ import 'dart:typed_data';
 
 import 'package:pili_aurora/services/live_stream/live_packet.dart';
 
-/// 每个连接复用一个 worker。关闭时终止 worker，并结束所有在途任务。
+/// 每个连接复用一个 worker，以消息 ID 将异步解析结果对应回原请求。
+///
+/// 关闭或 worker 异常退出时会终止 worker，并结束所有在途任务。
 class LivePacketDecoder {
   final _pending = <int, Completer<List<DecodedLivePacket>>>{};
   ReceivePort? _responses, _errors, _exits;
@@ -22,6 +24,7 @@ class LivePacketDecoder {
     final id = ++_sequence;
     final result = Completer<List<DecodedLivePacket>>();
     _pending[id] = result;
+    // TransferableTypedData 避免把完整网络帧复制进解析 isolate。
     _commands!.send((id, TransferableTypedData.fromList([bytes])));
     return result.future;
   }

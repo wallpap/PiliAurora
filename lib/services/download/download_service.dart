@@ -32,6 +32,10 @@ import 'package:synchronized/synchronized.dart';
 
 // ref https://github.com/10miaomiao/bilimiao2/blob/master/bilimiao-download/src/main/java/cn/a10miaomiao/bilimiao/download/DownloadService.kt
 
+/// 管理下载记录、待下载队列和当前任务；DASH 的音视频流可并行传输。
+///
+/// 目录与 JSON 由 [DownloadRepository] 管理，单路媒体传输由
+/// [DownloadManager] 管理。服务只维护一个当前下载项及其可选的音频任务。
 class DownloadService extends GetxService {
   DownloadService({required this._repository, required this._downloadClient});
 
@@ -79,6 +83,7 @@ class DownloadService extends GetxService {
       ..sort((a, b) => b.timeUpdateStamp.compareTo(a.timeUpdateStamp));
     final pending = entries.where((entry) => !entry.isCompleted).toList();
     final current = curDownload.value;
+    // 用磁盘快照替换队列，同时复用当前对象，避免刷新时丢失进行中的状态。
     waitDownloadQueue.assignAll(
       pending.map((entry) => current?.cid == entry.cid ? current! : entry),
     );
@@ -218,6 +223,7 @@ class DownloadService extends GetxService {
   }
 
   Future<void> _createDownload(BiliDownloadEntryInfo entry) async {
+    // 先持久化再排队，进程重启后仍能从目录记录恢复任务。
     await _repository.create(entry);
     entry.status = DownloadStatus.wait;
     waitDownloadQueue.add(entry);
@@ -228,6 +234,7 @@ class DownloadService extends GetxService {
 
   Future<void> startDownload(BiliDownloadEntryInfo entry) {
     return _lock.synchronized(() async {
+      // 切换当前项前等待旧音视频流退出，避免两个任务同时写入同一状态。
       await _downloadManager?.cancel(isDelete: false);
       await _audioDownloadManager?.cancel(isDelete: false);
       _downloadManager = null;
@@ -266,6 +273,7 @@ class DownloadService extends GetxService {
           throw StateError('Invalid danmaku segment count: $seg');
         }
 
+        // 先取首段，再以固定批次并发补齐，限制单个任务的请求峰值。
         final danmaku = (await DmGrpc.dmSegMobile(
           cid: cid,
           segmentIndex: 1,
@@ -352,6 +360,7 @@ class DownloadService extends GetxService {
           );
           break;
         case Type2 mediaFileInfo:
+          // DASH 音视频使用独立文件与传输器，构造后会各自开始流式下载。
           _downloadManager = DownloadManager(
             client: _downloadClient,
             url: mediaFileInfo.video.first.baseUrl,
@@ -442,6 +451,7 @@ class DownloadService extends GetxService {
     if (entry == null) {
       return;
     }
+    // 视频与可选音轨都完成后才落完成标记，再从待下载队列移除。
     entry
       ..downloadedBytes = entry.totalBytes
       ..isCompleted = true;
@@ -507,6 +517,7 @@ class DownloadService extends GetxService {
     _downloadManager = null;
     _audioDownloadManager = null;
     if (!isDelete) {
+      // 暂停保留已写入的字节数，后续由 DownloadManager 发送 Range 请求续传。
       final entry = curDownload.value;
       if (entry != null) {
         await _repository.save(entry);

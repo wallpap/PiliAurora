@@ -22,12 +22,14 @@ import 'package:dio/dio.dart';
 import 'package:dio/io.dart';
 import 'package:dio_http2_adapter/dio_http2_adapter.dart';
 
+/// 创建应用共享的 Dio 客户端，并接入账号、重试、诊断和响应转换逻辑。
 class Request {
   static final Request _instance = Request._internal();
   static late AccountManager accountManager;
   static final _enableHttp2 = Pref.enableHttp2;
   static late final Dio dio;
   static Dio? _http11Dio;
+  /// 返回 HTTP/1.1 客户端，HTTP/2 开启时复用其 fallback adapter。
   static Dio get http11Dio =>
       _http11Dio ??= _enableHttp2 ? _cloneHttp11Dio() : dio;
   factory Request() => _instance;

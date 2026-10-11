@@ -20,6 +20,7 @@ import 'package:path/path.dart' as path;
 import 'package:screen_brightness_platform_interface/screen_brightness_platform_interface.dart';
 import 'package:window_manager/window_manager.dart' hide calcWindowPosition;
 
+/// 初始化平台能力；Windows WebView 必须在 `Request.setCookie()` 前就绪。
 Future<void> initializePlatformServices() async {
   if (PlatformUtils.isMobile) {
     if (Platform.isAndroid) MaxScreenSize.init();
@@ -34,6 +35,7 @@ Future<void> initializePlatformServices() async {
   }
 }
 
+/// 配置移动端系统 UI，或创建并显示桌面应用窗口。
 Future<void> initializePlatformWindow() async {
   if (PlatformUtils.isMobile) {
     SystemChrome.setEnabledSystemUIMode(.edgeToEdge);

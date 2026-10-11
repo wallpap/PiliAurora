@@ -12,7 +12,7 @@
 
 ### 播放
 
-`lib/pages/video/` → `lib/http/video.dart` 和视频模型 → `lib/plugin/pl_player/` → `media_kit` 与平台库。排查时区分地址解析、网络、解码、渲染和窗口阶段。播放器诊断入口在 `lib/services/diagnostics/player_diagnostics.dart`。
+`lib/pages/video/` → `lib/http/video.dart` 和视频模型 → `lib/plugin/pl_player/` → `media_kit` 与平台库。排查时区分地址解析、网络、解码、渲染和窗口阶段。播放器诊断入口在 `lib/services/diagnostics/player_diagnostics.dart`；切源与网络恢复见[播放器流程图](runtime-flows.md#播放器切源与网络恢复)。
 
 ### 视频弹幕
 
@@ -20,11 +20,11 @@
 
 ### 直播
 
-`lib/pages/live_room/` → `lib/http/live.dart` 与 `lib/services/live_stream/` → 直播包解码 → 消息和弹幕 UI。连接、包解码、历史与未读消息、渲染和退出清理需要分别检查。
+`lib/pages/live_room/` → `lib/http/live.dart` 与 `lib/services/live_stream/` → 直播包解码 → 消息和弹幕 UI。连接、包解码、历史与未读消息、渲染和退出清理需要分别检查；消息时序见[直播消息流程](runtime-flows.md#直播消息与弹幕)。
 
 ### 下载
 
-`lib/pages/download/` → `lib/services/download/` → `lib/http/download.dart`、响应适配和流式写入 → 本地下载目录。重点检查路径权限、磁盘空间、网络重试、写入回压和任务生命周期。
+`lib/pages/download/` → `lib/services/download/` → `lib/http/download.dart`、响应适配和流式写入 → 本地下载目录。重点检查路径权限、磁盘空间、网络重试、写入回压和任务生命周期；任务状态见[下载流程](runtime-flows.md#下载)。
 
 ### 登录与账号
 
@@ -39,7 +39,12 @@
 
 ## 问题报告
 
-请提供应用版本、Git 提交、构建模式和目标平台；操作系统、设备或显卡及 Flutter/JDK 版本；复现步骤、媒体编码与分辨率、弹幕密度和复现频率；登录、硬件解码和网络状态；脱敏后的诊断摘要及时间范围。明确标出尚未验证的假设。
+请附上以下信息：
+
+- 应用版本、Git 提交、构建模式和目标平台，以及操作系统、设备或显卡型号。
+- Flutter/JDK 版本、复现步骤、媒体编码与分辨率、弹幕密度和复现频率。
+- 登录、硬件解码和网络状态，以及脱敏后的诊断摘要和时间范围。
+- 尚未验证的假设。
 
 ## 复现和测量
 

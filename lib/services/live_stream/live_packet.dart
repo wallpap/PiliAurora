@@ -4,6 +4,7 @@ import 'dart:typed_data';
 
 import 'package:brotli/brotli.dart';
 
+/// 直播二进制包基础头部，字段采用大端序编码。
 class PackageHeader {
   const PackageHeader({
     required this.protocolVer,
@@ -40,6 +41,7 @@ class PackageHeaderRes extends PackageHeader {
   final int totalSize;
   final int headerSize;
 
+  /// 解析指定偏移处的包头；长度或边界不合法时返回 null。
   static PackageHeaderRes? fromBytesData(Uint8List data, [int offset = 0]) {
     if (offset < 0 || data.length - offset < 16) return null;
     final bytes = ByteData.sublistView(data, offset);
@@ -108,6 +110,7 @@ List<DecodedLivePacket> decodeLivePackets(Uint8List data) {
           }
         case 2:
         case 3:
+          // 压缩包作为新的游标入栈，深度上限阻止异常输入无限嵌套。
           if (stack.length >= 8) continue;
           final expanded = header.protocolVer == 2
               ? ZLibDecoder().convert(body)

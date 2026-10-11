@@ -76,5 +76,6 @@ PiliAurora 是社区独立维护的第三方客户端，与 Bilibili 官方无�
 - [文档索引](doc/README.md)
 - [功能领域地图](doc/features.md)
 - [架构说明](doc/architecture.md)
+- [运行流程图](doc/runtime-flows.md)
 - [构建与测试](doc/build-and-test.md)
 - [维护与排障](doc/maintenance.md)

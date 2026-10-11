@@ -72,5 +72,10 @@ linter:
     - prefer_spread_collections
     - unnecessary_to_list_in_spreads
     - prefer_for_elements_to_map_fromIterable
+analyzer:
+  exclude:
+    - build/**
+    - android/**
+    - ios/**
 # Additional information about this file can be found at
 # https://dart.dev/guides/language/analysis-options

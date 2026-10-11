@@ -78,6 +78,9 @@ class HeartbeatPackage extends AbstractPackage<dynamic> {
   }
 }
 
+/// 维护一条直播消息 WebSocket：连接、认证、心跳、拆包并分发消息。
+///
+/// 页面持有该对象并在离开直播间时调用 [close] 释放连接和解析 worker。
 class LiveMessageStream {
   String streamToken;
   int roomId, uid;
@@ -119,6 +122,7 @@ class LiveMessageStream {
     // final marshaledData = authPackage.marshal();
     // logger.d(marshaledData);
     try {
+      // 按服务端提供的顺序尝试地址；认证包只在握手成功后发送。
       Future<WebSocketChannel> getSocket() async {
         for (final server in servers) {
           try {
@@ -170,6 +174,7 @@ class LiveMessageStream {
       return;
     }
     if (kDebugMode) logger.i("$logTag 直播间信息流认证成功 $hashCode");
+    // 认证响应到达后才启动周期心跳，避免未认证连接发送业务心跳。
     int heartBeatCount = 1;
     _timer ??= Timer.periodic(heartbeatInterval, (timer) {
       if (!_active) {
@@ -207,6 +212,7 @@ class LiveMessageStream {
         data is Uint8List ? data : Uint8List.fromList(data),
       );
       if (!_active) return;
+      // 拍下本批监听器快照，监听器增删不会改变正在分发的消息集合。
       final listeners = List.of(_eventListeners);
       for (final packet in packets) {
         if (!_active) break;
@@ -232,6 +238,7 @@ class LiveMessageStream {
 
   void close() {
     if (!_active) return;
+    // 先标记失活；随后到达的异步解析结果会因此被丢弃。
     _active = false;
     _decoder.close();
     if (kDebugMode) logger.i("$logTag close $hashCode");
