@@ -1,4 +1,5 @@
 import 'package:pili_aurora/common/style.dart';
+import 'package:pili_aurora/common/widgets/scaffold/simple_scaffold.dart';
 import 'package:pili_aurora/models/common/enum_with_label.dart';
 import 'package:pili_aurora/pages/setting/widgets/normal_item.dart';
 import 'package:pili_aurora/pages/setting/widgets/popup_item.dart';
@@ -21,6 +22,7 @@ sealed class SettingsModel {
   Widget get widget;
   String get effectiveTitle;
   String? get effectiveSubtitle;
+  Iterable<SettingsModel> get searchableItems => [this];
 
   const SettingsModel({
     this.subtitle,
@@ -28,6 +30,53 @@ sealed class SettingsModel {
     this.contentPadding,
     this.titleStyle,
   });
+}
+
+/// 分类本身也是设置项，页面与搜索沿同一棵树访问实际设置。
+class SettingsGroup extends SettingsModel {
+  const SettingsGroup({
+    required this.title,
+    required this.children,
+    super.subtitle,
+    super.leading,
+  });
+
+  @override
+  final String title;
+  final List<SettingsModel> children;
+
+  @override
+  String get effectiveTitle => title;
+  @override
+  String? get effectiveSubtitle => subtitle;
+  @override
+  Iterable<SettingsModel> get searchableItems sync* {
+    yield this;
+    for (final child in children) {
+      yield* child.searchableItems;
+    }
+  }
+
+  @override
+  Widget get widget => NormalItem(
+    title: title,
+    subtitle: subtitle,
+    leading: leading,
+    getTrailing: (_) => const Icon(Icons.chevron_right),
+    onTap: (context, _) => Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => SimpleScaffold(
+          appBar: AppBar(title: Text(title)),
+          body: ListView(
+            padding: EdgeInsets.only(
+              bottom: MediaQuery.viewPaddingOf(context).bottom + 32,
+            ),
+            children: [for (final child in children) child.widget],
+          ),
+        ),
+      ),
+    ),
+  );
 }
 
 class SplitModel extends SettingsModel {
@@ -64,6 +113,7 @@ class SplitModel extends SettingsModel {
     contentPadding: contentPadding,
     titleStyle: titleStyle,
     isSplit: true,
+    children: [for (final child in switchModel.children) child.widget],
   );
 }
 
@@ -164,6 +214,7 @@ class SwitchModel extends SettingsModel {
   final ValueChanged<bool>? onChanged;
   final bool needReboot;
   final void Function(BuildContext context)? onTap;
+  final List<SettingsModel> children;
 
   const SwitchModel({
     super.subtitle,
@@ -176,6 +227,7 @@ class SwitchModel extends SettingsModel {
     this.onChanged,
     this.needReboot = false,
     this.onTap,
+    this.children = const [],
   });
 
   const SwitchModel.split({
@@ -184,12 +236,21 @@ class SwitchModel extends SettingsModel {
     this.needReboot = false,
     this.onChanged,
     this.onTap,
+    this.children = const [],
   }) : title = null;
 
   @override
   String get effectiveTitle => title!;
   @override
   String? get effectiveSubtitle => subtitle;
+
+  @override
+  Iterable<SettingsModel> get searchableItems sync* {
+    yield this;
+    for (final child in children) {
+      yield* child.searchableItems;
+    }
+  }
 
   @override
   Widget get widget => SetSwitchItem(
@@ -203,6 +264,7 @@ class SwitchModel extends SettingsModel {
     onTap: onTap,
     contentPadding: contentPadding,
     titleStyle: titleStyle,
+    children: [for (final child in children) child.widget],
   );
 }
 

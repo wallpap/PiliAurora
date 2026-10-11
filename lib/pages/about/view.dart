@@ -11,9 +11,7 @@ import 'package:pili_aurora/common/widgets/dialog/simple_dialog_option.dart';
 import 'package:pili_aurora/common/widgets/flutter/list_tile.dart';
 import 'package:pili_aurora/common/widgets/scaffold/simple_scaffold.dart';
 import 'package:pili_aurora/pages/mine/controller.dart';
-import 'package:pili_aurora/pages/about/diagnostics_page.dart';
-import 'package:pili_aurora/services/diagnostics/diagnostics.dart';
-import 'package:pili_aurora/services/logger.dart';
+import 'package:pili_aurora/pages/setting/models/about_settings.dart';
 import 'package:pili_aurora/utils/accounts.dart';
 import 'package:pili_aurora/utils/accounts/account.dart';
 import 'package:pili_aurora/utils/android/android_helper.dart';
@@ -153,6 +151,7 @@ class _AboutPageState extends State<AboutPage> {
               style: subTitleStyle,
             ),
           ),
+          ...aboutSettings.map((item) => item.widget),
           ListTile(
             title: Text(
               '''
@@ -193,61 +192,6 @@ Commit Hash: ${BuildConfig.commitHash}''',
             leading: const Icon(Icons.feedback_outlined),
             title: const Text('问题反馈'),
             trailing: Icon(Icons.arrow_forward, size: 16, color: outline),
-          ),
-          ListTile(
-            onTap: () => Get.toNamed('/logs'),
-            onLongPress: LoggerUtils.clearLogs,
-            onSecondaryTap: PlatformUtils.isMobile
-                ? null
-                : LoggerUtils.clearLogs,
-            leading: const Icon(Icons.bug_report_outlined),
-            title: const Text('错误日志'),
-            subtitle: Text('长按清除日志', style: subTitleStyle),
-            trailing: Icon(Icons.arrow_forward, size: 16, color: outline),
-          ),
-          AnimatedBuilder(
-            animation: Diagnostics.instance,
-            builder: (context, _) => ListTile(
-              leading: const Icon(Icons.monitor_heart_outlined),
-              title: const Text('性能跟踪'),
-              subtitle: Text(
-                Diagnostics.instance.tracing
-                    ? '正在记录 · 查看指标与导出诊断包'
-                    : '记录运行性能、查看运行日志与导出诊断包',
-                style: subTitleStyle,
-              ),
-              trailing: Icon(Icons.arrow_forward, size: 16, color: outline),
-              onTap: () => Navigator.of(context).push(
-                MaterialPageRoute<void>(
-                  settings: const RouteSettings(name: '/diagnostics'),
-                  builder: (_) => const DiagnosticsPage(),
-                ),
-              ),
-            ),
-          ),
-          AnimatedBuilder(
-            animation: Diagnostics.instance,
-            builder: (context, _) => ListTile(
-              leading: const Icon(Icons.tune),
-              title: const Text('日志等级'),
-              subtitle: Text(
-                '${Diagnostics.instance.level.label} · 即时生效',
-                style: subTitleStyle,
-              ),
-              onTap: () => showDiagnosticLogLevelDialog(context),
-            ),
-          ),
-          AnimatedBuilder(
-            animation: Diagnostics.instance,
-            builder: (context, _) => ListTile(
-              leading: const Icon(Icons.video_settings_outlined),
-              title: const Text('播放器与解码日志等级'),
-              subtitle: Text(
-                '${Diagnostics.instance.playerLevel.label} · 独立保存与导出',
-                style: subTitleStyle,
-              ),
-              onTap: () => showDiagnosticLogLevelDialog(context, player: true),
-            ),
           ),
           ListTile(
             onTap: () {

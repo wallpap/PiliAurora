@@ -24,6 +24,17 @@ abstract final class VideoUtils {
     Iterable<String> urls, {
     CDNService? defaultCDNService,
     bool isAudio = false,
+  }) => _getCdnUrl(
+    urls,
+    defaultCDNService: defaultCDNService,
+    isAudio: isAudio,
+  );
+
+  static String _getCdnUrl(
+    Iterable<String> urls, {
+    CDNService? defaultCDNService,
+    bool isAudio = false,
+    bool reportUnknown = true,
   }) {
     defaultCDNService ??= cdnService;
 
@@ -72,7 +83,7 @@ abstract final class VideoUtils {
             .toString();
       }
 
-      logger.w('unknown cdn type: $url');
+      if (reportUnknown) logger.w('unknown cdn type: $url');
     }
 
     return mcdnUpgcxcode == null
@@ -88,7 +99,7 @@ abstract final class VideoUtils {
               .toString();
   }
 
-  /// 默认沿用单 CDN 选择；启用多 CDN 时附上接口提供的备用地址。
+  /// 首选 CDN 优先，启用回退时按偏好尝试其它 CDN，再保留接口原始备用地址。
   static List<String> getCdnUrls(
     Iterable<String> urls, {
     CDNService? defaultCDNService,
@@ -105,6 +116,18 @@ abstract final class VideoUtils {
       ),
     ];
     if (!Pref.enableMultiCdn) return result;
+    if (!isAudio || !disableAudioCDN) {
+      final order = Pref.cdnFallbackOrder;
+      for (final service in order.isEmpty ? CDNService.values : order) {
+        // 首选地址解析已报告未知来源，生成回退候选时避免逐个 CDN 重复报告。
+        final url = _getCdnUrl(
+          sourceUrls,
+          defaultCDNService: service,
+          reportUnknown: false,
+        );
+        if (!result.contains(url)) result.add(url);
+      }
+    }
     for (final url in sourceUrls) {
       if (!result.contains(url)) result.add(url);
     }

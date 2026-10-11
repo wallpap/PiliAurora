@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
-import 'dart:typed_data';
+
+import 'package:flutter/services.dart';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:material_ui/material_ui.dart';
@@ -17,7 +18,7 @@ Future<void> showDiagnosticLogLevelDialog(
   final selected = await showDialog<DiagnosticLogLevel>(
     context: context,
     builder: (context) => SimpleDialog(
-      title: Text(player ? '播放器与解码日志等级' : '日志等级'),
+      title: Text(player ? '播放日志等级' : '日志等级'),
       children: [
         for (final level in DiagnosticLogLevel.values)
           SimpleDialogOption(
@@ -50,7 +51,8 @@ void _message(BuildContext context, String message) =>
         .showSnackBar(SnackBar(content: Text(message)));
 
 class DiagnosticsPage extends StatefulWidget {
-  const DiagnosticsPage({super.key, this.diagnostics});
+  const DiagnosticsPage({super.key, this.diagnostics, this.showAppBar = true});
+  final bool showAppBar;
   final Diagnostics? diagnostics;
 
   @override
@@ -60,6 +62,9 @@ class DiagnosticsPage extends StatefulWidget {
 class _DiagnosticsPageState extends State<DiagnosticsPage> {
   late final service = widget.diagnostics ?? Diagnostics.instance;
   bool _exporting = false;
+  bool _showPerformance = false;
+  String? _channel;
+  bool _errorsOnly = false;
 
   Future<void> _configure({bool? tracing, int? intervalMs}) async {
     try {
@@ -109,7 +114,7 @@ class _DiagnosticsPageState extends State<DiagnosticsPage> {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('清除诊断记录'),
-        content: const Text('停止性能跟踪，并清除本机保存的性能记录和运行日志？'),
+        content: const Text('停止性能记录，并清除本机保存的异常、运行、播放和性能记录？'),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(false),
@@ -158,28 +163,36 @@ class _DiagnosticsPageState extends State<DiagnosticsPage> {
       final process = latest?['process'] as Map? ?? const {};
       final frames = latest?['frames'] as Map? ?? const {};
       final images = latest?['images'] as Map? ?? const {};
-      final logs = service.recentLogs;
+      final logs = service.recentLogs
+          .where(
+            (record) =>
+                (_channel == null || record['channel'] == _channel) &&
+                (!_errorsOnly || record['level'] == 'error'),
+          )
+          .toList();
       return Scaffold(
-        appBar: AppBar(
-          title: const Text('性能与诊断'),
-          actions: [
-            IconButton(
-              tooltip: '导出诊断包',
-              onPressed: _exporting ? null : _export,
-              icon: _exporting
-                  ? const SizedBox.square(
-                      dimension: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Icon(Icons.file_upload_outlined),
-            ),
-            IconButton(
-              tooltip: '清除诊断记录',
-              onPressed: _clear,
-              icon: const Icon(Icons.delete_outline),
-            ),
-          ],
-        ),
+        appBar: widget.showAppBar
+            ? AppBar(
+                title: const Text('日志与诊断'),
+                actions: [
+                  IconButton(
+                    tooltip: '导出诊断包',
+                    onPressed: _exporting ? null : _export,
+                    icon: _exporting
+                        ? const SizedBox.square(
+                            dimension: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.file_upload_outlined),
+                  ),
+                  IconButton(
+                    tooltip: '清除诊断记录',
+                    onPressed: _clear,
+                    icon: const Icon(Icons.delete_outline),
+                  ),
+                ],
+              )
+            : null,
         body: CustomScrollView(
           slivers: [
             SliverToBoxAdapter(
@@ -188,28 +201,22 @@ class _DiagnosticsPageState extends State<DiagnosticsPage> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    SwitchListTile(
-                      contentPadding: EdgeInsets.zero,
-                      title: const Text('记录性能'),
-                      subtitle: Text(
-                        service.tracing ? '正在记录，可返回其他页面复现问题' : '关闭时不进行定时采样',
-                      ),
-                      value: service.tracing,
-                      onChanged: (value) => _configure(tracing: value),
-                    ),
-                    ListTile(
-                      contentPadding: EdgeInsets.zero,
-                      title: const Text('采样间隔'),
-                      trailing: DropdownButton<int>(
-                        value: service.intervalMs,
-                        onChanged: (value) => _configure(intervalMs: value),
-                        items: const [
-                          DropdownMenuItem(value: 250, child: Text('250 毫秒')),
-                          DropdownMenuItem(value: 1000, child: Text('1 秒（推荐）')),
-                          DropdownMenuItem(value: 5000, child: Text('5 秒')),
+                    if (!widget.showAppBar)
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.end,
+                        children: [
+                          TextButton.icon(
+                            onPressed: _exporting ? null : _export,
+                            icon: const Icon(Icons.file_upload_outlined),
+                            label: const Text('导出诊断包'),
+                          ),
+                          TextButton.icon(
+                            onPressed: _clear,
+                            icon: const Icon(Icons.delete_outline),
+                            label: const Text('清除记录'),
+                          ),
                         ],
                       ),
-                    ),
                     ListTile(
                       contentPadding: EdgeInsets.zero,
                       title: const Text('日志等级'),
@@ -222,9 +229,9 @@ class _DiagnosticsPageState extends State<DiagnosticsPage> {
                     ),
                     ListTile(
                       contentPadding: EdgeInsets.zero,
-                      title: const Text('播放器与解码日志等级'),
+                      title: const Text('播放日志等级'),
                       subtitle: Text(
-                        '${service.playerLevel.description}；独立保存为 player.jsonl，不受通用日志等级影响。调试含 2 秒快照，跟踪含 250 毫秒快照。',
+                        '${service.playerLevel.description}；用于定位播放与解码问题',
                       ),
                       trailing: Text(service.playerLevel.label),
                       onTap: () => showDiagnosticLogLevelDialog(
@@ -233,11 +240,7 @@ class _DiagnosticsPageState extends State<DiagnosticsPage> {
                         player: true,
                       ),
                     ),
-                    const Text(
-                      '仅保存在本机。通用日志 32 MiB、播放器/解码日志 128 MiB、性能记录 64 MiB。'
-                      '达到各自上限后轮转最旧文件；突发写入队列最多 32768 条/32 MiB，单条最多 1 MiB。'
-                      '导出包含三个通道及丢弃原因、轮转计数。详细等级会增加磁盘占用和采样开销。',
-                    ),
+                    const Text('记录保存在本机并自动轮转。详细日志会增加存储与采样开销。'),
                     const SizedBox(height: 16),
                     if (service.storageError != null ||
                         service.droppedRecords > 0)
@@ -247,92 +250,155 @@ class _DiagnosticsPageState extends State<DiagnosticsPage> {
                           color: Theme.of(context).colorScheme.error,
                         ),
                       ),
-                    if (latest == null)
-                      const Text('开启后显示采样结果')
-                    else ...[
-                      Text(
-                        '${service.tracing ? '最新采样' : '已停止 · 最后采样'}  #${latest['sequence']}  ${latest['route']}',
+                    ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      title: const Text('性能记录'),
+                      subtitle: Text(
+                        service.tracing ? '正在记录' : '按需记录 CPU、内存与帧耗时',
                       ),
-                      const SizedBox(height: 8),
-                      Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
-                        children: [
-                          _metric(
-                            '进程工作集',
-                            _number(
-                              process['rssBytes'],
-                              ' MiB',
-                              divisor: 1048576,
-                            ),
-                          ),
-                          _metric(
-                            '启动以来峰值',
-                            _number(
-                              process['peakRssBytes'],
-                              ' MiB',
-                              divisor: 1048576,
-                            ),
-                          ),
-                          _metric(
-                            '私有提交',
-                            _number(
-                              process['privateBytes'],
-                              ' MiB',
-                              divisor: 1048576,
-                            ),
-                          ),
-                          _metric(
-                            '进程 CPU / 全机',
-                            _number(process['cpuPercentMachine'], '%'),
-                          ),
-                          _metric(
-                            '图片 LRU',
-                            _number(
-                              images['cacheBytes'],
-                              ' MiB',
-                              divisor: 1048576,
-                            ),
-                          ),
-                          _metric(
-                            '本周期慢帧',
-                            '${frames['slowFrames'] ?? 0} / ${frames['count'] ?? 0}',
-                          ),
-                          _metric(
-                            'UI 构建峰值',
-                            _number(frames['maxBuildMs'], ' ms'),
-                          ),
-                          _metric(
-                            '光栅化峰值',
-                            _number(frames['maxRasterMs'], ' ms'),
-                          ),
-                        ],
+                      trailing: Icon(
+                        _showPerformance
+                            ? Icons.expand_less
+                            : Icons.expand_more,
                       ),
-                      const Padding(
-                        padding: EdgeInsets.symmetric(vertical: 8),
-                        child: Text(
-                          '缓存值属于进程内存的一部分，不可相加。GPU、Dart 堆及各模块独占内存不可直接测量；“不可用”不表示为零。',
+                      onTap: () =>
+                          setState(() => _showPerformance = !_showPerformance),
+                    ),
+                    if (_showPerformance) ...[
+                      SwitchListTile(
+                        contentPadding: EdgeInsets.zero,
+                        title: const Text('记录性能'),
+                        subtitle: Text(
+                          service.tracing ? '正在记录，可返回其他页面复现问题' : '关闭时不进行定时采样',
+                        ),
+                        value: service.tracing,
+                        onChanged: (value) => _configure(tracing: value),
+                      ),
+                      ListTile(
+                        contentPadding: EdgeInsets.zero,
+                        title: const Text('采样间隔'),
+                        trailing: DropdownButton<int>(
+                          value: service.intervalMs,
+                          onChanged: (value) => _configure(intervalMs: value),
+                          items: const [
+                            DropdownMenuItem(value: 250, child: Text('250 毫秒')),
+                            DropdownMenuItem(
+                              value: 1000,
+                              child: Text('1 秒（推荐）'),
+                            ),
+                            DropdownMenuItem(value: 5000, child: Text('5 秒')),
+                          ],
                         ),
                       ),
-                      ExpansionTile(
-                        title: const Text('各部分详细指标'),
-                        children: [
-                          Padding(
-                            padding: const EdgeInsets.all(12),
-                            // 折叠时子树不在树上；用 Builder 把美化 JSON 推迟到展开时再做，
-                            // 否则每 250ms 一次的重绘都会序列化整份采样。
-                            child: Builder(
-                              builder: (_) =>
-                                  SelectableText(service.snapshotText()),
+                      if (latest == null)
+                        const Text('开启后显示采样结果')
+                      else ...[
+                        Text(
+                          '${service.tracing ? '最新采样' : '已停止 · 最后采样'}  #${latest['sequence']}  ${latest['route']}',
+                        ),
+                        const SizedBox(height: 8),
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: [
+                            _metric(
+                              '进程工作集',
+                              _number(
+                                process['rssBytes'],
+                                ' MiB',
+                                divisor: 1048576,
+                              ),
                             ),
+                            _metric(
+                              '启动以来峰值',
+                              _number(
+                                process['peakRssBytes'],
+                                ' MiB',
+                                divisor: 1048576,
+                              ),
+                            ),
+                            _metric(
+                              '私有提交',
+                              _number(
+                                process['privateBytes'],
+                                ' MiB',
+                                divisor: 1048576,
+                              ),
+                            ),
+                            _metric(
+                              '进程 CPU / 全机',
+                              _number(process['cpuPercentMachine'], '%'),
+                            ),
+                            _metric(
+                              '图片 LRU',
+                              _number(
+                                images['cacheBytes'],
+                                ' MiB',
+                                divisor: 1048576,
+                              ),
+                            ),
+                            _metric(
+                              '本周期慢帧',
+                              '${frames['slowFrames'] ?? 0} / ${frames['count'] ?? 0}',
+                            ),
+                            _metric(
+                              'UI 构建峰值',
+                              _number(frames['maxBuildMs'], ' ms'),
+                            ),
+                            _metric(
+                              '光栅化峰值',
+                              _number(frames['maxRasterMs'], ' ms'),
+                            ),
+                          ],
+                        ),
+                        const Padding(
+                          padding: EdgeInsets.symmetric(vertical: 8),
+                          child: Text(
+                            '缓存值属于进程内存的一部分，不可相加。GPU、Dart 堆及各模块独占内存不可直接测量；“不可用”不表示为零。',
                           ),
-                        ],
-                      ),
+                        ),
+                        ExpansionTile(
+                          title: const Text('各部分详细指标'),
+                          children: [
+                            Padding(
+                              padding: const EdgeInsets.all(12),
+                              // 折叠时子树不在树上；用 Builder 把美化 JSON 推迟到展开时再做，
+                              // 否则每 250ms 一次的重绘都会序列化整份采样。
+                              child: Builder(
+                                builder: (_) =>
+                                    SelectableText(service.snapshotText()),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
                     ],
                     const Divider(height: 32),
                     Text(
-                      '最近运行日志（${logs.length} 条）',
+                      '最近日志（${logs.length} 条）',
                       style: Theme.of(context).textTheme.titleMedium,
+                    ),
+                    Wrap(
+                      spacing: 8,
+                      children: [
+                        for (final (channel, label) in const [
+                          (null, '全部'),
+                          ('runtime', '应用'),
+                          ('player', '播放'),
+                        ])
+                          ChoiceChip(
+                            label: Text(label),
+                            selected: _channel == channel,
+                            onSelected: (_) =>
+                                setState(() => _channel = channel),
+                          ),
+                        FilterChip(
+                          label: const Text('错误'),
+                          selected: _errorsOnly,
+                          onSelected: (value) =>
+                              setState(() => _errorsOnly = value),
+                        ),
+                      ],
                     ),
                     if (logs.isEmpty)
                       const Padding(
@@ -347,24 +413,15 @@ class _DiagnosticsPageState extends State<DiagnosticsPage> {
               itemCount: logs.length,
               itemBuilder: (context, index) {
                 final log = logs[index];
-                return ExpansionTile(
-                  title: Text(
-                    '[${log['level']}] ${log['category']} · ${log['message']}',
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
+                return Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 4,
                   ),
-                  subtitle: Text('${log['time']}'),
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.all(16),
-                      // 同上：折叠时不序列化整条日志。
-                      child: Builder(
-                        builder: (_) => SelectableText(
-                          const JsonEncoder.withIndent('  ').convert(log),
-                        ),
-                      ),
-                    ),
-                  ],
+                  child: _LogCard(
+                    key: ValueKey((log['runId'], log['sequence'], log['time'])),
+                    record: log,
+                  ),
                 );
               },
             ),
@@ -374,4 +431,78 @@ class _DiagnosticsPageState extends State<DiagnosticsPage> {
       );
     },
   );
+}
+
+class _LogCard extends StatefulWidget {
+  const _LogCard({super.key, required this.record});
+  final Map<String, Object?> record;
+
+  @override
+  State<_LogCard> createState() => _LogCardState();
+}
+
+class _LogCardState extends State<_LogCard> {
+  bool _expanded = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final record = widget.record;
+    final colors = Theme.of(context).colorScheme;
+    final level = DiagnosticLogLevel.parse(record['level'] as String?);
+    final time = DateTime.tryParse('${record['time']}')?.toLocal();
+    String format() => const JsonEncoder.withIndent('  ').convert(record);
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        '${record['message']}',
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(fontWeight: FontWeight.w600),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        '${level.label} · ${record['category']} · ${time ?? record['time']}',
+                        style: TextStyle(color: colors.outline, fontSize: 13),
+                      ),
+                    ],
+                  ),
+                ),
+                IconButton(
+                  tooltip: '复制日志',
+                  icon: const Icon(Icons.copy_outlined, size: 20),
+                  onPressed: () async {
+                    await Clipboard.setData(ClipboardData(text: format()));
+                    if (context.mounted) _message(context, '日志已复制');
+                  },
+                ),
+                IconButton(
+                  tooltip: _expanded ? '收起' : '展开',
+                  icon: Icon(_expanded ? Icons.expand_less : Icons.expand_more),
+                  onPressed: () => setState(() => _expanded = !_expanded),
+                ),
+              ],
+            ),
+            if (_expanded) ...[
+              const Divider(height: 24),
+              SelectableText(
+                format(),
+                style: const TextStyle(fontFamily: 'Monospace', fontSize: 13),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
 }

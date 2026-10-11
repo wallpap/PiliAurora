@@ -57,8 +57,9 @@ abstract final class Pref {
     SettingBoxKey.playerDiagnosticLogLevel,
     defaultValue: 'info',
   );
-  static String get diagnosticLogLevel =>
-      _setting.get(SettingBoxKey.diagnosticLogLevel, defaultValue: 'warning');
+  static String get diagnosticLogLevel => enableLog
+      ? _setting.get(SettingBoxKey.diagnosticLogLevel, defaultValue: 'warning')
+      : 'off';
   static bool get performanceTracing =>
       _setting.get(SettingBoxKey.performanceTracing, defaultValue: false);
   static int get performanceIntervalMs =>
@@ -300,6 +301,17 @@ abstract final class Pref {
 
   static bool get enableMultiCdn =>
       _setting.get(SettingBoxKey.enableMultiCdn, defaultValue: false);
+
+  static List<CDNService> get cdnFallbackOrder {
+    final names = _setting.get(
+      SettingBoxKey.cdnFallbackOrder,
+      defaultValue: const <String>[],
+    ) as List;
+    return [
+      for (final service in CDNService.values)
+        if (names.contains(service.name)) service,
+    ]..sort((a, b) => names.indexOf(a.name).compareTo(names.indexOf(b.name)));
+  }
 
   static String get banWordForRecommend =>
       _setting.get(SettingBoxKey.banWordForRecommend, defaultValue: '');

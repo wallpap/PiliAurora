@@ -1,15 +1,11 @@
+import 'package:pili_aurora/models/common/setting_type.dart';
 import 'package:pili_aurora/common/widgets/loading_widget/http_error.dart';
 import 'package:pili_aurora/common/widgets/scaffold/simple_scaffold.dart';
 import 'package:pili_aurora/common/widgets/view_insets_safe_area.dart';
 import 'package:pili_aurora/common/widgets/view_sliver_safe_area.dart';
-import 'package:pili_aurora/common/widgets/debounced_state.dart' show DebounceStreamState;
-import 'package:pili_aurora/pages/setting/models/extra_settings.dart';
+import 'package:pili_aurora/common/widgets/debounced_state.dart'
+    show DebounceStreamState;
 import 'package:pili_aurora/pages/setting/models/model.dart';
-import 'package:pili_aurora/pages/setting/models/play_settings.dart';
-import 'package:pili_aurora/pages/setting/models/privacy_settings.dart';
-import 'package:pili_aurora/pages/setting/models/recommend_settings.dart';
-import 'package:pili_aurora/pages/setting/models/style_settings.dart';
-import 'package:pili_aurora/pages/setting/models/video_settings.dart';
 import 'package:pili_aurora/utils/grid.dart';
 import 'package:pili_aurora/utils/waterfall.dart';
 import 'package:get/get.dart';
@@ -29,12 +25,9 @@ class _SettingsSearchPageState
   final _textEditingController = TextEditingController();
   final RxList<SettingsModel> _list = <SettingsModel>[].obs;
   late final _settings = [
-    ...extraSettings,
-    ...privacySettings,
-    ...recommendSettings,
-    ...videoSettings,
-    ...playSettings,
-    ...styleSettings,
+    for (final type in SettingType.values)
+      if (type != SettingType.webdavSetting)
+        for (final item in type.settings) ...item.searchableItems,
   ];
 
   @override

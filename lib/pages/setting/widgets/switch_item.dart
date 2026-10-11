@@ -17,6 +17,7 @@ class SetSwitchItem extends StatefulWidget {
   final EdgeInsetsGeometry? contentPadding;
   final TextStyle? titleStyle;
   final bool isSplit;
+  final List<Widget> children;
 
   const SetSwitchItem({
     super.key,
@@ -31,6 +32,7 @@ class SetSwitchItem extends StatefulWidget {
     this.contentPadding,
     this.titleStyle,
     this.isSplit = false,
+    this.children = const [],
   });
 
   @override
@@ -112,25 +114,28 @@ class _SetSwitchItemState extends State<SetSwitchItem> {
       trailing: trailing,
     );
 
-    if (widget.isSplit) {
-      return Row(
-        children: [
-          Expanded(child: child(null)),
-          SizedBox(
-            height: 25,
-            child: VerticalDivider(
-              width: 1,
-              color: theme.colorScheme.outline.withValues(alpha: .3),
-            ),
-          ),
-          Padding(
-            padding: const .only(left: 4, right: 24),
-            child: switchBtn,
-          ),
-        ],
-      );
-    }
-
-    return child(switchBtn);
+    final tile = widget.isSplit
+        ? Row(
+            children: [
+              Expanded(child: child(null)),
+              SizedBox(
+                height: 25,
+                child: VerticalDivider(
+                  width: 1,
+                  color: theme.colorScheme.outline.withValues(alpha: .3),
+                ),
+              ),
+              Padding(
+                padding: const .only(left: 4, right: 24),
+                child: switchBtn,
+              ),
+            ],
+          )
+        : child(switchBtn);
+    return widget.children.isEmpty
+        ? tile
+        : Column(
+            children: [tile, if (val) ...widget.children],
+          );
   }
 }

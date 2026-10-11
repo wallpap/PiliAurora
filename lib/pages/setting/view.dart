@@ -1,18 +1,12 @@
+import 'package:pili_aurora/pages/about/diagnostics_page.dart';
 import 'package:pili_aurora/common/widgets/flutter/list_tile.dart';
 import 'package:pili_aurora/common/widgets/scaffold/simple_scaffold.dart';
 import 'package:pili_aurora/common/widgets/view_safe_area.dart';
-import 'package:pili_aurora/http/login.dart';
 import 'package:pili_aurora/models/common/setting_type.dart';
 import 'package:pili_aurora/pages/about/view.dart';
-import 'package:pili_aurora/pages/login/controller.dart';
 import 'package:pili_aurora/pages/setting/common_setting.dart';
-import 'package:pili_aurora/pages/setting/widgets/multi_select_dialog.dart';
 import 'package:pili_aurora/pages/webdav/view.dart';
-import 'package:pili_aurora/utils/accounts.dart';
-import 'package:pili_aurora/utils/accounts/account.dart';
 import 'package:pili_aurora/utils/extension/size_ext.dart';
-import 'package:pili_aurora/utils/utils.dart';
-import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:get/get.dart';
 import 'package:material_design_icons_flutter/material_design_icons_flutter.dart';
 import 'package:material_ui/material_ui.dart' hide ListTile;
@@ -37,21 +31,25 @@ class SettingPage extends StatefulWidget {
 }
 
 class _SettingPageState extends State<SettingPage> {
-  late SettingType _type = SettingType.privacySetting;
-  final RxBool _noAccount = Accounts.account.isEmpty.obs;
+  late SettingType _type = SettingType.styleSetting;
   late bool _isPortrait;
   late ThemeData theme;
 
   static const List<_SettingsModel> _items = [
     _SettingsModel(
-      type: SettingType.privacySetting,
-      subtitle: '黑名单',
-      icon: Icon(Icons.privacy_tip_outlined),
+      type: SettingType.styleSetting,
+      subtitle: '主题与文字、布局与导航、图片与动效',
+      icon: Icon(Icons.style_outlined),
     ),
     _SettingsModel(
       type: SettingType.recommendSetting,
       subtitle: '推荐来源（web/app）、刷新保留内容、过滤器',
       icon: Icon(Icons.explore_outlined),
+    ),
+    _SettingsModel(
+      type: SettingType.contentSetting,
+      subtitle: '搜索、评论、动态、视频详情与内容过滤',
+      icon: Icon(Icons.forum_outlined),
     ),
     _SettingsModel(
       type: SettingType.videoSetting,
@@ -60,22 +58,28 @@ class _SettingPageState extends State<SettingPage> {
     ),
     _SettingsModel(
       type: SettingType.playSetting,
-      subtitle: '双击/长按、全屏、后台播放、弹幕、字幕、底部进度条等',
+      subtitle: '播放行为、手势、全屏控件、弹幕与字幕',
       icon: Icon(Icons.touch_app_outlined),
     ),
     _SettingsModel(
-      type: SettingType.styleSetting,
-      subtitle: '横屏适配（平板）、侧栏、列宽、首页、动态红点、主题、字号、图片、帧率等',
-      icon: Icon(Icons.style_outlined),
+      type: SettingType.privacySetting,
+      subtitle: '切换账号、退出登录与黑名单',
+      icon: Icon(Icons.privacy_tip_outlined),
     ),
     _SettingsModel(
       type: SettingType.extraSetting,
-      subtitle: '震动、搜索、收藏、ai、评论、动态、代理、更新检查等',
+      subtitle: '网络连接、缓存与下载目录',
       icon: Icon(Icons.extension_outlined),
     ),
     _SettingsModel(
       type: SettingType.webdavSetting,
+      subtitle: '导入导出设置与 WebDAV 同步',
       icon: Icon(MdiIcons.databaseCogOutline),
+    ),
+    _SettingsModel(
+      type: SettingType.diagnosticSetting,
+      subtitle: '异常与播放日志、性能记录、导出诊断包',
+      icon: Icon(Icons.bug_report_outlined),
     ),
     _SettingsModel(
       type: SettingType.about,
@@ -119,11 +123,15 @@ class _SettingPageState extends State<SettingPage> {
                       .videoSetting ||
                       .playSetting ||
                       .styleSetting ||
-                      .extraSetting => CommonSetting(
+                      .extraSetting ||
+                      .contentSetting => CommonSetting(
                         settingType: _type,
                         showAppBar: false,
                       ),
                       .webdavSetting => const WebDavSettingPage(
+                        showAppBar: false,
+                      ),
+                      .diagnosticSetting => const DiagnosticsPage(
                         showAppBar: false,
                       ),
                       .about => const AboutPage(showAppBar: false),
@@ -135,12 +143,6 @@ class _SettingPageState extends State<SettingPage> {
     );
   }
 
-  @override
-  void dispose() {
-    _noAccount.close();
-    super.dispose();
-  }
-
   void _toPage(SettingType type) {
     if (_isPortrait) {
       Get.to(
@@ -150,8 +152,10 @@ class _SettingPageState extends State<SettingPage> {
           .videoSetting ||
           .playSetting ||
           .styleSetting ||
-          .extraSetting => CommonSetting(settingType: type),
+          .extraSetting ||
+          .contentSetting => CommonSetting(settingType: type),
           .webdavSetting => const WebDavSettingPage(),
+          .diagnosticSetting => const DiagnosticsPage(),
           .about => const AboutPage(),
         },
       );
@@ -179,121 +183,18 @@ class _SettingPageState extends State<SettingPage> {
       padding: EdgeInsets.only(bottom: padding.bottom + 100),
       children: [
         _buildSearchItem(theme),
-        ..._items
-            .take(_items.length - 1)
-            .map(
-              (item) => ListTile(
-                tileColor: _getTileColor(theme, item.type),
-                onTap: () => _toPage(item.type),
-                leading: item.icon,
-                title: Text(item.type.title, style: titleStyle),
-                subtitle: item.subtitle == null
-                    ? null
-                    : Text(item.subtitle!, style: subTitleStyle),
-              ),
-            ),
-        ListTile(
-          onTap: () => LoginPageController.switchAccountDialog(context),
-          leading: const Icon(Icons.switch_account_outlined),
-          title: Text('切换账号', style: titleStyle),
-        ),
-        Obx(
-          () => _noAccount.value
-              ? const SizedBox.shrink()
-              : ListTile(
-                  leading: const Icon(Icons.logout_outlined),
-                  onTap: () => _logoutDialog(context),
-                  title: Text('退出登录', style: titleStyle),
-                ),
-        ),
-        ListTile(
-          tileColor: _getTileColor(theme, _items.last.type),
-          onTap: () => _toPage(_items.last.type),
-          leading: _items.last.icon,
-          title: Text(_items.last.type.title, style: titleStyle),
+        ..._items.map(
+          (item) => ListTile(
+            tileColor: _getTileColor(theme, item.type),
+            onTap: () => _toPage(item.type),
+            leading: item.icon,
+            title: Text(item.type.title, style: titleStyle),
+            subtitle: item.subtitle == null
+                ? null
+                : Text(item.subtitle!, style: subTitleStyle),
+          ),
         ),
       ],
-    );
-  }
-
-  Future<void> _removeAccounts(Set<LoginAccount> accounts) async {
-    await Accounts.deleteAll(accounts);
-    if (mounted) _noAccount.value = Accounts.account.isEmpty;
-  }
-
-  static Future<LoginAccount?> _logoutWrapper(LoginAccount account) async {
-    try {
-      final res = await LoginHttp.logout(account);
-      return res.isSuccess ? account : null;
-    } catch (e, s) {
-      Utils.reportError(e, s);
-      return null;
-    }
-  }
-
-  Future<void> _logoutDialog(BuildContext context) async {
-    final result = await showDialog<Set<LoginAccount>>(
-      context: context,
-      builder: (context) => MultiSelectDialog<LoginAccount>(
-        title: '选择要登出的账号uid',
-        initValues: const Iterable.empty(),
-        values: {
-          for (final i in Accounts.account.values) i: i.mid.toString(),
-        },
-      ),
-    );
-    if (!context.mounted || result == null || result.isEmpty) return;
-
-    showDialog(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: const Text('提示'),
-          content: Text(
-            "确认要退出以下账号登录吗\n\n${result.map((i) => i.mid).join('\n')}",
-          ),
-          actions: [
-            TextButton(
-              onPressed: Get.back,
-              child: Text(
-                '点错了',
-                style: TextStyle(color: theme.colorScheme.outline),
-              ),
-            ),
-            TextButton(
-              onPressed: () {
-                Get.back();
-                _removeAccounts(result);
-              },
-              child: Text(
-                '仅登出',
-                style: TextStyle(color: theme.colorScheme.error),
-              ),
-            ),
-            TextButton(
-              onPressed: () async {
-                SmartDialog.showLoading();
-                final res = await Future.wait(result.map(_logoutWrapper));
-                SmartDialog.dismiss();
-                final logoutAccounts = res.nonNulls.toSet();
-                if (logoutAccounts.isEmpty) {
-                  SmartDialog.showToast('所选账号均退出登录失败');
-                } else {
-                  Get.back();
-                  _removeAccounts(logoutAccounts);
-                  if (logoutAccounts.length != result.length) {
-                    result.removeWhere(logoutAccounts.contains);
-                    SmartDialog.showToast(
-                      '账号 ${result.map((i) => i.mid).join(",")} 退出登录失败',
-                    );
-                  }
-                }
-              },
-              child: const Text('确认'),
-            ),
-          ],
-        );
-      },
     );
   }
 

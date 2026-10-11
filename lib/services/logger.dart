@@ -1,6 +1,5 @@
 import 'dart:io';
 
-import 'package:pili_aurora/utils/json_file_handler.dart';
 import 'package:pili_aurora/utils/storage_pref.dart';
 import 'package:pili_aurora/services/diagnostics/diagnostics.dart';
 import 'package:pili_aurora/services/diagnostics/app_logger.dart';
@@ -18,8 +17,6 @@ final logger = AppLogger(
 );
 
 abstract final class LoggerUtils {
-  static File? _logFile;
-
   static Future<void> initialize() async {
     Diagnostics.instance.register(
       'app',
@@ -30,43 +27,25 @@ abstract final class LoggerUtils {
     );
     await Diagnostics.instance.initialize(
       directory: Directory(p.join(appSupportDirPath, 'diagnostics')),
-      level: Pref.enableLog
-          ? DiagnosticLogLevel.parse(Pref.diagnosticLogLevel)
-          : DiagnosticLogLevel.off,
+      level: DiagnosticLogLevel.parse(Pref.diagnosticLogLevel),
+      legacyReports: File(
+        p.join(
+          (await getApplicationDocumentsDirectory()).path,
+          '.pili_logs.json',
+        ),
+      ),
       playerLevel: DiagnosticLogLevel.parse(Pref.playerDiagnosticLogLevel),
       tracing: Pref.performanceTracing,
       intervalMs: Pref.performanceIntervalMs,
       saveSettings: (settings) => GStorage.setting.putAll({
         SettingBoxKey.diagnosticLogLevel: settings['level'],
         SettingBoxKey.playerDiagnosticLogLevel: settings['playerLevel'],
+        // 保持旧开关与等级一致，兼容已有备份。
         SettingBoxKey.enableLog:
             settings['level'] != DiagnosticLogLevel.off.name,
         SettingBoxKey.performanceTracing: settings['tracing'],
         SettingBoxKey.performanceIntervalMs: settings['intervalMs'],
       }),
     );
-  }
-
-  static Future<File> getLogsPath() async {
-    final file = _logFile ??= File(
-      p.join(
-        (await getApplicationDocumentsDirectory()).path,
-        '.pili_logs.json',
-      ),
-    );
-    if (!file.existsSync()) {
-      await file.create(recursive: true);
-    }
-    return file;
-  }
-
-  static Future<bool> clearLogs() async {
-    try {
-      await JsonFileHandler.clear();
-    } catch (e) {
-      // if (kDebugMode) debugPrint('Error clearing file: $e');
-      return false;
-    }
-    return true;
   }
 }

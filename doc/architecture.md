@@ -83,7 +83,7 @@ flowchart LR
 | 设置与本地 box | `GStorage`、`Pref`、`SettingBoxKey` | 存储初始化在启动阶段完成；新增设置时同步默认值和键定义。 |
 | 下载记录与媒体索引 | `DownloadRepository` | 文件位于下载根目录；目录格式与 JSON 字段由仓库维护。 |
 | 临时目录、缓存、字体 | `app/app_paths.dart`、`CacheManager`、`FontUtils` | 初始化先于页面使用。 |
-| 诊断记录 | `services/diagnostics/`、`JsonFileHandler` | 记录会按设置脱敏；导出前仍应确认没有账号凭据。 |
+| 诊断记录 | `services/diagnostics/`、`DiagnosticReportHandler` | 记录会按设置脱敏；导出前仍应确认没有账号凭据。 |
 | 播放器状态 | `PlaybackSession`、`NativePlaybackRuntime` 与 `PlPlayerController` | 会话拥有页面归属与加载代次，运行时拥有原生资源，控制器负责 UI 状态与事件接线。 |
 
 ## 平台边界

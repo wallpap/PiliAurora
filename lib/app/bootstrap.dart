@@ -13,7 +13,7 @@ import 'package:pili_aurora/services/logger.dart';
 import 'package:pili_aurora/utils/cache_manager.dart';
 import 'package:pili_aurora/utils/date_utils.dart';
 import 'package:pili_aurora/utils/font_utils.dart';
-import 'package:pili_aurora/utils/json_file_handler.dart';
+import 'package:pili_aurora/services/diagnostics/report_handler.dart';
 import 'package:pili_aurora/utils/path_utils.dart';
 import 'package:pili_aurora/utils/request_utils.dart';
 import 'package:pili_aurora/utils/storage.dart';
@@ -88,10 +88,9 @@ Future<void> bootstrapApplication() async {
     'MPV Api Version':
         '${NativePlayer.apiVersion >> 16}.${NativePlayer.apiVersion & 0xFFFF}',
   };
-  final fileHandler = await JsonFileHandler.init();
 
   Catcher2(
-    [?fileHandler],
+    [DiagnosticReportHandler()],
     const PiliAuroraApp(),
     logger: (level, message, {error, stackTrace}) {
       final log = switch (level) {

@@ -44,6 +44,8 @@ class Diagnostics extends ChangeNotifier {
   DiagnosticRecordStore? _logs;
   DiagnosticRecordStore? _trace;
   DiagnosticRecordStore? _playerLogs;
+  // 历史异常文件以只读兼容源保留，新异常统一写入 runtime。
+  DiagnosticRecordStore? _legacyReports;
   final _clock = Stopwatch()..start();
   final String _runId = DateTime.now().toUtc().toIso8601String();
   int _logSequence = 0;
@@ -80,6 +82,7 @@ class Diagnostics extends ChangeNotifier {
 
   Future<void> initialize({
     required Directory directory,
+    File? legacyReports,
     DiagnosticLogLevel level = DiagnosticLogLevel.warning,
     DiagnosticLogLevel playerLevel = DiagnosticLogLevel.info,
     bool tracing = false,
@@ -87,6 +90,9 @@ class Diagnostics extends ChangeNotifier {
     Future<void> Function(Map<String, Object?>)? saveSettings,
   }) async {
     _logs = DiagnosticRecordStore(File('${directory.path}/runtime.jsonl'));
+    _legacyReports = legacyReports == null
+        ? null
+        : DiagnosticRecordStore(legacyReports);
     _trace = DiagnosticRecordStore(
       File('${directory.path}/performance.jsonl'),
       maxBytes: 16 << 20,
@@ -110,6 +116,26 @@ class Diagnostics extends ChangeNotifier {
           [
             ...await readDiagnosticHistory(await _logs!.files()),
             ...await readDiagnosticHistory(await _playerLogs!.files()),
+            for (final report in await readDiagnosticHistory(
+              await _legacyReports?.files() ?? const [],
+            ))
+              {
+                'time':
+                    DateTime.tryParse('${report['dateTime']}')
+                        ?.toUtc()
+                        .toIso8601String() ??
+                    DateTime.utc(1970).toIso8601String(),
+                'channel': 'runtime',
+                'level': 'error',
+                'category': 'exception',
+                'message': report['error'],
+                'stack': report['stackTrace'],
+                'details': {
+                  'device': report['deviceParameters'],
+                  'application': report['applicationParameters'],
+                  'build': report['customParameters'],
+                },
+              },
           ]..sort((a, b) {
             final order = (a['time'] as String? ?? '').compareTo(
               b['time'] as String? ?? '',
@@ -387,6 +413,7 @@ class Diagnostics extends ChangeNotifier {
     ...?await _logs?.files(),
     ...?await _playerLogs?.files(),
     ...?await _trace?.files(),
+    ...?await _legacyReports?.files(),
   ];
   Future<void> flush() async {
     await _logs?.flush();
@@ -399,6 +426,7 @@ class Diagnostics extends ChangeNotifier {
     await _logs?.clear();
     await _playerLogs?.clear();
     await _trace?.clear();
+    await _legacyReports?.clear();
     _recent.clear();
     latest = null;
     notifyListeners();
@@ -414,6 +442,7 @@ class Diagnostics extends ChangeNotifier {
         ...?await _logs?.snapshot(directory),
         ...?await _playerLogs?.snapshot(directory),
         ...?await _trace?.snapshot(directory),
+        ...await _legacySnapshots(directory),
       ];
       final manifest = File('${directory.path}/manifest.json');
       await manifest.writeAsString(
@@ -443,6 +472,36 @@ class Diagnostics extends ChangeNotifier {
       }
       rethrow;
     }
+  }
+
+  Future<List<String>> _legacySnapshots(Directory directory) async {
+    final paths = <String>[];
+    for (final source
+        in await _legacyReports?.snapshot(directory) ?? <String>[]) {
+      // 早期版本保存过原始报告；导出时重新脱敏，历史文件保持原样。
+      final output = File('$source.sanitized');
+      final sink = output.openWrite();
+      try {
+        await for (final line
+            in File(source)
+                .openRead()
+                .transform(const Utf8Decoder(allowMalformed: true))
+                .transform(const LineSplitter())) {
+          try {
+            sink.writeln(
+              jsonEncode(DiagnosticRedactor.clean(jsonDecode(line))),
+            );
+          } on FormatException {
+            // 跳过中断写入留下的不完整报告。
+          }
+        }
+      } finally {
+        await sink.close();
+      }
+      await output.rename(source);
+      paths.add(source);
+    }
+    return paths;
   }
 
   static Future<void> _zip((List<String>, String) args) async {

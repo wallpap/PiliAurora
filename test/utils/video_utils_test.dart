@@ -26,6 +26,8 @@ void main() {
 
   setUp(() async {
     await GStorage.setting.delete(SettingBoxKey.enableMultiCdn);
+    await GStorage.setting.delete(SettingBoxKey.cdnFallbackOrder);
+    VideoUtils.disableAudioCDN = false;
   });
 
   test('直播备用源保留当前选择，按当前编码提供原始备用 host', () async {
@@ -65,7 +67,7 @@ void main() {
   });
 
   test(
-    'preferred CDN stays first, followed by unique API backup URLs',
+    'default fallback uses CDN list order after the preferred source',
     () async {
       await GStorage.setting.put(SettingBoxKey.enableMultiCdn, true);
       const primary =
@@ -78,11 +80,14 @@ void main() {
         defaultCDNService: CDNService.hw,
       );
 
-      expect(urls, [
+      expect(urls.take(5), [
         'https://upos-sz-mirrorhw.bilivideo.com/upgcxcode/video?deadline=1',
         primary,
         backup,
+        'https://upos-sz-mirroralib.bilivideo.com/upgcxcode/video?deadline=1',
+        'https://upos-sz-mirroralio1.bilivideo.com/upgcxcode/video?deadline=1',
       ]);
+      expect(urls.toSet().length, urls.length);
       expect(
         urls.first,
         VideoUtils.getCdnUrl([
@@ -90,6 +95,62 @@ void main() {
           backup,
         ], defaultCDNService: CDNService.hw),
       );
+    },
+  );
+
+  test(
+    'custom fallback order persists and deduplicates the preferred CDN',
+    () async {
+      await GStorage.setting.put(SettingBoxKey.enableMultiCdn, true);
+      await GStorage.setting.put(
+        SettingBoxKey.cdnFallbackOrder,
+        ['hw', 'ali', 'removed-cdn', 'hw', 'cos'],
+      );
+      expect(Pref.cdnFallbackOrder, [
+        CDNService.hw,
+        CDNService.ali,
+        CDNService.cos,
+      ]);
+      const primary =
+          'https://upos-sz-mirrorcos.bilivideo.com/upgcxcode/video?deadline=1';
+      const backup = 'https://backup.example.com/video?deadline=1';
+      expect(
+        VideoUtils.getCdnUrls([
+          primary,
+          backup,
+        ], defaultCDNService: CDNService.ali),
+        [
+          'https://upos-sz-mirrorali.bilivideo.com/upgcxcode/video?deadline=1',
+          'https://upos-sz-mirrorhw.bilivideo.com/upgcxcode/video?deadline=1',
+          primary,
+          backup,
+        ],
+      );
+
+      await GStorage.setting.put(SettingBoxKey.enableMultiCdn, false);
+      expect(
+        VideoUtils.getCdnUrls([
+          primary,
+          backup,
+        ], defaultCDNService: CDNService.ali),
+        [
+          'https://upos-sz-mirrorali.bilivideo.com/upgcxcode/video?deadline=1',
+        ],
+      );
+    },
+  );
+
+  test(
+    'audio opt-out retains API sources without rewriting fallback hosts',
+    () async {
+      await GStorage.setting.put(SettingBoxKey.enableMultiCdn, true);
+      await GStorage.setting.put(SettingBoxKey.cdnFallbackOrder, ['hw']);
+      VideoUtils.disableAudioCDN = true;
+      const urls = [
+        'https://upos-sz-mirrorcos.bilivideo.com/upgcxcode/audio?deadline=1',
+        'https://upos-sz-mirrorali.bilivideo.com/upgcxcode/audio?deadline=1',
+      ];
+      expect(VideoUtils.getCdnUrls(urls, isAudio: true), urls);
     },
   );
 
