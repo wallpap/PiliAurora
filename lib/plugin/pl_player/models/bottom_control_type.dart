@@ -3,6 +3,7 @@ enum BottomControlType {
   pre,
   next,
   time,
+  volume,
   episode,
   fit,
   subtitle,

@@ -38,6 +38,7 @@ import 'package:pili_aurora/pages/video/post_panel/view.dart';
 import 'package:pili_aurora/pages/video/widgets/header_control.dart';
 import 'package:pili_aurora/plugin/pl_player/controller.dart';
 import 'package:pili_aurora/plugin/pl_player/models/bottom_control_type.dart';
+import 'package:pili_aurora/plugin/pl_player/widgets/desktop_volume_control.dart';
 import 'package:pili_aurora/plugin/pl_player/models/data_status.dart';
 import 'package:pili_aurora/plugin/pl_player/models/double_tap_type.dart';
 import 'package:pili_aurora/plugin/pl_player/models/fullscreen_mode.dart';
@@ -472,6 +473,17 @@ class _PLVideoPlayerState extends State<PLVideoPlayer>
     Widget progressWidget(
       BottomControlType bottomControl,
     ) => switch (bottomControl) {
+      BottomControlType.volume => DesktopVolumeControl(
+        volume: plPlayerController.volume,
+        muted: plPlayerController.muted,
+        maxVolume: plPlayerController.maxVolume,
+        onChanged: (value) =>
+            plPlayerController.setVolume(value, showIndicator: false),
+        onMuteChanged: plPlayerController.setMuted,
+        onOpened: () => plPlayerController.setControlsMenuOpen(true),
+        onClosed: () => plPlayerController.setControlsMenuOpen(false),
+      ),
+
       /// 播放暂停
       BottomControlType.playOrPause => PlayOrPauseButton(
         plPlayerController: plPlayerController,
@@ -949,6 +961,7 @@ class _PLVideoPlayerState extends State<PLVideoPlayer>
     List<BottomControlType> userSpecifyItemLeft = [
       .playOrPause,
       .time,
+      if (PlatformUtils.isDesktop) .volume,
       if (!isNotFileSource || anySeason) ...[.pre, .next],
     ];
 

@@ -5,6 +5,8 @@ import 'package:pili_aurora/plugin/pl_player/controller.dart';
 import 'package:pili_aurora/plugin/pl_player/models/video_fit_type.dart';
 import 'package:pili_aurora/plugin/pl_player/widgets/common_btn.dart';
 import 'package:pili_aurora/plugin/pl_player/widgets/play_pause_btn.dart';
+import 'package:pili_aurora/plugin/pl_player/widgets/desktop_volume_control.dart';
+import 'package:pili_aurora/utils/platform_utils.dart';
 import 'package:pili_aurora/utils/storage.dart';
 import 'package:pili_aurora/utils/storage_key.dart';
 import 'package:pili_aurora/utils/theme_utils.dart';
@@ -51,6 +53,17 @@ class _BottomControlState extends State<BottomControl> with HeaderMixin {
         child: Row(
           children: [
             PlayOrPauseButton(plPlayerController: plPlayerController),
+            if (PlatformUtils.isDesktop)
+              DesktopVolumeControl(
+                volume: plPlayerController.volume,
+                muted: plPlayerController.muted,
+                maxVolume: plPlayerController.maxVolume,
+                onChanged: (value) =>
+                    plPlayerController.setVolume(value, showIndicator: false),
+                onMuteChanged: plPlayerController.setMuted,
+                onOpened: () => plPlayerController.setControlsMenuOpen(true),
+                onClosed: () => plPlayerController.setControlsMenuOpen(false),
+              ),
             ComBtn(
               height: 30,
               tooltip: '刷新',

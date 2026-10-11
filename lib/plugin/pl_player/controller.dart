@@ -187,7 +187,13 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
   /// [videoController] instance of Player
   VideoController? get videoController => _videoController;
 
-  bool isMuted = false;
+  final RxBool muted = false.obs;
+  bool get isMuted => muted.value;
+
+  Future<void> setMuted(bool value) async {
+    muted.value = value;
+    await _videoPlayerController?.setVolume(value ? 0 : volume.value * 100);
+  }
 
   /// 听视频
   late final RxBool onlyPlayAudio = false.obs;
@@ -762,7 +768,7 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
     danmakuController?.clear();
 
     final player = await _runtime.initialize(
-      volume: this.volume.value,
+      volume: isMuted ? 0 : this.volume.value,
       width: width,
       height: height,
     );
@@ -1309,12 +1315,22 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
   }
 
   bool tripling = false;
+  bool controlsMenuOpen = false;
+
+  void setControlsMenuOpen(bool value) {
+    controlsMenuOpen = value;
+    if (value) {
+      _timer?.cancel();
+    } else {
+      hideTaskControls();
+    }
+  }
 
   /// 隐藏控制条
   void hideTaskControls() {
     _timer?.cancel();
     _timer = Timer(showControlDuration, () {
-      if (!isSeeking.value && !tripling) {
+      if (!isSeeking.value && !tripling && !controlsMenuOpen) {
         controls = false;
       }
       _timer = null;
@@ -1341,11 +1357,13 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
 
   final double maxVolume = PlatformUtils.isDesktop ? Pref.maxVolume : 1.0;
   Future<void> setVolume(double volume, {bool showIndicator = true}) async {
-    if (this.volume.value != volume) {
+    volume = volume.clamp(0.0, maxVolume);
+    if (this.volume.value != volume || isMuted) {
       this.volume.value = volume;
+      muted.value = false;
       try {
         if (PlatformUtils.isDesktop) {
-          await _videoPlayerController!.setVolume(volume * 100);
+          await _videoPlayerController?.setVolume(volume * 100);
         } else {
           FlutterVolumeController.updateShowSystemUI(false);
           await FlutterVolumeController.setVolume(volume);
