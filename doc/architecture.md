@@ -105,7 +105,7 @@ flowchart LR
 - `services/` 负责跨页面共享或需显式管理生命周期的工作。页面状态通常留在对应 controller。
 - `services/messaging/` 按主账号的 `MessagingSession` 管理消息业务。GetX 保留路由，Riverpod 订阅业务快照；聊天和分享共用会话缓存及发送锁。分类消息句柄由页面 Notifier 创建和释放，未读概览、会话列表及聊天缓存由 Session 持有。入口和异步约定见[消息模块](../lib/services/messaging/README.md)。
 - `DownloadRepository` 负责下载目录布局和记录读写；`DownloadService` 负责队列、状态和任务调度；`DownloadManager` 负责单路媒体传输。详情见[下载流程](runtime-flows.md#下载)。
-- `DownloadRepository.load()` 跳过损坏的单条记录并通过回调报告；写入在进入串行队列前编码数据快照。它是文件存储，不提供事务或崩溃原子性。
+- `DownloadRepository` 写入前编码快照，同目录临时文件 flush/close 后重命名替换，并保留上次可读 JSON 的 `.bak`。启动按正式文件、备份、临时文件顺序恢复记录与媒体索引，读取或恢复失败通过回调报告；Windows 文件占用时不删除正式文件重试。它不提供跨文件事务，也不承诺断电时目录项持久性；进程中断后的续传进度以实际媒体文件长度为准。
 - `pl_player/` 是项目与 `media_kit`、mpv 及平台输出之间的协调层。`PlPlayerController` 负责 UI 投影、业务事件和平台适配；页面通过 `PlaybackOwner` 提交查询、加载与控制命令，`PlaybackSession` 管理页面归属、播放意图、配置快照和原生操作顺序。
 - 每个 `PlaybackPlan` 冻结业务内容键、来源候选及索引、时间线、位置和加载配置。查询在队列外解析，但 owner 在开始时同步接受请求代次与播放策略，再由会话提交解析出的计划；来源地址不承担内容身份。偏好只在装配计划或创建运行时配置时读取。
 - `PlaybackSnapshot` 是播放状态和配置的规范投影。页面控制器将其投影到现有 UI 状态；进度和视频帧仍走专用通道。页面保留字幕请求、直播消息和弹幕等业务副作用，并在异步提交时核对媒体与页面归属。

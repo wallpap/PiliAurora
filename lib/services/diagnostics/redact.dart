@@ -1,18 +1,24 @@
 /// 日志仅保留诊断所需信息。结构化字段和字符串都经过此入口。
 abstract final class DiagnosticRedactor {
   static final _secretKey = RegExp(
-    r'authorization|cookie|token|password|passwd|secret|credential|private.?key|api.?key|access.?key|sessdata|bili_jct|csrf|buvid|dedeuserid|identifierforvendor|android.?id|device.?id|fingerprint',
+    r'authorization|cookie|token|password|passwd|secret|credential|private.?key|api.?key|access.?key|sessdata|bili_jct|csrf|buvid|dedeuserid|identifierforvendor|android.?id|device.?id|fingerprint|signature|^sign$|^w_rid$|^upsig$|auth.?code|auth.?key|ticket',
     caseSensitive: false,
   );
-  static final _url = RegExp(r'https?://[^\s<>"\x27]+', caseSensitive: false);
+  static final _url = RegExp(
+    r'(?:https?|wss?)://[^\s<>"\x27]+(?:<redacted>)?',
+    caseSensitive: false,
+  );
   // mpv 的音轨标题可能只含文件名和签名查询串，没有 URL scheme。
   // 整段查询一并移除，不能只枚举已知 token 名称而漏掉其他签名参数。
   static final _query = RegExp(r'''\?[^\s<>"']+''');
   static final _assignment = RegExp(
-    r'''((?:authorization|cookie|set-cookie|token|access_token|refresh_token|access[_-]?key|api[_-]?key|password|passwd|secret|credential|private[_-]?key|SESSDATA|bili_jct|csrf|buvid\w*|DedeUserID)["']?\s*[=:]\s*)([^\r\n,;}]+)''',
+    r'''((?:authorization|cookie|set-cookie|[\w-]*token|access[_-]?key|api[_-]?key|password|passwd|secret|credential|private[_-]?key|SESSDATA|bili_jct|csrf|buvid\w*|DedeUserID|sign(?:ature)?|w_rid|upsig|auth[_-]?(?:code|key)|ticket)["']?\s*[=:]\s*)([^\r\n,;}]+)''',
     caseSensitive: false,
   );
-  static final _bearer = RegExp(r'\bBearer\s+[^\s,;]+', caseSensitive: false);
+  static final _bearer = RegExp(
+    r'\b(?:Bearer|Basic)\s+[^\s,;]+',
+    caseSensitive: false,
+  );
   static final _header = RegExp(
     r'''((?:authorization|cookie|set-cookie)["']?\s*[:=]\s*)[^\r\n]+''',
     caseSensitive: false,
@@ -28,12 +34,21 @@ abstract final class DiagnosticRedactor {
         .replaceAllMapped(_url, (match) {
           final uri = Uri.tryParse(match[0]!);
           if (uri == null) return '<url>';
-          return '${uri.scheme}://${uri.host}${uri.path}${uri.hasQuery ? '?<redacted>' : ''}';
+          final endpoint = Uri(
+            scheme: uri.scheme,
+            host: uri.host,
+            port: uri.hasPort ? uri.port : null,
+            path: uri.path,
+          );
+          return '$endpoint${uri.hasQuery ? '?<redacted>' : ''}';
         })
         .replaceAll(_query, '?<redacted>')
         .replaceAllMapped(_header, (match) => '${match[1]}<redacted>')
         .replaceAllMapped(_assignment, (match) => '${match[1]}<redacted>')
-        .replaceAll(_bearer, 'Bearer <redacted>');
+        .replaceAllMapped(
+          _bearer,
+          (match) => '${match[0]!.split(RegExp(r'\s')).first} <redacted>',
+        );
     // 本机用户名及目录不是诊断指标。
     result = result.replaceAll(
       RegExp(r'\b[A-Za-z]:[\\/][^\r\n"<>]+'),

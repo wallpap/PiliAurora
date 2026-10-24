@@ -2,6 +2,8 @@ import 'package:pili_aurora/common/style.dart';
 import 'package:pili_aurora/common/widgets/scaffold/simple_scaffold.dart';
 import 'package:pili_aurora/common/widgets/view_insets_safe_area.dart';
 import 'package:pili_aurora/pages/webdav/webdav.dart';
+import 'package:pili_aurora/services/settings/webdav_client.dart';
+import 'package:pili_aurora/services/diagnostics/redact.dart';
 import 'package:pili_aurora/utils/storage.dart';
 import 'package:pili_aurora/utils/storage_key.dart';
 import 'package:pili_aurora/utils/storage_pref.dart';
@@ -55,6 +57,7 @@ class _WebDavSettingPageState extends State<WebDavSettingPage> {
               controller: _uriCtr,
               decoration: const InputDecoration(
                 labelText: '地址',
+                helperText: '使用 HTTPS；本机 HTTP 每次操作需确认',
                 border: OutlineInputBorder(),
               ),
             ),
@@ -130,13 +133,28 @@ class _WebDavSettingPageState extends State<WebDavSettingPage> {
           child: FloatingActionButton(
             child: const Icon(Icons.save),
             onPressed: () async {
+              // 先校验草稿，不用无效/远程明文地址覆盖已有配置。
+              try {
+                if (_usernameCtr.text.contains(':')) {
+                  throw ArgumentError('WebDAV Basic Auth 用户名不能包含冒号');
+                }
+                if (_uriCtr.text.trim().isNotEmpty) {
+                  WebDavSettingsClient.validateEndpoint(
+                    Uri.parse(_uriCtr.text.trim()),
+                    allowInsecureLoopback: true,
+                  );
+                }
+              } catch (error) {
+                SmartDialog.showToast('配置失败: ${DiagnosticRedactor.text(error)}');
+                return;
+              }
               await GStorage.setting.putAll({
-                SettingBoxKey.webdavUri: _uriCtr.text,
+                SettingBoxKey.webdavUri: _uriCtr.text.trim(),
                 SettingBoxKey.webdavUsername: _usernameCtr.text,
                 SettingBoxKey.webdavPassword: _passwordCtr.text,
                 SettingBoxKey.webdavDirectory: _directoryCtr.text,
               });
-              if (_uriCtr.text.isEmpty) {
+              if (_uriCtr.text.trim().isEmpty) {
                 return;
               }
               try {

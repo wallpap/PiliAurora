@@ -91,6 +91,51 @@ void main() {
     expect((await repository.load()).single.downloadedBytes, 30);
   });
 
+  test('recovers a corrupt record from the last committed backup', () async {
+    final entry = downloadEntry();
+    await repository.create(entry);
+    entry.downloadedBytes = 12;
+    await repository.save(entry);
+    final file = File(path.join(entry.entryDirPath, 'entry.json'));
+    await file.writeAsString('{interrupted');
+    final restored = (await repository.load()).single;
+    expect(restored.downloadedBytes, 10);
+    expect(jsonDecode(file.readAsStringSync()), restored.toJson());
+    expect(corruptPaths, contains(file.path));
+  });
+
+  test('committed record wins over a leftover newer temporary file', () async {
+    final entry = downloadEntry();
+    await repository.create(entry);
+    entry.isCompleted = true;
+    await File(path.join(entry.entryDirPath, 'entry.json.tmp'))
+        .writeAsString(jsonEncode(entry.toJson()), flush: true);
+    expect((await repository.load()).single.isCompleted, isFalse);
+  });
+
+  test('first interrupted creation can recover a complete temporary file', () async {
+    final entry = downloadEntry();
+    await repository.create(entry);
+    final file = File(path.join(entry.entryDirPath, 'entry.json'));
+    await file.rename('${file.path}.tmp');
+    expect((await repository.load()).single.cid, entry.cid);
+    expect(file.existsSync(), isTrue);
+  });
+
+  test('failed replacement preserves the committed record and media', () async {
+    final entry = downloadEntry();
+    await repository.create(entry);
+    final file = File(path.join(entry.entryDirPath, 'entry.json'));
+    final original = await file.readAsString();
+    final media = File(path.join(entry.entryDirPath, 'video.m4s'));
+    await media.writeAsBytes([1, 2, 3]);
+    await Directory('${file.path}.tmp').create();
+    entry.downloadedBytes = 20;
+    await expectLater(repository.save(entry), throwsA(isA<FileSystemException>()));
+    expect(await file.readAsString(), original);
+    expect(await media.readAsBytes(), [1, 2, 3]);
+  });
+
   test('download root is resolved again after a settings change', () async {
     await repository.create(downloadEntry());
     final oldRoot = rootPath;

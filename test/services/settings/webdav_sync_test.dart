@@ -293,6 +293,7 @@ void main() {
         sync = WebDavSettingsSync(
           connect: () => WebDavSettingsClient(
             endpoint: Uri.parse('http://127.0.0.1:${server.port}/root'),
+            allowInsecureLoopback: true,
             username: '',
             password: '',
           ),

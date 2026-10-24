@@ -4,6 +4,31 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:pili_aurora/services/diagnostics/redact.dart';
 
 void main() {
+  test('redaction remains stable through error and toast boundaries', () {
+    final once = DiagnosticRedactor.text(
+      'GET https://user:pass@example.test:8443/path?access_key=secret#private',
+    );
+    expect(DiagnosticRedactor.text(once), once);
+    expect(once, 'GET https://example.test:8443/path?<redacted>');
+  });
+  test('redacts signatures, auth parameters and websocket credentials', () {
+    final output = jsonEncode(DiagnosticRedactor.clean({
+      'sign': 'map-sign-secret',
+      'w_rid': 'map-wrid-secret',
+      'authCode': 'map-auth-secret',
+      'message': 'sign=text-sign-secret\naccessToken=text-token-secret\n'
+          'Basic basic-secret\nwss://user:pass@example.com:8443/socket?ticket=ws-secret#fragment-secret',
+    }));
+    for (final secret in [
+      'map-sign-secret', 'map-wrid-secret', 'map-auth-secret',
+      'text-sign-secret', 'text-token-secret', 'basic-secret',
+      'user:pass', 'ws-secret', 'fragment-secret',
+    ]) {
+      expect(output, isNot(contains(secret)));
+    }
+    expect(output, contains('wss://example.com:8443/socket'));
+  });
+
   test('redacts credentials in maps, headers, URLs and quoted text', () {
     final output = jsonEncode(
       DiagnosticRedactor.clean({

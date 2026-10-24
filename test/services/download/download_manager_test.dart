@@ -31,6 +31,8 @@ void main() {
         start == 0 ? 200 : 206,
         headers: {
           'content-length': ['${bytes.length - start}'],
+          if (start > 0)
+            'content-range': ['bytes $start-${bytes.length - 1}/${bytes.length}'],
         },
       );
     });
@@ -53,6 +55,69 @@ void main() {
     expect(completed, 1);
     expect(await file.readAsBytes(), bytes);
     expect(adapter.lastRequest!.headers['range'], 'bytes=100-');
+  });
+
+  for (final status in [200, 206, 416, 500]) {
+    test('invalid resume response $status preserves existing bytes', () async {
+      final file = File('${directory.path}/resume.bin');
+      await file.writeAsBytes([1, 2, 3]);
+      client.httpClientAdapter = _Adapter((_) async => ResponseBody.fromBytes(
+        [9, 9], status,
+        headers: {
+          'content-length': ['2'],
+          if (status == 206) 'content-range': ['bytes 0-1/5'],
+          if (status == 416) 'content-range': ['bytes */5'],
+        },
+      ));
+      final errors = <Object?>[];
+      final manager = DownloadManager(
+        url: 'https://example.test/video', path: file.path, client: client,
+        onReceiveProgress: null, onDone: ([error]) => errors.add(error),
+      );
+      await manager.task;
+      expect(manager.status, DownloadStatus.failDownload);
+      expect(errors, hasLength(1));
+      expect(errors.single, isNotNull);
+      expect(await file.readAsBytes(), [1, 2, 3]);
+    });
+  }
+
+  test('short successful response is not marked complete', () async {
+    client.httpClientAdapter = _Adapter((_) async => ResponseBody.fromBytes(
+      [1, 2, 3], 200, headers: {'content-length': ['9']},
+    ));
+    final errors = <Object?>[];
+    final manager = DownloadManager(
+      url: 'https://example.test/video', path: '${directory.path}/short.bin',
+      client: client, onReceiveProgress: null,
+      onDone: ([error]) => errors.add(error),
+    );
+    await manager.task;
+    expect(manager.status, DownloadStatus.failDownload);
+    expect(errors.single, isNotNull);
+    expect(await File(manager.path).readAsBytes(), [1, 2, 3]);
+  });
+
+  test('unknown response length is not marked complete', () async {
+    client.httpClientAdapter = _Adapter(
+      (_) async => ResponseBody(
+        Stream.value(Uint8List.fromList([1, 2, 3])),
+        200,
+      ),
+    );
+    final errors = <Object?>[];
+    final manager = DownloadManager(
+      url: 'https://example.test/video',
+      path: '${directory.path}/unknown-length.bin',
+      client: client,
+      onReceiveProgress: null,
+      onDone: ([error]) => errors.add(error),
+    );
+    await manager.task;
+    expect(manager.status, DownloadStatus.failDownload);
+    expect(errors, hasLength(1));
+    expect(errors.single, isNotNull);
+    expect(await File(manager.path).readAsBytes(), [1, 2, 3]);
   });
 
   test('stream error keeps partial data and reports failure once', () async {

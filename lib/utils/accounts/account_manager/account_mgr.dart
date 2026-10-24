@@ -1,5 +1,6 @@
 // edit from package:dio_cookie_manager
 import 'dart:io';
+import 'package:pili_aurora/services/diagnostics/redact.dart';
 
 import 'package:pili_aurora/http/api.dart';
 import 'package:pili_aurora/http/request_failure_policy.dart';
@@ -161,8 +162,14 @@ class AccountManager extends Interceptor {
 
   static void toast(DioException err) {
     if (isExpectedHttpFailure(err)) return;
-    final url = err.requestOptions.uri.toString();
-    dioError(err).then((res) => SmartDialog.showToast(res + url));
+    final url = DiagnosticRedactor.text(err.requestOptions.uri);
+    final status = err.response?.statusCode;
+    dioError(err).then(
+      (res) => SmartDialog.showToast(
+        '$res\n${err.requestOptions.method} $url'
+        '${status == null ? '' : ' (HTTP $status)'}',
+      ),
+    );
   }
 
   static Future<void> _saveCookies(Account account, Response response) async {
@@ -255,7 +262,7 @@ class AccountManager extends Interceptor {
         } catch (_) {
           desc = '';
         }
-        return '$desc网络异常 ${error.error}';
+        return '$desc网络异常 ${DiagnosticRedactor.text(error.error)}';
     }
   }
 }

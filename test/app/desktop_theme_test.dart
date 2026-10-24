@@ -15,7 +15,7 @@ void main() {
       call,
     ) async {
       calls.add(call);
-      return null;
+      return call.method == 'isMinimized' ? false : null;
     });
     addTearDown(
       () => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
@@ -48,6 +48,40 @@ void main() {
     final count = calls.length;
     await tester.pump();
     expect(calls.length, count);
+    expect(tester.takeException(), isNull);
+  }, skip: !Platform.isWindows);
+
+  testWidgets('隐藏窗口关闭视觉 ticker，失焦可见窗口继续更新', (tester) async {
+    const channel = MethodChannel('window_manager');
+    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+      channel,
+      (call) async => call.method == 'isMinimized' ? false : null,
+    );
+    addTearDown(() {
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(channel, null);
+    });
+    bool? enabled;
+    await tester.pumpWidget(MaterialApp(
+      home: DesktopWindowTheme(child: Builder(builder: (context) {
+        enabled = TickerMode.valuesOf(context).enabled;
+        return const SizedBox();
+      })),
+    ));
+    for (final state in [
+      AppLifecycleState.resumed,
+      AppLifecycleState.inactive,
+      AppLifecycleState.hidden,
+      AppLifecycleState.inactive,
+      AppLifecycleState.resumed,
+    ]) {
+      tester.binding.handleAppLifecycleStateChanged(state);
+      await tester.pump();
+      expect(enabled, state != AppLifecycleState.hidden);
+    }
+    await tester.pumpWidget(const SizedBox());
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
+    await tester.pump();
     expect(tester.takeException(), isNull);
   }, skip: !Platform.isWindows);
 }

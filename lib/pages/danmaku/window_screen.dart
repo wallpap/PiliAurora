@@ -272,7 +272,13 @@ class _DanmakuWindowScreenState<T> extends State<DanmakuWindowScreen<T>> {
   void didChangeDependencies() {
     super.didChangeDependencies();
     _view = View.of(context);
+    final wasEnabled = _enabled;
     _enabled = TickerMode.valuesOf(context).enabled;
+    if (wasEnabled && !_enabled) {
+      _lastFrameTimeUs = null;
+      _pausedAtUs = null;
+      widget.renderer.suspendPresentation();
+    }
     _syncScheduler();
     _scheduler.requestFrame();
   }
@@ -304,7 +310,7 @@ class _DanmakuWindowScreenState<T> extends State<DanmakuWindowScreen<T>> {
 
   @override
   Widget build(BuildContext context) => Offstage(
-    offstage: widget.opacity <= 0,
+    offstage: !_visible,
     child: IgnorePointer(
       child: RepaintBoundary(
         child: CustomPaint(

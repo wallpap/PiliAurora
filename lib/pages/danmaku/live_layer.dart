@@ -301,7 +301,7 @@ class _LiveDanmakuLayerState<T> extends State<LiveDanmakuLayer<T>> {
     child: RepaintBoundary(
       child: CustomPaint(
         size: widget.size,
-        painter: _LivePainter(_renderer, widget.visible),
+        painter: _LivePainter(_renderer, _visible),
       ),
     ),
   );

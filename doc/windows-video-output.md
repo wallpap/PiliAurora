@@ -4,6 +4,10 @@ Windows 通过 media_kit 的 libmpv 渲染接口和 ANGLE 共享纹理输出视�
 
 ## 原生资源与首帧
 
+Windows 根视图在最小化或 Flutter 报告 hidden/paused/detached 时关闭 `TickerMode`，复用点播弹幕调度停用、直播显示订阅释放及图片卸载机制。恢复后按当前媒体时间重新准备显示，播放器会话、音频与用户选择的源画质不受此视觉开关控制。失焦 `inactive` 可能仍是可见小窗，继续显示；目前没有可靠的任意窗口遮挡检测，不把失焦当作完全遮挡，也不额外轮询窗口层级。
+
+关闭子窗口时，窗口位置查询、播放器清理、诊断刷新及 IPC 释放分别报告失败并继续后续阶段；IPC 关闭等待有界。原生纹理、ANGLE 和播放器仍按已有释放协议销毁。以上路径仅做源码审查，实际 CPU/GPU 收益、音频连续性与驱动行为需要目标设备验证。
+
 [`VideoOutput`](../third_party/media_kit_video/windows/video_output.cc) 在共用输出线程上创建、渲染和释放 mpv render context 与 ANGLE 资源。释放时先将对应 EGL 上下文设为 current，清除 mpv 更新回调并释放 render context，再解除 current、销毁 EGL 和设备。
 
 初始纹理 ID 用于完成 Dart 控制器创建，视频首帧就绪另行通知。真实纹理替换要等渲染成功后发布；同尺寸请求沿用已发布的画面。源尺寸由 Dart 的 `video-out-params` 观察事件送入原生队列，避免渲染线程同步查询正在等待首帧的 mpv 核心。

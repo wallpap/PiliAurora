@@ -129,31 +129,35 @@ class Request {
     }
 
     final http11Adapter = IOHttpClientAdapter(
-      createHttpClient: enableSystemProxy
-          ? () => HttpClient()
-              ..idleTimeout = const Duration(seconds: 15)
-              ..autoUncompress = false
-              ..findProxy = ((_) => 'PROXY $systemProxyHost:$systemProxyPort')
-              ..badCertificateCallback = (cert, host, port) => true
-          : () => HttpClient()
-              ..idleTimeout = const Duration(seconds: 15)
-              ..autoUncompress = false, // Http2Adapter没有自动解压, 统一行为
+      createHttpClient: () {
+        final client = HttpClient()
+          ..idleTimeout = const Duration(seconds: 15)
+          ..autoUncompress = false // 与 HTTP/2 的解压行为保持一致。
+          ..badCertificateCallback = Pref.badCertificateCallback
+              ? (cert, host, port) => true
+              : null;
+        if (enableSystemProxy) {
+          client.findProxy = (_) => 'PROXY $systemProxyHost:$systemProxyPort';
+        }
+        return client;
+      },
     );
 
     final connectionManager = _enableHttp2
         ? ConnectionManager(
             idleTimeout: const Duration(seconds: 15),
-            onClientCreate: enableSystemProxy
-                ? (_, config) => config
-                    ..proxy = Uri(
-                      scheme: 'http',
-                      host: systemProxyHost,
-                      port: systemProxyPort,
-                    )
-                    ..onBadCertificate = (_) => true
-                : Pref.badCertificateCallback
-                ? (_, config) => config.onBadCertificate = (_) => true
-                : null,
+            onClientCreate: (_, config) {
+              if (enableSystemProxy) {
+                config.proxy = Uri(
+                  scheme: 'http',
+                  host: systemProxyHost,
+                  port: systemProxyPort,
+                );
+              }
+              config.onBadCertificate = Pref.badCertificateCallback
+                  ? (_) => true
+                  : null;
+            },
           )
         : null;
     return (DownloadResponseAdapter(http11Adapter), connectionManager);

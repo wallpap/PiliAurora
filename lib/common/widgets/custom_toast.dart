@@ -1,4 +1,5 @@
 import 'package:pili_aurora/utils/storage_pref.dart';
+import 'package:pili_aurora/services/diagnostics/redact.dart';
 import 'package:material_ui/material_ui.dart';
 
 class CustomToast extends StatelessWidget {
@@ -21,7 +22,7 @@ class CustomToast extends StatelessWidget {
         borderRadius: const .all(.circular(20)),
       ),
       child: Text(
-        msg,
+        DiagnosticRedactor.text(msg),
         style: TextStyle(
           fontSize: 13,
           color: colorScheme.onPrimaryContainer,
@@ -57,7 +58,10 @@ class LoadingWidget extends StatelessWidget {
             valueColor: AlwaysStoppedAnimation(onSurfaceVariant),
           ),
           //msg
-          Text(msg, style: TextStyle(color: onSurfaceVariant)),
+          Text(
+            DiagnosticRedactor.text(msg),
+            style: TextStyle(color: onSurfaceVariant),
+          ),
         ],
       ),
     );
@@ -88,7 +92,10 @@ class NotifyWarning extends StatelessWidget {
             size: 22,
             color: onSurfaceVariant,
           ),
-          Text(msg, style: TextStyle(color: onSurfaceVariant)),
+          Text(
+            DiagnosticRedactor.text(msg),
+            style: TextStyle(color: onSurfaceVariant),
+          ),
         ],
       ),
     );

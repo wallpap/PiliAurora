@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart' show immutable;
+import 'package:pili_aurora/services/diagnostics/redact.dart';
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 
 sealed class LoadingState<T> {
@@ -72,6 +73,6 @@ class Error extends LoadingState<Never> {
 
   @override
   String toString() {
-    return errMsg ?? code?.toString() ?? '';
+    return DiagnosticRedactor.text(errMsg ?? code?.toString() ?? '');
   }
 }

@@ -29,7 +29,6 @@ import 'package:pili_aurora/utils/storage_pref.dart';
 import 'package:pili_aurora/utils/theme_utils.dart';
 import 'package:pili_aurora/utils/utils.dart';
 import 'package:catcher_2/catcher_2.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:get/get.dart';
 import 'package:media_kit/media_kit.dart';
@@ -111,7 +110,7 @@ Future<void> _bootstrapApplication(List<String> arguments) async {
         repository: DownloadRepository(
           rootPath: () => downloadPath,
           onReadError: (path, error, stackTrace) => logger.w(
-            '忽略损坏的下载记录: $path',
+            '下载元数据读取或恢复异常: $path',
             error: error,
             stackTrace: stackTrace,
           ),
@@ -120,6 +119,9 @@ Future<void> _bootstrapApplication(List<String> arguments) async {
       ),
     );
   HttpOverrides.global = _CustomHttpOverrides();
+  if (Pref.badCertificateCallback) {
+    logger.w('已显式禁用 TLS 证书验证，仅应用于受控调试；请在调试结束后恢复验证');
+  }
 
   // Windows Cookie 同步依赖 WebView 环境，因此先完成平台服务初始化。
   if (!playerWindow) await initializePlatformServices();
@@ -209,7 +211,7 @@ class _CustomHttpOverrides extends HttpOverrides {
     // ..maxConnectionsPerHost = 32
     /// The default value is 15 seconds.
     //   ..idleTimeout = const Duration(seconds: 15);
-    if (kDebugMode || Pref.badCertificateCallback) {
+    if (Pref.badCertificateCallback) {
       client.badCertificateCallback = (cert, host, port) => true;
     }
     return client;

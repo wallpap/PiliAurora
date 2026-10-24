@@ -559,6 +559,7 @@ class DesktopPlaybackWindows with WindowListener {
   }
 
   void _saveBounds() {
+    if (_closing) return;
     _boundsTimer?.cancel();
     _boundsTimer = Timer(const Duration(milliseconds: 250), () async {
       if (await windowManager.isMinimized() ||
@@ -566,6 +567,7 @@ class DesktopPlaybackWindows with WindowListener {
         return;
       }
       final bounds = await windowManager.getBounds();
+      if (_closing) return;
       if (_childSocket?.readyState == WebSocket.open) {
         _childSocket!.add(
           jsonEncode({'type': 'bounds', 'bounds': _rectValues(bounds)}),
@@ -583,32 +585,41 @@ class DesktopPlaybackWindows with WindowListener {
     if (_closing) return;
     _closing = true;
     _boundsTimer?.cancel();
-    final bounds =
-        await windowManager.isMinimized() || await windowManager.isFullScreen()
-        ? null
-        : await windowManager.getBounds();
-    try {
-      await onPlayerClose?.call();
-    } catch (error, stackTrace) {
-      Diagnostics.instance.log(
-        DiagnosticLogLevel.error,
-        'window',
-        '关闭播放窗口时清理失败',
-        details: error,
-        stack: stackTrace,
-      );
-    } finally {
-      await Diagnostics.instance.flush();
+    // 每个释放阶段独立报告失败，窗口查询或日志失败不能跳过播放器销毁。
+    Future<void> release(String phase, Future<void> Function() action) async {
+      try {
+        await action();
+      } catch (error, stackTrace) {
+        Diagnostics.instance.log(
+          DiagnosticLogLevel.error,
+          'window',
+          '关闭播放窗口时清理失败: $phase',
+          details: error,
+          stack: stackTrace,
+        );
+      }
     }
-    if (_childSocket?.readyState == WebSocket.open) {
-      if (bounds != null) {
+
+    await release('bounds', () async {
+      if (!await windowManager.isMinimized() &&
+          !await windowManager.isFullScreen()) {
+        final bounds = await windowManager.getBounds();
+        if (_childSocket?.readyState != WebSocket.open) return;
         _childSocket!.add(
           jsonEncode({'type': 'bounds', 'bounds': _rectValues(bounds)}),
         );
       }
-      await _childSocket!.close();
-    }
-    await _childSubscription?.cancel();
+    });
+    await release('player', () async {
+      await onPlayerClose?.call();
+    });
+    await release('diagnostics', Diagnostics.instance.flush);
+    await release('socket', () async {
+      await _childSocket?.close().timeout(const Duration(seconds: 3));
+    });
+    await release('subscription', () async {
+      await _childSubscription?.cancel();
+    });
     windowManager.removeListener(this);
     await windowManager.destroy();
   }
