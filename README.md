@@ -7,7 +7,7 @@
 
 PiliAurora 是面向 Android 和 Windows x64 的 Bilibili 第三方客户端，基于 [PiliPlus 2.1.5](https://github.com/bggRGjQaUbCoE/PiliPlus/tree/2.1.5)，使用 Flutter 开发。
 
-在保留上游浏览、播放、互动和多账号功能的基础上，PiliAurora 集中优化播放时的资源占用，重做 Windows 弹幕渲染与视频输出，并加入视频和直播独立窗口、弹幕合并与帧率调节、原生表情包管理等功能。
+在保留上游浏览、播放、互动和多账号功能的基础上，PiliAurora 集中优化播放时的资源占用，重做 Windows 弹幕渲染与视频输出，并加入视频和直播独立窗口、弹幕合并与帧率调节、原生表情包管理、番剧页面优化（接近官方效果）等功能。
 
 [下载](https://github.com/wallpap/PiliAurora/releases/latest) · [更新日志](doc/releases/v1.6.0.md) · [问题反馈](https://github.com/wallpap/PiliAurora/issues) · [许可证](LICENSE)
 
@@ -27,6 +27,12 @@ PiliAurora 是面向 Android 和 Windows x64 的 Bilibili 第三方客户端，�
   <img src="assets/display/windows-live-player.jpg" alt="Windows 直播界面" width="800">
   <br>
   <em>Windows 直播界面</em>
+</p>
+
+<p align="center">
+  <img src="assets/display/windows-bangumi.png" alt="Windows 番剧简介" width="800">
+  <br>
+  <em>Windows 番剧界面</em>
 </p>
 
 ### Android
@@ -86,6 +92,7 @@ Android 另有按屏幕分辨率缩放输出的实验选项，默认关闭。输
 - 评论长按菜单支持拉黑用户，新增粉丝列表支持直接关注和取消关注。
 - 下载可选择音质，分集之间继承字幕状态，支持清理失效番剧订阅。
 - 直播弹幕支持表情，表情包页签和收藏文件夹支持鼠标滚轮操作。
+- 番剧页面优化，在piliplus的基础上增加了便捷切季，以及更多番剧相关内容的显示，让其更接近官方体验。
 
 ## 与上游的关系
 
