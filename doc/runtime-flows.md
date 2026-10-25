@@ -70,7 +70,7 @@ sequenceDiagram
 
 `Request.get()` 和 `Request.post()` 会把 `DioException` 转成含错误消息的 `Response`，调用层仍需检查业务响应。重试条件见 [`retry_interceptor.dart`](../lib/http/retry_interceptor.dart)。
 
-`_CustomHttpOverrides` 在调试模式或 `Pref.badCertificateCallback` 开启时接受无效证书，此时 TLS 证书校验会降低。
+`_CustomHttpOverrides` 默认验证 TLS 证书；仅当 `Pref.badCertificateCallback` 显式开启时接受无效证书。HTTP/1.1、HTTP/2 与回退适配器共用该设置，Debug 构建沿用相同规则。
 
 ## 播放器切源与网络恢复
 
