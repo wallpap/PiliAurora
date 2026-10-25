@@ -549,7 +549,7 @@ class DownloadService extends GetxService {
   }) async {
     waitDownloadQueue.removeWhere((entry) => entry.pageDirPath == pageDirPath);
     if (curDownload.value?.pageDirPath == pageDirPath) {
-      await cancelDownload(isDelete: true, downloadNext: false);
+      await cancelDownload(isDelete: true);
     }
     await _repository.removePage(pageDirPath);
     downloadList.removeWhere((e) => e.pageDirPath == pageDirPath);

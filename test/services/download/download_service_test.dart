@@ -8,6 +8,20 @@ import 'package:pili_aurora/services/download/download_service.dart';
 
 import 'download_fixtures.dart';
 
+class _SchedulingDownloadService extends DownloadService {
+  _SchedulingDownloadService({
+    required super.repository,
+    required super.downloadClient,
+  });
+
+  final started = <int>[];
+
+  @override
+  Future<void> startDownload(BiliDownloadEntryInfo entry) async {
+    started.add(entry.cid);
+  }
+}
+
 void main() {
   late Directory directory;
   late DownloadRepository repository;
@@ -96,4 +110,44 @@ void main() {
       expect((await repository.load()).map((entry) => entry.cid), [22]);
     },
   );
+
+  test('删除当前下载组后继续调度其他组', () async {
+    final active = downloadEntry()..status = DownloadStatus.downloading;
+    final sibling = downloadEntry(cid: 12);
+    final remaining = downloadEntry(aid: 2, cid: 22);
+    await repository.create(active);
+    await repository.create(sibling);
+    await repository.create(remaining);
+    final schedulingService = _SchedulingDownloadService(
+      repository: repository,
+      downloadClient: client,
+    );
+    schedulingService.waitDownloadQueue.addAll([active, sibling, remaining]);
+    schedulingService.curDownload.value = active;
+
+    await schedulingService.deletePage(pageDirPath: active.pageDirPath);
+
+    expect(schedulingService.waitDownloadQueue.map((entry) => entry.cid), [22]);
+    expect(schedulingService.started, [22]);
+    expect((await repository.load()).map((entry) => entry.cid), [22]);
+  });
+
+  test('删除其他下载组时保留当前任务', () async {
+    final active = downloadEntry()..status = DownloadStatus.downloading;
+    final removed = downloadEntry(aid: 2, cid: 22, completed: true);
+    await repository.create(active);
+    await repository.create(removed);
+    final schedulingService = _SchedulingDownloadService(
+      repository: repository,
+      downloadClient: client,
+    );
+    schedulingService.waitDownloadQueue.add(active);
+    schedulingService.curDownload.value = active;
+
+    await schedulingService.deletePage(pageDirPath: removed.pageDirPath);
+
+    expect(schedulingService.curDownload.value, same(active));
+    expect(schedulingService.started, isEmpty);
+    expect((await repository.load()).map((entry) => entry.cid), [11]);
+  });
 }

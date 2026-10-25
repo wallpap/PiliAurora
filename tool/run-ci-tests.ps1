@@ -20,6 +20,7 @@ $ciTests = @(
     "test/services/diagnostics/record_store_test.dart",
     "test/services/settings/settings_backup_test.dart",
     "test/services/settings/webdav_sync_test.dart",
+    "test/services/download/download_service_test.dart",
     # 页面退出、音频归属与播放会话
     "test/common/widgets/image/image_lifecycle_test.dart",
     "test/common/widgets/image/cached_image_transition_test.dart",
