@@ -5,6 +5,7 @@ import 'package:pili_aurora/models/remote/pgc/pgc_info_model/episode.dart';
 import 'package:pili_aurora/models/remote/pgc/pgc_info_model/new_ep.dart';
 import 'package:pili_aurora/models/remote/pgc/pgc_info_model/publish.dart';
 import 'package:pili_aurora/models/remote/pgc/pgc_info_model/rating.dart';
+import 'package:pili_aurora/models/remote/pgc/pgc_info_model/season.dart';
 import 'package:pili_aurora/models/remote/pgc/pgc_info_model/section.dart';
 import 'package:pili_aurora/models/remote/pgc/pgc_info_model/stat.dart';
 import 'package:pili_aurora/models/remote/pgc/pgc_info_model/up_info.dart';
@@ -12,19 +13,24 @@ import 'package:pili_aurora/models/remote/pgc/pgc_info_model/user_status.dart';
 
 class PgcInfoModel {
   String? actors;
+  String? alias;
   List<Area>? areas;
   String? cover;
   List<EpisodeItem>? episodes;
   String? evaluate;
   int? mediaId;
+  String? originName;
   NewEp? newEp;
   Publish? publish;
   Rating? rating;
   int? seasonId;
   String? seasonTitle;
+  List<PgcSeason>? seasons;
   List<Section>? section;
   PgcStat? stat;
   String? subtitle;
+  List<String>? styles;
+  String? staff;
   String? title;
   int? type;
   UpInfo? upInfo;
@@ -34,19 +40,24 @@ class PgcInfoModel {
 
   PgcInfoModel({
     this.actors,
+    this.alias,
     this.areas,
     this.cover,
     this.episodes,
     this.evaluate,
     this.mediaId,
+    this.originName,
     this.newEp,
     this.publish,
     this.rating,
     this.seasonId,
     this.seasonTitle,
+    this.seasons,
     this.section,
     this.stat,
     this.subtitle,
+    this.styles,
+    this.staff,
     this.title,
     this.type,
     this.upInfo,
@@ -57,6 +68,7 @@ class PgcInfoModel {
 
   factory PgcInfoModel.fromJson(Map<String, dynamic> json) => PgcInfoModel(
     actors: json['actors'] as String?,
+    alias: json['alias'] as String?,
     areas: (json['areas'] as List<dynamic>?)
         ?.map((e) => Area.fromJson(e as Map<String, dynamic>))
         .toList(),
@@ -66,6 +78,7 @@ class PgcInfoModel {
         .toList(),
     evaluate: json['evaluate'] as String?,
     mediaId: json['media_id'] as int?,
+    originName: json['origin_name'] as String?,
     newEp: json['new_ep'] == null
         ? null
         : NewEp.fromJson(json['new_ep'] as Map<String, dynamic>),
@@ -77,6 +90,10 @@ class PgcInfoModel {
         : Rating.fromJson(json['rating'] as Map<String, dynamic>),
     seasonId: json['season_id'] as int?,
     seasonTitle: json['season_title'] as String?,
+    seasons: (json['seasons'] as List<dynamic>?)
+        ?.whereType<Map<String, dynamic>>()
+        .map(PgcSeason.fromJson)
+        .toList(),
     section: (json['section'] as List<dynamic>?)
         ?.map((e) => Section.fromJson(e as Map<String, dynamic>))
         .toList(),
@@ -84,6 +101,8 @@ class PgcInfoModel {
         ? null
         : PgcStat.fromJson(json['stat'] as Map<String, dynamic>),
     subtitle: json['subtitle'] as String?,
+    styles: (json['styles'] as List<dynamic>?)?.whereType<String>().toList(),
+    staff: json['staff'] as String?,
     title: json['title'] as String?,
     type: json['type'] as int?,
     upInfo: json['up_info'] == null

@@ -44,6 +44,7 @@ class PgcIntroController extends CommonIntroController {
 
   late final bool isPgc;
   late final PgcInfoModel pgcItem;
+  late List<EpisodeItem> _playbackEpisodes;
 
   @override
   (Object, int) get getFavRidType => (epId!, 24);
@@ -62,6 +63,7 @@ class PgcIntroController extends CommonIntroController {
     epId = args['epId'];
     isPgc = args['videoType'] == VideoType.pgc;
     pgcItem = args['pgcItem'];
+    _playbackEpisodes = pgcItem.episodes ?? <EpisodeItem>[];
 
     super.onInit();
 
@@ -73,6 +75,12 @@ class PgcIntroController extends CommonIntroController {
         }
       }
       queryVideoTags();
+    }
+  }
+
+  void setPlaybackEpisodes(List<EpisodeItem> episodes) {
+    if (episodes.isNotEmpty) {
+      _playbackEpisodes = episodes;
     }
   }
 
@@ -336,7 +344,8 @@ class PgcIntroController extends CommonIntroController {
 
   @override
   bool prevPlay() {
-    final episodes = pgcItem.episodes!;
+    final episodes = _playbackEpisodes;
+    if (episodes.isEmpty) return false;
     int currentIndex = episodes.indexWhere(
       (e) => e.cid == videoDetailCtr.cid.value,
     );
@@ -357,7 +366,8 @@ class PgcIntroController extends CommonIntroController {
   @override
   bool nextPlay() {
     try {
-      final episodes = pgcItem.episodes!;
+      final episodes = _playbackEpisodes;
+      if (episodes.isEmpty) return false;
 
       PlayRepeat playRepeat = videoDetailCtr.plPlayerController.playRepeat;
 
