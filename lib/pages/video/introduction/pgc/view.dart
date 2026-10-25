@@ -9,7 +9,9 @@ import 'package:pili_aurora/common/widgets/image_viewer/hero.dart';
 import 'package:pili_aurora/common/widgets/stat/stat.dart';
 import 'package:pili_aurora/models/common/image_preview_type.dart';
 import 'package:pili_aurora/models/common/image_type.dart';
+import 'package:pili_aurora/models/common/stat_type.dart';
 import 'package:pili_aurora/models/remote/pgc/pgc_info_model/result.dart';
+import 'package:pili_aurora/models/remote/pgc/pgc_info_model/season.dart';
 import 'package:pili_aurora/models/remote/pgc/pgc_info_model/stat.dart';
 import 'package:pili_aurora/pages/video/controller.dart';
 import 'package:pili_aurora/pages/video/introduction/pgc/controller.dart';
@@ -29,6 +31,8 @@ class PgcIntroPage extends StatefulWidget {
   final Function showIntroDetail;
   final double maxWidth;
   final bool isLandscape;
+  final bool showHeader;
+  final bool headerOnly;
 
   const PgcIntroPage({
     super.key,
@@ -38,6 +42,8 @@ class PgcIntroPage extends StatefulWidget {
     required this.showIntroDetail,
     required this.maxWidth,
     required this.isLandscape,
+    this.showHeader = true,
+    this.headerOnly = false,
   });
 
   @override
@@ -67,31 +73,47 @@ class _PgcIntroPageState extends State<PgcIntroPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            spacing: 10,
-            children: [
-              _buildCover(colorScheme, isLandscape, item),
-              Expanded(child: _buildInfoPanel(isLandscape, colorScheme, item)),
-            ],
-          ),
-          const SizedBox(height: 6),
-          // 点赞收藏转发 布局样式2
-          if (introController.isPgc) actionGrid(item.stat!, introController),
-          // 番剧分集
-          if (item.episodes?.isNotEmpty == true)
-            PgcPanel(
-              heroTag: widget.heroTag,
-              pages: item.episodes!,
-              cid: videoDetailCtr.cid.value,
-              onChangeEpisode: introController.onChangeEpisode,
-              showEpisodes: widget.showEpisodes,
-              newEp: item.newEp,
+          if (widget.showHeader)
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              spacing: 10,
+              children: [
+                _buildCover(colorScheme, isLandscape, item),
+                Expanded(
+                  child: _buildInfoPanel(isLandscape, colorScheme, item),
+                ),
+              ],
             ),
+          if (!widget.showHeader && introController.isPgc)
+            _buildAboutPanel(colorScheme, item),
+          if (!widget.headerOnly) ...[
+            if (widget.showHeader) const SizedBox(height: 6),
+            if (introController.isPgc && item.stat != null)
+              actionGrid(item.stat!, introController),
+            if (item.episodes?.isNotEmpty == true ||
+                item.section?.any(
+                      (section) => section.episodes?.isNotEmpty == true,
+                    ) ==
+                    true)
+              PgcPanel(
+                heroTag: widget.heroTag,
+                pages: item.episodes ?? const [],
+                sections: item.section,
+                seasonTitle: item.seasonTitle,
+                seasons: item.seasons,
+                seasonId: item.seasonId,
+                onChangeSeason: _changeSeason,
+                cid: videoDetailCtr.cid.value,
+                onChangeEpisode: introController.onChangeEpisode,
+                onChangeEpisodeList: introController.setPlaybackEpisodes,
+                showEpisodes: widget.showEpisodes,
+                newEp: item.newEp,
+              ),
+          ],
         ],
       ),
     );
-    if (!introController.isPgc) {
+    if (!introController.isPgc && !widget.headerOnly) {
       final brief = _buildBrief(item);
       if (brief != null) {
         sliver = SliverMainAxisGroup(slivers: [sliver, brief]);
@@ -102,10 +124,308 @@ class _PgcIntroPageState extends State<PgcIntroPage> {
         Style.safeSpace,
         Style.safeSpace,
         Style.safeSpace,
-        Style.safeSpace + 50,
+        Style.safeSpace + 16,
       ),
       sliver: sliver,
     );
+  }
+
+  void _changeSeason(PgcSeason season) {
+    final seasonId = season.seasonId;
+    if (seasonId == null || seasonId == introController.seasonId) return;
+    PageUtils.viewPgc(seasonId: seasonId);
+  }
+
+  Widget _buildAboutPanel(ColorScheme colorScheme, PgcInfoModel item) {
+    final score = item.rating?.score;
+    final evaluate = item.evaluate?.trim();
+    final publishDate =
+        item.publish?.releaseDateShow ??
+        _formatPublishTime(item.publish?.pubTimeShow);
+    final newEpStatus = item.newEp?.desc?.trim();
+    final status =
+        item.publish?.timeLengthShow ??
+        (newEpStatus?.isNotEmpty == true ? newEpStatus : null) ??
+        (item.episodes?.isNotEmpty == true
+            ? '已完结，全${item.episodes!.length}话'
+            : null);
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 15),
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: () => widget.showIntroDetail(
+          item,
+          introController.videoTags.value,
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _buildAboutHeader(
+              colorScheme,
+              item,
+              score,
+              publishDate,
+              status,
+            ),
+            if (item.originName?.trim().isNotEmpty == true)
+              _buildMetaLine(colorScheme, '原名', item.originName!),
+            if (item.alias?.trim().isNotEmpty == true)
+              _buildMetaLine(colorScheme, '别名', item.alias!),
+            if (item.styles?.isNotEmpty == true)
+              _buildMetaTags(colorScheme, item.styles!),
+            if (evaluate?.isNotEmpty == true)
+              _buildBriefCard(colorScheme, evaluate!),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildAboutHeader(
+    ColorScheme colorScheme,
+    PgcInfoModel item,
+    double? score,
+    String? publishDate,
+    String? status,
+  ) {
+    Widget details() => Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          item.title ?? '',
+          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+        ),
+        if (item.stat != null)
+          Padding(
+            padding: const EdgeInsets.only(top: 7),
+            child: Wrap(
+              spacing: 8,
+              runSpacing: 4,
+              children: [
+                FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: StatWidget(
+                    type: StatType.play,
+                    value: item.stat!.view,
+                  ),
+                ),
+                FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: StatWidget(
+                    type: StatType.danmaku,
+                    value: item.stat!.danmaku,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        const SizedBox(height: 12),
+        Text(
+          '番剧  ${item.areas?.isNotEmpty == true ? item.areas!.first.name ?? '' : ''}',
+          style: TextStyle(fontSize: 13, color: colorScheme.outline),
+        ),
+        const SizedBox(height: 5),
+        Text(
+          publishDate ?? '暂无开播日期',
+          style: TextStyle(fontSize: 13, color: colorScheme.outline),
+        ),
+        const SizedBox(height: 5),
+        Text(
+          status ?? '暂无更新信息',
+          style: TextStyle(fontSize: 13, color: colorScheme.outline),
+        ),
+      ],
+    );
+
+    Widget coverAndDetails() => Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      spacing: 12,
+      children: [
+        _buildCover(colorScheme, widget.isLandscape, item, showRating: false),
+        Expanded(child: details()),
+      ],
+    );
+
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      spacing: 12,
+      children: [
+        Expanded(child: coverAndDetails()),
+        if (score != null) _buildRatingSummary(colorScheme, item, score),
+      ],
+    );
+  }
+
+  Widget _buildRatingSummary(
+    ColorScheme colorScheme,
+    PgcInfoModel item,
+    double score,
+  ) {
+    return GestureDetector(
+      onTap: () => widget.showIntroDetail(
+        item,
+        introController.videoTags.value,
+        true,
+      ),
+      child: Container(
+        width: 76,
+        padding: const EdgeInsets.only(left: 6, top: 20),
+        decoration: BoxDecoration(
+          border: Border(left: BorderSide(color: colorScheme.outlineVariant)),
+        ),
+        child: Column(
+          children: [
+            Text(
+              score.toStringAsFixed(1),
+              style: TextStyle(
+                fontSize: 27,
+                height: 1,
+                color: colorScheme.primary,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(height: 6),
+            _ratingStars(colorScheme, score),
+            const SizedBox(height: 5),
+            Text(
+              item.rating?.count == null
+                  ? '评分人数'
+                  : '${_formatRatingCount(item.rating!.count!)}人',
+              style: TextStyle(fontSize: 11, color: colorScheme.outline),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _ratingStars(ColorScheme colorScheme, double score) {
+    final halfStars = (score.clamp(0, 10) / 2 * 2).round().clamp(0, 10);
+    final filled = halfStars ~/ 2;
+    final hasHalf = halfStars.isOdd;
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: List.generate(
+        5,
+        (index) => Icon(
+          index < filled
+              ? Icons.star
+              : index == filled && hasHalf
+              ? Icons.star_half
+              : Icons.star_border,
+          size: 12,
+          color: colorScheme.primary,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMetaLine(ColorScheme colorScheme, String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 12),
+      child: Text.rich(
+        TextSpan(
+          children: [
+            TextSpan(
+              text: '$label  ',
+              style: const TextStyle(fontWeight: FontWeight.w600),
+            ),
+            TextSpan(text: value),
+          ],
+        ),
+        style: TextStyle(fontSize: 13, color: colorScheme.outline),
+      ),
+    );
+  }
+
+  Widget _buildMetaTags(ColorScheme colorScheme, List<String> styles) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 12),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Text(
+            '风格  ',
+            style: TextStyle(fontSize: 13, color: colorScheme.outline),
+          ),
+          Expanded(
+            child: Wrap(
+              spacing: 6,
+              runSpacing: 5,
+              children: styles
+                  .map(
+                    (style) => DecoratedBox(
+                      decoration: BoxDecoration(
+                        color: colorScheme.onInverseSurface,
+                        borderRadius: const BorderRadius.all(
+                          Radius.circular(6),
+                        ),
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 4,
+                        ),
+                        child: Text(
+                          style,
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: colorScheme.onSurfaceVariant,
+                          ),
+                        ),
+                      ),
+                    ),
+                  )
+                  .toList(),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildBriefCard(ColorScheme colorScheme, String evaluate) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            evaluate,
+            maxLines: 5,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontSize: 13,
+              height: 1.7,
+              color: colorScheme.outline,
+            ),
+          ),
+          Align(
+            alignment: Alignment.centerRight,
+            child: Text(
+              '查看详情 ›',
+              style: TextStyle(fontSize: 12, color: colorScheme.primary),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _formatRatingCount(int value) {
+    if (value >= 10000) return '${(value / 10000).toStringAsFixed(1)}万';
+    return value.toString();
+  }
+
+  String? _formatPublishTime(String? value) {
+    if (value == null || value.trim().isEmpty) return null;
+    final match = RegExp(
+      r'(\d{4})\D+(\d{1,2})\D+(\d{1,2}).*?(\d{1,2}):(\d{2})',
+    ).firstMatch(value);
+    if (match == null) return value;
+    String pad(String part) => part.padLeft(2, '0');
+    return '${match.group(1)}.${pad(match.group(2)!)}.${pad(match.group(3)!)} '
+        '${pad(match.group(4)!)}:${match.group(5)}';
   }
 
   Widget? _buildBrief(PgcInfoModel item) {
@@ -137,8 +457,9 @@ class _PgcIntroPageState extends State<PgcIntroPage> {
   Widget _buildCover(
     ColorScheme colorScheme,
     bool isLandscape,
-    PgcInfoModel item,
-  ) {
+    PgcInfoModel item, {
+    bool showRating = true,
+  }) {
     return Stack(
       clipBehavior: Clip.none,
       children: [
@@ -155,7 +476,7 @@ class _PgcIntroPageState extends State<PgcIntroPage> {
             ),
           ),
         ),
-        if (item.rating != null)
+        if (showRating && item.rating != null)
           PBadge(
             text: '评分 ${item.rating!.score!}',
             top: null,
@@ -385,68 +706,80 @@ class _PgcIntroPageState extends State<PgcIntroPage> {
   }
 
   Widget actionGrid(PgcStat stat, PgcIntroController introController) {
-    return SizedBox(
-      height: 48,
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Obx(
-            () => ActionItem(
-              animation: introController.tripleAnimation,
-              icon: Icon(FontAwesomeIcons.thumbsUp.data),
-              selectIcon: Icon(FontAwesomeIcons.solidThumbsUp.data),
-              selectStatus: introController.hasLike.value,
-              semanticsLabel: '点赞',
-              text: NumUtils.numFormat(stat.like),
-              onStartTriple: introController.onStartTriple,
-              onCancelTriple: introController.onCancelTriple,
-            ),
-          ),
-          Obx(
-            () => ActionItem(
-              animation: introController.tripleAnimation,
-              icon: Icon(FontAwesomeIcons.b.data),
-              selectIcon: Icon(FontAwesomeIcons.b.data),
-              onTap: introController.actionCoinVideo,
-              selectStatus: introController.hasCoin,
-              semanticsLabel: '投币',
-              text: NumUtils.numFormat(stat.coin),
-            ),
-          ),
-          Obx(
-            () => ActionItem(
-              animation: introController.tripleAnimation,
-              icon: Icon(FontAwesomeIcons.star.data),
-              selectIcon: Icon(FontAwesomeIcons.solidStar.data),
-              onTap: () => introController.showFavBottomSheet(context),
-              onLongPress: () => introController.showFavBottomSheet(
-                context,
-                isLongPress: true,
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16),
+      child: Container(
+        height: 64,
+        decoration: BoxDecoration(
+          border: Border(
+            bottom: BorderSide(
+              color: ColorScheme.of(context).outlineVariant.withValues(
+                alpha: 0.45,
               ),
-              selectStatus: introController.hasFav.value,
-              semanticsLabel: '收藏',
-              text: NumUtils.numFormat(stat.favorite),
             ),
           ),
-          Obx(
-            () => ActionItem(
-              icon: Icon(FontAwesomeIcons.clock.data),
-              selectIcon: Icon(FontAwesomeIcons.solidClock.data),
-              onTap: () =>
-                  introController.handleAction(introController.viewLater),
-              selectStatus: introController.hasLater.value,
-              semanticsLabel: '再看',
-              text: '再看',
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Obx(
+              () => ActionItem(
+                animation: introController.tripleAnimation,
+                icon: Icon(FontAwesomeIcons.thumbsUp.data),
+                selectIcon: Icon(FontAwesomeIcons.solidThumbsUp.data),
+                selectStatus: introController.hasLike.value,
+                semanticsLabel: '点赞',
+                text: NumUtils.numFormat(stat.like),
+                onStartTriple: introController.onStartTriple,
+                onCancelTriple: introController.onCancelTriple,
+              ),
             ),
-          ),
-          ActionItem(
-            icon: Icon(FontAwesomeIcons.shareFromSquare.data),
-            onTap: () => introController.actionShareVideo(context),
-            selectStatus: false,
-            semanticsLabel: '转发',
-            text: NumUtils.numFormat(stat.share),
-          ),
-        ],
+            Obx(
+              () => ActionItem(
+                animation: introController.tripleAnimation,
+                icon: Icon(FontAwesomeIcons.b.data),
+                selectIcon: Icon(FontAwesomeIcons.b.data),
+                onTap: introController.actionCoinVideo,
+                selectStatus: introController.hasCoin,
+                semanticsLabel: '投币',
+                text: NumUtils.numFormat(stat.coin),
+              ),
+            ),
+            Obx(
+              () => ActionItem(
+                animation: introController.tripleAnimation,
+                icon: Icon(FontAwesomeIcons.star.data),
+                selectIcon: Icon(FontAwesomeIcons.solidStar.data),
+                onTap: () => introController.showFavBottomSheet(context),
+                onLongPress: () => introController.showFavBottomSheet(
+                  context,
+                  isLongPress: true,
+                ),
+                selectStatus: introController.hasFav.value,
+                semanticsLabel: '收藏',
+                text: NumUtils.numFormat(stat.favorite),
+              ),
+            ),
+            Obx(
+              () => ActionItem(
+                icon: Icon(FontAwesomeIcons.clock.data),
+                selectIcon: Icon(FontAwesomeIcons.solidClock.data),
+                onTap: () =>
+                    introController.handleAction(introController.viewLater),
+                selectStatus: introController.hasLater.value,
+                semanticsLabel: '再看',
+                text: '再看',
+              ),
+            ),
+            ActionItem(
+              icon: Icon(FontAwesomeIcons.shareFromSquare.data),
+              onTap: () => introController.actionShareVideo(context),
+              selectStatus: false,
+              semanticsLabel: '转发',
+              text: NumUtils.numFormat(stat.share),
+            ),
+          ],
+        ),
       ),
     );
   }

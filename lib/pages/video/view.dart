@@ -899,8 +899,9 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
       return childSplit(Style.aspectRatio16x9);
     }
     final introHeight = maxHeight - height - padding.top;
-    final showIntro =
-        videoDetailController.isUgc && videoDetailController.showRelatedVideo;
+    final showIntro = videoDetailController.isUgc
+        ? videoDetailController.showRelatedVideo
+        : !videoDetailController.isFileSource;
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -926,6 +927,7 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
                     height: introHeight,
                     needRelated: false,
                     needCtr: false,
+                    pgcHeaderOnly: !videoDetailController.isUgc,
                   ),
                 ),
               ),
@@ -942,10 +944,8 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   buildTabBar(
-                    introText: '相关视频',
-                    showIntro: videoDetailController.isFileSource
-                        ? true
-                        : showIntro,
+                    introText: videoDetailController.isUgc ? '相关视频' : '简介',
+                    showIntro: videoDetailController.isFileSource || showIntro,
                   ),
                   Expanded(
                     child: tabBarView(
@@ -953,7 +953,7 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
                       children: [
                         if (videoDetailController.isFileSource)
                           localIntroPanel()
-                        else if (showIntro)
+                        else if (showIntro && videoDetailController.isUgc)
                           KeepAliveWrapper(
                             child: CustomScrollView(
                               key: const PageStorageKey(CommonIntroController),
@@ -965,6 +965,17 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
                                   heroTag: heroTag,
                                 ),
                               ],
+                            ),
+                          )
+                        else if (showIntro)
+                          videoIntro(
+                            width: maxWidth - width - padding.horizontal,
+                            height: maxHeight - padding.top,
+                            needRelated: false,
+                            needCtr: true,
+                            pgcShowHeader: false,
+                            pageStorageKey: PageStorageKey(
+                              '$heroTag-pgc-content',
                             ),
                           ),
                         if (videoDetailController.showReply) videoReplyPanel(),
@@ -1623,13 +1634,16 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
     bool? isHorizontal,
     bool needRelated = true,
     bool needCtr = true,
+    bool pgcHeaderOnly = false,
+    bool pgcShowHeader = true,
+    Key? pageStorageKey,
   }) {
     if (videoDetailController.isFileSource) {
       return localIntroPanel(needCtr: needCtr);
     }
 
     Widget child = CustomScrollView(
-      key: const PageStorageKey(CommonIntroController),
+      key: pageStorageKey ?? const PageStorageKey(CommonIntroController),
       controller: needCtr
           ? videoDetailController.effectiveIntroScrollCtr
           : null,
@@ -1663,13 +1677,14 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
           ],
         ] else
           PgcIntroPage(
-            key: videoIntroKey,
             heroTag: heroTag,
             cid: videoDetailController.cid.value,
             showEpisodes: showEpisodes,
             showIntroDetail: showIntroDetail,
             maxWidth: width ?? maxWidth,
             isLandscape: !isPortrait,
+            showHeader: pgcShowHeader,
+            headerOnly: pgcHeaderOnly,
           ),
         SliverToBoxAdapter(
           child: SizedBox(
@@ -1841,13 +1856,15 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
 
   void showIntroDetail(
     PgcInfoModel videoDetail,
-    List<VideoTagItem>? videoTags,
-  ) {
+    List<VideoTagItem>? videoTags, [
+    bool openReviews = false,
+  ]) {
     videoDetailController.childKey.currentState?.showBottomSheet(
       constraints: const BoxConstraints(),
       (context) => PgcIntroPanel(
         item: videoDetail,
         videoTags: videoTags,
+        openReviews: openReviews,
       ),
     );
   }
