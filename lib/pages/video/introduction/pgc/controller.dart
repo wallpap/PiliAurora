@@ -129,6 +129,12 @@ class PgcIntroController extends CommonIntroController {
   // 分享视频
   @override
   void actionShareVideo(BuildContext context) {
+    final episodes = <EpisodeItem>[
+      ...?pgcItem.episodes,
+      for (final section in pgcItem.section ?? const []) ...?section.episodes,
+    ];
+    bool isCurrentEpisode(EpisodeItem item) => (item.epId ?? item.id) == epId;
+
     String videoUrl =
         '${HttpString.baseUrl}/bangumi/play/ep$epId${videoDetailCtr.playedTimePos}';
     showDialog(
@@ -155,9 +161,7 @@ class PgcIntroController extends CommonIntroController {
             DialogOption(
               child: const Text('分享视频', style: TextStyle(fontSize: 14)),
               onPressed: () {
-                final item = pgcItem.episodes?.firstWhereOrNull(
-                  (item) => item.epId == epId,
-                );
+                final item = episodes.firstWhereOrNull(isCurrentEpisode);
                 Get.back();
                 ShareUtils.shareText(
                   '${pgcItem.title}${item != null ? ' ${item.showTitle}' : ''}'
@@ -170,9 +174,7 @@ class PgcIntroController extends CommonIntroController {
               child: const Text('分享至动态', style: TextStyle(fontSize: 14)),
               onPressed: () {
                 Get.back();
-                final item = pgcItem.episodes?.firstWhereOrNull(
-                  (item) => item.epId == epId,
-                );
+                final item = episodes.firstWhereOrNull(isCurrentEpisode);
                 showModalBottomSheet(
                   context: context,
                   isScrollControlled: true,
@@ -213,9 +215,7 @@ class PgcIntroController extends CommonIntroController {
               onPressed: () {
                 Get.back();
                 try {
-                  final item = pgcItem.episodes!.firstWhere(
-                    (item) => item.epId == epId,
-                  );
+                  final item = episodes.firstWhere(isCurrentEpisode);
                   final title =
                       item.shareCopy ??
                       '${pgcItem.title} ${item.showTitle ?? item.longTitle}';
