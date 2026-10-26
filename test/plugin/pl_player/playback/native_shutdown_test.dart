@@ -42,6 +42,30 @@ void main() {
       ]);
     });
   }
+
+  test('open 回执失败后关闭仍等待迟到的文件身份和卸载证据', () async {
+    final fixture = _Fixture();
+    addTearDown(fixture.close);
+    fixture.player.openTimesOut = true;
+    expect((await fixture.load()).loaded, isFalse);
+
+    final shutdown = fixture.runtime.shutdown();
+    await _turn();
+    expect(fixture.output.releaseCalls, 0);
+    expect(fixture.player.disposed, isFalse);
+
+    fixture.player.startFile();
+    await _turn();
+    expect(fixture.events, ['stop']);
+    await fixture.player.unload();
+    fixture.player.endFile();
+    await _turn();
+    expect(fixture.output.releaseCalls, 1);
+    fixture.output.releaseReceipt.complete();
+    expect((await shutdown).outcome, PlaybackShutdownOutcome.released);
+    await fixture.runtime.released;
+    expect(fixture.events.last, 'dispose-player');
+  });
 }
 
 Future<void> _turn() => Future<void>.delayed(Duration.zero);
@@ -97,6 +121,7 @@ class _Fixture {
 
   Future<void> close() async {
     if (!output.releaseReceipt.isCompleted) output.releaseReceipt.complete();
+    player.startFile();
     await player.unload();
     player.endFile();
     await runtime.shutdown();
@@ -110,6 +135,8 @@ class _Player implements NativePlayer {
   final events = StreamController<NativePlayerEvent>.broadcast(sync: true);
   NativeLifecycleHookHandler? hook;
   bool stopTimesOut = false;
+  bool openTimesOut = false;
+  bool started = false;
   @override
   bool disposed = false;
   @override
@@ -133,15 +160,21 @@ class _Player implements NativePlayer {
     bool play = true,
     bool synchronized = true,
   }) async {
-    events
-      ..add(const NativeStartFile(playlistEntryId: 7))
-      ..add(
-        NativeFileLoaded(
-          playlistEntryId: 7,
-          videoTracks: const [],
-          hasAudio: true,
-        ),
-      );
+    if (openTimesOut) throw TimeoutException('open reply');
+    startFile();
+    events.add(
+      NativeFileLoaded(
+        playlistEntryId: 7,
+        videoTracks: const [],
+        hasAudio: true,
+      ),
+    );
+  }
+
+  void startFile() {
+    if (started) return;
+    started = true;
+    events.add(const NativeStartFile(playlistEntryId: 7));
   }
 
   Future<void> unload() async {

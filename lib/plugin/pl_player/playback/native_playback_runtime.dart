@@ -95,6 +95,7 @@ class NativePlaybackRuntime
   Future<void> _operationTail = Future<void>.value();
   Future<PlaybackShutdownResult>? _shutdownFuture;
   _PendingNativeLoad? _pendingLoad;
+  _PendingNativeLoad? _openingLoad;
   _NativeFileBinding? _activeBinding;
   PlaybackPlan? _activePlan;
   Duration Function() _activeNow = _fallbackNow;
@@ -584,6 +585,7 @@ class NativePlaybackRuntime
       );
       final watch = Stopwatch()..start();
       _nativeOpenNeedsRetirement = true;
+      _openingLoad = pending;
       await player.open(source, play: false);
       // open 回执可能先于 start-file；取消后仍需保留归属，直到原生身份已知。
       await pending.started.future.timeout(_remaining(context));
@@ -694,20 +696,8 @@ class NativePlaybackRuntime
     Player player,
     PlaybackExecutionContext context,
   ) async {
-    final binding = _activeBinding;
-    if (binding == null) {
-      // current 在 stop 后仍保留 Dart 来源列表。原生是否待卸载由已发出的
-      // open 和匹配的 unload/end-file 回执决定，取消在下次 open 前可直接续载。
-      if (_nativeOpenNeedsRetirement) {
-        _markNativeLifecycleUnknown(
-          'An issued native open has no confirmed file binding.',
-        );
-        throw StateError(
-          'Native open has no confirmed native file identity.',
-        );
-      }
-      return;
-    }
+    final binding = await _waitForActiveBinding().timeout(_remaining(context));
+    if (binding == null) return;
     if (binding.unloaded && binding.endFileSeen) {
       _nativeOpenNeedsRetirement = false;
       _activeBinding = null;
@@ -730,6 +720,21 @@ class NativePlaybackRuntime
     _bindings.remove(binding.entryId);
     _nativeOpenNeedsRetirement = false;
     _activeBinding = null;
+  }
+
+  Future<_NativeFileBinding?> _waitForActiveBinding() async {
+    if (_activeBinding == null && _nativeOpenNeedsRetirement) {
+      final opening = _openingLoad;
+      if (opening == null) {
+        _markNativeLifecycleUnknown(
+          'An issued native open has no confirmed file binding.',
+        );
+        throw StateError('Native open has no confirmed native file identity.');
+      }
+      // 查询已失败仍保留这次 open 的归属，迟到的 START_FILE 可继续完成卸载。
+      await opening.started.future;
+    }
+    return _activeBinding;
   }
 
   Future<void> _applyLoadedTrackConfiguration(
@@ -1250,7 +1255,7 @@ class NativePlaybackRuntime
         _syncVideoFrameSampling();
         sampleMediaClock();
       case NativeStartFile(:final playlistEntryId):
-        final pending = _pendingLoad;
+        final pending = _pendingLoad ?? _openingLoad;
         if (pending == null || playlistEntryId == null) {
           _markNativeLifecycleUnknown(
             'start-file has no load or entry identity.',
@@ -1265,19 +1270,24 @@ class NativePlaybackRuntime
           pending.fail(const _NativeIdentityFailure('Duplicate start-file.'));
           return;
         }
-        final binding = _NativeFileBinding(
-          entryId: playlistEntryId,
-          loadId: pending.context.loadId,
-          token: pending.token,
-        )..retiring = !pending.context.isCurrent();
-        pending
-          ..binding = binding
-          ..started.complete();
+        final binding =
+            _NativeFileBinding(
+                entryId: playlistEntryId,
+                loadId: pending.context.loadId,
+                token: pending.token,
+              )
+              ..retiring =
+                  _shutdownRequested ||
+                  !identical(_pendingLoad, pending) ||
+                  !pending.context.isCurrent();
+        pending.binding = binding;
         _seekable = null;
         _partiallySeekable = null;
         _lastPublishedCapabilities = null;
         _bindings[playlistEntryId] = binding;
         _activeBinding = binding;
+        if (identical(_openingLoad, pending)) _openingLoad = null;
+        pending.started.complete();
       case NativeFileLoaded(
         :final playlistEntryId,
         :final videoOutputParameters,
@@ -2055,7 +2065,10 @@ class NativePlaybackRuntime
         if (!_released.isCompleted) _released.complete();
         return const PlaybackShutdownResult.released();
       }
-      final binding = _activeBinding;
+      if (_activeBinding == null && _nativeOpenNeedsRetirement) {
+        recordStage('waiting-for-file-identity');
+      }
+      final binding = await _waitForActiveBinding();
       if (!player.disposed && binding != null) {
         if (binding.entryId == null || binding.token == null) {
           return PlaybackShutdownResult.cleanupIncomplete(
@@ -2083,6 +2096,7 @@ class NativePlaybackRuntime
         recordStage('invalidating-output');
         await _videoController?.invalidateOutputGeneration(binding.token!);
         _activeBinding = null;
+        _nativeOpenNeedsRetirement = false;
       }
 
       recordStage('file-retired');
