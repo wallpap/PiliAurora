@@ -793,9 +793,25 @@ class PlaybackSession implements PlaybackMediaClock {
     }
     final completer = Completer<CommandResult>();
     _playingWaiters[revision] = completer;
+    // 调用方按接受意图时的预算结算；writer 继续排空原生调用并落实最新意图。
+    final timer = Timer(commandBudget, () {
+      _settlePlayingRevision(
+        revision,
+        CommandResult.failed(
+          PlaybackFailure(
+            category: PlaybackFailureCategory.timeout,
+            operation: playing ? 'play' : 'pause',
+            stage: _stage,
+            recoverable: false,
+            cause: '播放状态写入超过命令预算。',
+          ),
+        ),
+      );
+    });
     _ensureWriter();
     unawaited(
       completer.future.then((result) {
+        timer.cancel();
         if (playing && result.outcome == CommandOutcome.applied) {
           _resumeDeferredRecovery();
         }

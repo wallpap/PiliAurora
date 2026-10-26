@@ -501,6 +501,54 @@ void main() {
     expect(session.currentSnapshot.phase, PlaybackPhase.disposed);
   });
 
+  testWidgets('播放调用在原生写入未返回时也应按命令预算结束等待', (tester) async {
+    var now = Duration.zero;
+    const budget = Duration(milliseconds: 500);
+    final runtime = _FakeRuntime();
+    final session = PlaybackSession(
+      runtime: runtime,
+      commandBudget: budget,
+      monotonicNow: () => now,
+    );
+    final owner = session.attach();
+    final load = owner.load(_plan('movie'));
+    await tester.pump();
+    expect((await load).outcome, LoadOutcome.ready);
+    final nativeReply = Completer<PlaybackRuntimeCommandResult>();
+    runtime.onSetPlaying = (playing, context, _) {
+      runtime.playCalls.add(playing);
+      return nativeReply.future;
+    };
+    addTearDown(() async {
+      if (!nativeReply.isCompleted) {
+        nativeReply.complete(const PlaybackRuntimeCommandResult());
+      }
+      await tester.pump();
+      owner.close();
+      await tester.pump();
+      await session.shutdown();
+    });
+    CommandResult? result;
+    unawaited(owner.setPlaying(true).then((value) => result = value));
+    await tester.pump();
+    now = budget;
+    await tester.pump(budget);
+    expect(result, isNotNull, reason: 'commandBudget 到达后播放调用仍未结算');
+    expect(result!.failure?.category, PlaybackFailureCategory.timeout);
+    CommandResult? pauseResult;
+    unawaited(owner.setPlaying(false).then((value) => pauseResult = value));
+    await tester.pump();
+    now += budget;
+    await tester.pump(budget);
+    expect(pauseResult?.failure?.category, PlaybackFailureCategory.timeout);
+    expect(runtime.playCalls, [false, true]);
+    nativeReply.complete(const PlaybackRuntimeCommandResult());
+    await tester.pump();
+    expect(runtime.playCalls, [false, true, false]);
+    expect(result!.failure?.category, PlaybackFailureCategory.timeout);
+    expect(session.currentSnapshot.intent.playing, isFalse);
+  });
+
   test('旧 play 写入返回后 writer 收敛到更新的 pause 意图', () async {
     final runtime = _FakeRuntime();
     final session = PlaybackSession(runtime: runtime);
