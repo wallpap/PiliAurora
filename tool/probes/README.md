@@ -375,7 +375,7 @@ Windows 采样门控的主机回归可运行 `python tool/probes/windows/windows
 
 ## Windows 图形资源生命周期探针
 
-以下入口编译生产 ANGLE 与 VideoOutput 类，通过外部资源计数替身检查构造失败回滚、共享 EGLDisplay 的跨线程释放，以及 resize、重建、销毁交错时的纹理注销回执：
+以下入口编译生产 ANGLE 与 VideoOutput 类，通过外部资源计数替身检查构造失败回滚、共享 EGLDisplay 的跨线程释放、持续渲染期间的卸载任务调度，以及 resize、重建、销毁交错时的纹理注销回执：
 
 ```powershell
 python tool/probes/windows/windows_angle_rollback_probe.py

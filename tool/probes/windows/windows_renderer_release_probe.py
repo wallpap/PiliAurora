@@ -73,7 +73,11 @@ inline void mpv_render_context_free(mpv_render_context* context) {
   CheckBarrier(); ++context_frees; delete context;
 }
 inline uint64_t mpv_render_context_update(mpv_render_context*) { return MPV_RENDER_UPDATE_FRAME; }
-inline int mpv_render_context_render(mpv_render_context*, mpv_render_param*) { return 0; }
+inline std::function<void()> render_hook;
+inline int mpv_render_context_render(mpv_render_context*, mpv_render_param*) {
+  if(render_hook) render_hook();
+  return 0;
+}
 constexpr int kFlutterDesktopPixelFormatBGRA8888 = 1;
 constexpr int kFlutterDesktopGpuSurfaceTypeDxgiSharedHandle = 1;
 struct FlutterDesktopGpuSurfaceDescriptor {
@@ -164,6 +168,50 @@ static void Settled(Fixture& f) {
 }
 int main() {
   try {
+    {
+      Fixture f;
+      f.output->SetTextureUpdateCallback([](auto, auto, auto) {});
+      const OutputOperationToken token{1, 1, 1, 0};
+      f.output->BeginOutputForLoad(token, [](bool okay) {
+        Require(okay, "output token rejected");
+      });
+      f.Drain();
+      std::promise<void> first_render, resume_render, invalidated, rendered_all;
+      auto resume = resume_render.get_future().share();
+      auto first = first_render.get_future();
+      auto retired = invalidated.get_future();
+      auto all = rendered_all.get_future();
+      std::atomic<int> renders{0};
+      int renders_at_revoke = 0;
+      // 每次渲染期间继续收到更新，退出请求排在第一帧之后。
+      render_hook = [&] {
+        const auto count = renders.fetch_add(1) + 1;
+        if(count == 1) {
+          first_render.set_value();
+          resume.wait();
+        }
+        if(count < 64) f.output->NotifyRender();
+        else if(count == 64) rendered_all.set_value();
+      };
+      f.output->NotifyRender();
+      Require(first.wait_for(std::chrono::seconds(2)) == std::future_status::ready,
+              "render did not start");
+      f.output->InvalidateOutputGeneration(token, [&](bool okay) {
+        Require(okay, "invalidation rejected");
+        renders_at_revoke = renders.load();
+        invalidated.set_value();
+      });
+      resume_render.set_value();
+      Require(retired.wait_for(std::chrono::seconds(2)) == std::future_status::ready,
+              "generation revoke did not complete");
+      Require(all.wait_for(std::chrono::seconds(2)) == std::future_status::ready,
+              "render updates did not settle");
+      f.Drain();
+      render_hook = nullptr;
+      Require(renders_at_revoke < 64,
+              "continuous render updates starved the unload generation revoke");
+      std::cout << "PASS rendering yields to unload generation revoke\n";
+    }
     {
       Fixture f; int size_calls=0, reset_calls=0, last_calls=0;
       f.output->SetSize(800, 450, [&](bool okay) { Require(okay, "resize failed"); ++size_calls; });

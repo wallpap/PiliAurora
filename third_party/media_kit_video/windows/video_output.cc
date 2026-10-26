@@ -285,16 +285,11 @@ void VideoOutput::NotifyRender() {
   }
   try {
     thread_pool_ref_->Post([this]() {
-      for (;;) {
-        render_dirty_.store(false, std::memory_order_release);
-        if (!destroyed_.load(std::memory_order_acquire)) {
-          CheckAndResize();
-          Render();
-        }
-        if (destroyed_.load(std::memory_order_acquire) ||
-            !render_dirty_.exchange(false, std::memory_order_acq_rel)) {
-          break;
-        }
+      // 后续更新排回队尾，让卸载回执和尺寸变更在持续渲染期间也能执行。
+      render_dirty_.store(false, std::memory_order_release);
+      if (!destroyed_.load(std::memory_order_acquire)) {
+        CheckAndResize();
+        Render();
       }
       render_pending_.store(false, std::memory_order_release);
       if (!destroyed_.load(std::memory_order_acquire) &&

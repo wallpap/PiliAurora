@@ -8,7 +8,9 @@ import 'package:hive_ce/hive.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:pili_aurora/http/init.dart';
 import 'package:pili_aurora/models/common/super_chat_type.dart';
-import 'package:pili_aurora/pages/live_room/view.dart';
+import 'package:pili_aurora/models/remote/live/live_danmaku/danmaku_msg.dart';
+import 'package:pili_aurora/pages/danmaku/danmaku_model.dart';
+import 'package:pili_aurora/pages/live_room/view.dart' show LiveRoomPage;
 import 'package:pili_aurora/pages/live_room/widgets/bottom_control.dart';
 import 'package:pili_aurora/pages/live_room/widgets/header_control.dart';
 import 'package:pili_aurora/plugin/pl_player/models/data_status.dart';
@@ -80,7 +82,54 @@ void main() {
     Get.reset();
     await tester.pump(const Duration(milliseconds: 1));
   });
+
+  testWidgets('长时间停留并积压直播消息后可以返回并释放页面', (tester) async {
+    addTearDown(() async {
+      await tester.pumpWidget(const SizedBox.shrink());
+      Get.reset();
+      await tester.pump();
+    });
+    await tester.pumpWidget(
+      const GetMaterialApp(home: Scaffold(body: Text('直播列表'))),
+    );
+    unawaited(Get.to<void>(() => const LiveRoomPage(), arguments: 1));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 500));
+    final controller = tester
+        .widget<LiveHeaderControl>(find.byType(LiveHeaderControl))
+        .liveController;
+    controller.plPlayerController.showDanmaku = true;
+    controller.addDm(_message(0));
+    await tester.pump(const Duration(milliseconds: 100));
+    controller.disableAutoScroll.value = true;
+    for (var i = 1; i <= 100000; i++) {
+      controller.addDm(_message(i));
+    }
+    await tester.pump(const Duration(hours: 4));
+    expect(controller.chatBuffer.pendingCount, 500);
+    expect(controller.chatBuffer.droppedPending, 99500);
+
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
+    expect(find.text('直播列表'), findsOneWidget);
+    expect(find.byType(LiveRoomPage), findsNothing);
+    expect(controller.isClosed, isTrue);
+    expect(controller.chatBuffer.historyCount, 0);
+    expect(controller.chatBuffer.pendingCount, 0);
+    controller
+      ..addDm(_message(100001))
+      ..refreshMsgIfNeeded();
+    await tester.pump(const Duration(seconds: 1));
+    expect(controller.messages.value, isEmpty);
+    expect(tester.takeException(), isNull);
+  });
 }
+
+DanmakuMsg _message(int id) => DanmakuMsg(
+  name: '用户',
+  text: '消息 $id',
+  extra: LiveDanmaku(id: '$id', mid: 0, dmType: 0, ts: 0, ct: ''),
+);
 
 class _PendingAdapter implements HttpClientAdapter {
   @override

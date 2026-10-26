@@ -407,6 +407,14 @@ class NativePlaybackRuntime
     _shutdownRequested = true;
     _syncVideoFrameSampling();
     _releaseSeekObservation();
+    if (_shutdownFuture == null && _player != null) {
+      Diagnostics.instance.playerLog(
+        DiagnosticLogLevel.info,
+        'player',
+        'runtime.shutdown.requested',
+        details: {'runtimeId': runtimeId, 'loadId': _activeBinding?.loadId},
+      );
+    }
     return _shutdownFuture ??= _serialize(_shutdown);
   }
 
@@ -2008,6 +2016,13 @@ class NativePlaybackRuntime
           'runtimeId': runtimeId,
           'durationUs': elapsed,
           'stageDurationUs': elapsed - previousStageUs,
+          'loadId': _activeBinding?.loadId,
+          'entryId': _activeBinding?.entryId,
+          'outputEpoch': _activeBinding?.token?.outputEpoch,
+          'endFileSeen': _activeBinding?.endFileSeen,
+          'unloaded': _activeBinding?.unloaded,
+          'nativeLifecycleUnknown': _nativeLifecycleUnknown,
+          'batchId': _lastBatchId,
         },
       );
       previousStageUs = elapsed;
@@ -2036,12 +2051,15 @@ class NativePlaybackRuntime
           );
         }
         if (!(binding.endFileSeen && binding.unloaded)) {
+          recordStage('stopping-file');
           await player.stop();
           // The session's single shutdown deadline bounds the caller result.
           // Keep this cleanup chain alive until native stop and unload facts
           // actually arrive; a late barrier must still complete released.
+          recordStage('waiting-for-file-retirement');
           await binding.retired.future;
         }
+        recordStage('invalidating-output');
         await _videoController?.invalidateOutputGeneration(binding.token!);
         _activeBinding = null;
       }
@@ -2049,6 +2067,7 @@ class NativePlaybackRuntime
       recordStage('file-retired');
       _diagnostics?.dispose();
       _diagnostics = null;
+      recordStage('releasing-subscriptions');
       for (final subscription in _subscriptions) {
         await subscription.cancel();
       }
@@ -2056,12 +2075,15 @@ class NativePlaybackRuntime
       await _hookRegistration?.dispose();
       _hookRegistration = null;
       recordStage('subscriptions-released');
+      recordStage('waiting-for-media-clock');
       await _mediaClockSampling.close();
+      recordStage('releasing-output');
       await _videoController?.releaseOutput();
       recordStage('output-released');
       // Player 释放会归还运行时槽；下一 owner 取得槽前先恢复本次亲和性。
       _restoreRasterScheduling();
       try {
+        recordStage('disposing-player');
         await player.dispose();
         recordStage('player-disposed');
         await player.released;

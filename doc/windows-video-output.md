@@ -10,6 +10,8 @@ Windows 根视图在最小化或 Flutter 报告 hidden/paused/detached 时关闭
 
 [`VideoOutput`](../third_party/media_kit_video/windows/video_output.cc) 在共用输出线程上创建、渲染和释放 mpv render context 与 ANGLE 资源。释放时先将对应 EGL 上下文设为 current，清除 mpv 更新回调并释放 render context，再解除 current、销毁 EGL 和设备。
 
+渲染通知通过 pending/dirty 标记合并，每个队列任务处理一帧，后续更新排回队尾，使输出代次撤销、尺寸变更和释放任务能在持续渲染期间执行。
+
 初始纹理 ID 用于完成 Dart 控制器创建，视频首帧就绪另行通知。真实纹理替换要等渲染成功后发布；同尺寸请求沿用已发布的画面。源尺寸由 Dart 的 `video-out-params` 观察事件送入原生队列，避免渲染线程同步查询正在等待首帧的 mpv 核心。
 
 ANGLE Surface 的 D3D 纹理作为默认 framebuffer 的绘制目标，随后通过 D3D 复制供 Flutter

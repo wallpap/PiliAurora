@@ -1,6 +1,6 @@
 # media_kit_video 本地版本
 
-- 本地版本：`1.2.5+piliaurora.11`；来源包版本：`1.2.5`。
+- 本地版本：`1.2.5+piliaurora.12`；来源包版本：`1.2.5`。
 - 来源仓库：https://github.com/My-Responsitories/media-kit.git
 - 来源提交：`73771ec38176be2d984a3049c28177bce23b54a0`。
 - 来源子目录：`media_kit_video`。
@@ -54,3 +54,5 @@ Windows 支持在创建输出时指定固定尺寸。初始纹理 ID 与视频�
 2026-10-23（piliaurora.10）：Android 重建 Surface 时，旧 Surface 或 JNI 全局引用释放失败会终止重建，并向平台通道传播错误。未确认删除的旧引用继续由输出持有，后续释放可继续回收，避免新引用覆盖旧句柄。主机故障探针覆盖旧资源释放失败、复合故障与后续完整释放。
 
 2026-10-23（piliaurora.11）：Android Surface 与 JNI 全局引用完整创建后再登记到输出；构造失败、JNI 引用创建抛错或返回零句柄时，回收本次新建的 Surface 并向平台通道传播错误。回滚释放失败时保留 Surface 所有权与原始错误，后续输出释放继续回收。主机故障探针补齐创建失败、零句柄、回滚失败与重试恢复。
+
+2026-10-26（piliaurora.12）：Windows 每个渲染任务处理一帧，持续到达的更新合并后排回队尾，避免渲染循环长期占用输出线程、阻塞卸载时的输出代次撤销。`tool/probes/windows/windows_renderer_release_probe.py` 通过连续更新期间排入撤销请求，检查渲染与卸载任务的交替执行。
