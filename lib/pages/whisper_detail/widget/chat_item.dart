@@ -2,7 +2,6 @@ import 'dart:math' as math;
 
 import 'package:pili_aurora/common/constants.dart';
 import 'package:pili_aurora/common/style.dart';
-import 'package:pili_aurora/common/widgets/badge.dart';
 import 'package:pili_aurora/common/widgets/emote_tooltip.dart';
 import 'package:pili_aurora/common/widgets/gesture/tap_gesture_recognizer.dart';
 import 'package:pili_aurora/common/widgets/image/cached_image.dart';
@@ -11,6 +10,7 @@ import 'package:pili_aurora/common/widgets/image_viewer/hero.dart';
 import 'package:pili_aurora/common/widgets/selection_text.dart';
 import 'package:pili_aurora/http/search.dart';
 import 'package:pili_aurora/models/common/image_preview_type.dart';
+import 'package:pili_aurora/pages/whisper_detail/widget/message_content_card.dart';
 import 'package:pili_aurora/services/messaging/message_models.dart';
 import 'package:pili_aurora/utils/app_scheme.dart';
 import 'package:pili_aurora/utils/date_utils.dart';
@@ -171,15 +171,8 @@ class ChatItem extends StatelessWidget {
           MessageContentKind.pictureCard => msgTypePictureCard_13(payload),
           MessageContentKind.tip => msgTypeTipMessage_18(theme, payload),
           MessageContentKind.shareV2 => msgTypeShareV2_7(payload, textColor),
-          MessageContentKind.videoCard => msgTypeVideoCard_11(
-            theme,
-            payload,
-            textColor,
-          ),
-          MessageContentKind.articleCard => msgTypeArticleCard_12(
-            payload,
-            textColor,
-          ),
+          MessageContentKind.videoCard => msgTypeVideoCard_11(theme, payload),
+          MessageContentKind.articleCard => msgTypeArticleCard_12(payload),
           MessageContentKind.commonShareCard => msgTypeCommonShareCard_14(
             payload,
             textColor,
@@ -245,54 +238,17 @@ class ChatItem extends StatelessWidget {
     }
   }
 
-  Widget msgTypeArticleCard_12(dynamic content, Color textColor) {
-    return GestureDetector(
-      behavior: .opaque,
+  Widget msgTypeArticleCard_12(dynamic content) {
+    return MessageContentCard(
+      coverUrls: (content['image_urls'] as List?)?.cast<String>() ?? const [],
+      title: content['title'] ?? '',
+      summary: content['summary'],
       onTap: () => Get.toNamed(
         '/articlePage',
         parameters: {
           'id': '${content['rid']}',
-          'type': "read",
+          'type': 'read',
         },
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              for (final i in content['image_urls'])
-                NetworkImgLayer(
-                  width: 130,
-                  height: 73.125,
-                  src: i,
-                ),
-            ],
-          ),
-          const SizedBox(height: 6),
-          Text(
-            content['title'] ?? "",
-            style: TextStyle(
-              letterSpacing: 0.6,
-              height: 1.5,
-              color: textColor,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          if (content['summary'] != null && content['summary'] != '') ...[
-            const SizedBox(height: 1),
-            Text(
-              content['summary'],
-              style: TextStyle(
-                letterSpacing: 0.6,
-                height: 1.5,
-                color: textColor.withValues(alpha: 0.6),
-                fontSize: 12,
-                overflow: TextOverflow.ellipsis,
-              ),
-              maxLines: 2,
-            ),
-          ],
-        ],
       ),
     );
   }
@@ -403,101 +359,46 @@ class ChatItem extends StatelessWidget {
     );
   }
 
-  Widget msgTypeVideoCard_11(ThemeData theme, content, Color textColor) {
+  Widget msgTypeVideoCard_11(ThemeData theme, content) {
     String? attachMsg;
     try {
       attachMsg = content['attach_msg']?['content'];
     } catch (_) {}
 
-    return Center(
-      child: Container(
-        constraints: const BoxConstraints(maxWidth: 400.0),
-        decoration: BoxDecoration(
-          borderRadius: Style.mdRadius,
-          color: theme.colorScheme.onInverseSurface,
-        ),
-        child: LayoutBuilder(
-          builder: (_, constrains) {
-            return GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              onTap: () async {
-                try {
-                  SmartDialog.showLoading();
-                  final bvid = content["bvid"];
-                  final res = await SearchHttp.ab2cWithDimension(bvid: bvid);
-                  final cid = res?.cid;
-                  SmartDialog.dismiss();
-                  if (cid != null) {
-                    PageUtils.toVideoPage(
-                      bvid: bvid,
-                      cid: cid,
-                      cover: content['cover'],
-                      dimension: res!.dimension,
-                      // 接口提供标题时可同时传入。
-                    );
-                  }
-                } catch (err) {
-                  SmartDialog.dismiss();
-                  SmartDialog.showToast(err.toString());
-                }
-              },
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Stack(
-                    clipBehavior: Clip.none,
-                    children: [
-                      NetworkImgLayer(
-                        width: constrains.maxWidth,
-                        height: constrains.maxWidth / Style.aspectRatio16x9,
-                        src: content['cover'],
-                        borderRadius: const .vertical(top: Style.imgRadius),
-                      ),
-                      PBadge(
-                        left: 6,
-                        bottom: 6,
-                        type: .gray,
-                        text: content['times'] == 0
-                            ? '--:--'
-                            : DurationUtils.formatDuration(content['times']),
-                      ),
-                    ],
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 8,
-                    ),
-                    child: Text(
-                      content['times'] == 0 ? '内容已失效' : content['title'],
-                      style: TextStyle(
-                        letterSpacing: 0.6,
-                        height: 1.5,
-                        color: textColor,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ),
-                  if (attachMsg?.isNotEmpty ?? false)
-                    Container(
-                      margin: const .fromLTRB(12, 0, 12, 8),
-                      padding: const .symmetric(horizontal: 11, vertical: 3.5),
-                      decoration: BoxDecoration(
-                        color: theme.colorScheme.surface,
-                        borderRadius: const .all(.circular(6)),
-                      ),
-                      child: msgTypeText_1(
-                        theme,
-                        content: content['attach_msg'],
-                        textColor: textColor,
-                      ),
-                    ),
-                ],
-              ),
+    return MessageContentCard(
+      coverUrls: [if (content['cover'] != null) content['cover']],
+      title: content['times'] == 0 ? '内容已失效' : content['title'],
+      coverLabel: content['times'] == 0
+          ? '--:--'
+          : DurationUtils.formatDuration(content['times']),
+      footer: attachMsg?.isNotEmpty == true
+          ? msgTypeText_1(
+              theme,
+              content: content['attach_msg'],
+              textColor: theme.colorScheme.onSurface,
+            )
+          : null,
+      onTap: () async {
+        try {
+          SmartDialog.showLoading();
+          final bvid = content['bvid'];
+          final res = await SearchHttp.ab2cWithDimension(bvid: bvid);
+          final cid = res?.cid;
+          SmartDialog.dismiss();
+          if (cid != null) {
+            PageUtils.toVideoPage(
+              bvid: bvid,
+              cid: cid,
+              cover: content['cover'],
+              dimension: res!.dimension,
+              // 接口提供标题时可同时传入。
             );
-          },
-        ),
-      ),
+          }
+        } catch (err) {
+          SmartDialog.dismiss();
+          SmartDialog.showToast(err.toString());
+        }
+      },
     );
   }
 
