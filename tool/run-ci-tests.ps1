@@ -41,6 +41,7 @@ $ciTests = @(
     "test/plugin/pl_player/playback/playback_runtime_slot_test.dart",
     "test/plugin/pl_player/playback/native_media_clock_sampling_test.dart",
     "test/plugin/pl_player/playback/native_load_readiness_test.dart",
+    "test/plugin/pl_player/playback/native_shutdown_test.dart",
     "test/plugin/pl_player/playback/video_frame_timings_test.dart",
     "test/plugin/pl_player/playback/presentation_profile_test.dart",
     "test/plugin/pl_player/playback/shader_updates_test.dart",

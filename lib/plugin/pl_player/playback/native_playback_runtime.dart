@@ -39,6 +39,18 @@ class NativePlaybackRuntime
     required this.diagnosticsExtra,
   });
 
+  @visibleForTesting
+  NativePlaybackRuntime.withResources({
+    required this.configuration,
+    required this.diagnosticsExtra,
+    required Player player,
+    required VideoController videoController,
+  }) : _player = player,
+       _videoController = videoController {
+    _bindNativeLifecycle(player);
+    _videoControllerListenable.value = videoController;
+  }
+
   static int _nextRuntimeId = 1;
   static final Stopwatch _fallbackClock = Stopwatch()..start();
   static Duration _fallbackNow() => _fallbackClock.elapsed;
@@ -805,16 +817,7 @@ class NativePlaybackRuntime
         await _cleanupFailedInitialization(player);
         return null;
       }
-      _subscriptions.add(
-        player.nativeEvents.listen(
-          _handleNativeEvent,
-          onError: (Object error, StackTrace stack) =>
-              _handleRuntimeNativeError(error),
-        ),
-      );
-      _hookRegistration = player.registerLifecycleHookHandler(
-        _handleLifecycleHook,
-      );
+      _bindNativeLifecycle(player);
       _diagnostics = PlayerDiagnostics(player, extra: diagnosticsExtra);
 
       final base = hardwareVideoConfiguration(
@@ -951,6 +954,19 @@ class NativePlaybackRuntime
       );
       return null;
     }
+  }
+
+  void _bindNativeLifecycle(Player player) {
+    _subscriptions.add(
+      player.nativeEvents.listen(
+        _handleNativeEvent,
+        onError: (Object error, StackTrace stack) =>
+            _handleRuntimeNativeError(error),
+      ),
+    );
+    _hookRegistration = player.registerLifecycleHookHandler(
+      _handleLifecycleHook,
+    );
   }
 
   @override
@@ -2052,7 +2068,12 @@ class NativePlaybackRuntime
         }
         if (!(binding.endFileSeen && binding.unloaded)) {
           recordStage('stopping-file');
-          await player.stop();
+          try {
+            await player.stop();
+          } on TimeoutException {
+            // 回执超时后原生操作仍可能完成，继续用卸载事实确认释放时机。
+            recordStage('stop-reply-timed-out');
+          }
           // The session's single shutdown deadline bounds the caller result.
           // Keep this cleanup chain alive until native stop and unload facts
           // actually arrive; a late barrier must still complete released.
