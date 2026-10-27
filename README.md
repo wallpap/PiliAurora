@@ -54,6 +54,11 @@ PiliAurora 是面向 Android 和 Windows x64 的 Bilibili 第三方客户端，�
 
 从 [GitHub Releases](https://github.com/wallpap/PiliAurora/releases/latest) 下载对应平台的安装包。
 
+应用的“检查更新”会比较正式发布的版本号，并通过浏览器下载对应平台的安装包。
+Windows 安装版更新时，先退出主窗口与独立播放窗口，再将 EXE 安装到原目录；安装器会记住上次的安装位置。
+便携版更新时，将 ZIP 完整解压到新目录并启动其中的 `PiliAurora.exe`。账号、设置和缓存会保留。
+更新后可在“关于”核对版本；任务栏固定项若仍指向旧目录，可取消后从新版窗口重新固定。
+
 ## 相较于 PiliPlus 2.1.5 的改进
 
 ### Windows 多窗口播放

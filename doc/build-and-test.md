@@ -62,6 +62,17 @@ pwsh -File tool/build.ps1 -Platform windows -Mode release
 
 Android 通用 APK 位于 `build/app/outputs/flutter-apk/app-release.apk`，Windows 运行目录位于 `build/windows/x64/runner/Release/`。正式 GitHub Release 由 `.github/workflows/build.yml` 手动触发并传入 `vX.Y.Z`：Android 使用对应架构的定制引擎生成三个分 ABI APK，Windows 使用定制引擎生成 x64 便携包和安装程序。引擎产物及身份文件随 Git 保存，CI 校验后直接装配，维护步骤见[预编译引擎](../third_party/flutter_engine/README.md)。版本名与构建号取自 `pubspec.yaml`，工作流会用 tag 重写本次构建的版本和 `pili_release.json`。
 
+Windows 的 fastforge 打包前置入口为 `tool/packaging/prepare_windows_package.py`，先装配并校验定制引擎，再生成 `piliaurora-runtime.sha256`。安装版和便携版携带相同的程序文件清单；Inno 模板要求该清单存在。覆盖安装完成后，旧清单中已退役且摘要未改变的程序文件会被清理，用户修改的文件和未登记文件会保留。从尚无清单的旧安装升级时，开始记录本次包的文件归属。
+
+安装器通过 Windows Restart Manager 检测程序文件占用，沿用相同 AppId 的历史安装目录，并为快捷方式写入与运行进程一致的 `PiliAurora.Desktop` 标识。版本检查按 `tag_name` 的数字版本比较，跳过草稿与预发布；相同版本的构建时间或 build 后缀变化不触发更新提示。
+
+覆盖安装回归使用独占临时目录，编译并运行关闭系统集成的安装器夹具，验证程序更新、退役文件清理、用户文件保留和路径边界；Windows 需要 PATH 中的 Inno Setup 6：
+
+```powershell
+python -m unittest discover -s tool/packaging -p '*_test.py' -v
+fvm flutter test --no-pub test/utils/app_release_test.dart
+```
+
 ## 静态检查与测试
 
 完成验证后，在提交说明中记录实际执行的命令及结果，便于复查。

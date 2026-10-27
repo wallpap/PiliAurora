@@ -7,6 +7,7 @@ import 'package:pili_aurora/http/api.dart';
 import 'package:pili_aurora/http/browser_ua.dart';
 import 'package:pili_aurora/http/init.dart';
 import 'package:pili_aurora/utils/accounts/account.dart';
+import 'package:pili_aurora/utils/app_release.dart';
 import 'package:pili_aurora/utils/page_utils.dart';
 import 'package:pili_aurora/utils/storage.dart';
 import 'package:pili_aurora/utils/storage_key.dart';
@@ -15,139 +16,145 @@ import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:material_ui/material_ui.dart';
+import 'package:path/path.dart' as path;
 
 abstract final class Update {
-  // 检查更新
+  static const _dialogTag = 'app-update';
+  static bool _checking = false;
+
   static Future<void> checkUpdate([bool isAuto = true]) async {
-    if (kDebugMode) return;
-    SmartDialog.dismiss();
+    if ((kDebugMode && isAuto) || _checking) return;
+    _checking = true;
     try {
       final res = await Request().get(
         Api.latestApp,
+        queryParameters: {'per_page': 100},
         options: Options(
           headers: {'user-agent': BrowserUa.mob},
           extra: {'account': const NoAccount()},
         ),
       );
-      final releases = res.data;
-      if (releases is! List) {
-        if (!isAuto) {
-          SmartDialog.showToast('检查更新失败，GitHub接口未返回数据，请检查网络');
-        }
+      final release = AppRelease.latestStable(res.data);
+      if (release == null) {
+        if (!isAuto) SmartDialog.showToast('暂无已发布的正式版本');
         return;
       }
-      if (releases.isEmpty) {
-        if (!isAuto) {
-          SmartDialog.showToast('暂无已发布版本');
-        }
+      if (!release.isNewerThan(BuildConfig.versionName)) {
+        if (!isAuto) SmartDialog.showToast('当前版本已是最新');
         return;
       }
-      final data = releases.first;
-      final int latest =
-          DateTime.parse(data['created_at']).millisecondsSinceEpoch ~/ 1000;
-      if (BuildConfig.buildTime >= latest) {
-        if (!isAuto) {
-          SmartDialog.showToast('已是最新版本');
-        }
-      } else {
-        SmartDialog.show(
-          animationType: SmartAnimationType.centerFade_otherSlide,
-          builder: (context) {
-            final colorScheme = ColorScheme.of(context);
-            Widget downloadBtn(String text, {String? ext}) => TextButton(
-              onPressed: () => onDownload(data, ext: ext),
-              child: Text(text),
-            );
-            return AlertDialog(
-              title: const Text('🎉 发现新版本 '),
-              content: SizedBox(
-                height: 280,
-                child: SingleChildScrollView(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        '${data['tag_name']}',
-                        style: const TextStyle(fontSize: 20),
-                      ),
-                      const SizedBox(height: 8),
-                      Text('${data['body']}'),
-                      TextButton(
-                        onPressed: () => PageUtils.launchURL(
-                          '${Constants.sourceCodeUrl}/commits/main',
-                        ),
-                        child: Text(
-                          "点此查看完整更新(即commit)内容",
-                          style: TextStyle(color: colorScheme.primary),
-                        ),
-                      ),
-                    ],
+      SmartDialog.show(
+        tag: _dialogTag,
+        keepSingle: true,
+        animationType: SmartAnimationType.centerFade_otherSlide,
+        builder: (context) => AlertDialog(
+          title: Text('发现新版本 ${release.tag}'),
+          content: SizedBox(
+            width: 480,
+            height: 320,
+            child: SingleChildScrollView(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    '当前版本：${BuildConfig.versionName}+${BuildConfig.versionCode}',
                   ),
-                ),
-              ),
-              actions: [
-                if (isAuto)
-                  TextButton(
-                    onPressed: () {
-                      SmartDialog.dismiss();
-                      GStorage.setting.put(SettingBoxKey.autoUpdate, false);
-                    },
-                    child: Text(
-                      '不再提醒',
-                      style: TextStyle(color: colorScheme.outline),
+                  const SizedBox(height: 12),
+                  Text(release.notes.isEmpty ? '本次发布未提供更新说明。' : release.notes),
+                  if (Platform.isWindows) ...[
+                    const SizedBox(height: 16),
+                    const Text('安装版：退出所有播放窗口后，安装到原目录。便携版：完整解压到新目录后运行。'),
+                    const SizedBox(height: 8),
+                    SelectableText(
+                      '当前程序目录：${path.dirname(Platform.resolvedExecutable)}',
                     ),
-                  ),
-                TextButton(
-                  onPressed: SmartDialog.dismiss,
-                  child: Text(
-                    '取消',
-                    style: TextStyle(color: colorScheme.outline),
-                  ),
-                ),
-                if (Platform.isWindows) ...[
-                  downloadBtn('zip', ext: 'zip'),
-                  downloadBtn('exe', ext: 'exe'),
-                ] else
-                  downloadBtn('Github'),
-              ],
-            );
-          },
-        );
-      }
+                    const SizedBox(height: 8),
+                    const Text('更新后在“关于”核对版本；任务栏旧固定项可取消后重新固定。'),
+                  ],
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            if (isAuto)
+              TextButton(
+                onPressed: () {
+                  SmartDialog.dismiss(tag: _dialogTag);
+                  GStorage.setting.put(SettingBoxKey.autoUpdate, false);
+                },
+                child: const Text('不再提醒'),
+              ),
+            TextButton(
+              onPressed: () => SmartDialog.dismiss(tag: _dialogTag),
+              child: const Text('稍后'),
+            ),
+            TextButton(
+              onPressed: () => PageUtils.launchURL(_releasePage(release)),
+              child: const Text('发布页面'),
+            ),
+            if (Platform.isWindows) ...[
+              TextButton(
+                onPressed:
+                    release.downloadUrl(
+                          platform: 'windows',
+                          extension: 'zip',
+                        ) ==
+                        null
+                    ? null
+                    : () => onDownload(release, extension: 'zip'),
+                child: const Text('便携版 ZIP'),
+              ),
+              FilledButton(
+                onPressed:
+                    release.downloadUrl(
+                          platform: 'windows',
+                          extension: 'exe',
+                        ) ==
+                        null
+                    ? null
+                    : () => onDownload(release, extension: 'exe'),
+                child: const Text('安装版 EXE'),
+              ),
+            ] else
+              FilledButton(
+                onPressed: () => onDownload(release),
+                child: const Text('下载更新'),
+              ),
+          ],
+        ),
+      );
     } catch (e, stackTrace) {
-      logger.w('failed to check update: $e', error: e, stackTrace: stackTrace);
+      logger.w('检查更新失败', error: e, stackTrace: stackTrace);
+      if (!isAuto) SmartDialog.showToast('检查更新失败，请检查网络或前往发布页面');
+    } finally {
+      _checking = false;
     }
   }
 
-  // 下载适用于当前系统的安装包
-  static Future<void> onDownload(Map data, {String? ext}) async {
-    SmartDialog.dismiss();
-    try {
-      void download(String plat) {
-        if (data['assets'].isNotEmpty) {
-          for (Map<String, dynamic> i in data['assets']) {
-            final String name = i['name'];
-            if (name.contains(plat) &&
-                (ext == null || ext.isEmpty ? true : name.endsWith(ext))) {
-              PageUtils.launchURL(i['browser_download_url']);
-              return;
-            }
-          }
-          throw UnsupportedError('platform not found: $plat');
-        }
-      }
+  static String _releasePage(AppRelease release) =>
+      '${Constants.sourceCodeUrl}/releases/tag/${Uri.encodeComponent(release.tag)}';
 
-      if (Platform.isAndroid) {
-        // 获取设备信息
-        AndroidDeviceInfo androidInfo = await DeviceInfoPlugin().androidInfo;
-        // [arm64-v8a]
-        download(androidInfo.supportedAbis.first);
-      } else {
-        download(Platform.operatingSystem);
+  static Future<void> onDownload(
+    AppRelease release, {
+    String? extension,
+  }) async {
+    await SmartDialog.dismiss(tag: _dialogTag);
+    try {
+      final abis = Platform.isAndroid
+          ? (await DeviceInfoPlugin().androidInfo).supportedAbis
+          : const <String>[];
+      final url = release.downloadUrl(
+        platform: Platform.operatingSystem,
+        extension: extension,
+        supportedAbis: abis,
+      );
+      if (url == null) {
+        SmartDialog.showToast('该版本暂无适用的安装包，请在发布页面查看');
       }
+      await PageUtils.launchURL(url ?? _releasePage(release));
     } catch (e, stackTrace) {
-      logger.w('download error: $e', error: e, stackTrace: stackTrace);
-      PageUtils.launchURL('${Constants.sourceCodeUrl}/releases/latest');
+      logger.w('打开更新下载失败', error: e, stackTrace: stackTrace);
+      await PageUtils.launchURL(_releasePage(release));
     }
   }
 }

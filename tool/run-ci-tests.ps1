@@ -31,6 +31,7 @@ $ciTests = @(
     "test/router/get_route_lifecycle_test.dart",
     "test/app/desktop_theme_test.dart",
     "test/app/desktop_playback_launch_test.dart",
+    "test/utils/app_release_test.dart",
     "test/pages/video/playback_lifecycle_test.dart",
     "test/pages/video/pgc_sharing_test.dart",
     "test/pages/live_room/controller_test.dart",

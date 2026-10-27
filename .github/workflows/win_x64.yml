@@ -92,6 +92,12 @@ jobs:
         shell: pwsh
         run: python third_party/mpv/package-runtime.py verify third_party/mpv
 
+      - name: Test Windows upgrade installation
+        shell: pwsh
+        run: |
+          $env:PATH = "$env:INNO_SETUP_PATH;$env:PATH"
+          python -m unittest discover -s tool/packaging -p '*_test.py' -v
+
       - name: Verify prebuilt cnativeapi
         shell: pwsh
         run: python third_party/nativeapi/package.py verify
@@ -104,7 +110,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Windows engine validation failed' }
           $configuration | Set-Content build/windows-engine-config.json -Encoding utf8NoBOM
           $defines = @(($configuration | ConvertFrom-Json).dartDefines | ForEach-Object { "--build-dart-define=$_" })
-          fastforge package --platform windows --targets exe --flutter-build-args="dart-define-from-file=pili_release.json,no-pub" --skip-clean @defines --hook-pre "python third_party/flutter_engine/package.py install-windows --target windows-x64 --output build/windows/x64/runner/Release"
+          fastforge package --platform windows --targets exe --flutter-build-args="dart-define-from-file=pili_release.json,no-pub" --skip-clean @defines --hook-pre "python tool/packaging/prepare_windows_package.py --runtime build/windows/x64/runner/Release"
           if ($LASTEXITCODE -ne 0) { throw 'Windows packaging failed' }
           $expected = ($configuration | ConvertFrom-Json).identity.binarySha256
           $actual = (Get-FileHash build/windows/x64/runner/Release/flutter_windows.dll -Algorithm SHA256).Hash.ToLowerInvariant()

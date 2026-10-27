@@ -8,6 +8,7 @@
 | `run-ci-tests.ps1` | 本地运行 GitHub Actions 选择的测试范围。 |
 | `run-native-probes.ps1` | 使用项目固定 Flutter 源码执行 Android 主机 Java 探针。 |
 | `check_dependencies.dart` | 依赖版本、来源和许可证验收。 |
+| `packaging/` | Windows 安装前的引擎装配、程序文件清单及覆盖安装回归。 |
 | [`probes/`](probes/README.md) | Android、Windows、播放链路和事件循环的隔离回归探针。 |
 | [`experiments/`](experiments/README.md) | 按业务领域组织的按需对照与性能测量。 |
 | [`engine/`](engine/README.md) | 两端自编引擎的共同身份、配置生成和装配协议。 |
