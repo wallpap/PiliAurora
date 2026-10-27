@@ -66,6 +66,26 @@ void main() {
     await fixture.runtime.released;
     expect(fixture.events.last, 'dispose-player');
   });
+
+  test('open 尚未提交加载就失败时关闭不等待文件身份', () async {
+    final fixture = _Fixture();
+    addTearDown(fixture.close);
+    fixture.player.openFailsBeforeSubmission = true;
+    final load = await fixture.load();
+    expect(load.loaded, isFalse);
+    expect(load.failure?.category, PlaybackFailureCategory.timeout);
+
+    final shutdown = fixture.runtime.shutdown();
+    await _turn();
+    expect(fixture.player.started, isFalse);
+    expect(fixture.output.releaseCalls, 1);
+    expect(fixture.player.disposed, isFalse);
+
+    fixture.output.releaseReceipt.complete();
+    expect((await shutdown).outcome, PlaybackShutdownOutcome.released);
+    await fixture.runtime.released;
+    expect(fixture.events, ['release-output', 'dispose-player']);
+  });
 }
 
 Future<void> _turn() => Future<void>.delayed(Duration.zero);
@@ -136,6 +156,7 @@ class _Player implements NativePlayer {
   NativeLifecycleHookHandler? hook;
   bool stopTimesOut = false;
   bool openTimesOut = false;
+  bool openFailsBeforeSubmission = false;
   bool started = false;
   @override
   bool disposed = false;
@@ -159,7 +180,10 @@ class _Player implements NativePlayer {
     Playable playable, {
     bool play = true,
     bool synchronized = true,
+    void Function()? onLoadSubmitted,
   }) async {
+    if (openFailsBeforeSubmission) throw TimeoutException('open stop reply');
+    onLoadSubmitted?.call();
     if (openTimesOut) throw TimeoutException('open reply');
     startFile();
     events.add(

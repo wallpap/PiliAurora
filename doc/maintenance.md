@@ -60,7 +60,7 @@ Android 点播的滚动弹幕与视频共用 Flutter 输出 Surface。存在新�
 
 Android `media.output.preloaded` 记录预挂载策略、证据和解码前 selected 值；mpv 在 on_preloaded 之后选轨，该阶段允许唯一候选尚未 selected，FILE_LOADED 继续核对实际选轨。`runtime.shutdown.*` 分段记录文件卸载、订阅清理、输出释放与 Player 释放；`player.disposed` 是诊断停止事件，不代表原生释放完成。Surface 释放先同步解除 VO/wid，再等待 JNI 删除回执。
 
-退出排查先核对 `runtime.shutdown.requested` 与 `begin`，区分关闭请求已发出和原生命令队列已进入清理。后续 `waiting-for-file-identity`、`stopping-file`、`waiting-for-file-retirement`、`invalidating-output`、`releasing-subscriptions`、`waiting-for-media-clock`、`releasing-output`、`disposing-player` 标记各等待阶段；结合 `loadId/entryId/outputEpoch`、`endFileSeen/unloaded`、`nativeLifecycleUnknown` 和 `batchId` 关联同一次关闭。`stop-reply-timed-out` 表示 stop 回执超时，清理仍等待后续卸载事实。
+退出排查先核对 `runtime.shutdown.requested` 与 `begin`，区分关闭请求已发出和原生命令队列已进入清理。后续 `waiting-for-file-identity`、`stopping-file`、`waiting-for-file-retirement`、`invalidating-output`、`releasing-subscriptions`、`waiting-for-media-clock`、`releasing-output`、`disposing-player` 标记各等待阶段；结合 `loadId/entryId/outputEpoch`、`endFileSeen/unloaded`、`nativeLifecycleUnknown` 和 `batchId` 关联同一次关闭。`stop-reply-timed-out` 表示 stop 回执超时，清理仍等待后续卸载事实。文件身份等待从 libmpv 接受加载命令开始；open 的前置停播或暂停失败时直接清理输出，提交后仍等待迟到的身份与卸载证据。
 
 直播 FILE_LOADED 后缺少有效视频几何时，最多等待 5 秒，且不超过请求剩余预算；输出就绪前的 EOF/error 立即使加载失败。正常点播沿用请求预算，纯音频沿用无视频输出路径。`media.startup.failed` 记录几何等待失败，页面显示既有失败及刷新入口。加载动画的首帧可见性和驱动行为仍需设备验证。
 

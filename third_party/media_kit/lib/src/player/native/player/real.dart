@@ -259,11 +259,13 @@ class NativePlayer extends PlatformPlayer {
   /// );
   /// ```
   ///
+  /// [onLoadSubmitted] 在 libmpv 接受加载命令后、异步回执返回前调用。
   @override
   Future<void> open(
     Playable playable, {
     bool play = true,
     bool synchronized = true,
+    void Function()? onLoadSubmitted,
   }) {
     Future<void> function() async {
       throwIfDisposed();
@@ -307,7 +309,7 @@ class NativePlayer extends PlatformPlayer {
       // isPlayingStateChangeAllowed = false;
 
       for (int i = 0; i < current.length; i++) {
-        _add(current[i]);
+        await _add(current[i], onSubmitted: onLoadSubmitted);
       }
 
       // If [play] is `true`, then exit paused state.
@@ -545,8 +547,8 @@ class NativePlayer extends PlatformPlayer {
     }
   }
 
-  Future<void> _add(Media media) {
-    return command([
+  Future<void> _add(Media media, {void Function()? onSubmitted}) {
+    return _command([
       'loadfile',
       media.uri,
       'append',
@@ -558,7 +560,7 @@ class NativePlayer extends PlatformPlayer {
           'end=${(media.end!.inMilliseconds / 1000).toStringAsFixed(3)}',
         ...?media.extras?.entries.map((e) => '${e.key}=${e.value}'),
       ].join(','),
-    ]);
+    ], onSubmitted: onSubmitted);
   }
 
   /// Appends a [Media] to the [Player]'s playlist.
@@ -2662,6 +2664,14 @@ class NativePlayer extends PlatformPlayer {
   /// Calls mpv command passed as [args].
   /// Automatically freeds memory after command sending.
   Future<void> command(List<String> args, {int? seekObservationId}) {
+    return _command(args, seekObservationId: seekObservationId);
+  }
+
+  Future<void> _command(
+    List<String> args, {
+    int? seekObservationId,
+    void Function()? onSubmitted,
+  }) {
     throwIfDisposed();
     if (args.isNotEmpty && args.first == 'seek' && _seekObservation != null) {
       throw StateError('A native seek observation is still in flight.');
@@ -2690,6 +2700,9 @@ class NativePlayer extends PlatformPlayer {
       // Sending failed
       _takeRequest(requestNumber);
       completer.complete(immediate);
+    } else {
+      // 提交事实先于异步回执，回执超时后仍可能收到文件生命周期事件。
+      onSubmitted?.call();
     }
     return completer.future.then(_checkRequest);
   }

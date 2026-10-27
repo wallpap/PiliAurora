@@ -1,6 +1,6 @@
 # media_kit 本地版本
 
-- 本地版本：`1.1.11+piliaurora.4`；来源包版本：`1.1.11`。
+- 本地版本：`1.1.11+piliaurora.5`；来源包版本：`1.1.11`。
 - 来源仓库：https://github.com/My-Responsitories/media-kit.git
 - 来源提交：`73771ec38176be2d984a3049c28177bce23b54a0`。
 - 来源子目录：`media_kit`。
@@ -21,3 +21,5 @@
 2026-10-19：seek 可携带观察序号；单一事件 reader 以命令请求回执、SEEK 与同文件 PLAYBACK_RESTART 关联完成。新文件、退出和事件队列溢出清除旧关联，在途记录阻止重复 seek 覆盖。原生提交回执与落点完成分别通知调用方。
 
 2026-10-21：公开句柄所用的 nativeLibraryPath，供媒体时钟在 worker isolate 读取属性时复用实际加载的库路径，包含调用方指定路径。
+
+2026-10-27：open 在 libmpv 接受 loadfile 后同步通知调用方，并等待加载命令回执。运行时据此区分提交前失败和提交后回执迟到，按实际原生归属执行卸载与关闭。

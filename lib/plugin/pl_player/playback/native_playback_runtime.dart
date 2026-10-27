@@ -584,9 +584,14 @@ class NativePlaybackRuntime
         },
       );
       final watch = Stopwatch()..start();
-      _nativeOpenNeedsRetirement = true;
-      _openingLoad = pending;
-      await player.open(source, play: false);
+      await player.open(
+        source,
+        play: false,
+        onLoadSubmitted: () {
+          _nativeOpenNeedsRetirement = true;
+          _openingLoad = pending;
+        },
+      );
       // open 回执可能先于 start-file；取消后仍需保留归属，直到原生身份已知。
       await pending.started.future.timeout(_remaining(context));
       _diagnostics?.event(
