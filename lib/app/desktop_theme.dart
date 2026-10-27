@@ -53,6 +53,10 @@ class _DesktopWindowThemeState extends State<DesktopWindowTheme>
     if (mounted) setState(() => _minimized = false);
   }
 
+  // 从最小化恢复到最大化时，插件发送 maximize，也需要恢复视觉更新。
+  @override
+  void onWindowMaximize() => onWindowRestore();
+
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (!mounted) return;

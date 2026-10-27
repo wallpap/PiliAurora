@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/services.dart';
@@ -84,4 +85,106 @@ void main() {
     await tester.pump();
     expect(tester.takeException(), isNull);
   }, skip: !Platform.isWindows);
+
+  for (final restoredEvent in ['restore', 'maximize']) {
+    testWidgets('最小化后通过 $restoredEvent 恢复，返回动画完成并释放页面', (tester) async {
+      const channel = MethodChannel('window_manager');
+      final messenger = tester.binding.defaultBinaryMessenger
+        ..setMockMethodCallHandler(
+          channel,
+          (call) async => call.method == 'isMinimized' ? false : null,
+        );
+      addTearDown(() async {
+        await tester.pumpWidget(const SizedBox());
+        tester.binding.handleAppLifecycleStateChanged(
+          AppLifecycleState.resumed,
+        );
+        messenger.setMockMethodCallHandler(channel, null);
+      });
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      final navigator = GlobalKey<NavigatorState>();
+      var disposed = false;
+      bool? tickerEnabled;
+      await tester.pumpWidget(
+        MaterialApp(
+          navigatorKey: navigator,
+          builder: (_, child) => DesktopWindowTheme(child: child!),
+          home: const Scaffold(body: Text('直播列表')),
+        ),
+      );
+      await tester.pump();
+      unawaited(
+        navigator.currentState!.push<void>(
+          MaterialPageRoute(
+            builder: (_) => _ExitProbe(
+              onDispose: () => disposed = true,
+              child: Builder(
+                builder: (context) {
+                  tickerEnabled = TickerMode.valuesOf(context).enabled;
+                  return Scaffold(
+                    body: TextButton(
+                      onPressed: () => Navigator.of(context).pop(),
+                      child: const Text('返回直播列表'),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await _windowEvent(tester, 'maximize');
+      await _windowEvent(tester, 'minimize');
+      expect(tickerEnabled, isFalse);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
+      await tester.pump();
+      await _windowEvent(tester, restoredEvent);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      await tester.pump();
+
+      await tester.tap(find.text('返回直播列表'));
+      await tester.pump();
+      await tester.pump(const Duration(seconds: 1));
+      await tester.pump();
+      expect(disposed, isTrue, reason: '恢复后返回动画必须结束，页面才能释放播放器');
+      expect(find.text('直播列表'), findsOneWidget);
+      expect(tickerEnabled, isTrue);
+      expect(tester.takeException(), isNull);
+    }, skip: !Platform.isWindows);
+  }
+}
+
+Future<void> _windowEvent(WidgetTester tester, String event) async {
+  const channel = MethodChannel('window_manager');
+  final completed = Completer<void>();
+  tester.binding.defaultBinaryMessenger.handlePlatformMessage(
+    channel.name,
+    channel.codec.encodeMethodCall(MethodCall('onEvent', {'eventName': event})),
+    (_) => completed.complete(),
+  );
+  await completed.future;
+  await tester.pump();
+}
+
+class _ExitProbe extends StatefulWidget {
+  const _ExitProbe({required this.onDispose, required this.child});
+
+  final VoidCallback onDispose;
+  final Widget child;
+
+  @override
+  State<_ExitProbe> createState() => _ExitProbeState();
+}
+
+class _ExitProbeState extends State<_ExitProbe> {
+  @override
+  Widget build(BuildContext context) => widget.child;
+
+  @override
+  void dispose() {
+    widget.onDispose();
+    super.dispose();
+  }
 }
