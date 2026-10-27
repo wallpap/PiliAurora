@@ -9,6 +9,7 @@ import 'package:pili_aurora/services/diagnostics/diagnostics.dart';
 import 'package:pili_aurora/services/diagnostics/window_coordinator.dart';
 import 'package:pili_aurora/services/desktop_playback_layout.dart';
 import 'package:pili_aurora/services/desktop_playback_request.dart';
+import 'package:pili_aurora/services/windows_update_exit.dart';
 import 'package:pili_aurora/utils/storage.dart';
 import 'package:screen_retriever/screen_retriever.dart';
 import 'package:window_manager/window_manager.dart';
@@ -375,6 +376,7 @@ class DesktopPlaybackWindows with WindowListener {
   }
 
   Future<void> watchPlayerWindow() async {
+    WindowsUpdateExit.setHandler(onWindowClose);
     windowManager.addListener(this);
     await windowManager.setPreventClose(true);
   }
@@ -621,6 +623,7 @@ class DesktopPlaybackWindows with WindowListener {
       await _childSubscription?.cancel();
     });
     windowManager.removeListener(this);
+    WindowsUpdateExit.setHandler(null);
     await windowManager.destroy();
   }
 }

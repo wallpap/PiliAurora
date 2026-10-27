@@ -2,6 +2,8 @@
 
 #include <optional>
 #include <utility>
+#include <flutter/method_channel.h>
+#include <flutter/standard_method_codec.h>
 
 #include "flutter/generated_plugin_registrant.h"
 
@@ -55,6 +57,20 @@ LRESULT
 FlutterWindow::MessageHandler(HWND hwnd, UINT const message,
                               WPARAM const wparam,
                               LPARAM const lparam) noexcept {
+  // 更新退出先通知 Dart 保存进度和释放播放器，绕过普通关闭的托盘设置。
+  if ((lparam & ENDSESSION_CLOSEAPP) != 0) {
+    if (message == WM_QUERYENDSESSION) {
+      return TRUE;
+    }
+    if (message == WM_ENDSESSION && wparam && flutter_controller_) {
+      flutter::MethodChannel<flutter::EncodableValue> channel(
+          flutter_controller_->engine()->messenger(), "piliaurora/update_exit",
+          &flutter::StandardMethodCodec::GetInstance());
+      channel.InvokeMethod("closeForUpdate", nullptr);
+      return 0;
+    }
+  }
+
   // Give Flutter, including plugins, an opportunity to handle window messages.
   if (flutter_controller_) {
     std::optional<LRESULT> result =

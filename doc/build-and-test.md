@@ -64,9 +64,9 @@ Android 通用 APK 位于 `build/app/outputs/flutter-apk/app-release.apk`，Wind
 
 Windows 的 fastforge 打包前置入口为 `tool/packaging/prepare_windows_package.py`，先装配并校验定制引擎，再生成 `piliaurora-runtime.sha256`。安装版和便携版携带相同的程序文件清单；Inno 模板要求该清单存在。覆盖安装完成后，旧清单中已退役且摘要未改变的程序文件会被清理，用户修改的文件和未登记文件会保留。从尚无清单的旧安装升级时，开始记录本次包的文件归属。
 
-安装器通过 Windows Restart Manager 检测程序文件占用，沿用相同 AppId 的历史安装目录，并为快捷方式写入与运行进程一致的 `PiliAurora.Desktop` 标识。版本检查按 `tag_name` 的数字版本比较，跳过草稿与预发布；相同版本的构建时间或 build 后缀变化不触发更新提示。
+安装器通过 Windows Restart Manager 检测程序文件占用。应用收到已确认的更新退出请求后，通过原生消息通道进入退出流程，保存主窗口和播放小窗的本地进度并释放播放器，跳过关闭窗口时的托盘驻留设置；安装器保留强制关闭能力，用于拒绝退出的旧版本或无响应的进程。更新前应保存当前操作并结束播放。安装器沿用相同 AppId 的历史安装目录，并为快捷方式写入与运行进程一致的 `PiliAurora.Desktop` 标识。版本检查按 `tag_name` 的数字版本比较，跳过草稿与预发布；相同版本的构建时间或 build 后缀变化不触发更新提示。
 
-覆盖安装回归使用独占临时目录，编译并运行关闭系统集成的安装器夹具，验证程序更新、退役文件清理、用户文件保留和路径边界；Windows 需要 PATH 中的 Inno Setup 6：
+覆盖安装回归使用独占临时目录，编译并运行关闭系统集成的安装器夹具，验证程序更新、退役文件清理、用户文件保留和路径边界。进程关闭夹具覆盖正常退出、隐藏驻留、多个拒绝退出的独立进程与 DLL 占用，并检查其他目录的同名程序保持运行、更新无需重启 Windows；该夹具需要 .NET Framework C# 编译器。Windows 需要 PATH 中的 Inno Setup 6：
 
 ```powershell
 python -m unittest discover -s tool/packaging -p '*_test.py' -v

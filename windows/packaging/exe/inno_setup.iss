@@ -22,7 +22,8 @@ PrivilegesRequired={{PRIVILEGES_REQUIRED}}
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 UsePreviousAppDir=yes
-CloseApplications=yes
+; 旧版本可能拒绝会话结束或仍驻留托盘，由 Restart Manager 强制释放占用。
+CloseApplications=force
 CloseApplicationsFilter=*.exe,*.dll
 RestartApplications=no
 SetupMutex=PiliAurora.Setup

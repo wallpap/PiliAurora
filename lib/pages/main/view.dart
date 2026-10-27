@@ -17,6 +17,7 @@ import 'package:pili_aurora/plugin/pl_player/controller.dart';
 import 'package:pili_aurora/plugin/pl_player/playback/playback_contracts.dart';
 import 'package:pili_aurora/plugin/pl_player/playback/playback_session.dart';
 import 'package:pili_aurora/services/desktop_playback_windows.dart';
+import 'package:pili_aurora/services/windows_update_exit.dart';
 import 'package:pili_aurora/utils/android/android_helper.dart';
 import 'package:pili_aurora/utils/app_scheme.dart';
 import 'package:pili_aurora/utils/device_utils.dart';
@@ -65,6 +66,7 @@ class _MainAppState extends PopScopeState<MainApp>
     super.initState();
     addObserverMobile(this);
     if (PlatformUtils.isDesktop) {
+      if (Platform.isWindows) WindowsUpdateExit.setHandler(_onClose);
       windowManager
         ..addListener(this)
         ..setPreventClose(true);
@@ -122,6 +124,7 @@ class _MainAppState extends PopScopeState<MainApp>
 
   @override
   void dispose() {
+    if (Platform.isWindows) WindowsUpdateExit.setHandler(null);
     if (PlatformUtils.isDesktop) {
       _disposeTray();
       windowManager.removeListener(this);
@@ -180,6 +183,17 @@ class _MainAppState extends PopScopeState<MainApp>
     if (Platform.isWindows) {
       // 小窗关闭会回传播放进度和窗口位置，先处理完再关闭存储。
       await DesktopPlaybackWindows.instance.closeAll();
+      final player = PlPlayerController.instance;
+      if (player != null) {
+        // 主窗口退出不会经过视频页面卸载，先保存本地进度再释放播放器。
+        if (player.isFileSource && player.cid != null) {
+          await GStorage.watchProgress.put(
+            player.cid.toString(),
+            player.positionInMilliseconds,
+          );
+        }
+        await player.shutdownPlaybackFacade();
+      }
     }
     await GStorage.compact();
     await GStorage.close();
