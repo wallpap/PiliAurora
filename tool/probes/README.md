@@ -51,6 +51,21 @@ uv run --locked python tool/probes/playback/native_media_smoke.py --library buil
 
 该检查通过 Windows libmpv、`vo=null`、`ao=null` 和软件解码运行，视频帧依据 mpv 的 trace 日志计数，覆盖 Windows 软件解码这一条路径。Android GPU/MediaCodec、扬声器输出和完整应用性能由对应平台验收，画面和硬件解码在目标设备上验证。
 
+## Windows 独立音轨断流回归
+
+`playback/native_audio_stream_recovery.py` 在127.0.0.1临时HTTP端口提供合成WAV，发送4秒音频后通过RST终止连接，
+复现curl传输失败、音频缓存耗尽但视频继续、缓存内向右跳转仍无声，再解除故障并执行 `audio-reload`。
+输入为至少20秒的本地连续视频，探针关闭mpv原生重试以缩短故障注入窗口，使用现有libmpv和软件解码。
+
+```powershell
+python tool/probes/playback/native_audio_stream_recovery.py --library build/windows/x64/runner/Release/libmpv-2.dll --video <本地视频文件>
+```
+
+入口检查跳转期间未新建音频连接、视频时间持续推进，以及重连后音频时间恢复并保留播放状态。
+报告默认保存到 `build/native-audio-stream-recovery/<时间戳>/summary.json`；`--output` 指定不存在的目录。
+任一前置场景未复现或恢复失败返回非零。合成音轨用于时钟检查，输出采用 `vo=null`、`ao=null`；
+应用的恢复监视、缓存等待和重试预算由 `test/plugin/pl_player/playback/audio_recovery_test.dart` 覆盖，扬声器由实机验收。
+
 ## 暂停旋转探针
 
 `paused_rotation.dart` 使用本地视频检查暂停后横屏、竖屏和再次横屏时的整帧显示。配套的 `paused_rotation_probe.py` 会检查四象限、视频白边和暂停状态。输入文件应使用对应的测试图视频。

@@ -11,11 +11,15 @@ void main() {
   late int notices;
   late int now;
   late List<Object> errors;
+  late List<String> diagnostics;
+  late List<AudioRecoveryStatus> statuses;
 
   setUp(() {
     playback = _Playback();
     repairs = reloads = notices = now = 0;
     errors = [];
+    diagnostics = [];
+    statuses = [];
     recovery = PlaybackAudioRecovery(
       readState: () => playback.attached ? playback.state : null,
       repairAudio: () async {
@@ -24,6 +28,8 @@ void main() {
       },
       reload: () async => reloads++,
       onError: errors.add,
+      onDiagnostic: diagnostics.add,
+      onStatusChanged: statuses.add,
       onExhausted: () => notices++,
       elapsedMilliseconds: () => now,
     );
@@ -41,6 +47,83 @@ void main() {
     if (healthy) playback.audioPts = playback.position.inSeconds.toDouble();
     await tester.pump(const Duration(seconds: 2));
   }
+
+  Future<void> verifyRecovery(WidgetTester tester) async {
+    for (var i = 0; i < 4; i++) {
+      await tick(tester);
+    }
+  }
+
+  testWidgets('音轨命令返回后等待时钟恢复，短暂空窗不重载视频', (tester) async {
+    playback.audioPts = null;
+    audioError();
+    await tick(tester);
+    expect(repairs, 1);
+    expect(statuses.last, AudioRecoveryStatus.recovering);
+    expect(diagnostics, contains('audio.recovery.track.accepted'));
+    expect(diagnostics, isNot(contains('audio.recovery.verified')));
+    for (var i = 0; i < 3; i++) {
+      await tick(tester);
+      expect(reloads, 0);
+    }
+    await tick(tester, healthy: true);
+    expect(reloads, 0);
+    expect(diagnostics, contains('audio.recovery.verified'));
+    expect(statuses.last, AudioRecoveryStatus.idle);
+    recovery.dispose();
+  });
+
+  testWidgets('恢复观察按有效播放计时，暂停缓冲和拖动不消耗预算', (tester) async {
+    playback.audioPts = null;
+    audioError();
+    await tick(tester);
+    await tick(tester);
+    for (final waiting in [false, true]) {
+      playback
+        ..playing = waiting
+        ..waiting = waiting;
+      recovery.onPlaybackChanged();
+      now += 60000;
+      await tester.pump(const Duration(minutes: 1));
+      playback
+        ..playing = true
+        ..waiting = false;
+      recovery.onPlaybackChanged();
+      await tick(tester);
+      expect(reloads, 0);
+    }
+    await tick(tester);
+    expect(reloads, 1);
+    expect(notices, 0);
+    await verifyRecovery(tester);
+    expect(notices, 1);
+    recovery.dispose();
+  });
+
+  testWidgets('重复日志不延长音轨恢复观察，失败后按预算升级', (tester) async {
+    playback.audioPts = null;
+    audioError();
+    await tick(tester);
+    for (var i = 0; i < 3; i++) {
+      audioError();
+      await tick(tester);
+      expect(reloads, 0);
+    }
+    audioError();
+    await tick(tester);
+    expect(repairs, 1);
+    expect(reloads, 1);
+    recovery.dispose();
+  });
+
+  testWidgets('没有新错误日志时，原生音频停滞信号仍能启动恢复', (tester) async {
+    playback.audioPts = null;
+    recovery.observe();
+    await tick(tester);
+    expect(repairs, 1);
+    expect(statuses.last, AudioRecoveryStatus.recovering);
+    recovery.dispose();
+  });
 
   testWidgets('网络截断后继续消耗音频缓存，保持画面和声音', (tester) async {
     recovery.onLog(
@@ -61,6 +144,27 @@ void main() {
     recovery.dispose();
   });
 
+  testWidgets('curl读取终止后缓存可播放超过30秒，耗尽及缓存内跳转仍恢复音轨', (tester) async {
+    recovery.onLog(
+      prefix: 'curl',
+      level: 'error',
+      message: 'transfer failed: Failure when receiving data from the peer',
+    );
+    for (var i = 0; i < 25; i++) {
+      await tick(tester, healthy: true);
+    }
+    expect(repairs, 0);
+    expect(reloads, 0);
+    // 视频缓存继续播放；音频时间停住，缓存内向右跳转也未产生新的错误。
+    playback.position += const Duration(seconds: 3);
+    recovery.onPlaybackChanged();
+    await tick(tester);
+    expect(repairs, 1);
+    await verifyRecovery(tester);
+    expect(reloads, 1);
+    recovery.dispose();
+  });
+
   testWidgets('单个损坏音频包后解码恢复，取消侵入式兜底', (tester) async {
     audioError();
     for (var i = 0; i < 16; i++) {
@@ -68,6 +172,62 @@ void main() {
     }
     expect(repairs, 0);
     expect(reloads, 0);
+    recovery.dispose();
+  });
+
+  testWidgets('音轨重连后持续健康，后续断流可以再次恢复', (tester) async {
+    void readFailure() => recovery.onLog(
+      prefix: 'curl',
+      level: 'error',
+      message: 'transfer failed: Failure when receiving data from the peer',
+    );
+    playback.audioPts = null;
+    readFailure();
+    await tick(tester);
+    expect(repairs, 1);
+    for (var i = 0; i < 16; i++) {
+      await tick(tester, healthy: true);
+    }
+    expect(reloads, 0);
+    playback.audioPts = null;
+    readFailure();
+    await tick(tester);
+    expect(repairs, 2);
+    expect(reloads, 0);
+    recovery.dispose();
+  });
+
+  testWidgets('重连回执前再次断流，残余缓存不能清除新故障', (tester) async {
+    recovery.dispose();
+    final pending = Completer<bool>();
+    recovery = PlaybackAudioRecovery(
+      readState: () => playback.state,
+      repairAudio: () {
+        repairs++;
+        return pending.future;
+      },
+      reload: () async => reloads++,
+      onError: errors.add,
+      elapsedMilliseconds: () => now,
+    );
+    void readFailure() => recovery.onLog(
+      prefix: 'curl',
+      level: 'error',
+      message: 'transfer failed: Failed sending data to the peer',
+    );
+    playback.audioPts = null;
+    readFailure();
+    await tick(tester);
+    expect(repairs, 1);
+    readFailure();
+    pending.complete(true);
+    for (var i = 0; i < 25; i++) {
+      await tick(tester, healthy: true);
+    }
+    expect(reloads, 0);
+    await tick(tester);
+    expect(repairs, 1);
+    expect(reloads, 1);
     recovery.dispose();
   });
 
@@ -97,9 +257,9 @@ void main() {
     await tick(tester);
     expect(repairs, 1);
     audioError();
-    await tick(tester);
+    await verifyRecovery(tester);
     expect(reloads, 1);
-    await tick(tester);
+    await verifyRecovery(tester);
     expect(notices, 1);
     for (var i = 0; i < 20; i++) {
       audioError();
@@ -236,6 +396,8 @@ void main() {
     await tick(tester);
     expect(repairs, 0);
     expect(reloads, 0);
+    recovery.observe();
+    expect(statuses.last, AudioRecoveryStatus.failed);
     recovery.reset();
     audioError();
     await tick(tester);

@@ -39,6 +39,7 @@ import 'package:pili_aurora/pages/video/post_panel/popup_menu_text.dart';
 import 'package:pili_aurora/pages/video/post_panel/view.dart';
 import 'package:pili_aurora/pages/video/widgets/header_control.dart';
 import 'package:pili_aurora/plugin/pl_player/controller.dart';
+import 'package:pili_aurora/plugin/pl_player/playback/audio_recovery.dart';
 import 'package:pili_aurora/plugin/pl_player/playback/super_resolution_policy.dart';
 import 'package:pili_aurora/plugin/pl_player/models/bottom_control_type.dart';
 import 'package:pili_aurora/plugin/pl_player/widgets/desktop_volume_control.dart';
@@ -2219,15 +2220,34 @@ class _PLVideoPlayerState extends State<PLVideoPlayer>
         ListenableBuilder(
           listenable: _videoPresentation,
           builder: (context, _) => Obx(() {
+            final recovery = plPlayerController.audioRecoveryStatus.value;
+            final recoveringAudio =
+                recovery != AudioRecoveryStatus.idle &&
+                plPlayerController.wantsToPlay &&
+                !plPlayerController.isMuted;
             if (plPlayerController.dataStatus.loading ||
+                recoveringAudio ||
+                plPlayerController.isVideoStalled.value ||
                 _waitingForVideoFrame ||
                 plPlayerController.dataStatus.error ||
                 _videoOutputHandoff.image != null ||
                 (plPlayerController.isBuffering.value &&
                     plPlayerController.playerStatus.isPlaying)) {
               return PlayerLoadingIndicator(
-                failed: plPlayerController.dataStatus.error,
-                buffered: plPlayerController.buffered.value,
+                failed:
+                    plPlayerController.dataStatus.error ||
+                    recovery == AudioRecoveryStatus.failed,
+                message: recoveringAudio
+                    ? recovery == AudioRecoveryStatus.failed
+                          ? '声音恢复失败，点击重试'
+                          : '正在恢复声音...'
+                    : plPlayerController.isVideoStalled.value
+                    ? '正在恢复画面...'
+                    : null,
+                buffered:
+                    (plPlayerController.buffered.value -
+                            plPlayerController.position.value)
+                        .clamp(0, 1 << 30),
                 onRetry: plPlayerController.refreshPlayer,
               );
             } else {

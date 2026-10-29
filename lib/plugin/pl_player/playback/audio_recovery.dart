@@ -12,6 +12,8 @@ typedef AudioRecoveryState = ({
   double audioDelay,
 });
 
+enum AudioRecoveryStatus { idle, recovering, failed }
+
 /// 出错后观察音频时钟；依次尝试外部音轨重连和一次整段重载。
 class PlaybackAudioRecovery {
   PlaybackAudioRecovery({
@@ -21,6 +23,7 @@ class PlaybackAudioRecovery {
     required this.onError,
     this.onDiagnostic,
     this.onExhausted,
+    this.onStatusChanged,
     this.elapsedMilliseconds,
   });
 
@@ -31,12 +34,14 @@ class PlaybackAudioRecovery {
   final void Function(Object error) onError;
   final void Function(String action)? onDiagnostic;
   final void Function()? onExhausted;
+  final void Function(AudioRecoveryStatus status)? onStatusChanged;
   final int Function()? elapsedMilliseconds;
   final _clock = Stopwatch()..start();
   Timer? _timer;
   AudioRecoveryState? _previous;
+  int? _previousAtMs;
   int _generation = 0;
-  int _watchUntilMs = 0;
+  int? _verificationRemainingMs;
   int? _healthySinceMs;
   bool _watching = false;
   bool _inFlight = false;
@@ -45,10 +50,33 @@ class PlaybackAudioRecovery {
   bool _reloadAttempted = false;
   bool _notified = false;
   bool _decoderFailed = false;
+  bool _streamReadFailed = false;
+  int _streamReadFailureRevision = 0;
   bool _permissionDenied = false;
   bool _disposed = false;
+  AudioRecoveryStatus _status = AudioRecoveryStatus.idle;
   int get _nowMs => elapsedMilliseconds?.call() ?? _clock.elapsedMilliseconds;
   bool get isActive => !_disposed && readState() != null;
+
+  /// 原生健康信号也可启动观察，覆盖断流后没有新错误日志的情况。
+  void observe() {
+    if (_disposed) return;
+    if (_permissionDenied) {
+      final state = readState();
+      if (state != null && _canObserve(state)) {
+        _setStatus(AudioRecoveryStatus.failed);
+      }
+      return;
+    }
+    _watching = true;
+    _schedule();
+  }
+
+  void _setStatus(AudioRecoveryStatus status) {
+    if (_status == status) return;
+    _status = status;
+    onStatusChanged?.call(status);
+  }
 
   void onLog({
     required String prefix,
@@ -65,15 +93,19 @@ class PlaybackAudioRecovery {
     final audioError =
         prefix == 'ffmpeg/audio' ||
         (prefix == 'ad' && message == 'Error decoding audio.');
-    if (!audioError &&
-        !isPlaybackStreamReadFailure(
-          prefix: prefix,
-          level: level,
-          message: message,
-        )) {
+    final readFailure = isPlaybackStreamReadFailure(
+      prefix: prefix,
+      level: level,
+      message: message,
+    );
+    if (!audioError && !readFailure) {
       return;
     }
     if (readState() == null) return;
+    if (readFailure) {
+      _streamReadFailed = true;
+      _streamReadFailureRevision++;
+    }
     if (prefix == 'ad' && message == 'Error decoding audio.') {
       _decoderFailed = true;
     }
@@ -82,7 +114,6 @@ class PlaybackAudioRecovery {
       _healthySinceMs = null;
     }
     _watching = true;
-    _watchUntilMs = _nowMs + 30000;
     _schedule();
   }
 
@@ -96,8 +127,8 @@ class PlaybackAudioRecovery {
     _timer?.cancel();
     _timer = null;
     _previous = null;
+    _previousAtMs = null;
     _healthySinceMs = null;
-    _watchUntilMs = _nowMs + 30000;
     _schedule();
   }
 
@@ -117,6 +148,7 @@ class PlaybackAudioRecovery {
     }
     if (!_canObserve(state)) return;
     _previous ??= state;
+    _previousAtMs ??= _nowMs;
     _timer = Timer(Duration(seconds: _notified ? 10 : 2), _check);
   }
 
@@ -129,16 +161,24 @@ class PlaybackAudioRecovery {
     }
     if (!_canObserve(state)) {
       _previous = null;
+      _previousAtMs = null;
       _healthySinceMs = null;
       return;
     }
     final previous = _previous;
+    final observedMs = _previousAtMs == null ? 0 : _nowMs - _previousAtMs!;
     _previous = state;
+    _previousAtMs = _nowMs;
     if (previous == null ||
         (state.position <= previous.position && !_decoderFailed)) {
       _healthySinceMs = null;
       _schedule();
       return;
+    }
+    if (_verificationRemainingMs case final remaining?) {
+      _verificationRemainingMs = observedMs >= remaining
+          ? 0
+          : remaining - observedMs;
     }
     final pts = state.audioPts;
     final audioProgress =
@@ -154,22 +194,30 @@ class PlaybackAudioRecovery {
             1.5;
     if (audioProgress && inSync) {
       _decoderFailed = false;
+      _setStatus(AudioRecoveryStatus.idle);
+      if (_verificationRemainingMs == 0) {
+        _verificationRemainingMs = null;
+        onDiagnostic?.call('audio.recovery.verified');
+      }
       _healthySinceMs ??= _nowMs;
-      if (_nowMs - _healthySinceMs! >= 30000) {
+      // 读取已经终止时，健康时钟仍可能来自残留缓存；等到重连后再确认恢复。
+      if (!_streamReadFailed && _nowMs - _healthySinceMs! >= 30000) {
         reset();
         onDiagnostic?.call('audio.recovery.healthy');
-        return;
-      }
-      if (!_audioAttempted && !_reloadAttempted && _nowMs >= _watchUntilMs) {
-        _watching = false;
-        _previous = null;
         return;
       }
       _schedule();
       return;
     }
     _healthySinceMs = null;
+    // 原生命令返回后继续等待音频时钟；暂停、缓冲和 seek 期间不计时。
+    if ((_verificationRemainingMs ?? 0) > 0) {
+      _schedule();
+      return;
+    }
+    _verificationRemainingMs = null;
     if (_audioAttempted && _reloadAttempted) {
+      _setStatus(AudioRecoveryStatus.failed);
       if (!_notified) {
         _notified = true;
         onDiagnostic?.call('audio.recovery.exhausted');
@@ -178,6 +226,7 @@ class PlaybackAudioRecovery {
       _schedule();
       return;
     }
+    _setStatus(AudioRecoveryStatus.recovering);
     unawaited(_recover());
   }
 
@@ -187,6 +236,7 @@ class PlaybackAudioRecovery {
     _playbackChanged = false;
     try {
       if (!_audioAttempted) {
+        final readFailureRevision = _streamReadFailureRevision;
         final repair = repairAudio();
         if (repair == null) return;
         _audioAttempted = true;
@@ -194,7 +244,11 @@ class PlaybackAudioRecovery {
         final supported = await repair.timeout(const Duration(seconds: 8));
         if (_disposed || generation != _generation) return;
         if (supported) {
-          onDiagnostic?.call('audio.recovery.track.completed');
+          if (readFailureRevision == _streamReadFailureRevision) {
+            _streamReadFailed = false;
+          }
+          _verificationRemainingMs = 8000;
+          onDiagnostic?.call('audio.recovery.track.accepted');
           return;
         }
         if (_playbackChanged) return;
@@ -207,7 +261,8 @@ class PlaybackAudioRecovery {
       onDiagnostic?.call('audio.recovery.media.begin');
       await attempt;
       if (!_disposed && generation == _generation) {
-        onDiagnostic?.call('audio.recovery.media.completed');
+        _verificationRemainingMs = 8000;
+        onDiagnostic?.call('audio.recovery.media.accepted');
       }
     } catch (error) {
       if (!_disposed && generation == _generation) onError(error);
@@ -215,6 +270,7 @@ class PlaybackAudioRecovery {
       if (!_disposed && generation == _generation) {
         _inFlight = false;
         _previous = null;
+        _previousAtMs = null;
         _schedule();
       }
     }
@@ -225,6 +281,8 @@ class PlaybackAudioRecovery {
     _timer?.cancel();
     _timer = null;
     _previous = null;
+    _previousAtMs = null;
+    _verificationRemainingMs = null;
     _healthySinceMs = null;
     _watching = false;
     _inFlight = false;
@@ -233,7 +291,9 @@ class PlaybackAudioRecovery {
     _reloadAttempted = false;
     _notified = false;
     _decoderFailed = false;
+    _streamReadFailed = false;
     _permissionDenied = false;
+    _setStatus(AudioRecoveryStatus.idle);
   }
 
   void dispose() {

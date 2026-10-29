@@ -16,6 +16,7 @@ class PlaybackNetworkRecovery {
     required this.reload,
     required this.onError,
     this.onRetry,
+    this.videoProgressing,
     this.delay = const Duration(seconds: 3),
     this.cooldown = const Duration(seconds: 10),
   });
@@ -25,6 +26,7 @@ class PlaybackNetworkRecovery {
   final Future<void>? Function(bool tryNextCdn) reload;
   final void Function(Object error) onError;
   final void Function()? onRetry;
+  final bool Function()? videoProgressing;
   final Duration delay;
   final Duration cooldown;
   final _clock = Stopwatch()..start();
@@ -34,8 +36,13 @@ class PlaybackNetworkRecovery {
   bool _allowNativeRecovery = true;
   bool _waitForCachedPlayback = false;
   bool _tryNextCdn = false;
+  bool _requireVideoProgress = false;
   RecoveryState? _failureState;
+  RecoveryState? _previousState;
   (int, bool)? _scheduledAttempt;
+  bool _inFlight = false;
+  bool _permissionDenied = false;
+  int _stalledChecks = 0;
   bool _disposed = false;
   bool get isActive => !_disposed && isCurrent();
 
@@ -47,13 +54,15 @@ class PlaybackNetworkRecovery {
     bool tryNextCdn = false,
     int candidate = 0,
     bool throttle = false,
+    bool requireVideoProgress = false,
   }) {
-    if (_disposed || !isCurrent()) return;
+    if (_disposed || _permissionDenied || _inFlight || !isCurrent()) return;
     if (_timer != null) {
       _requireEmptyBuffer &= requireEmptyBuffer;
       _allowNativeRecovery &= allowNativeRecovery;
       _waitForCachedPlayback |= waitForCachedPlayback;
       _tryNextCdn |= tryNextCdn;
+      _requireVideoProgress &= requireVideoProgress;
       if (!requireEmptyBuffer) _failureState = readState();
       return;
     }
@@ -67,22 +76,34 @@ class PlaybackNetworkRecovery {
     _allowNativeRecovery = allowNativeRecovery;
     _waitForCachedPlayback = waitForCachedPlayback;
     _tryNextCdn = tryNextCdn;
+    _requireVideoProgress = requireVideoProgress;
     _scheduledAttempt = throttle ? (candidate, requireEmptyBuffer) : null;
-    _failureState = requireEmptyBuffer && !waitForCachedPlayback
-        ? null
-        : readState();
+    _failureState = _previousState = readState();
+    _stalledChecks = 0;
     _timer = Timer(delay, _check);
   }
 
   void _check() {
     _timer = null;
-    if (_disposed || !isCurrent()) return;
+    if (_disposed || _permissionDenied || !isCurrent()) return;
+    if (_requireVideoProgress && videoProgressing?.call() != false) {
+      if (_scheduledAttempt case final key?) _attempted.remove(key);
+      return;
+    }
+    final state = readState();
+    if (state == null) return;
+    final lastCheck = _previousState;
+    _previousState = state;
+    final stalled =
+        state.buffering &&
+        lastCheck != null &&
+        state.position <= lastCheck.position &&
+        state.buffer <= lastCheck.buffer;
+    _stalledChecks = stalled ? _stalledChecks + 1 : 0;
     final previous = _failureState;
-    if (_allowNativeRecovery && !_requireEmptyBuffer && previous != null) {
-      final state = readState();
+    if (_allowNativeRecovery && previous != null) {
       // 新读入的数据需补足已消耗的时长，残余损坏包的少量推进仍要等待缓存耗尽。
-      if (state != null &&
-          !state.buffering &&
+      if (!state.buffering &&
           state.buffer > state.position &&
           state.position > previous.position &&
           state.buffer > previous.buffer &&
@@ -94,38 +115,49 @@ class PlaybackNetworkRecovery {
       }
     }
     if (_waitForCachedPlayback) {
-      final state = readState();
-      if (state == null) return;
       // 分离音视频可能由另一轨推进时钟；主视频缓存耗尽后再恢复画面。
-      if (state.buffer > state.position) {
+      // 缓冲状态下两次检查均无进展时，超前的缓存时间也可能无法继续播放。
+      if (state.buffer > state.position && !stalled) {
         _timer = Timer(delay, _check);
         return;
       }
     } else if (_requireEmptyBuffer) {
-      final state = readState();
-      if (state == null) return;
-      if (!hasExhaustedPlaybackBuffer(
-        buffering: state.buffering,
-        position: state.position,
-        buffer: state.buffer,
-      )) {
-        if (shouldDeferPlaybackNetworkRecovery(
-          buffering: state.buffering,
-          position: state.position,
-          buffer: state.buffer,
-        )) {
+      if (_stalledChecks < 2 &&
+          !hasExhaustedPlaybackBuffer(
+            buffering: state.buffering,
+            position: state.position,
+            buffer: state.buffer,
+          )) {
+        if (state.buffering || state.buffer > state.position) {
           _timer = Timer(delay, _check);
         }
         return;
       }
     }
-    final attempt = reload(_tryNextCdn);
-    if (attempt == null) {
-      _timer = Timer(delay, _check);
-      return;
+    unawaited(_reload());
+  }
+
+  Future<void> _reload() async {
+    _inFlight = true;
+    try {
+      final attempt = reload(_tryNextCdn);
+      if (attempt == null) {
+        _timer = Timer(delay, _check);
+        return;
+      }
+      if (_requireEmptyBuffer) onRetry?.call();
+      await attempt;
+    } catch (error) {
+      if (!_disposed) onError(error);
+    } finally {
+      _inFlight = false;
     }
-    if (_requireEmptyBuffer) onRetry?.call();
-    attempt.catchError(onError);
+  }
+
+  void stopForPermissionFailure() {
+    _permissionDenied = true;
+    _timer?.cancel();
+    _timer = null;
   }
 
   void dispose() {

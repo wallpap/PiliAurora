@@ -44,6 +44,7 @@ import 'package:pili_aurora/plugin/pl_player/playback/super_resolution_policy.da
 import 'package:pili_aurora/services/android_video_output_limit.dart';
 import 'package:pili_aurora/plugin/pl_player/playback/network_recovery.dart';
 import 'package:pili_aurora/plugin/pl_player/playback/audio_recovery.dart';
+import 'package:pili_aurora/plugin/pl_player/playback/progress_projection.dart';
 import 'package:pili_aurora/plugin/pl_player/playback/background_policy.dart';
 import 'package:pili_aurora/plugin/pl_player/utils/playback_network_recovery.dart';
 import 'package:pili_aurora/services/service_locator.dart';
@@ -127,10 +128,13 @@ class PlPlayerController
 
   final RxInt position = RxInt(0);
   final RxInt seekPosition = RxInt(0);
+  final _progressProjection = PlaybackProgressProjection();
   int get progress => isSeeking.value ? seekPosition.value : position.value;
 
   int get positionInMilliseconds =>
-      videoPlayerController?.state.position.inMilliseconds ?? 0;
+      processing || _progressProjection.awaitingPosition
+      ? position.value * 1000
+      : videoPlayerController?.state.position.inMilliseconds ?? 0;
 
   final RxInt buffered = RxInt(0);
 
@@ -255,6 +259,8 @@ class PlPlayerController
   late final RxBool flipY = false.obs;
 
   final RxBool isBuffering = true.obs;
+  final audioRecoveryStatus = AudioRecoveryStatus.idle.obs;
+  final isVideoStalled = false.obs;
 
   /// 全屏方向
   // ignore: unnecessary_getters_setters
@@ -913,10 +919,17 @@ class PlPlayerController
       volume.value = (desired.volume / 100).clamp(0.0, 1.0);
     }
     final wasBuffering = isBuffering.value;
+    if ((snapshot.phase == PlaybackPhase.loading ||
+            snapshot.phase == PlaybackPhase.recovering) &&
+        !dataStatus.loading) {
+      _progressProjection.begin(Duration(seconds: position.value));
+    }
     if (snapshot.actual.buffering case final buffering?) {
       isBuffering.value = buffering;
     }
-    if (snapshot.actual.duration case final actualDuration?) {
+    if (snapshot.actual.duration case final actualDuration?
+        when snapshot.phase == PlaybackPhase.ready &&
+            actualDuration > Duration.zero) {
       updateDuration(actualDuration);
     }
 
@@ -928,6 +941,29 @@ class PlPlayerController
       PlaybackPhase.failed => DataStatus.error,
       PlaybackPhase.closing || PlaybackPhase.disposed => DataStatus.none,
     };
+    if (snapshot.phase == PlaybackPhase.ready && player != null) {
+      _publishPlaybackPosition(player.state.position);
+    }
+    if (snapshot.phase == PlaybackPhase.ready &&
+        snapshot.capabilities.hasAudio == true &&
+        snapshot.actual.audioProgressing == false) {
+      _ensureAudioRecovery()?.observe();
+    }
+    isVideoStalled.value =
+        snapshot.phase == PlaybackPhase.ready &&
+        snapshot.intent.playing &&
+        snapshot.actual.playing == true &&
+        snapshot.actual.seeking != true &&
+        !desired.audioOnly &&
+        snapshot.capabilities.hasVideo == true &&
+        snapshot.actual.videoProgressing == false;
+    if (isVideoStalled.value) {
+      _recoverPlaybackNetwork(
+        requireEmptyBuffer: false,
+        allowNativeRecovery: false,
+        requireVideoProgress: true,
+      );
+    }
     final loadId = snapshot.loadId;
     if (snapshot.phase == PlaybackPhase.ready &&
         loadId != null &&
@@ -1098,6 +1134,7 @@ class PlPlayerController
     VideoType? videoType,
   }) {
     if (!owner.isActive) return;
+    final sameContent = _currentPlan?.contentKey == plan.contentKey;
     activatePlaybackOwner(owner);
     _networkRecovery?.dispose();
     _networkRecovery = null;
@@ -1138,7 +1175,15 @@ class PlPlayerController
             width: metadataWidth,
             height: plan.metadata?.height ?? metadataWidth,
           );
-    position.value = buffered.value = plan.startPosition?.inSeconds ?? 0;
+    final initialPosition =
+        plan.reloadPosition ??
+        plan.startPosition ??
+        (sameContent ? Duration(seconds: position.value) : Duration.zero);
+    _progressProjection.begin(initialPosition);
+    position.value = buffered.value = initialPosition.inSeconds;
+    if (!sameContent || plan.timeline.duration != null) {
+      updateDuration(plan.timeline.duration ?? Duration.zero);
+    }
   }
 
   Future<LoadResult> loadPlaybackPlan({
@@ -1361,6 +1406,8 @@ class PlPlayerController
     bool requireEmptyBuffer = true,
     bool allowNativeRecovery = true,
     bool waitForCachedPlayback = false,
+    bool permissionDenied = false,
+    bool requireVideoProgress = false,
   }) {
     final plan = currentPlaybackPlan;
     if (plan == null || !plan.source.isNetwork) return;
@@ -1389,11 +1436,22 @@ class PlPlayerController
         automaticRecovery: true,
       ),
       onError: Utils.reportError,
+      videoProgressing: () {
+        final snapshot = _session.currentSnapshot;
+        return !snapshot.intent.playing ||
+            snapshot.actual.playing != true ||
+            snapshot.actual.seeking == true ||
+            snapshot.actual.videoProgressing != false;
+      },
       onRetry: () => SmartDialog.showToast(
         '视频链接打开失败，重试中',
         displayTime: const Duration(milliseconds: 500),
       ),
     );
+    if (permissionDenied) {
+      _networkRecovery!.stopForPermissionFailure();
+      return;
+    }
     _networkRecovery!.schedule(
       requireEmptyBuffer: !isLive && requireEmptyBuffer,
       allowNativeRecovery: allowNativeRecovery,
@@ -1401,11 +1459,15 @@ class PlPlayerController
       tryNextCdn: true,
       candidate: Pref.enableMultiCdn ? plan.source.candidateIndex : 0,
       throttle: !isLive,
+      requireVideoProgress: requireVideoProgress,
     );
   }
 
   void _observePlaybackAudio(PlayerLog event) {
-    if (isFileSource || processing) return;
+    if (isFileSource ||
+        (processing && !isPlaybackPermissionFailure(event.text))) {
+      return;
+    }
     if (event.level != 'error' && event.level != 'fatal') return;
     if (event.prefix != 'ffmpeg/audio' &&
         event.prefix != 'ad' &&
@@ -1417,6 +1479,16 @@ class PlPlayerController
         )) {
       return;
     }
+    final recovery = _ensureAudioRecovery();
+    recovery?.onLog(
+      prefix: event.prefix,
+      level: event.level,
+      message: event.text,
+    );
+  }
+
+  PlaybackAudioRecovery? _ensureAudioRecovery() {
+    if (isFileSource) return null;
     final plan = _currentPlan;
     if (plan == null ||
         (plan.source.currentAudioSource?.isNotEmpty != true &&
@@ -1424,7 +1496,7 @@ class PlPlayerController
                   (track) => int.tryParse(track.id) != null,
                 ) !=
                 true)) {
-      return;
+      return null;
     }
     final revision = _session.revision;
     if (_audioRecovery?.isActive == false) {
@@ -1481,6 +1553,10 @@ class PlPlayerController
         action,
         level: DiagnosticLogLevel.warning,
       ),
+      onStatusChanged: (status) {
+        audioRecoveryStatus.value = status;
+        _updatePlaybackState();
+      },
       onError: (error) => _diagnostics?.event(
         'audio.recovery.failed',
         level: DiagnosticLogLevel.warning,
@@ -1488,11 +1564,7 @@ class PlPlayerController
       ),
       onExhausted: () => SmartDialog.showToast('声音恢复失败，可尝试重新播放'),
     );
-    _audioRecovery!.onLog(
-      prefix: event.prefix,
-      level: event.level,
-      message: event.text,
-    );
+    return _audioRecovery;
   }
 
   // 首次加载倍速、shader 与音轨配置均随 PlaybackPlan 提交。
@@ -1556,7 +1628,10 @@ class PlPlayerController
       isLive,
       position: position ?? player.state.position,
       speed: playbackSpeed,
-      loading: dataStatus.loading,
+      loading:
+          dataStatus.loading ||
+          isVideoStalled.value ||
+          audioRecoveryStatus.value == AudioRecoveryStatus.recovering,
       debugLabel: debugLabel,
     );
   }
@@ -1654,6 +1729,9 @@ class PlPlayerController
         _audioRecovery?.onPlaybackChanged();
       }),
       stream.log.listen((event) {
+        if (isPlaybackPermissionFailure(event.text)) {
+          _recoverPlaybackNetwork(permissionDenied: true);
+        }
         _observePlaybackAudio(event);
         _androidDecodeRecovery?.onLog(
           prefix: event.prefix,
@@ -1684,36 +1762,18 @@ class PlPlayerController
       stream.completed.listen((_) {}),
 
       /// position
-      stream.position.listen((Duration position) {
-        final posInSeconds = position.inSeconds;
-
-        if (posInSeconds != this.position.value) {
-          if (posInSeconds == 0 && playerStatus.isPlaying) {
-            _updatePlaybackState(position: position);
-          }
-
-          this.position.value = posInSeconds;
-
-          makeHeartBeat(posInSeconds);
-        }
-
-        for (final element in _positionListeners) {
-          element(position);
-        }
-        final positionBucket = position.inMilliseconds ~/ 100;
-        if (positionBucket != _lastCoarsePositionBucket) {
-          _lastCoarsePositionBucket = positionBucket;
-          for (final element in _coarsePositionListeners) {
-            element(position);
-          }
-        }
+      stream.position.listen(_publishPlaybackPosition),
+      stream.duration.listen((value) {
+        if (!processing && value > Duration.zero) updateDuration(value);
       }),
-      stream.duration.listen(updateDuration),
       stream.buffer.listen((Duration buffer) {
-        buffered.value = buffer.inSeconds;
+        if (!processing && !_progressProjection.awaitingPosition) {
+          buffered.value = buffer.inSeconds;
+        }
       }),
       stream.buffering.listen((bool buffering) {
         _audioRecovery?.onPlaybackChanged();
+        if (buffering && !processing) _recoverPlaybackNetwork();
       }),
       stream.error.listen((String event) {
         // PlayerDiagnostics owns error logging, including its native state snapshot.
@@ -1757,6 +1817,28 @@ class PlPlayerController
     ];
   }
 
+  void _publishPlaybackPosition(Duration value) {
+    if (_audioSeekInProgress) return;
+    if (!_progressProjection.accept(_session.currentSnapshot.phase, value)) {
+      return;
+    }
+    final seconds = value.inSeconds;
+    if (position.value != seconds) {
+      position.value = seconds;
+      makeHeartBeat(seconds);
+    }
+    for (final listener in _positionListeners) {
+      listener(value);
+    }
+    final bucket = value.inMilliseconds ~/ 100;
+    if (bucket != _lastCoarsePositionBucket) {
+      _lastCoarsePositionBucket = bucket;
+      for (final listener in _coarsePositionListeners) {
+        listener(value);
+      }
+    }
+  }
+
   /// 移除事件监听
   void _removeListeners() {
     _androidDecodeRecovery?.dispose();
@@ -1777,6 +1859,7 @@ class PlPlayerController
   }
 
   Future<void> seek(Duration position, {bool isSeek = false}) async {
+    _progressProjection.begin(position);
     _audioSeekInProgress = true;
     _audioRecovery?.onPlaybackChanged();
     danmakuDisplay?.seeking?.call();
@@ -1790,6 +1873,11 @@ class PlPlayerController
       final owner = _activeOwner;
       if (owner == null || !owner.isActive) return;
       final result = await owner.seek(position);
+      if (result.outcome != CommandOutcome.applied) {
+        if (_videoPlayerController case final player?) {
+          _progressProjection.begin(player.state.position);
+        }
+      }
       _diagnostics?.event(
         result.outcome == CommandOutcome.applied
             ? 'playback.seek.end'
@@ -1812,6 +1900,9 @@ class PlPlayerController
       );
     } finally {
       _audioSeekInProgress = false;
+      if (_videoPlayerController case final player?) {
+        _publishPlaybackPosition(player.state.position);
+      }
       _audioRecovery?.onPlaybackChanged();
     }
   }

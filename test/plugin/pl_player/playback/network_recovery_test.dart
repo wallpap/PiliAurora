@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pili_aurora/plugin/pl_player/playback/network_recovery.dart';
 import 'package:pili_aurora/plugin/pl_player/utils/playback_network_recovery.dart';
@@ -8,6 +10,137 @@ void main() {
     position: Duration(seconds: 10),
     buffer: Duration(seconds: 10),
   );
+
+  testWidgets('声音仍前进但画面持续停滞时重连，短暂失帧恢复则取消', (tester) async {
+    var progressing = false;
+    var retries = 0;
+    final recovery =
+        PlaybackNetworkRecovery(
+          isCurrent: () => true,
+          readState: () => empty,
+          videoProgressing: () => progressing,
+          reload: (_) async => retries++,
+          onError: (error) => fail('$error'),
+        )..schedule(
+          requireVideoProgress: true,
+          allowNativeRecovery: false,
+          throttle: true,
+        );
+    progressing = true;
+    await tester.pump(const Duration(seconds: 3));
+    expect(retries, 0);
+    progressing = false;
+    recovery.schedule(
+      requireVideoProgress: true,
+      allowNativeRecovery: false,
+      throttle: true,
+    );
+    await tester.pump(const Duration(seconds: 3));
+    expect(retries, 1);
+    recovery.dispose();
+  });
+
+  testWidgets('重载仍在途时合并错误，避免重复提交媒体加载', (tester) async {
+    final pending = Completer<void>();
+    var retries = 0;
+    final recovery = PlaybackNetworkRecovery(
+      isCurrent: () => true,
+      readState: () => empty,
+      reload: (_) {
+        retries++;
+        return pending.future;
+      },
+      onError: (error) => fail('$error'),
+    )..schedule();
+    addTearDown(recovery.dispose);
+    await tester.pump(const Duration(seconds: 3));
+    recovery.schedule();
+    await tester.pump(const Duration(seconds: 3));
+    expect(retries, 1);
+    pending.complete();
+    await tester.pump();
+  });
+
+  testWidgets('权限错误取消已有定时重连，后续断流日志不重开媒体', (tester) async {
+    var retries = 0;
+    final recovery = PlaybackNetworkRecovery(
+      isCurrent: () => true,
+      readState: () => empty,
+      reload: (_) async => retries++,
+      onError: (error) => fail('$error'),
+    )..schedule();
+    addTearDown(recovery.dispose);
+    recovery.stopForPermissionFailure();
+    await tester.pump(const Duration(seconds: 3));
+    recovery.schedule();
+    await tester.pump(const Duration(seconds: 3));
+    expect(retries, 0);
+  });
+
+  testWidgets('分离流缓存时间仍超前但缓冲和进度持续停滞时恢复', (tester) async {
+    var state = (
+      buffering: false,
+      position: const Duration(seconds: 10),
+      buffer: const Duration(seconds: 20),
+    );
+    var retries = 0;
+    final recovery = PlaybackNetworkRecovery(
+      isCurrent: () => true,
+      readState: () => state,
+      reload: (_) async => retries++,
+      onError: (error) => fail('$error'),
+    )..schedule(waitForCachedPlayback: true);
+    addTearDown(recovery.dispose);
+    state = (
+      buffering: true,
+      position: const Duration(seconds: 13),
+      buffer: const Duration(seconds: 20),
+    );
+    await tester.pump(const Duration(seconds: 3));
+    expect(retries, 0);
+    await tester.pump(const Duration(seconds: 3));
+    expect(retries, 1);
+  });
+
+  testWidgets('首次检查尚未进入缓冲时保留机会，随后耗尽仍重连', (tester) async {
+    var state = (
+      buffering: false,
+      position: const Duration(seconds: 10),
+      buffer: const Duration(seconds: 20),
+    );
+    var retries = 0;
+    final recovery = PlaybackNetworkRecovery(
+      isCurrent: () => true,
+      readState: () => state,
+      reload: (_) async => retries++,
+      onError: (error) => fail('$error'),
+    )..schedule(requireEmptyBuffer: true);
+    addTearDown(recovery.dispose);
+    await tester.pump(const Duration(seconds: 3));
+    expect(retries, 0);
+    state = empty;
+    await tester.pump(const Duration(seconds: 3));
+    expect(retries, 1);
+  });
+
+  testWidgets('默认缓冲恢复连续两轮停滞后重连，不被超前缓存时间卡住', (tester) async {
+    var retries = 0;
+    final recovery = PlaybackNetworkRecovery(
+      isCurrent: () => true,
+      readState: () => (
+        buffering: true,
+        position: const Duration(seconds: 10),
+        buffer: const Duration(seconds: 20),
+      ),
+      reload: (_) async => retries++,
+      onError: (error) => fail('$error'),
+    )..schedule(requireEmptyBuffer: true);
+    await tester.pump(const Duration(seconds: 3));
+    expect(retries, 0);
+    await tester.pump(const Duration(seconds: 3));
+    expect(retries, 1);
+    recovery.dispose();
+  });
 
   testWidgets('分离音视频读取失败先保留剩余缓存，耗尽后恢复主视频', (tester) async {
     var state = (

@@ -7,11 +7,13 @@ class PlayerLoadingIndicator extends StatelessWidget {
     this.failed = false,
     this.buffered = 0,
     this.onRetry,
+    this.message,
   });
 
   final bool failed;
   final int buffered;
   final VoidCallback? onRetry;
+  final String? message;
 
   @override
   Widget build(BuildContext context) => Center(
@@ -41,11 +43,12 @@ class PlayerLoadingIndicator extends StatelessWidget {
               ),
             const SizedBox(height: 6),
             Text(
-              failed
-                  ? '加载失败，点击重试'
-                  : buffered == 0
-                  ? '加载中...'
-                  : DurationUtils.formatDuration(buffered),
+              message ??
+                  (failed
+                      ? '加载失败，点击重试'
+                      : buffered == 0
+                      ? '加载中...'
+                      : DurationUtils.formatDuration(buffered)),
               style: const TextStyle(color: Colors.white, fontSize: 12),
             ),
           ],
