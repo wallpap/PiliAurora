@@ -58,6 +58,20 @@ class FrameTimingCaptureTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             choose_layer(first + "\n" + second, "io.example.app", None)
 
+    def test_retired_blast_layer_does_not_hide_active_layer(self):
+        active = "abc SurfaceView[io.example.app/Main](BLAST)#52"
+        retired = "abc SurfaceView[io.example.app/Main](BLAST)#42"
+        listing = (
+            f"RequestedLayerState{{{retired} parentId=41 !handle}}\n"
+            f"RequestedLayerState{{{active} parentId=51}}"
+        )
+        self.assertEqual(choose_layer(listing, "io.example.app", None), active)
+
+    def test_retired_blast_layer_is_not_selected_automatically(self):
+        listing = "RequestedLayerState{abc SurfaceView[io.example.app/Main](BLAST)#42 parentId=41 !handle}"
+        with self.assertRaises(ValueError):
+            choose_layer(listing, "io.example.app", None)
+
     @patch("frame_timing_capture.subprocess.run")
     def test_device_shell_quotes_layer_and_does_not_emit_raw_error(self, run):
         layer = "SurfaceView[io.example.app/Main]#1;$(private)"

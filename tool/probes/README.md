@@ -97,7 +97,7 @@ pwsh -NoProfile -File tool/run-native-probes.ps1
 uv run --locked python tool/probes/android/frame_timing_capture.py --adb <adb路径> --serial <设备序列号> --package io.github.wallpap.piliaurora.debug --seconds 10
 ```
 
-省略 `--layer` 时优先选择包名对应的唯一 SurfaceView BLAST 缓冲图层，其余情况选择唯一 SurfaceView；多个缓冲图层需显式指定。Android 16 的 `RequestedLayerState{...}` 列表先提取实际 `name#id`，`--layer` 接受该名称或列表中的原始行。Release 包名为 `io.github.wallpap.piliaurora`，应与被测构建一致。采集命令为 `dumpsys SurfaceFlinger --list`、`--latency <layer>` 及 `dumpsys gfxinfo <package> framestats`；不安装 APK、不重置统计、不清理日志、不修改设备配置。
+省略 `--layer` 时优先选择包名对应的唯一 SurfaceView BLAST 缓冲图层，其余情况选择唯一 SurfaceView；自动选择排除带 `!handle` 的已销毁图层，多个活动缓冲图层需显式指定。Android 16 的 `RequestedLayerState{...}` 列表先提取实际 `name#id`，`--layer` 接受该名称或列表中的原始行。Release 包名为 `io.github.wallpap.piliaurora`，应与被测构建一致。采集命令为 `dumpsys SurfaceFlinger --list`、`--latency <layer>` 及 `dumpsys gfxinfo <package> framestats`；不安装 APK、不重置统计、不清理日志、不修改设备配置。
 
 输出默认位于 `build/android-frame-timing/<UTC时间>.json`，可传 `--output` 指定不存在的文件。工具排除初始缓冲区中的已完成帧、重复行、零值和未完成 fence，保存数值行与图层摘要，不保存设备序列号、原始图层名或 dumpsys 文本。SurfaceFlinger 三列依次为期望呈现、实际呈现和帧就绪的纳秒时间，定义见 [AOSP FrameTracker](https://android.googlesource.com/platform/frameworks/native/+/878911f7df21c700ddbe9e9c9d28cd0a1776946f/services/surfaceflinger/FrameTracker.cpp#240)。gfxinfo 按输出表头提取 `Flags`、`IntendedVsync`、`Vsync`、`FrameCompleted`。
 
@@ -154,7 +154,10 @@ v1 QPC CSV，等待数据写入后自动执行同帧关联与汇总。默认目�
 `-SkipBuild` 要求 Profile 目录当前就是此探针。PresentMon 使用官方独立命令行工具
 （已验证 2.5.1），无需安装服务；采集失败时查看目录内的 stdout/stderr。
 `-EngineLibrary <flutter_windows.dll>` 可对照[固定自编引擎](../engine/windows_frame_pacing/README.md)，
-入口核对身份文件、Profile/x64 模式和摘要，采集后恢复探针原引擎。
+入口核对身份文件、所选构建模式、x64 架构和摘要，并将身份文件保存在采集目录。
+
+`-Mode release` 使用 Release 应用与同模式引擎，可直接验证正式预编译引擎。
+两端的完整复测流程见[弹幕实机复测](danmaku/README.md)。
 
 探针窗口临时置顶，并确认实际可见；测量时避免其他置顶窗口遮挡它。
 Windows 隐藏启动和窗口完全遮挡会影响帧交付，须结合报告里的窗口状态解释数据。

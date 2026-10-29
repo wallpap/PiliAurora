@@ -95,13 +95,19 @@ def choose_layer(text, package, requested):
         match = re.fullmatch(r"RequestedLayerState\{(.+?#\d+)(?:\s+\w+=.*?)?\}", line)
         return match.group(1) if match else line
 
-    layers = [layer_name(line) for line in text.splitlines()]
+    listing = text.splitlines()
+    layers = [layer_name(line) for line in listing]
     if requested:
         requested = layer_name(requested)
         if requested not in layers or package not in requested:
             raise ValueError("指定图层不在当前应用的图层列表中。")
         return requested
-    candidates = [name for name in layers if package in name and "SurfaceView" in name]
+    # SurfaceFlinger 会保留已销毁的层；!handle 层没有活动输出，自动选择时排除。
+    candidates = [
+        layer_name(line) for line in listing
+        if package in line and "SurfaceView" in line
+        and not re.search(r"(?:\s)!handle(?=\s|\})", line)
+    ]
     buffers = [name for name in candidates if "(BLAST)#" in name]
     if buffers:
         candidates = buffers

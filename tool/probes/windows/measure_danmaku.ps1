@@ -4,6 +4,8 @@ param(
     [string]$PresentMonPath,
     [string]$Media,
     [string]$EngineLibrary,
+    [ValidateSet('profile', 'release')]
+    [string]$Mode = 'profile',
     [string]$OutputDirectory,
     [switch]$SkipBuild
 )
@@ -28,17 +30,18 @@ $captureProcess = $null
 $sessionName = 'PiliAuroraDanmaku-' + [Guid]::NewGuid().ToString('N')
 try {
     if (-not $SkipBuild) {
-        $buildOptions = @('-Platform', 'windows', '-Mode', 'profile', '-Target', 'tool/probes/windows/danmaku_frame_pacing.dart', '-SkipPubGet')
+        $buildOptions = @('-Platform', 'windows', '-Mode', $Mode, '-Target', 'tool/probes/windows/danmaku_frame_pacing.dart', '-SkipPubGet')
         if ($enginePath) { $buildOptions += @('-EngineLibrary', $enginePath) }
         & pwsh -NoProfile -File (Join-Path $workspace 'tool/build.ps1') @buildOptions
         if ($LASTEXITCODE -ne 0) { throw 'Windows 探针构建失败。' }
     }
-    $binary = Join-Path $workspace 'build/windows/x64/runner/Profile/PiliAurora.exe'
+    $modeDirectory = (Get-Culture).TextInfo.ToTitleCase($Mode)
+    $binary = Join-Path $workspace "build/windows/x64/runner/$modeDirectory/PiliAurora.exe"
     $identityFile = Join-Path (Split-Path $binary -Parent) 'engine-identity.json'
     if ($enginePath) {
         . (Join-Path $workspace 'tool/engine/windows_frame_pacing/engine_identity.ps1')
-        $expected = Get-WindowsFramePacingEngineIdentity -LibraryPath $enginePath -Mode profile
-        $installed = Get-WindowsFramePacingEngineIdentity -LibraryPath (Join-Path (Split-Path $binary -Parent) 'flutter_windows.dll') -Mode profile
+        $expected = Get-WindowsFramePacingEngineIdentity -LibraryPath $enginePath -Mode $Mode
+        $installed = Get-WindowsFramePacingEngineIdentity -LibraryPath (Join-Path (Split-Path $binary -Parent) 'flutter_windows.dll') -Mode $Mode
         if ($expected.binarySha256 -ne $installed.binarySha256) { throw '探针应用配置与引擎身份不匹配，请重新构建。' }
         Copy-Item -LiteralPath $identityFile -Destination (Join-Path $outputPath 'engine-identity.json')
     }
