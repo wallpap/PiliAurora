@@ -11,12 +11,12 @@ import 'package:pili_aurora/utils/app_release.dart';
 import 'package:pili_aurora/utils/page_utils.dart';
 import 'package:pili_aurora/utils/storage.dart';
 import 'package:pili_aurora/utils/storage_key.dart';
+import 'package:pili_aurora/utils/storage_pref.dart';
 import 'package:device_info_plus/device_info_plus.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:material_ui/material_ui.dart';
-import 'package:path/path.dart' as path;
 
 abstract final class Update {
   static const _dialogTag = 'app-update';
@@ -43,15 +43,67 @@ abstract final class Update {
         if (!isAuto) SmartDialog.showToast('当前版本已是最新');
         return;
       }
+      if (isAuto && Pref.updateIgnoredVersion == release.tag) return;
+
+      final actions = <Widget>[
+        TextButton(
+          onPressed: () => SmartDialog.dismiss(tag: _dialogTag),
+          child: const Text('稍后'),
+        ),
+        if (isAuto)
+          TextButton(
+            onPressed: () {
+              SmartDialog.dismiss(tag: _dialogTag);
+              GStorage.setting.put(
+                SettingBoxKey.updateIgnoredVersion,
+                release.tag,
+              );
+            },
+            child: const Text('此版本不再提醒'),
+          ),
+      ];
+      if (Platform.isWindows) {
+        actions.addAll([
+          TextButton(
+            onPressed:
+                release.downloadUrl(
+                      platform: 'windows',
+                      extension: 'zip',
+                    ) ==
+                    null
+                ? null
+                : () => onDownload(release, extension: 'zip'),
+            child: const Text('便携版 ZIP'),
+          ),
+          TextButton(
+            onPressed:
+                release.downloadUrl(
+                      platform: 'windows',
+                      extension: 'exe',
+                    ) ==
+                    null
+                ? null
+                : () => onDownload(release, extension: 'exe'),
+            child: const Text('安装版 EXE'),
+          ),
+        ]);
+      } else {
+        actions.add(
+          TextButton(
+            onPressed: () => onDownload(release),
+            child: const Text('下载更新'),
+          ),
+        );
+      }
+
       SmartDialog.show(
         tag: _dialogTag,
         keepSingle: true,
         animationType: SmartAnimationType.centerFade_otherSlide,
         builder: (context) => AlertDialog(
           title: Text('发现新版本 ${release.tag}'),
-          content: SizedBox(
-            width: 480,
-            height: 320,
+          content: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 640, maxHeight: 420),
             child: SingleChildScrollView(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -61,65 +113,25 @@ abstract final class Update {
                   ),
                   const SizedBox(height: 12),
                   Text(release.notes.isEmpty ? '本次发布未提供更新说明。' : release.notes),
-                  if (Platform.isWindows) ...[
-                    const SizedBox(height: 16),
-                    const Text('安装版：退出所有播放窗口后，安装到原目录。便携版：完整解压到新目录后运行。'),
-                    const SizedBox(height: 8),
-                    SelectableText(
-                      '当前程序目录：${path.dirname(Platform.resolvedExecutable)}',
-                    ),
-                    const SizedBox(height: 8),
-                    const Text('更新后在“关于”核对版本；任务栏旧固定项可取消后重新固定。'),
-                  ],
                 ],
               ),
             ),
           ),
+          actionsPadding: const EdgeInsets.fromLTRB(24, 0, 24, 16),
           actions: [
-            if (isAuto)
-              TextButton(
-                onPressed: () {
-                  SmartDialog.dismiss(tag: _dialogTag);
-                  GStorage.setting.put(SettingBoxKey.autoUpdate, false);
-                },
-                child: const Text('不再提醒'),
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  for (final action in actions)
+                    Padding(
+                      padding: const EdgeInsets.only(left: 8),
+                      child: action,
+                    ),
+                ],
               ),
-            TextButton(
-              onPressed: () => SmartDialog.dismiss(tag: _dialogTag),
-              child: const Text('稍后'),
             ),
-            TextButton(
-              onPressed: () => PageUtils.launchURL(_releasePage(release)),
-              child: const Text('发布页面'),
-            ),
-            if (Platform.isWindows) ...[
-              TextButton(
-                onPressed:
-                    release.downloadUrl(
-                          platform: 'windows',
-                          extension: 'zip',
-                        ) ==
-                        null
-                    ? null
-                    : () => onDownload(release, extension: 'zip'),
-                child: const Text('便携版 ZIP'),
-              ),
-              FilledButton(
-                onPressed:
-                    release.downloadUrl(
-                          platform: 'windows',
-                          extension: 'exe',
-                        ) ==
-                        null
-                    ? null
-                    : () => onDownload(release, extension: 'exe'),
-                child: const Text('安装版 EXE'),
-              ),
-            ] else
-              FilledButton(
-                onPressed: () => onDownload(release),
-                child: const Text('下载更新'),
-              ),
           ],
         ),
       );

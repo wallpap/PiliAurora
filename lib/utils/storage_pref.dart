@@ -504,6 +504,9 @@ abstract final class Pref {
   static bool get autoUpdate =>
       _setting.get(SettingBoxKey.autoUpdate, defaultValue: true);
 
+  static String? get updateIgnoredVersion =>
+      _setting.get(SettingBoxKey.updateIgnoredVersion) as String?;
+
   static bool get horizontalPreview =>
       _setting.get(SettingBoxKey.horizontalPreview, defaultValue: false);
 
