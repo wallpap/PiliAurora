@@ -9,7 +9,7 @@ PiliAurora is a third-party Bilibili client for Android and Windows x64, built w
 
 It retains upstream browsing, playback, social features, and multi-account support while focusing on playback resource usage. It reworks Windows danmaku rendering and video output, and adds separate video and live-stream windows, danmaku merging and frame-rate controls, and native sticker management. Danmaku are timed comments displayed over the video.
 
-[Download](https://github.com/wallpap/PiliAurora/releases/latest) · [Changelog](doc/releases/v1.6.0.md) · [Report an issue](https://github.com/wallpap/PiliAurora/issues) · [License](LICENSE)
+[Download](https://github.com/wallpap/PiliAurora/releases/latest) · [Changelog](doc/releases/v1.6.4.md) · [Report an issue](https://github.com/wallpap/PiliAurora/issues) · [License](LICENSE)
 
 ## Screenshots
 

@@ -9,7 +9,7 @@ PiliAurora 是面向 Android 和 Windows x64 的 Bilibili 第三方客户端，�
 
 在保留上游浏览、播放、互动和多账号功能的基础上，PiliAurora 集中优化播放时的资源占用，重做 Windows 弹幕渲染与视频输出，并加入视频和直播独立窗口、弹幕合并与帧率调节、原生表情包管理、番剧页面优化（接近官方效果）等功能。
 
-[下载](https://github.com/wallpap/PiliAurora/releases/latest) · [更新日志](doc/releases/v1.6.0.md) · [问题反馈](https://github.com/wallpap/PiliAurora/issues) · [许可证](LICENSE)
+[下载](https://github.com/wallpap/PiliAurora/releases/latest) · [更新日志](doc/releases/v1.6.4.md) · [问题反馈](https://github.com/wallpap/PiliAurora/issues) · [许可证](LICENSE)
 
 ## 界面预览
 
