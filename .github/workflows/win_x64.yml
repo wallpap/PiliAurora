@@ -46,7 +46,7 @@ jobs:
           cache: true
 
       - name: Cache WebView NuGet packages
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: build/windows/x64/packages
           key: windows-x64-webview-${{ hashFiles('third_party/flutter_inappwebview_windows/windows/CMakeLists.txt') }}
