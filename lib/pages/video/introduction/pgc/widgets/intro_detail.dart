@@ -2,6 +2,7 @@ import 'package:pili_aurora/common/widgets/keep_alive_wrapper.dart';
 import 'package:pili_aurora/common/widgets/scroll_physics.dart'
     show tabBarScrollPhysics;
 import 'package:pili_aurora/common/widgets/selection_text.dart';
+import 'package:pili_aurora/common/widgets/video_tag_colors.dart';
 import 'package:pili_aurora/common/widgets/image/network_img_layer.dart';
 import 'package:pili_aurora/common/widgets/stat/stat.dart';
 import 'package:pili_aurora/models/common/stat_type.dart';
@@ -335,19 +336,30 @@ class _IntroDetailState extends State<PgcIntroPanel>
   Widget _buildTags(List<String> tags) => Wrap(
     spacing: 8,
     runSpacing: 8,
-    children: tags
-        .map(
-          (tag) => SearchText(
-            fontSize: 13,
-            text: tag,
-            onTap: (tagName) => Get.toNamed(
-              '/searchResult',
-              parameters: {'keyword': tagName},
-            ),
-            onLongPress: Utils.copyText,
+    children: tags.map(
+      (tag) {
+        final colors = Theme.of(context).colorScheme;
+        return SearchText(
+          fontSize: 13,
+          text: tag,
+          bgColor: VideoTagColors.plainBackground(
+            isDark: colors.brightness == Brightness.dark,
+            onSurface: colors.onSurface,
+            onSurfaceVariant: colors.onSurfaceVariant,
           ),
-        )
-        .toList(),
+          textColor: VideoTagColors.plainForeground(
+            isDark: colors.brightness == Brightness.dark,
+            onSurface: colors.onSurface,
+            onSurfaceVariant: colors.onSurfaceVariant,
+          ),
+          onTap: (tagName) => Get.toNamed(
+            '/searchResult',
+            parameters: {'keyword': tagName},
+          ),
+          onLongPress: Utils.copyText,
+        );
+      },
+    ).toList(),
   );
 
   String _formatCount(int value) {

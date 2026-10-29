@@ -14,6 +14,7 @@ import 'package:pili_aurora/common/widgets/selection_text.dart';
 import 'package:pili_aurora/common/widgets/stat/stat.dart';
 import 'package:pili_aurora/common/widgets/translucent_column.dart';
 import 'package:pili_aurora/common/widgets/topic_tag.dart';
+import 'package:pili_aurora/common/widgets/video_tag_colors.dart';
 import 'package:pili_aurora/http/sponsor_block.dart';
 import 'package:pili_aurora/models/remote/video/video_ai_conclusion/model_result.dart';
 import 'package:pili_aurora/models/remote/video/video_detail/data.dart';
@@ -1045,6 +1046,20 @@ class _UgcIntroPanelState extends State<UgcIntroPanel> {
               child: SearchText(
                 fontSize: 13,
                 text: text,
+                bgColor: VideoTagColors.plainBackground(
+                  isDark: Theme.of(context).brightness == Brightness.dark,
+                  onSurface: Theme.of(context).colorScheme.onSurface,
+                  onSurfaceVariant: Theme.of(context)
+                      .colorScheme
+                      .onSurfaceVariant,
+                ),
+                textColor: VideoTagColors.plainForeground(
+                  isDark: Theme.of(context).brightness == Brightness.dark,
+                  onSurface: Theme.of(context).colorScheme.onSurface,
+                  onSurfaceVariant: Theme.of(context)
+                      .colorScheme
+                      .onSurfaceVariant,
+                ),
                 onTap: (tagName) => Get.toNamed(
                   '/searchResult',
                   parameters: {'keyword': tagName},

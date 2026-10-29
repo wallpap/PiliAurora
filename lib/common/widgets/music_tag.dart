@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:pili_aurora/common/widgets/video_tag_colors.dart';
 
 class MusicTag extends StatelessWidget {
   const MusicTag({
@@ -17,7 +18,11 @@ class MusicTag extends StatelessWidget {
     final colorScheme = ColorScheme.of(context);
     const radius = BorderRadius.all(Radius.circular(8));
     return Material(
-      color: colorScheme.secondaryContainer,
+      color: VideoTagColors.topicBackground(
+        isDark: colorScheme.brightness == Brightness.dark,
+        primary: colorScheme.primary,
+        primaryContainer: colorScheme.primaryContainer,
+      ),
       borderRadius: radius,
       child: InkWell(
         onTap: onTap,
@@ -33,13 +38,21 @@ class MusicTag extends StatelessWidget {
                 Icon(
                   Icons.music_note_rounded,
                   size: 17,
-                  color: colorScheme.onSecondaryContainer,
+                  color: VideoTagColors.topicForeground(
+                    isDark: colorScheme.brightness == Brightness.dark,
+                    primary: colorScheme.primary,
+                    onSurface: colorScheme.onSurface,
+                  ),
                 ),
                 const SizedBox(width: 3),
                 Text(
                   text,
                   style: TextStyle(
-                    color: colorScheme.onSecondaryContainer,
+                    color: VideoTagColors.topicForeground(
+                      isDark: colorScheme.brightness == Brightness.dark,
+                      primary: colorScheme.primary,
+                      onSurface: colorScheme.onSurface,
+                    ),
                     fontSize: 13,
                     height: 1,
                   ),

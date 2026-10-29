@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:pili_aurora/common/widgets/video_tag_colors.dart';
 
 class TopicTag extends StatelessWidget {
   const TopicTag({super.key, required this.text, this.onTap});
@@ -10,7 +11,11 @@ class TopicTag extends StatelessWidget {
   Widget build(BuildContext context) {
     final colorScheme = ColorScheme.of(context);
     return Material(
-      color: colorScheme.primaryContainer.withValues(alpha: 0.32),
+      color: VideoTagColors.topicBackground(
+        isDark: colorScheme.brightness == Brightness.dark,
+        primary: colorScheme.primary,
+        primaryContainer: colorScheme.primaryContainer,
+      ),
       borderRadius: const BorderRadius.all(Radius.circular(8)),
       child: InkWell(
         onTap: onTap,
@@ -44,7 +49,11 @@ class TopicTag extends StatelessWidget {
                 Text(
                   text,
                   style: TextStyle(
-                    color: colorScheme.primary,
+                    color: VideoTagColors.topicForeground(
+                      isDark: colorScheme.brightness == Brightness.dark,
+                      primary: colorScheme.primary,
+                      onSurface: colorScheme.onSurface,
+                    ),
                     fontSize: 13,
                     height: 1,
                     fontWeight: FontWeight.w600,
@@ -54,7 +63,11 @@ class TopicTag extends StatelessWidget {
                 Icon(
                   Icons.chevron_right,
                   size: 16,
-                  color: colorScheme.primary.withValues(alpha: 0.72),
+                  color: VideoTagColors.topicForeground(
+                    isDark: colorScheme.brightness == Brightness.dark,
+                    primary: colorScheme.primary,
+                    onSurface: colorScheme.onSurface,
+                  ).withValues(alpha: 0.72),
                 ),
               ],
             ),
