@@ -328,6 +328,7 @@ class PlaybackSession implements PlaybackMediaClock {
     PlaybackOwner owner,
     Future<PlaybackPlan?> Function(PlaybackQuery query) resolve, {
     required PlaybackStartPolicy start,
+    bool Function()? shouldLoad,
   }) {
     final rejected = _rejectLoad(owner);
     if (rejected != null) return Future.value(rejected);
@@ -335,6 +336,7 @@ class PlaybackSession implements PlaybackMediaClock {
     if (request == null) {
       return Future.value(_closedOrInactive(owner));
     }
+    request.shouldLoad = shouldLoad;
     _publish();
     final ownerGeneration = owner._generation;
     final query = PlaybackQuery(
@@ -343,7 +345,8 @@ class PlaybackSession implements PlaybackMediaClock {
           owner._generation == ownerGeneration &&
           (_isRequestCurrent(request) ||
               request.loaded &&
-                  _isCommandCurrent(owner, request.id, request.loadId!)),
+                  _isCommandCurrent(owner, request.id, request.loadId!) ||
+              request.resolved && isCurrent(request.id) && owner.isActive),
       registerCancel: (cancel) {
         if (_isRequestCurrent(request)) {
           request.cancelCallbacks.add(cancel);
@@ -388,6 +391,16 @@ class PlaybackSession implements PlaybackMediaClock {
         return;
       }
       if (!_isRequestCurrent(request)) return;
+      if (request.shouldLoad?.call() == false) {
+        request.resolved = true;
+        request.owner._requiresLoad = true;
+        _phase = PlaybackPhase.idle;
+        _stage = PlaybackStage.idle;
+        _failure = null;
+        _finishRequest(request, const LoadResult.noMedia());
+        _publish();
+        return;
+      }
       _stage = PlaybackStage.queued;
       _publish();
       _scheduleLoad(request, plan);
@@ -2212,7 +2225,8 @@ class PlaybackOwner {
   Future<LoadResult> query(
     Future<PlaybackPlan?> Function(PlaybackQuery query) resolve, {
     PlaybackStartPolicy start = PlaybackStartPolicy.preserve,
-  }) => _session._query(this, resolve, start: start);
+    bool Function()? shouldLoad,
+  }) => _session._query(this, resolve, start: start, shouldLoad: shouldLoad);
 
   Future<LoadResult> retry() => _session._retry(this);
 
@@ -2398,6 +2412,8 @@ class _AcceptedRequest {
   int? loadId;
   PlaybackPlan? finalPlan;
   bool loaded = false;
+  bool resolved = false;
+  bool Function()? shouldLoad;
   bool recovery = false;
 
   void registerCancel(void Function() cancel) {

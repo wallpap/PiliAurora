@@ -53,6 +53,7 @@ import 'package:pili_aurora/pages/video/widgets/intro_layout.dart';
 import 'package:pili_aurora/pages/video/widgets/player_focus.dart';
 import 'package:pili_aurora/plugin/pl_player/controller.dart';
 import 'package:pili_aurora/plugin/pl_player/models/data_status.dart';
+import 'package:pili_aurora/plugin/pl_player/playback/playback_contracts.dart';
 import 'package:pili_aurora/plugin/pl_player/models/fullscreen_mode.dart';
 import 'package:pili_aurora/plugin/pl_player/models/play_repeat.dart';
 import 'package:pili_aurora/plugin/pl_player/models/play_status.dart';
@@ -326,25 +327,26 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
 
   /// 未开启自动播放时触发播放
   Future<void>? handlePlay() {
-    if (!videoDetailController.isFileSource) {
-      if (videoDetailController.isQuerying) {
-        logger.d('handlePlay: querying');
-        return null;
-      }
-      if (videoDetailController.videoUrl == null ||
-          videoDetailController.audioUrl == null) {
-        logger.w('handlePlay: videoUrl/audioUrl not initialized');
-        videoDetailController.queryVideoUrl();
-        return null;
-      }
-    }
     final plPlayerController = this.plPlayerController =
         videoDetailController.plPlayerController;
     videoDetailController.autoPlay = true;
     plPlayerController
       ..addStatusLister(playerListener)
       ..addCoarsePositionListener(positionListener);
-    if (plPlayerController.preInitPlayer) {
+    if (!videoDetailController.isFileSource) {
+      if (videoDetailController.isQuerying) {
+        return plPlayerController.play();
+      }
+      if (videoDetailController.videoUrl == null) {
+        return videoDetailController.queryVideoUrl(
+          startPolicy: PlaybackStartPolicy.play,
+          autoFullScreenFlag: true,
+        );
+      }
+    }
+    if (videoDetailController.videoState.value &&
+        plPlayerController.currentPlaybackSnapshot.phase ==
+            PlaybackPhase.ready) {
       if (plPlayerController.autoEnterFullScreen) {
         plPlayerController.triggerFullScreen();
       }
@@ -722,19 +724,8 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
           bottom: -1,
           child: GestureDetector(
             onTap: () {
-              if (!videoDetailController.isFileSource) {
-                if (videoDetailController.isQuerying) {
-                  logger.d('handlePlay: querying');
-                  return;
-                }
-                if (videoDetailController.videoUrl == null ||
-                    videoDetailController.audioUrl == null) {
-                  logger.w('handlePlay: videoUrl/audioUrl not initialized');
-                  videoDetailController.queryVideoUrl();
-                  return;
-                }
-              }
-              if (plPlayerController == null ||
+              if (!videoDetailController.autoPlay ||
+                  plPlayerController == null ||
                   videoDetailController.playedTime == null) {
                 handlePlay();
               } else {

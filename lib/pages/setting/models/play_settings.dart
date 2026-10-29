@@ -479,8 +479,8 @@ List<SettingsModel> get playEnhancementSettings => [
     defaultVal: true,
   ),
   const SwitchModel(
-    title: '提前初始化播放器',
-    subtitle: '相对减少手动播放加载时间',
+    title: '手动播放前预加载视频',
+    subtitle: '关闭自动播放时，提前加载并暂停在续播位置，减少点击播放后的等待；会消耗流量和播放器资源',
     leading: Icon(Icons.play_circle_outlined),
     setKey: SettingBoxKey.preInitPlayer,
     defaultVal: false,

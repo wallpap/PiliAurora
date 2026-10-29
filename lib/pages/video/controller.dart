@@ -708,10 +708,7 @@ class VideoDetailController extends GetxController
   }
 
   bool _shouldInitializePlayer({bool force = false}) =>
-      force ||
-      _autoPlay.value ||
-      (plPlayerController.preInitPlayer && !plPlayerController.processing) &&
-          (isFileSource ? true : videoPlayerKey.currentState?.mounted == true);
+      force || _autoPlay.value || plPlayerController.preInitPlayer;
 
   Future<void>? _initPlayerIfNeeded(
     bool autoFullScreenFlag, {
@@ -835,7 +832,8 @@ class VideoDetailController extends GetxController
   Future<LoadResult> submitPlaybackQuery(
     Future<PlaybackPlan?> Function(PlaybackQuery) resolve, {
     required PlaybackStartPolicy start,
-  }) => playbackOwner.query(resolve, start: start);
+    bool Function()? shouldLoad,
+  }) => playbackOwner.query(resolve, start: start, shouldLoad: shouldLoad);
 
   Future<LoadResult> loadPlaybackPlanForRoute(
     PlaybackPlan plan, {
@@ -1031,6 +1029,7 @@ class VideoDetailController extends GetxController
         );
       },
       start: start,
+      shouldLoad: () => _shouldInitializePlayer(force: fromReset),
     );
     final query = acceptedQuery;
     bool valid() =>
@@ -1149,9 +1148,7 @@ class VideoDetailController extends GetxController
         );
         _setVideoHeight();
       }
-      if (!isCurrent() ||
-          !_shouldInitializePlayer(force: fromReset) ||
-          _networkSource == null) {
+      if (!isCurrent() || _networkSource == null) {
         return null;
       }
       final plan = _buildPlaybackPlan(_networkSource!, configuration);

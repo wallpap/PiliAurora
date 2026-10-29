@@ -72,6 +72,22 @@ void main() {
     controller.closePlayback();
   });
 
+  for (final preload in [false, true]) {
+    test('关闭自动播放且预加载为 $preload 时按设置加载并保留暂停意图', () async {
+      await GStorage.setting.put(SettingBoxKey.preInitPlayer, preload);
+      final controller = page()..autoPlay = false;
+      final query = controller.queryVideoUrl();
+      (await adapter.next()).complete(media(1));
+      await query;
+      expect(controller.videoUrl, contains('/1'));
+      expect(controller.loads.length, preload ? 1 : 0);
+      if (preload) expect(controller.loads.single.autoplay, isFalse);
+      expect(controller.plPlayerController.preInitPlayer, preload);
+      controller.closePlayback();
+      await GStorage.setting.put(SettingBoxKey.preInitPlayer, false);
+    });
+  }
+
   test('补充画质请求也绑定原媒体，迟到补充不能污染当前数据', () async {
     final controller = page();
     final old = controller.queryVideoUrl();
@@ -255,6 +271,7 @@ class _VideoController extends VideoDetailController {
   Future<LoadResult> submitPlaybackQuery(
     Future<PlaybackPlan?> Function(PlaybackQuery) resolve, {
     required PlaybackStartPolicy start,
+    bool Function()? shouldLoad,
   }) async {
     _cancelQuery?.call();
     _cancelQuery = null;
@@ -274,6 +291,7 @@ class _VideoController extends VideoDetailController {
     final plan = await resolve(query);
     if (!isCurrent()) return const LoadResult.superseded();
     if (plan == null) return const LoadResult.noMedia();
+    if (shouldLoad?.call() == false) return const LoadResult.noMedia();
     loads.add((
       cid: cid.value,
       source: plan.source.currentVideoSource,

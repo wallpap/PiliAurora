@@ -957,6 +957,52 @@ void main() {
     await session.shutdown();
   });
 
+  test('手动播放前仅解析来源正常结束，保留查询身份且不标记失败', () async {
+    final runtime = _FakeRuntime();
+    final session = PlaybackSession(runtime: runtime);
+    final owner = session.attach();
+    late PlaybackQuery query;
+    final result = await owner.query(
+      (value) async {
+        query = value;
+        return _plan('manual');
+      },
+      start: PlaybackStartPolicy.pause,
+      shouldLoad: () => false,
+    );
+    expect(result.outcome, LoadOutcome.noMedia);
+    expect(session.currentSnapshot.phase, PlaybackPhase.idle);
+    expect(session.currentSnapshot.failure, isNull);
+    expect(runtime.loadedPlans, isEmpty);
+    expect(query.isCurrent, isTrue);
+    await owner.load(_plan('manual'), start: PlaybackStartPolicy.play);
+    expect(query.isCurrent, isFalse);
+    expect(runtime.loadedKeys, ['manual']);
+    owner.close();
+    await session.shutdown();
+  });
+
+  test('来源查询未返回时点击播放，查询完成后加载并落实最新意图', () async {
+    final runtime = _FakeRuntime();
+    final session = PlaybackSession(runtime: runtime);
+    final owner = session.attach();
+    final source = Completer<PlaybackPlan>();
+    var load = false;
+    final query = owner.query(
+      (_) => source.future,
+      start: PlaybackStartPolicy.pause,
+      shouldLoad: () => load,
+    );
+    load = true;
+    await owner.setPlaying(true);
+    source.complete(_plan('manual'));
+    expect((await query).outcome, LoadOutcome.ready);
+    expect(runtime.loadedKeys, ['manual']);
+    expect(runtime.playCalls.last, isTrue);
+    owner.close();
+    await session.shutdown();
+  });
+
   test('音轨重连中切源使旧结果失效，原生命令排空后再加载新媒体', () async {
     final runtime = _FakeRuntime();
     final session = PlaybackSession(runtime: runtime);
