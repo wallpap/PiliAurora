@@ -1,6 +1,5 @@
 import 'dart:io';
 
-import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart' show FilteringTextInputFormatter;
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:get/get.dart';
@@ -190,37 +189,38 @@ List<SettingsModel> get videoSettings => [
           setKey: SettingBoxKey.enableAndroidTextureScaling,
           defaultVal: false,
         ),
-      if (kDebugMode || Platform.isAndroid)
+      if (Platform.isAndroid)
         NormalModel(
-          title: '音频输出设备',
+          title: '音频输出后端',
           leading: const Icon(Icons.speaker_outlined),
-          getSubtitle: () => '当前：${Pref.audioOutput}',
+          getSubtitle: () => '当前：${Pref.audioOutput}；重新打开播放器后生效',
           onTap: _showAudioOutputDialog,
         ),
       NormalModel(
         title: '缓冲大小',
         leading: const Icon(Icons.storage_outlined),
         getSubtitle: () =>
-            '当前：${Pref.bufferSize}MB。同时为前向和后向缓冲区大小。对于直播流，无后向缓冲大小，全部转给前向（此选项即mpv的--demuxer-max-bytes，--demuxer-max-back-bytes）',
+            '点播前向、后向各 ${Pref.bufferSize} MiB，直播前向 ${Pref.bufferSize * 2} MiB；分离音视频分别受此上限约束，下次加载生效',
         onTap: _showBufferSizeDialog,
       ),
       NormalModel(
         title: '缓冲时长',
         leading: const Icon(Icons.av_timer),
         getSubtitle: () =>
-            '当前：${Pref.bufferSec}s。实际缓冲为二者最小值。对于直播流，该选项无效（此选项即mpv的--cache-secs）',
+            '目标 ${Pref.bufferSec} 秒实际播放时间，倍速时换算为媒体时长；同时受缓冲大小限制。直播使用独立策略，下次加载生效',
         onTap: _showBufferSecDialog,
       ),
       NormalModel(
-        title: '自动同步',
+        title: '音频时钟平滑',
         leading: const Icon(Icons.sync_rounded),
-        getSubtitle: () => '当前：${Pref.autosync}（此项即mpv的--autosync）',
+        getSubtitle: () => '当前：${Pref.autosync}；平滑音频设备时序测量，0 为关闭；下次加载生效',
         onTap: _showAutoSyncDialog,
       ),
       NormalModel(
         title: '视频同步',
         leading: const Icon(Icons.view_timeline_outlined),
-        getSubtitle: () => '当前：${_videoSyncName(Pref.videoSync)}，控制画面与声音如何保持同步',
+        getSubtitle: () =>
+            '当前：${_videoSyncName(Pref.videoSync)}；控制音画与屏幕刷新率的协调，下次加载生效',
         onTap: _showVideoSyncDialog,
       ),
       NormalModel(
@@ -510,7 +510,7 @@ Future<void> _showAudioOutputDialog(
   final res = await showDialog<List<String>>(
     context: context,
     builder: (context) => OrderedMultiSelectDialog<String>(
-      title: '音频输出设备',
+      title: '音频输出后端',
       initValues: Pref.audioOutput.split(','),
       values: {
         for (final e in AudioOutput.values) e.name: e.label,
@@ -584,7 +584,7 @@ void _showAutoSyncDialog(BuildContext context, VoidCallback setState) {
   showDialog(
     context: context,
     builder: (context) => AlertDialog(
-      title: const Text('自动同步'),
+      title: const Text('音频时钟平滑'),
       content: TextFormField(
         autofocus: true,
         initialValue: autosync,
@@ -687,7 +687,7 @@ void _showBufferSecDialog(BuildContext context, VoidCallback setState) =>
     );
 
 List<SettingsModel> get videoEnhancementSettings => [
-  if (kDebugMode || Platform.isAndroid)
+  if (Platform.isAndroid)
     NormalModel(
       title: '音量均衡',
       leading: const Icon(Icons.multitrack_audio),
@@ -710,7 +710,7 @@ List<SettingsModel> get videoEnhancementSettings => [
     title: '超分辨率',
     leading: const Icon(Icons.stay_current_landscape_outlined),
     getSubtitle: () =>
-        '当前:「${Pref.superResolutionType.label}」\n默认设置对番剧生效, 其他视频默认关闭\n视频分辨率超过当前屏幕分辨率时无法开启\n超分辨率需要启用硬件解码, 若启用硬件解码后仍然不生效, 尝试切换硬件解码器为 auto-copy',
+        '当前:「${Pref.superResolutionType.label}」\n默认设置用于番剧，其他视频可在播放器内选择\n源视频超过当前屏幕分辨率时不启用；需要输出后端支持 GPU 着色器',
     onTap: _showSuperResolutionDialog,
   ),
 ];

@@ -16,6 +16,7 @@ $ciTests = @(
     "test/services/messaging/messaging_test.dart",
     "test/services/messaging/sharing_test.dart",
     "test/services/messaging/protocol_test.dart",
+    "test/services/messaging/preferences_test.dart",
     "test/services/diagnostics/redact_test.dart",
     "test/services/diagnostics/record_store_test.dart",
     "test/services/settings/settings_backup_test.dart",

@@ -10,6 +10,7 @@ import 'package:pili_aurora/models/common/msg/msg_unread_type.dart';
 import 'package:pili_aurora/pages/whisper/controller.dart';
 import 'package:pili_aurora/pages/whisper/widgets/item.dart';
 import 'package:pili_aurora/services/messaging/overview.dart';
+import 'package:pili_aurora/services/messaging/preferences.dart';
 import 'package:pili_aurora/services/messaging/session_models.dart';
 import 'package:pili_aurora/services/messaging/session_providers.dart';
 import 'package:pili_aurora/utils/extension/three_dot_ext.dart';
@@ -121,6 +122,7 @@ class _UnreadTopItems extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
+    ref.watch(disableLikeMessagesProvider);
     final controller = WhisperController(sessions: ref.watch(sessionsProvider));
     final overview = ref.watch(overviewProvider);
     const unreadTypes = [

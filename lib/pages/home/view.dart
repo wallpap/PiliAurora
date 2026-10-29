@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pili_aurora/services/messaging/overview.dart';
+import 'package:pili_aurora/services/messaging/preferences.dart';
 import 'package:pili_aurora/common/style.dart';
 import 'package:pili_aurora/common/widgets/custom_height_widget.dart';
 import 'package:pili_aurora/common/widgets/image/network_img_layer.dart';
@@ -283,13 +284,14 @@ Widget msgBadge(MainController mainController) {
   return Consumer(
     builder: (context, ref, child) {
       final unread = ref.watch(overviewProvider);
+      final disableLike = ref.watch(disableLikeMessagesProvider);
       return Obx(
         () {
           mainController.msgBadgeRevision.value;
           if (mainController.accountService.isLogin.value) {
             final total = unread.total(
               mainController.msgUnReadTypes,
-              disableLike: mainController.disableLikeMsg,
+              disableLike: disableLike,
             );
             final count = total == null || total == 0
                 ? null

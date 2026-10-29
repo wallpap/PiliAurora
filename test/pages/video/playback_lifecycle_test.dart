@@ -88,6 +88,34 @@ void main() {
     });
   }
 
+  test('媒体计划读取新的同步设置和缓冲偏好，已捕获计划保持稳定', () async {
+    final controller = page();
+    final first = controller.plPlayerController.capturePlaybackConfiguration(
+      live: false,
+    );
+    await GStorage.setting.putAll({
+      SettingBoxKey.videoSync: 'audio',
+      SettingBoxKey.autosync: '30',
+      SettingBoxKey.bufferSec: 24.0,
+      SettingBoxKey.bufferSize: 8.0,
+    });
+    final next = controller.plPlayerController.capturePlaybackConfiguration(
+      live: false,
+    );
+    expect(next.mediaOptions['video-sync'], 'audio');
+    expect(next.mediaOptions['autosync'], '30');
+    expect(next.mediaOptions['cache-secs'], '24.000');
+    expect(next.mediaOptions['demuxer-max-bytes'], '${8 * 1024 * 1024}');
+    expect(first.mediaOptions['video-sync'], 'display-resample');
+    controller.closePlayback();
+    await GStorage.setting.deleteAll([
+      SettingBoxKey.videoSync,
+      SettingBoxKey.autosync,
+      SettingBoxKey.bufferSec,
+      SettingBoxKey.bufferSize,
+    ]);
+  });
+
   test('补充画质请求也绑定原媒体，迟到补充不能污染当前数据', () async {
     final controller = page();
     final old = controller.queryVideoUrl();

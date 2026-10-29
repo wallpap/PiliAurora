@@ -463,9 +463,6 @@ abstract final class Pref {
     return length;
   }
 
-  static int get defaultPicQa =>
-      _setting.get(SettingBoxKey.defaultPicQa, defaultValue: 10);
-
   static double get danmakuLineHeight =>
       (_setting.get(SettingBoxKey.danmakuLineHeight, defaultValue: 1.6) as num)
           .toDouble()
@@ -621,11 +618,6 @@ abstract final class Pref {
 
   static bool get enableShrinkVideoSize =>
       _setting.get(SettingBoxKey.enableShrinkVideoSize, defaultValue: true);
-
-  static bool get enableAndroidVideoOutputSize => _setting.get(
-    SettingBoxKey.enableAndroidVideoOutputSize,
-    defaultValue: true,
-  );
 
   static bool get enableAndroidTextureScaling => _setting.get(
     SettingBoxKey.enableAndroidTextureScaling,

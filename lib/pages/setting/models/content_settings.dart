@@ -167,8 +167,8 @@ List<SettingsModel> get contentSettings => [
         onChanged: (value) => ReplyItemGrpc.enableWordRe = value,
       ),
       const SwitchModel(
-        title: '消息页禁用"收到的赞"功能',
-        subtitle: '禁止打开入口，降低网络社交依赖',
+        title: '禁用“收到的赞”入口和角标',
+        subtitle: '消息页禁用该入口，首页未读数排除赞消息；立即生效。接收规则可在消息设置中调整',
         leading: Icon(Icons.beach_access_outlined),
         setKey: SettingBoxKey.disableLikeMsg,
         defaultVal: false,

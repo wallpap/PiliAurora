@@ -66,12 +66,15 @@ List<SettingsModel> get playSettings => [
           },
         ),
       if (PlatformUtils.isMobile)
-        const SwitchModel(
+        SwitchModel(
           title: '后台播放',
           subtitle: '进入后台时继续播放',
-          leading: Icon(Icons.motion_photos_pause_outlined),
+          leading: const Icon(Icons.motion_photos_pause_outlined),
           setKey: SettingBoxKey.continuePlayInBackground,
           defaultVal: false,
+          onChanged: (value) =>
+              PlPlayerController.instance?.continuePlayInBackground.value =
+                  value,
         ),
       if (Platform.isAndroid) ...[
         SwitchModel(
@@ -115,8 +118,8 @@ List<SettingsModel> get playSettings => [
             .whenComplete(setState),
       ),
       const SwitchModel(
-        title: '播放器设置仅对当前生效',
-        subtitle: '弹幕、字幕及部分设置中没有的设置除外',
+        title: '不保存播放器内的临时调整',
+        subtitle: '播放顺序、画中画、后台播放等调整不写入默认偏好，当前播放器会话继续沿用；弹幕和字幕设置仍会保存',
         leading: Icon(Icons.video_settings_outlined),
         setKey: SettingBoxKey.tempPlayerConf,
         defaultVal: false,
@@ -288,12 +291,14 @@ List<SettingsModel> get playSettings => [
     leading: const Icon(Icons.subtitles_outlined),
     children: [
       ...danmakuExtraSettings,
-      const SwitchModel(
+      SwitchModel(
         title: '弹幕开关',
         subtitle: '是否展示弹幕',
-        leading: Icon(CustomIcons.dm_settings),
+        leading: const Icon(CustomIcons.dm_settings),
         setKey: SettingBoxKey.enableShowDanmaku,
         defaultVal: true,
+        onChanged: (value) =>
+            PlPlayerController.instance?.enableShowDanmaku.value = value,
       ),
       if (PlatformUtils.isMobile)
         const SwitchModel(

@@ -413,7 +413,7 @@ class PlPlayerController
   }
 
   // 弹幕相关配置
-  late final enableTapDm = PlatformUtils.isMobile && Pref.enableTapDm;
+  bool get enableTapDm => PlatformUtils.isMobile && Pref.enableTapDm;
   late RuleFilter _filters = Pref.danmakuFilterRule;
   RuleFilter get filters => _filters;
   set filters(RuleFilter value) {
@@ -476,7 +476,7 @@ class PlPlayerController
   late int subtitlePaddingH = Pref.subtitlePaddingH;
   late int subtitlePaddingB = Pref.subtitlePaddingB;
   late double subtitleBgOpacity = Pref.subtitleBgOpacity;
-  final bool showVipDanmaku = Pref.showVipDanmaku; // loop unswitching
+  bool get showVipDanmaku => Pref.showVipDanmaku;
   late double subtitleStrokeWidth = Pref.subtitleStrokeWidth;
   late int subtitleFontWeight = Pref.subtitleFontWeight;
 
@@ -505,13 +505,13 @@ class PlPlayerController
   late final keyboardControl = Pref.keyboardControl;
   late final uiScale = Pref.uiScale;
 
-  late final bool autoEnterFullScreen = Pref.autoEnterFullScreen;
-  late final bool autoExitFullscreen = Pref.autoExitFullscreen;
-  late final bool autoPlayEnable = Pref.autoPlayEnable;
+  bool get autoEnterFullScreen => Pref.autoEnterFullScreen;
+  bool get autoExitFullscreen => Pref.autoExitFullscreen;
+  bool get autoPlayEnable => Pref.autoPlayEnable;
   late final bool enableVerticalExpand = Pref.enableVerticalExpand;
   late final bool pipNoDanmaku = Pref.pipNoDanmaku;
 
-  late final bool tempPlayerConf = Pref.tempPlayerConf;
+  bool get tempPlayerConf => Pref.tempPlayerConf;
 
   late int? cacheVideoQa = PlatformUtils.isMobile ? null : Pref.defaultVideoQa;
   late int cacheAudioQa = Pref.defaultAudioQa;
@@ -1055,6 +1055,7 @@ class PlPlayerController
       width: width,
       height: height,
       enableAndroidTextureScaling: Pref.enableAndroidTextureScaling,
+      readAndroidTextureScaling: () => Pref.enableAndroidTextureScaling,
     );
   }
 
@@ -1065,7 +1066,11 @@ class PlPlayerController
     bool? audioOnly,
   }) {
     final speed = live ? 1.0 : playbackSpeed;
-    final options = live ? Pref.initLiveBuffer() : Pref.initBuffer(speed);
+    final options = (live ? Pref.initLiveBuffer() : Pref.initBuffer(speed))
+      ..addAll({
+        'video-sync': Pref.videoSync,
+        'autosync': Pref.autosync,
+      });
     // 先读取并固定归一化偏好；查询期间 Pref 的后续变化不影响本次计划。
     audioFilterExtras(null, map: <String, String>{});
     if (source?.audioSource?.isNotEmpty == true) {

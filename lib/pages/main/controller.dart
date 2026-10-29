@@ -52,7 +52,6 @@ class MainController extends GetxController
   late bool hasHome = false;
   late final homeController = Get.putOrFind(HomeController.new);
 
-  late final disableLikeMsg = Pref.disableLikeMsg;
   late DynamicBadgeMode msgBadgeMode = Pref.msgBadgeMode;
   late Set<MsgUnReadType> msgUnReadTypes = Pref.msgUnReadTypeV2;
   final msgBadgeRevision = 0.obs;

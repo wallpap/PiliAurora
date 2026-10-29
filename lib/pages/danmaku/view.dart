@@ -73,6 +73,7 @@ class _PlDanmakuState extends State<PlDanmaku> {
         SettingBoxKey.mergeDanmakuScale,
         SettingBoxKey.mergeDanmakuThreshold,
         SettingBoxKey.mergeDanmakuLogBase,
+        SettingBoxKey.showVipDanmaku,
       }.contains(event.key)) {
         _refreshRules();
       }

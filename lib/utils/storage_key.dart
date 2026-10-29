@@ -132,7 +132,6 @@ abstract final class SettingBoxKey {
       slideDismissReplyPage = 'slideDismissReplyPage',
       showFSActionItem = 'showFSActionItem',
       enableShrinkVideoSize = 'enableShrinkVideoSize',
-      enableAndroidVideoOutputSize = 'enableAndroidVideoOutputSize',
       enableAndroidTextureScaling = 'enableAndroidTextureScaling',
       showDynActionBar = 'showDynActionBar',
       darkVideoPage = 'darkVideoPage',

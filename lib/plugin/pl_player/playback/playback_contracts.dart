@@ -587,6 +587,7 @@ class PlaybackRuntimeConfig {
     this.width,
     this.height,
     this.enableAndroidTextureScaling = false,
+    this.readAndroidTextureScaling,
   }) : playerOptions = Map.unmodifiable(playerOptions);
 
   final Map<String, String> playerOptions;
@@ -595,6 +596,7 @@ class PlaybackRuntimeConfig {
   final int? width;
   final int? height;
   final bool enableAndroidTextureScaling;
+  final bool Function()? readAndroidTextureScaling;
 }
 
 class PlaybackExecutionContext {

@@ -43,5 +43,4 @@ class WhisperController extends CommonWhisperController {
   }
 
   late final List<MsgFeedTopItem> msgFeedTopItems;
-  final bool disableLikeMsg = Pref.disableLikeMsg;
 }

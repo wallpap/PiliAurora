@@ -843,7 +843,9 @@ class NativePlaybackRuntime
             ? WindowsVideoOutputLimit.detected
             : null,
         androidOutputLimit: Platform.isAndroid
-            ? () => configuration.enableAndroidTextureScaling
+            ? () =>
+                  (configuration.readAndroidTextureScaling?.call() ??
+                      configuration.enableAndroidTextureScaling)
                   ? AndroidVideoOutputLimit.detected
                   : null
             : null,
