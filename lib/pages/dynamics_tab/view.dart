@@ -51,6 +51,8 @@ class _DynamicsTabPageState extends State<DynamicsTabPage> with DynMixin {
     return refreshIndicator(
       onRefresh: onRefresh,
       child: FeedPagination(
+        prefetchExtent: () =>
+            controller.scrollController.position.viewportDimension,
         controller: controller.scrollController,
         dataChanges: controller.loadingState.stream,
         canLoadMore: () => controller.canLoadMore && !controller.isLoading,
