@@ -88,15 +88,27 @@ class SliverGridDelegateWithExtentAndRatio extends SliverGridDelegate {
 
   @override
   SliverGridLayout getLayout(SliverConstraints constraints) {
+    return layoutForWidth(
+      constraints.crossAxisExtent,
+      reverseCrossAxis: axisDirectionIsReversed(constraints.crossAxisDirection),
+    );
+  }
+
+  SliverGridRegularTileLayout layoutForWidth(
+    double crossAxisExtent, {
+    bool reverseCrossAxis = false,
+  }) {
     // invoked before each frame
-    assert(_debugAssertIsValid(constraints.crossAxisExtent));
+    assert(_debugAssertIsValid(crossAxisExtent));
     if (layoutCache != null &&
-        constraints.crossAxisExtent == crossAxisExtentCache) {
-      return layoutCache!;
+        crossAxisExtent == crossAxisExtentCache &&
+        (layoutCache! as SliverGridRegularTileLayout).reverseCrossAxis ==
+            reverseCrossAxis) {
+      return layoutCache! as SliverGridRegularTileLayout;
     }
-    crossAxisExtentCache = constraints.crossAxisExtent;
+    crossAxisExtentCache = crossAxisExtent;
     int crossAxisCount =
-        ((constraints.crossAxisExtent - crossAxisSpacing) /
+        ((crossAxisExtent - crossAxisSpacing) /
                 (maxCrossAxisExtent + crossAxisSpacing))
             .ceil();
     // Ensure a minimum count of 1, can be zero and result in an infinite extent
@@ -104,19 +116,21 @@ class SliverGridDelegateWithExtentAndRatio extends SliverGridDelegate {
     crossAxisCount = max(1, crossAxisCount);
     final double usableCrossAxisExtent = max(
       0.0,
-      constraints.crossAxisExtent - crossAxisSpacing * (crossAxisCount - 1),
+      crossAxisExtent - crossAxisSpacing * (crossAxisCount - 1),
     );
     final double childCrossAxisExtent = usableCrossAxisExtent / crossAxisCount;
     final double childMainAxisExtent =
         childCrossAxisExtent / childAspectRatio + mainAxisExtent;
-    return layoutCache = SliverGridRegularTileLayout(
+    final layout = SliverGridRegularTileLayout(
       crossAxisCount: crossAxisCount,
       mainAxisStride: childMainAxisExtent + mainAxisSpacing,
       crossAxisStride: childCrossAxisExtent + crossAxisSpacing,
       childMainAxisExtent: childMainAxisExtent,
       childCrossAxisExtent: childCrossAxisExtent,
-      reverseCrossAxis: axisDirectionIsReversed(constraints.crossAxisDirection),
+      reverseCrossAxis: reverseCrossAxis,
     );
+    layoutCache = layout;
+    return layout;
   }
 
   @override

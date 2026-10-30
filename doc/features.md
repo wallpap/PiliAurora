@@ -54,7 +54,9 @@ flowchart TD
 - API/模型：`lib/http/api.dart`、`search.dart`、`lib/models/remote/` 下的 `popular/`、`search/` 等。
 - 入口：根路由 `/` → `MainApp`；具体子页见 `lib/router/app_pages.dart`。
 - 推荐和热门功能受响应结构、分页及登录状态影响；改动后先检查对应领域的测试。
-- 推荐与热门列表通过 `lib/common/widgets/feed_pagination.dart` 按实际滚动范围分页：首屏补足可视区，滚动后按页面指定的预取距离加载，避免预加载区构建末项时连续请求。对应测试为 `test/common/widgets/feed_pagination_test.dart`。
+- 首页推荐通过 `lib/pages/rcmd/viewport.dart` 与卡片共用网格几何，按列表实际高度、列数和字体缩放补足可视区及一行预取余量；底部留白不参与容量判断。骨架数量随容量变化。
+- 首页控制器连续下载所需批次，下载与黑名单同步、合作作者检查重叠，发布前完成黑名单准备。App 推荐按 `idx/pull` 顺序请求；Web 首包按容量请求 20–50 项，首包之后最多同时下载两页，按索引合并并去重。刷新保留历史内容和位置提示，后续分页追加在历史之后。
+- 首页滚动分页及其他发现列表使用 `lib/common/widgets/feed_pagination.dart` 按实际滚动范围与预取距离加载，避免构建末项触发请求。首页首屏补足由控制器负责；连续五页无有效增长时停止，分页失败保留内容并提供点击重试，刷新、切账号和退出会使旧查询失效。相关测试位于 `test/pages/rcmd/` 与 `test/common/widgets/feed_pagination_test.dart`。
 - “账号与隐私 → 增强黑名单屏蔽”默认开启。发现类列表按作者 UID 过滤并沿原来源补位；子开关“检查合作视频作者”默认开启，对列表明确标识的合作视频补查 `staff`，任一作者命中即屏蔽。补查共用缓存和并发限额，收藏、历史、稍后再看和详情访问沿用原行为。适用范围、请求开销和回归入口见[信息流黑名单屏蔽](content-filtering.md)。
 - 主导航、首页与排行通过 `TabActivity` / `TickerMode` 标记活动标签。`CachedImage` 在隐藏时卸载图片，页面数据和滚动位置继续保留；解码器创建与首帧交付共用两个并发名额，原生请求完成后归还名额。内存 LRU 仍为 64 MiB / 256 项，实际 RSS 与帧耗时需实机测量。
 - `NetworkImgLayer` 按卡片物理尺寸与 1 Mi 像素预算为 B 站 CDN 的质量型缩略请求补充宽高，让动图源文件同步缩小；已有尺寸或裁剪参数的请求继续沿用原构图，原图查看与下载沿用原地址。

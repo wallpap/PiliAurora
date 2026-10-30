@@ -54,9 +54,11 @@ abstract final class VideoHttp {
   static Future<LoadingState<List<RcmdVideoItemModel>>> rcmdVideoList({
     required int ps,
     required int freshIdx,
+    CancelToken? cancelToken,
   }) async {
     final res = await Request().get(
       Api.recommendListWeb,
+      cancelToken: cancelToken,
       queryParameters: await WbiSign.makSign({
         'version': 1,
         'feed_version': 'V8',
@@ -87,6 +89,7 @@ abstract final class VideoHttp {
   // 添加额外的loginState变量模拟未登录状态
   static Future<LoadingState<List<RcmdVideoItemAppModel>>> rcmdVideoListApp({
     required int freshIdx,
+    CancelToken? cancelToken,
   }) async {
     final params = {
       'build': 8430300,
@@ -119,6 +122,7 @@ abstract final class VideoHttp {
     };
     final res = await Request().get(
       Api.recommendListApp,
+      cancelToken: cancelToken,
       queryParameters: params,
       options: Options(
         headers: {
