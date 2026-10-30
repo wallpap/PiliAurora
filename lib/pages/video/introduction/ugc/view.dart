@@ -6,15 +6,12 @@ import 'package:pili_aurora/common/widgets/dialog/dialog.dart';
 import 'package:pili_aurora/common/widgets/expandable.dart';
 import 'package:pili_aurora/common/widgets/gesture/tap_gesture_recognizer.dart';
 import 'package:pili_aurora/common/widgets/image/network_img_layer.dart';
-import 'package:pili_aurora/common/widgets/music_tag.dart';
 import 'package:pili_aurora/common/widgets/pendant_avatar.dart';
 import 'package:pili_aurora/common/widgets/scroll_physics.dart'
     show ReloadScrollPhysics;
 import 'package:pili_aurora/common/widgets/selection_text.dart';
 import 'package:pili_aurora/common/widgets/stat/stat.dart';
 import 'package:pili_aurora/common/widgets/translucent_column.dart';
-import 'package:pili_aurora/common/widgets/topic_tag.dart';
-import 'package:pili_aurora/common/widgets/video_tag_colors.dart';
 import 'package:pili_aurora/http/sponsor_block.dart';
 import 'package:pili_aurora/models/remote/video/video_ai_conclusion/model_result.dart';
 import 'package:pili_aurora/models/remote/video/video_detail/data.dart';
@@ -1012,63 +1009,33 @@ class _UgcIntroPanelState extends State<UgcIntroPanel> {
       child: Wrap(
         spacing: 8,
         runSpacing: 8,
-        children: tags.map((item) {
-          if (item.tagType == 'topic') {
-            return TopicTag(
-              text: item.tagName!,
-              onTap: () => Get.toNamed(
-                '/dynTopic',
-                parameters: {'id': item.tagId!.toString()},
-              ),
-            );
-          }
-
-          if (item.tagType == 'bgm') {
-            return MusicTag(
-              text: item.tagName!.replaceFirst('发现', 'BGM：'),
-              onTap: () => Get.toNamed(
-                '/musicDetail',
-                parameters: {'musicId': item.musicId!},
-              ),
-              onLongPress: () => Utils.copyText(
-                item.tagName!.replaceFirst('发现', 'BGM：'),
-              ),
-            );
-          }
-
-          final text = item.tagName!;
-
-          return SizedBox(
-            height: 32,
-            child: Align(
-              alignment: Alignment.center,
-              widthFactor: 1,
-              child: SearchText(
+        children: tags
+            .map(
+              (item) => SearchText(
                 fontSize: 13,
-                text: text,
-                bgColor: VideoTagColors.plainBackground(
-                  isDark: Theme.of(context).brightness == Brightness.dark,
-                  onSurface: Theme.of(context).colorScheme.onSurface,
-                  onSurfaceVariant: Theme.of(context)
-                      .colorScheme
-                      .onSurfaceVariant,
-                ),
-                textColor: VideoTagColors.plainForeground(
-                  isDark: Theme.of(context).brightness == Brightness.dark,
-                  onSurface: Theme.of(context).colorScheme.onSurface,
-                  onSurfaceVariant: Theme.of(context)
-                      .colorScheme
-                      .onSurfaceVariant,
-                ),
-                onTap: (tagName) => Get.toNamed(
-                  '/searchResult',
-                  parameters: {'keyword': tagName},
-                ),
+                text: switch (item.tagType) {
+                  'bgm' => item.tagName!.replaceFirst('发现', '♫ BGM：'),
+                  'topic' => '#${item.tagName}',
+                  _ => item.tagName!,
+                },
+                onTap: switch (item.tagType) {
+                  'bgm' => (_) => Get.toNamed(
+                    '/musicDetail',
+                    parameters: {'musicId': item.musicId!},
+                  ),
+                  'topic' => (_) => Get.toNamed(
+                    '/dynTopic',
+                    parameters: {'id': item.tagId!.toString()},
+                  ),
+                  _ => (tagName) => Get.toNamed(
+                    '/searchResult',
+                    parameters: {'keyword': tagName},
+                  ),
+                },
                 onLongPress: Utils.copyText,
               ),
-            ),
-          );
-        }).toList(),
+            )
+            .toList(),
       ),
     );
   }
