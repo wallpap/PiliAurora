@@ -72,8 +72,8 @@ abstract final class Assets {
 
   static const mpvAnime4KShadersLite = [
     'Anime4K_Clamp_Highlights.glsl',
+    // 原尺寸仅执行一套恢复网络，避免重复滤波和额外中间纹理。
     'Anime4K_Restore_CNN_M.glsl',
-    'Anime4K_Restore_CNN_S.glsl',
     'Anime4K_Upscale_CNN_x2_M.glsl',
     'Anime4K_AutoDownscalePre_x2.glsl',
     'Anime4K_AutoDownscalePre_x4.glsl',
