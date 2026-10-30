@@ -45,9 +45,13 @@ class NativePlaybackRuntime
     required this.diagnosticsExtra,
     required Player player,
     required VideoController videoController,
+    bool subscribeToPlaybackEvents = false,
   }) : _player = player,
        _videoController = videoController {
     _bindNativeLifecycle(player);
+    if (subscribeToPlaybackEvents) {
+      _subscribePlaybackEvents(player, videoController);
+    }
     _videoControllerListenable.value = videoController;
   }
 
@@ -59,7 +63,9 @@ class NativePlaybackRuntime
   final int runtimeId = _nextRuntimeId++;
 
   @override
-  Duration? get position => _player?.state.position;
+  Duration? get position => _activeBinding?.eofReported == true
+      ? _activeBinding?.endPosition
+      : _player?.state.position;
 
   final PlaybackRuntimeConfig configuration;
   final Map<String, Object?> Function() diagnosticsExtra;
@@ -100,9 +106,9 @@ class NativePlaybackRuntime
   PlaybackPlan? _activePlan;
   Duration Function() _activeNow = _fallbackNow;
   Duration? _lastAudioPtsAdvance;
-  Duration? _lastVideoFrameAdvance;
+  Duration? _lastVideoPositionAdvance;
   Duration? _lastVideoFrameConsumed;
-  double? _lastVideoFrameNumber;
+  double? _lastVideoPosition;
   double? _selectedVideoFps;
   bool? _selectedVideoTrack;
   PlaybackActual? _lastPublishedActual;
@@ -901,53 +907,7 @@ class NativePlaybackRuntime
         userAgent: BrowserUa.pc,
         referer: HttpString.baseUrl,
       );
-      _subscribePlayerState(player);
-      _subscriptions.add(
-        player
-            .observeProperty('display-sync-active')
-            .listen(
-              (value) => _setDisplaySyncActive(value == 'yes'),
-              onError: (Object _) => _setDisplaySyncActive(false),
-            ),
-      );
-      _subscriptions.add(
-        player
-            .observeProperty('audio-pts')
-            .listen(
-              (value) => _observePts('audio', value),
-              onError: (Object _) => _observePts('audio', null),
-            ),
-      );
-      _subscriptions.add(
-        player
-            .observeProperty('estimated-frame-number')
-            .listen(
-              _observeVideoFrameNumber,
-              onError: (Object _) => _observeVideoFrameNumber(null),
-            ),
-      );
-      _subscriptions.add(
-        player
-            .observeProperty('seeking')
-            .listen(
-              (value) {
-                _seeking = value == 'yes';
-                if (_seeking) _resetHealthEvidence(keepCapabilities: true);
-                _emitActual(_activeBinding?.loadId);
-              },
-              onError: (Object _) {
-                _seeking = false;
-                _emitActual(_activeBinding?.loadId);
-              },
-            ),
-      );
-      _subscriptions.add(
-        video.outputProgress.listen(_observeOutputProgress),
-      );
-      _frameTimings.setFrameTimelineSupported(video.frameTimelineSupported);
-      _subscriptions.add(
-        video.frameEvents.listen(_frameTimings.accept),
-      );
+      _subscribePlaybackEvents(player, video);
       // 输出已可挂载；媒体探测和首帧准备继续在原生加载链中完成。
       _videoControllerListenable.value = video;
       recordStage('output-created');
@@ -966,6 +926,56 @@ class NativePlaybackRuntime
       );
       return null;
     }
+  }
+
+  void _subscribePlaybackEvents(Player player, VideoController video) {
+    _subscribePlayerState(player);
+    _subscriptions.add(
+      player
+          .observeProperty('display-sync-active')
+          .listen(
+            (value) => _setDisplaySyncActive(value == 'yes'),
+            onError: (Object _) => _setDisplaySyncActive(false),
+          ),
+    );
+    _subscriptions.add(
+      player
+          .observeProperty('audio-pts')
+          .listen(
+            (value) => _observePts('audio', value),
+            onError: (Object _) => _observePts('audio', null),
+          ),
+    );
+    _subscriptions.add(
+      player
+          .observeProperty('time-pos')
+          .listen(
+            _observeVideoPosition,
+            onError: (Object _) => _observeVideoPosition(null),
+          ),
+    );
+    _subscriptions.add(
+      player
+          .observeProperty('seeking')
+          .listen(
+            (value) {
+              _seeking = value == 'yes';
+              if (_seeking) _resetHealthEvidence(keepCapabilities: true);
+              _emitActual(_activeBinding?.loadId);
+            },
+            onError: (Object _) {
+              _seeking = false;
+              _emitActual(_activeBinding?.loadId);
+            },
+          ),
+    );
+    _subscriptions.add(
+      video.outputProgress.listen(_observeOutputProgress),
+    );
+    _frameTimings.setFrameTimelineSupported(video.frameTimelineSupported);
+    _subscriptions.add(
+      video.frameEvents.listen(_frameTimings.accept),
+    );
   }
 
   void _bindNativeLifecycle(Player player) {
@@ -1233,6 +1243,11 @@ class NativePlaybackRuntime
       return;
     }
     try {
+      if (!binding.eofReported) {
+        binding
+          ..endPosition = _player?.state.position
+          ..endDuration = _player?.state.duration;
+      }
       if (_frameTimings.frameState.value.output == binding.token) {
         _frameTimings.withdraw(Timeline.now);
         _samplingEnabled = false;
@@ -1247,6 +1262,25 @@ class NativePlaybackRuntime
 
   void _handleNativeEvent(NativePlayerEvent event) {
     switch (event) {
+      case NativePlaybackEof(
+        :final playlistEntryId,
+        :final reached,
+        :final position,
+        :final duration,
+      ):
+        final binding = playlistEntryId == null
+            ? null
+            : _bindings[playlistEntryId];
+        if (binding == null ||
+            !identical(binding, _activeBinding) ||
+            binding.retiring) {
+          return;
+        }
+        if (!reached) {
+          binding.eofReported = false;
+          return;
+        }
+        _reportEof(binding, position: position, duration: duration);
       case NativeSeekCompleted(:final playlistEntryId, :final observationId):
         final binding = _activeBinding;
         if (!_mediaClockSeekPending ||
@@ -1390,11 +1424,10 @@ class NativePlaybackRuntime
         }
         if (reason == NativeEndFileReason.eof &&
             identical(binding, _activeBinding)) {
-          _emit(
-            PlaybackRuntimeEnded(
-              runtimeId: runtimeId,
-              loadId: binding.loadId,
-            ),
+          _reportEof(
+            binding,
+            position: binding.endPosition ?? _player?.state.position,
+            duration: binding.endDuration ?? _player?.state.duration,
           );
         } else if (reason == NativeEndFileReason.error &&
             identical(binding, _activeBinding)) {
@@ -1421,6 +1454,30 @@ class NativePlaybackRuntime
       case NativeEventBatchDrained(:final batchId):
         if (batchId > _lastBatchId) _lastBatchId = batchId;
     }
+  }
+
+  void _reportEof(
+    _NativeFileBinding binding, {
+    Duration? position,
+    Duration? duration,
+  }) {
+    if (_shutdownRequested || binding.retiring || binding.eofReported) return;
+    binding
+      ..eofReported = true
+      ..endPosition = position
+      ..endDuration = duration;
+    final pending = _pendingLoad;
+    if (pending != null && identical(pending.binding, binding)) {
+      pending.handleEnd(NativeEndFileReason.eof, 0);
+    }
+    _emit(
+      PlaybackRuntimeEnded(
+        runtimeId: runtimeId,
+        loadId: binding.loadId,
+        position: position,
+        duration: duration,
+      ),
+    );
   }
 
   Future<void> _confirmOutputAfterFileLoaded(
@@ -1741,15 +1798,15 @@ class NativePlaybackRuntime
     _emitActual(binding.loadId);
   }
 
-  void _observeVideoFrameNumber(String? raw) {
+  void _observeVideoPosition(String? raw) {
     final binding = _activeBinding;
     if (binding == null || binding.token == null || raw == null) return;
-    final frameNumber = double.tryParse(raw);
-    if (frameNumber == null || !frameNumber.isFinite) return;
-    final previous = _lastVideoFrameNumber;
-    _lastVideoFrameNumber = frameNumber;
-    if (previous == null || frameNumber <= previous || _seeking) return;
-    _lastVideoFrameAdvance = _activeNow();
+    final position = double.tryParse(raw);
+    if (position == null || !position.isFinite) return;
+    final previous = _lastVideoPosition;
+    _lastVideoPosition = position;
+    if (previous == null || position <= previous || _seeking) return;
+    _lastVideoPositionAdvance = _activeNow();
     _scheduleHealthExpiry();
     _emitCapabilities(binding.loadId);
     _emitActual(binding.loadId);
@@ -1820,10 +1877,9 @@ class NativePlaybackRuntime
         frameRate <= 0) {
       return null;
     }
-    // estimated-frame-number derives from playback position in the bundled
-    // mpv. Pair it with a token-matched Flutter-consumed frame, and only use
-    // it for a selected video track with a known positive frame rate.
-    return _fresh(_lastVideoFrameAdvance, now) &&
+    // estimated-frame-number 不持续发布属性变更；用 time-pos 的推进
+    // 配合当前输出令牌的实际消费帧，确认画面仍在播放。
+    return _fresh(_lastVideoPositionAdvance, now) &&
         _fresh(_lastVideoFrameConsumed, now) &&
         !_buffering &&
         _playing &&
@@ -1838,7 +1894,7 @@ class NativePlaybackRuntime
     final timestamps = [
       if (_hasAudio == true) _lastAudioPtsAdvance,
       if (_hasVideo == true) ...[
-        _lastVideoFrameAdvance,
+        _lastVideoPositionAdvance,
         _lastVideoFrameConsumed,
       ],
     ].whereType<Duration>().toList();
@@ -1880,9 +1936,9 @@ class NativePlaybackRuntime
     _healthExpiryDeadline = null;
     _lastPts.clear();
     _lastAudioPtsAdvance = null;
-    _lastVideoFrameAdvance = null;
+    _lastVideoPositionAdvance = null;
     _lastVideoFrameConsumed = null;
-    _lastVideoFrameNumber = null;
+    _lastVideoPosition = null;
     _frameTimings.invalidate(Timeline.now);
     if (!keepCapabilities) {
       _hasVideo = null;
@@ -2274,6 +2330,9 @@ class _NativeFileBinding {
   bool endFileSeen = false;
   bool unloaded = false;
   bool retiring = false;
+  bool eofReported = false;
+  Duration? endPosition;
+  Duration? endDuration;
 }
 
 class _NativeIdentityFailure implements Exception {

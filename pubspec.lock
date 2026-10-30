@@ -1134,7 +1134,7 @@ packages:
       path: "third_party/media_kit"
       relative: true
     source: path
-    version: "1.1.11+piliaurora.5"
+    version: "1.1.11+piliaurora.6"
   media_kit_libs_android_video:
     dependency: "direct overridden"
     description:

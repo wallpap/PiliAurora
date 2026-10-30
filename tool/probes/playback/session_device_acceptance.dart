@@ -597,6 +597,18 @@ Future<void> main() async {
         ...await pixels(),
       };
     });
+    await test('natural-eof', () async {
+      final duration = runtime.player!.state.duration;
+      check(duration > const Duration(seconds: 3), 'fixture too short for EOF');
+      await owner.seek(duration - const Duration(seconds: 1));
+      await owner.setPlaying(true);
+      await waitFor(() => session.currentSnapshot.phase == PlaybackPhase.ended);
+      check(
+        !session.currentSnapshot.intent.playing,
+        'EOF retained play intent',
+      );
+      return {'phase': session.currentSnapshot.phase.name};
+    });
   } finally {
     mount.cancel();
     display.value = null;

@@ -641,6 +641,146 @@ void main() {
     await runtime.released;
   });
 
+  test('网络点播提前 EOF 保留意图和位置并受三次恢复预算约束', () async {
+    final runtime = _FakeRuntime()..position = const Duration(seconds: 2);
+    final session = PlaybackSession(runtime: runtime);
+    final owner = session.attach();
+    try {
+      await owner.load(_plan('truncated'), start: PlaybackStartPolicy.play);
+      for (var i = 0; i < 3; i++) {
+        runtime._events.add(
+          PlaybackRuntimeEnded(
+            runtimeId: runtime.runtimeId,
+            loadId: session.loadId,
+          ),
+        );
+        await _until(
+          () =>
+              runtime.loadedKeys.length == i + 2 &&
+              session.currentSnapshot.phase == PlaybackPhase.ready,
+        );
+        expect(session.currentSnapshot.intent.playing, isTrue);
+        expect(session.currentSnapshot.pendingAction, isNull);
+        expect(
+          runtime.loadedPlans.last.reloadPosition,
+          const Duration(seconds: 2),
+        );
+      }
+      runtime._events.add(
+        PlaybackRuntimeEnded(
+          runtimeId: runtime.runtimeId,
+          loadId: session.loadId,
+        ),
+      );
+      await _until(() => session.currentSnapshot.phase == PlaybackPhase.failed);
+      expect(runtime.loadedKeys, hasLength(4));
+      expect(session.currentSnapshot.failure?.operation, 'automatic-recovery');
+    } finally {
+      owner.close();
+      await session.shutdown();
+    }
+  });
+
+  test('暂停时提前 EOF 保留停止意图，恢复播放后继续处理故障', () async {
+    final runtime = _FakeRuntime()..position = const Duration(seconds: 2);
+    final session = PlaybackSession(runtime: runtime);
+    final owner = session.attach();
+    try {
+      await owner.load(_plan('truncated'), start: PlaybackStartPolicy.pause);
+      runtime._events.add(
+        PlaybackRuntimeEnded(
+          runtimeId: runtime.runtimeId,
+          loadId: session.loadId,
+        ),
+      );
+      await Future<void>.delayed(Duration.zero);
+      expect(runtime.loadedKeys, hasLength(1));
+      expect(session.currentSnapshot.intent.playing, isFalse);
+      expect(session.currentSnapshot.pendingAction, isNull);
+      await owner.setPlaying(true);
+      runtime.emitActual(
+        session.loadId,
+        const PlaybackActual(
+          playing: true,
+          position: Duration(seconds: 2),
+        ),
+      );
+      await _until(() => runtime.loadedKeys.length == 2);
+      expect(
+        runtime.loadedPlans.last.reloadPosition,
+        const Duration(seconds: 2),
+      );
+    } finally {
+      owner.close();
+      await session.shutdown();
+    }
+  });
+
+  for (final position in [
+    const Duration(seconds: 8),
+    const Duration(seconds: 10),
+  ]) {
+    test('距正常片尾不超过两秒的 EOF 完成播放：$position', () async {
+      final runtime = _FakeRuntime()..position = position;
+      final session = PlaybackSession(runtime: runtime);
+      final owner = session.attach();
+      try {
+        await owner.load(_plan('tail'), start: PlaybackStartPolicy.play);
+        runtime._events.add(
+          PlaybackRuntimeEnded(
+            runtimeId: runtime.runtimeId,
+            loadId: session.loadId,
+          ),
+        );
+        expect(session.currentSnapshot.phase, PlaybackPhase.ended);
+        expect(session.currentSnapshot.intent.playing, isFalse);
+        expect(runtime.loadedKeys, hasLength(1));
+      } finally {
+        owner.close();
+        await session.shutdown();
+      }
+    });
+  }
+
+  test('seek 命令回执在途时提前 EOF 不抢占，结束后按新位置恢复', () async {
+    final pending = Completer<PlaybackRuntimeCommandResult>();
+    final runtime = _FakeRuntime()
+      ..position = const Duration(seconds: 2)
+      ..onSeek = (_, _) => pending.future;
+    final session = PlaybackSession(runtime: runtime);
+    final owner = session.attach();
+    try {
+      await owner.load(_plan('seek-eof'), start: PlaybackStartPolicy.play);
+      final seeking = owner.seek(const Duration(seconds: 4));
+      await _until(() => runtime.seekCalls.isNotEmpty);
+      runtime
+        ..emitActual(session.loadId, const PlaybackActual(playing: false))
+        ..position = const Duration(seconds: 2);
+      runtime._events.add(
+        PlaybackRuntimeEnded(
+          runtimeId: runtime.runtimeId,
+          loadId: session.loadId,
+        ),
+      );
+      await Future<void>.delayed(Duration.zero);
+      expect(runtime.loadedKeys, hasLength(1));
+      runtime.position = const Duration(seconds: 4);
+      pending.complete(const PlaybackRuntimeCommandResult());
+      expect((await seeking).outcome, CommandOutcome.applied);
+      await _until(() => runtime.loadedKeys.length == 2);
+      expect(
+        runtime.loadedPlans.last.reloadPosition,
+        const Duration(seconds: 4),
+      );
+    } finally {
+      if (!pending.isCompleted) {
+        pending.complete(const PlaybackRuntimeCommandResult());
+      }
+      owner.close();
+      await session.shutdown();
+    }
+  });
+
   for (final ended in [false, true]) {
     test('A${ended ? '播完' : '暂停'}后经过B/C/D返回仍保持停止，显式播放可恢复', () async {
       final runtime = _FakeRuntime();
@@ -1314,6 +1454,134 @@ void main() {
     await session.shutdown();
   });
 
+  for (final scenario in [
+    (
+      name: '音视频共同健康',
+      hasAudio: true,
+      hasVideo: true,
+      audioOnly: false,
+      audio: true,
+      video: true,
+      resets: true,
+    ),
+    (
+      name: '音频故障而画面健康',
+      hasAudio: true,
+      hasVideo: true,
+      audioOnly: false,
+      audio: false,
+      video: true,
+      resets: false,
+    ),
+    (
+      name: '画面故障而音频健康',
+      hasAudio: true,
+      hasVideo: true,
+      audioOnly: false,
+      audio: true,
+      video: false,
+      resets: false,
+    ),
+    (
+      name: '双轨同时故障',
+      hasAudio: true,
+      hasVideo: true,
+      audioOnly: false,
+      audio: false,
+      video: false,
+      resets: false,
+    ),
+    (
+      name: '只听音频时忽略视频停滞',
+      hasAudio: true,
+      hasVideo: true,
+      audioOnly: true,
+      audio: true,
+      video: false,
+      resets: true,
+    ),
+    (
+      name: '只听音频时忽略未知视频轨道',
+      hasAudio: true,
+      hasVideo: null,
+      audioOnly: true,
+      audio: true,
+      video: null,
+      resets: true,
+    ),
+    (
+      name: '纯视频忽略不存在的音轨',
+      hasAudio: false,
+      hasVideo: true,
+      audioOnly: false,
+      audio: null,
+      video: true,
+      resets: true,
+    ),
+    (
+      name: '音视频模式音轨未知不能确认健康',
+      hasAudio: null,
+      hasVideo: true,
+      audioOnly: false,
+      audio: true,
+      video: true,
+      resets: false,
+    ),
+  ]) {
+    testWidgets('恢复预算按所需轨道判断：${scenario.name}', (tester) async {
+      var now = Duration.zero;
+      final runtime = _FakeRuntime()
+        ..onLoad = (plan, context, _) async => PlaybackRuntimeLoadResult(
+          loaded: true,
+          output: _loaded(context, plan).output,
+          capabilities: PlaybackCapabilities(
+            hasAudio: scenario.hasAudio,
+            hasVideo: scenario.hasVideo,
+          ),
+        );
+      final session = PlaybackSession(
+        runtime: runtime,
+        monotonicNow: () => now,
+      );
+      final owner = session.attach();
+      try {
+        final plan = _plan('tracks', audioOnly: scenario.audioOnly);
+        expect(
+          (await owner.load(plan, start: PlaybackStartPolicy.play)).outcome,
+          LoadOutcome.ready,
+        );
+        for (var i = 0; i < 3; i++) {
+          expect((await owner.recover(plan)).outcome, LoadOutcome.ready);
+        }
+        void observe() => runtime.emitActual(
+          session.loadId,
+          PlaybackActual(
+            playing: true,
+            buffering: false,
+            audioProgressing: scenario.audio,
+            videoProgressing: scenario.video,
+          ),
+        );
+        now = const Duration(seconds: 1);
+        observe();
+        now = const Duration(seconds: 11);
+        observe();
+        final result = await owner.recover(plan);
+        expect(
+          result.outcome,
+          scenario.resets ? LoadOutcome.ready : LoadOutcome.failed,
+        );
+        expect(runtime.loadedKeys, hasLength(scenario.resets ? 5 : 4));
+        if (!scenario.resets) {
+          expect(result.failure?.operation, 'automatic-recovery');
+        }
+      } finally {
+        owner.close();
+        await session.shutdown();
+      }
+    });
+  }
+
   test('连续故障恢复预算按有效播放时间耗尽，不因经过三十秒自动重开', () async {
     var now = Duration.zero;
     final runtime = _FakeRuntime();
@@ -1474,6 +1742,11 @@ class _FakeRuntime implements PlaybackRuntimePort {
   final loadedPlans = <PlaybackPlan>[];
   final playCalls = <bool>[];
   final seekCalls = <Duration>[];
+  Future<PlaybackRuntimeCommandResult> Function(
+    Duration,
+    PlaybackExecutionContext,
+  )?
+  onSeek;
   final audioReloadContexts = <PlaybackExecutionContext>[];
   Future<PlaybackRuntimeCommandResult> Function(PlaybackExecutionContext)?
   onReloadAudio;
@@ -1555,7 +1828,8 @@ class _FakeRuntime implements PlaybackRuntimePort {
     PlaybackExecutionContext context,
   ) async {
     seekCalls.add(target);
-    return const PlaybackRuntimeCommandResult();
+    return onSeek?.call(target, context) ??
+        const PlaybackRuntimeCommandResult();
   }
 
   @override

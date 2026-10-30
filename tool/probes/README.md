@@ -51,6 +51,10 @@ uv run --locked python tool/probes/playback/native_media_smoke.py --library buil
 
 该检查通过 Windows libmpv、`vo=null`、`ao=null` 和软件解码运行，视频帧依据 mpv 的 trace 日志计数，覆盖 Windows 软件解码这一条路径。Android GPU/MediaCodec、扬声器输出和完整应用性能由对应平台验收，画面和硬件解码在目标设备上验证。
 
+`playback/session_device_acceptance.dart` 使用真实播放会话与平台输出，检查暂停加载、画面采样、跳转、快速切源、解码与音频模式切换、自然片尾通知和释放。构建时用 `DEVICE_MEDIA` 指定设备可读样片，`DEVICE_REPORT` 指定报告路径，`DEVICE_SOAK_SECONDS` 控制连续播放时长。探针使用 `ao=null`，不检查扬声器输出。
+
+该探针的暂停跳转断言要求落点距目标小于 500ms。Android 普通音视频沿用关键帧跳转策略，应提供关键帧间隔不超过 500ms 的样片；稀疏关键帧样片用于单独验证跳转策略，不适用这个精度断言。独立音轨的精确跳转验证使用上文 `--seek-target` 入口。
+
 ## Windows 独立音轨断流回归
 
 `playback/native_audio_stream_recovery.py` 在127.0.0.1临时HTTP端口提供合成WAV，发送4秒音频后通过RST终止连接，

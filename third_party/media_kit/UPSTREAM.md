@@ -1,6 +1,6 @@
 # media_kit 本地版本
 
-- 本地版本：`1.1.11+piliaurora.5`；来源包版本：`1.1.11`。
+- 本地版本：`1.1.11+piliaurora.6`；来源包版本：`1.1.11`。
 - 来源仓库：https://github.com/My-Responsitories/media-kit.git
 - 来源提交：`73771ec38176be2d984a3049c28177bce23b54a0`。
 - 来源子目录：`media_kit`。
@@ -23,3 +23,5 @@
 2026-10-21：公开句柄所用的 nativeLibraryPath，供媒体时钟在 worker isolate 读取属性时复用实际加载的库路径，包含调用方指定路径。
 
 2026-10-27：open 在 libmpv 接受 loadfile 后同步通知调用方，并等待加载命令回执。运行时据此区分提交前失败和提交后回执迟到，按实际原生归属执行卸载与关闭。
+
+2026-10-30：单一 native reader 将 `eof-reached` 复制为带当前文件身份、位置及媒体时长的 `NativePlaybackEof`，覆盖 keep-open 保留文件时的播放结束和 seek 后恢复；文件卸载继续沿用独立的 end-file 事实。

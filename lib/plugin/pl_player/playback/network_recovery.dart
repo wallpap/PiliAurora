@@ -17,6 +17,7 @@ class PlaybackNetworkRecovery {
     required this.onError,
     this.onRetry,
     this.videoProgressing,
+    this.canRecover,
     this.delay = const Duration(seconds: 3),
     this.cooldown = const Duration(seconds: 10),
   });
@@ -27,6 +28,7 @@ class PlaybackNetworkRecovery {
   final void Function(Object error) onError;
   final void Function()? onRetry;
   final bool Function()? videoProgressing;
+  final bool Function()? canRecover;
   final Duration delay;
   final Duration cooldown;
   final _clock = Stopwatch()..start();
@@ -46,7 +48,7 @@ class PlaybackNetworkRecovery {
   bool _disposed = false;
   bool get isActive => !_disposed && isCurrent();
 
-  /// 强制恢复可关闭进度判断；分离音视频的读取失败可先保留主视频缓存。
+  /// 强制恢复可关闭进度判断；读取失败可先保留剩余缓存。
   void schedule({
     bool requireEmptyBuffer = false,
     bool allowNativeRecovery = true,
@@ -86,12 +88,17 @@ class PlaybackNetworkRecovery {
   void _check() {
     _timer = null;
     if (_disposed || _permissionDenied || !isCurrent()) return;
-    if (_requireVideoProgress && videoProgressing?.call() != false) {
+    final videoStalled = videoProgressing?.call() == false;
+    if (_requireVideoProgress && !videoStalled) {
       if (_scheduledAttempt case final key?) _attempted.remove(key);
       return;
     }
     final state = readState();
     if (state == null) return;
+    if (canRecover?.call() == false) {
+      _timer = Timer(delay, _check);
+      return;
+    }
     final lastCheck = _previousState;
     _previousState = state;
     final stalled =
@@ -114,8 +121,8 @@ class PlaybackNetworkRecovery {
         return;
       }
     }
-    if (_waitForCachedPlayback) {
-      // 分离音视频可能由另一轨推进时钟；主视频缓存耗尽后再恢复画面。
+    if (_waitForCachedPlayback && !videoStalled) {
+      // 已确认画面停滞时，另一轨的缓存不应挡住恢复。
       // 缓冲状态下两次检查均无进展时，超前的缓存时间也可能无法继续播放。
       if (state.buffer > state.position && !stalled) {
         _timer = Timer(delay, _check);

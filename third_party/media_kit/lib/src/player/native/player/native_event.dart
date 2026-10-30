@@ -77,6 +77,21 @@ final class NativeTracksChanged extends NativePlayerEvent {
 
 enum NativeEndFileReason { eof, stop, quit, error, redirect, unknown }
 
+/// keep-open 模式下的播放结束事实；文件尚未卸载，仍可 seek 后继续播放。
+final class NativePlaybackEof extends NativePlayerEvent {
+  const NativePlaybackEof({
+    required this.playlistEntryId,
+    required this.reached,
+    required this.position,
+    required this.duration,
+  });
+
+  final int? playlistEntryId;
+  final bool reached;
+  final Duration position;
+  final Duration duration;
+}
+
 final class NativeEndFile extends NativePlayerEvent {
   const NativeEndFile({
     required this.playlistEntryId,

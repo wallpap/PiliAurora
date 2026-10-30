@@ -87,6 +87,7 @@ class PlaybackSession implements PlaybackMediaClock {
   int _requestId = 0;
   int _loadId = 0;
   int _seekSequence = 0;
+  int? _pendingSeekSequence;
   Completer<void>? _seekWaitCancelled;
   PlaybackMediaAnchor? _mediaAnchor;
   final _mediaAnchors = StreamController<PlaybackMediaAnchor?>.broadcast(
@@ -128,6 +129,7 @@ class PlaybackSession implements PlaybackMediaClock {
   }
 
   void _invalidateMediaAnchor() {
+    _pendingSeekSequence = null;
     final waiting = _seekWaitCancelled;
     _seekWaitCancelled = null;
     if (waiting != null && !waiting.isCompleted) waiting.complete();
@@ -1023,72 +1025,84 @@ class PlaybackSession implements PlaybackMediaClock {
     final load = _loadId;
     final seekSequence = ++_seekSequence;
     _invalidateMediaAnchor();
+    _pendingSeekSequence = seekSequence;
     final deadline = _now() + commandBudget;
-    if (_runtime case final PlaybackSeekSubmissionGate gate) {
-      final cancelled = Completer<void>();
-      _seekWaitCancelled = cancelled;
-      final ready = Completer<void>();
-      void checkReady() {
-        if (!gate.seekSubmissionBlocked && !ready.isCompleted) ready.complete();
-      }
+    try {
+      if (_runtime case final PlaybackSeekSubmissionGate gate) {
+        final cancelled = Completer<void>();
+        _seekWaitCancelled = cancelled;
+        final ready = Completer<void>();
+        void checkReady() {
+          if (!gate.seekSubmissionBlocked && !ready.isCompleted) {
+            ready.complete();
+          }
+        }
 
-      final subscription = gate.seekSubmissionChanges.listen(
-        (_) => checkReady(),
-      );
-      checkReady();
-      try {
-        await Future.any([ready.future, cancelled.future])
-            .timeout(commandBudget);
-      } on TimeoutException {
-        return _commandResult(
-          const PlaybackOperationResult<
-            PlaybackRuntimeCommandResult
-          >.timedOut(),
-          'seek',
-          PlaybackStage.observing,
+        final subscription = gate.seekSubmissionChanges.listen(
+          (_) => checkReady(),
         );
-      } finally {
-        await subscription.cancel();
-        if (identical(_seekWaitCancelled, cancelled)) _seekWaitCancelled = null;
+        checkReady();
+        try {
+          await Future.any([ready.future, cancelled.future])
+              .timeout(commandBudget);
+        } on TimeoutException {
+          return _commandResult(
+            const PlaybackOperationResult<
+              PlaybackRuntimeCommandResult
+            >.timedOut(),
+            'seek',
+            PlaybackStage.observing,
+          );
+        } finally {
+          await subscription.cancel();
+          if (identical(_seekWaitCancelled, cancelled)) {
+            _seekWaitCancelled = null;
+          }
+        }
+        if (cancelled.isCompleted ||
+            !_isCommandCurrent(owner, request, load) ||
+            seekSequence != _seekSequence) {
+          return const CommandResult.superseded();
+        }
       }
-      if (cancelled.isCompleted ||
-          !_isCommandCurrent(owner, request, load) ||
-          seekSequence != _seekSequence) {
-        return const CommandResult.superseded();
+      final result = await _operations.submit<PlaybackRuntimeCommandResult>(
+        slot: PlaybackOperationSlot.seek,
+        deadline: deadline,
+        operation: (operation) {
+          if (!_isCommandCurrent(owner, request, load) ||
+              seekSequence != _seekSequence ||
+              !operation.isCurrent()) {
+            throw const _PlaybackSuperseded();
+          }
+          if (_capabilities.seekSupport != PlaybackSeekSupport.supported) {
+            throw const _PlaybackUnsupported();
+          }
+          return _runtime.seek(
+            target,
+            PlaybackExecutionContext(
+              requestId: request,
+              runtimeId: _runtime.runtimeId,
+              loadId: load,
+              seekSequence: seekSequence,
+              deadline: operation.deadline,
+              monotonicNow: _now,
+              cancelled: Future<void>.value(),
+              registerCancellation: (_) {},
+              isCurrent: () =>
+                  _isCommandCurrent(owner, request, load) &&
+                  seekSequence == _seekSequence &&
+                  operation.isCurrent(),
+            ),
+          );
+        },
+      );
+      return _commandResult(result, 'seek', PlaybackStage.observing);
+    } finally {
+      if (_pendingSeekSequence == seekSequence) {
+        _pendingSeekSequence = null;
+        _resumeDeferredRecovery();
       }
     }
-    final result = await _operations.submit<PlaybackRuntimeCommandResult>(
-      slot: PlaybackOperationSlot.seek,
-      deadline: deadline,
-      operation: (operation) {
-        if (!_isCommandCurrent(owner, request, load) ||
-            seekSequence != _seekSequence ||
-            !operation.isCurrent()) {
-          throw const _PlaybackSuperseded();
-        }
-        if (_capabilities.seekSupport != PlaybackSeekSupport.supported) {
-          throw const _PlaybackUnsupported();
-        }
-        return _runtime.seek(
-          target,
-          PlaybackExecutionContext(
-            requestId: request,
-            runtimeId: _runtime.runtimeId,
-            loadId: load,
-            seekSequence: seekSequence,
-            deadline: operation.deadline,
-            monotonicNow: _now,
-            cancelled: Future<void>.value(),
-            registerCancellation: (_) {},
-            isCurrent: () =>
-                _isCommandCurrent(owner, request, load) &&
-                seekSequence == _seekSequence &&
-                operation.isCurrent(),
-          ),
-        );
-      },
-    );
-    return _commandResult(result, 'seek', PlaybackStage.observing);
   }
 
   Future<CommandResult> _setConfiguration(
@@ -1423,10 +1437,15 @@ class PlaybackSession implements PlaybackMediaClock {
     return _commandResult(result, 'reloadAudio', PlaybackStage.observing);
   }
 
-  Future<LoadResult> _recover(PlaybackOwner owner, PlaybackPlan plan) {
+  Future<LoadResult> _recover(
+    PlaybackOwner owner,
+    PlaybackPlan plan, {
+    bool sourceEnded = false,
+  }) {
     final rejection = _rejectLoad(owner);
     if (rejection != null) return Future.value(rejection);
-    final incident = _ensureRecoveryIncident(plan.contentKey);
+    final incident = _ensureRecoveryIncident(plan.contentKey)
+      ..sourceEnded |= sourceEnded;
     _updateRecoveryClock();
     if (_shouldDeferRecovery(owner)) {
       incident.deferredPlan = plan.withConfiguration(_desiredConfiguration);
@@ -1438,7 +1457,11 @@ class PlaybackSession implements PlaybackMediaClock {
       _publish();
       return Future.value(const LoadResult.deferred());
     }
-    if (_recoveryIncident == incident) incident.deferredPlan = null;
+    if (_recoveryIncident == incident) {
+      incident
+        ..deferredPlan = null
+        ..sourceEnded = false;
+    }
     return _load(
       owner,
       _planForReload(plan),
@@ -1469,6 +1492,8 @@ class PlaybackSession implements PlaybackMediaClock {
 
   bool _shouldDeferRecovery(PlaybackOwner owner) =>
       owner._requiresLoad ||
+      _pendingSeekSequence != null ||
+      _actual.seeking == true ||
       _sessionInhibitors.isNotEmpty ||
       !owner._playing ||
       (_ownerInhibitors[owner]?.any(
@@ -1516,13 +1541,13 @@ class PlaybackSession implements PlaybackMediaClock {
   void _resumeDeferredRecovery() {
     if (_phase != PlaybackPhase.ready) return;
     final owner = _activeOwner;
+    final incident = _recoveryIncident;
     if (owner == null ||
         _shouldDeferRecovery(owner) ||
-        _actual.playing != true) {
+        (_actual.playing != true && incident?.sourceEnded != true)) {
       return;
     }
     _observeHealth(_now());
-    final incident = _recoveryIncident;
     final plan = incident?.deferredPlan;
     if (incident == null || plan == null) return;
     // Let observed healthy media continue for the full recovery-reset window
@@ -1608,10 +1633,31 @@ class PlaybackSession implements PlaybackMediaClock {
         _capabilities = capabilities;
         _observeHealth(_now());
         _publish();
-      case PlaybackRuntimeEnded():
+      case PlaybackRuntimeEnded(:final position, :final duration):
         if (_phase != PlaybackPhase.ready || _pendingAction != null) return;
         final owner = _activeOwner;
         if (owner == null) return;
+        final plan = _currentPlan;
+        final endPosition = position ?? _runtime.position ?? _actual.position;
+        final endDuration = duration != null && duration > Duration.zero
+            ? duration
+            : plan?.timeline.duration ?? _actual.duration;
+        if (plan != null &&
+            plan.source.isNetwork &&
+            plan.timeline.kind == PlaybackTimelineKind.onDemand &&
+            endPosition != null &&
+            endDuration != null &&
+            endDuration > Duration.zero &&
+            endPosition < endDuration - const Duration(seconds: 2)) {
+          // 网络点播提前结束仍属于同一次故障，保留用户意图并沿用恢复预算。
+          _emitTrace('recovery.premature-eof', {
+            'loadId': _loadId,
+            'positionMs': endPosition.inMilliseconds,
+            'durationMs': endDuration.inMilliseconds,
+          });
+          unawaited(_recover(owner, plan, sourceEnded: true));
+          return;
+        }
         // 播完后停止页面的播放意图，返回重载时保持停止；连播由页面显式发起。
         owner._playing = false;
         _intentRevision++;
@@ -1650,14 +1696,12 @@ class PlaybackSession implements PlaybackMediaClock {
       _healthyCheck = null;
       return;
     }
-    final audioRequired =
-        _currentPlan?.configuration.audioOnly == true ||
-        _capabilities.hasAudio == true;
-    final videoRequired =
-        _currentPlan?.configuration.audioOnly != true &&
-        _capabilities.hasVideo == true;
+    final audioOnly = _currentPlan?.configuration.audioOnly == true;
+    final audioRequired = audioOnly || _capabilities.hasAudio == true;
+    final videoRequired = !audioOnly && _capabilities.hasVideo == true;
     final knownTracks =
-        _capabilities.hasAudio != null && _capabilities.hasVideo != null;
+        _capabilities.hasAudio != null &&
+        (audioOnly || _capabilities.hasVideo != null);
     final tracksHealthy =
         knownTracks &&
         (!audioRequired || _actual.audioProgressing == true) &&
@@ -1932,6 +1976,9 @@ class PlaybackSession implements PlaybackMediaClock {
     _shutdownStarted = true;
     _phase = PlaybackPhase.closing;
     _stage = PlaybackStage.closing;
+    _healthyCheck?.cancel();
+    _healthyCheck = null;
+    _healthySince = null;
     _invalidateMediaAnchor();
     _supersedeAcceptedRequest();
     _operations.dispose();
@@ -2438,6 +2485,8 @@ class _RecoveryIncident {
   int attempts = 0;
   Duration? lastAttemptAt;
   PlaybackPlan? deferredPlan;
+  // EOF 后原生已停止，延期恢复仍由用户的播放意图决定。
+  bool sourceEnded = false;
 }
 
 class _SnapshotSubscriber {

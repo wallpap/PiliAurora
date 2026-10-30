@@ -786,7 +786,12 @@ class PlaybackRuntimeEnded extends PlaybackRuntimeEvent {
   const PlaybackRuntimeEnded({
     required super.runtimeId,
     required super.loadId,
+    this.position,
+    this.duration,
   });
+
+  final Duration? position;
+  final Duration? duration;
 }
 
 class PlaybackRuntimeFailure extends PlaybackRuntimeEvent {

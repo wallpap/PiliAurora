@@ -39,6 +39,7 @@ $ciTests = @(
     "test/services/audio_session_test.dart",
     "test/services/audio_handler_lifecycle_test.dart",
     "test/plugin/pl_player/playback/playback_session_test.dart",
+    "test/plugin/pl_player/playback/controller_recovery_test.dart",
     "test/plugin/pl_player/playback/audio_recovery_test.dart",
     "test/plugin/pl_player/playback/network_recovery_test.dart",
     "test/plugin/pl_player/playback/progress_projection_test.dart",

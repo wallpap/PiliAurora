@@ -422,6 +422,7 @@ class _Playback {
     position: position,
     duration: duration,
     audioPts: audioPts,
+    audioProgressing: null,
     audioDelay: 0,
   );
 }

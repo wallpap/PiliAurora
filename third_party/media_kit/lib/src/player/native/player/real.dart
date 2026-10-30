@@ -1848,6 +1848,19 @@ class NativePlayer extends PlatformPlayer {
       final property = data.cast<generated.mpv_event_property>().ref;
       if (property.name == nullptr || event.ref.reply_userdata != 0) return;
       final propertyName = property.name.toDartString();
+      if (propertyName == 'eof-reached' &&
+          property.format == generated.mpv_format.MPV_FORMAT_FLAG &&
+          property.data != nullptr) {
+        _emitNativeEvent(
+          NativePlaybackEof(
+            playlistEntryId: _activePlaylistEntryId,
+            reached: property.data.cast<Bool>().value,
+            position: state.position,
+            duration: state.duration,
+          ),
+        );
+        return;
+      }
       if (propertyName == 'video-out-params') {
         final playlistEntryId = _activePlaylistEntryId;
         NativeVideoOutputParameters? parameters;

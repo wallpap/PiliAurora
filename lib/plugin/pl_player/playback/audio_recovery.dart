@@ -9,6 +9,7 @@ typedef AudioRecoveryState = ({
   Duration position,
   Duration duration,
   double? audioPts,
+  bool? audioProgressing,
   double audioDelay,
 });
 
@@ -169,8 +170,11 @@ class PlaybackAudioRecovery {
     final observedMs = _previousAtMs == null ? 0 : _nowMs - _previousAtMs!;
     _previous = state;
     _previousAtMs = _nowMs;
+    // 纯音频故障可同时停住主时钟，此时仍使用原生音轨停滞证据。
     if (previous == null ||
-        (state.position <= previous.position && !_decoderFailed)) {
+        (state.position <= previous.position &&
+            !_decoderFailed &&
+            state.audioProgressing != false)) {
       _healthySinceMs = null;
       _schedule();
       return;

@@ -6,7 +6,8 @@ import 'dart:io' show Platform;
 import 'dart:math' show max, min;
 
 import 'package:pili_aurora/utils/volume_utils.dart';
-import 'package:flutter/foundation.dart' show ValueListenable;
+import 'package:flutter/foundation.dart'
+    show ValueListenable, visibleForTesting;
 
 import 'package:pili_aurora/common/assets.dart';
 import 'package:pili_aurora/http/loading_state.dart';
@@ -89,29 +90,33 @@ typedef PlayCallback = Future<void>? Function();
 
 class PlPlayerController
     with BlockConfigMixin, AudioNormalizationMixin, WindowListener {
-  late final NativePlaybackRuntime _runtime = NativePlaybackRuntime(
-    configuration: _captureRuntimeConfiguration(),
-    diagnosticsExtra: () => {
-      'previewCacheBytes': previewCache.sizeBytes,
-      'previewCacheLimitBytes': previewCache.maxBytes,
-      'live': isLive,
-      'appLifecycle': WidgetsBinding.instance.lifecycleState?.name,
-      'session': {
-        'phase': _session.currentSnapshot.phase.name,
-        'stage': _session.currentSnapshot.stage.name,
-        'runtimeId': _session.currentSnapshot.runtimeId,
-        'requestId': _session.currentSnapshot.requestId,
-        'loadId': _session.currentSnapshot.loadId,
-        'playingIntent': _session.currentSnapshot.intent.playing,
-        'seeking': _session.currentSnapshot.actual.seeking,
-        'inhibitors': [
-          for (final inhibitor in _session.currentSnapshot.inhibitors)
-            inhibitor.source.name,
-        ],
-      },
-      ..._runtime.videoFrameDiagnostics,
-    },
-  );
+  final NativePlaybackRuntime? _providedRuntime;
+  final Duration Function()? _monotonicNow;
+  late final NativePlaybackRuntime _runtime =
+      _providedRuntime ??
+      NativePlaybackRuntime(
+        configuration: _captureRuntimeConfiguration(),
+        diagnosticsExtra: () => {
+          'previewCacheBytes': previewCache.sizeBytes,
+          'previewCacheLimitBytes': previewCache.maxBytes,
+          'live': isLive,
+          'appLifecycle': WidgetsBinding.instance.lifecycleState?.name,
+          'session': {
+            'phase': _session.currentSnapshot.phase.name,
+            'stage': _session.currentSnapshot.stage.name,
+            'runtimeId': _session.currentSnapshot.runtimeId,
+            'requestId': _session.currentSnapshot.requestId,
+            'loadId': _session.currentSnapshot.loadId,
+            'playingIntent': _session.currentSnapshot.intent.playing,
+            'seeking': _session.currentSnapshot.actual.seeking,
+            'inhibitors': [
+              for (final inhibitor in _session.currentSnapshot.inhibitors)
+                inhibitor.source.name,
+            ],
+          },
+          ..._runtime.videoFrameDiagnostics,
+        },
+      );
   PlayerDiagnostics? get _diagnostics => _runtime.diagnostics;
   Player? get _videoPlayerController => _runtime.player;
   VideoController? get _videoController => _runtime.videoController;
@@ -697,7 +702,10 @@ class PlPlayerController
   }
 
   // 添加一个私有构造函数
-  PlPlayerController._() {
+  PlPlayerController._({
+    NativePlaybackRuntime? runtime,
+    this._monotonicNow,
+  }) : _providedRuntime = runtime {
     if (isDesktopPip) {
       windowManager.addListener(this);
       _listensToWindowEvents = true;
@@ -734,6 +742,15 @@ class PlPlayerController
     audioSessionHandler?.attachPlaybackController(this);
   }
 
+  @visibleForTesting
+  factory PlPlayerController.withRuntime(
+    NativePlaybackRuntime runtime, {
+    Duration Function()? monotonicNow,
+  }) => PlPlayerController._(
+    runtime: runtime,
+    monotonicNow: monotonicNow,
+  );
+
   void _onUserLeaveHint() {
     if (autoPiP && playerStatus.isPlaying && _isCurrVideoPage) {
       enterPip();
@@ -749,7 +766,10 @@ class PlPlayerController
     return _instance!..isLive = isLive;
   }
 
-  late final PlaybackSession _session = PlaybackSession(runtime: _runtime);
+  late final PlaybackSession _session = PlaybackSession(
+    runtime: _runtime,
+    monotonicNow: _monotonicNow,
+  );
   PlaybackMediaClock get mediaClock => _session;
   PlaybackNetworkRecovery? _networkRecovery;
   PlaybackAudioRecovery? _audioRecovery;
@@ -953,6 +973,7 @@ class PlPlayerController
         snapshot.phase == PlaybackPhase.ready &&
         snapshot.intent.playing &&
         snapshot.actual.playing == true &&
+        snapshot.actual.buffering != true &&
         snapshot.actual.seeking != true &&
         !desired.audioOnly &&
         snapshot.capabilities.hasVideo == true &&
@@ -1441,10 +1462,17 @@ class PlPlayerController
         automaticRecovery: true,
       ),
       onError: Utils.reportError,
+      canRecover: () =>
+          !_audioSeekInProgress &&
+          !isSeeking.value &&
+          _session.currentSnapshot.actual.seeking != true,
       videoProgressing: () {
         final snapshot = _session.currentSnapshot;
-        return !snapshot.intent.playing ||
+        return snapshot.configuration.desired.audioOnly ||
+            snapshot.capabilities.hasVideo != true ||
+            !snapshot.intent.playing ||
             snapshot.actual.playing != true ||
+            snapshot.actual.buffering == true ||
             snapshot.actual.seeking == true ||
             snapshot.actual.videoProgressing != false;
       },
@@ -1509,6 +1537,9 @@ class PlPlayerController
       _audioRecovery = null;
     }
     _audioRecovery ??= PlaybackAudioRecovery(
+      elapsedMilliseconds: _monotonicNow == null
+          ? null
+          : () => _monotonicNow().inMilliseconds,
       readState: () {
         final player = _videoPlayerController;
         if (!_session.isCurrent(revision) ||
@@ -1535,6 +1566,7 @@ class PlPlayerController
           position: player.state.position,
           duration: player.state.duration,
           audioPts: double.tryParse(_diagnostics?.property('audio-pts') ?? ''),
+          audioProgressing: _session.currentSnapshot.actual.audioProgressing,
           audioDelay:
               double.tryParse(
                 _diagnostics?.property('audio-delay') ?? '',
@@ -1751,9 +1783,7 @@ class PlPlayerController
         )) {
           _recoverPlaybackNetwork(
             requireEmptyBuffer: false,
-            waitForCachedPlayback:
-                !onlyPlayAudio.value &&
-                _currentPlan?.source.currentAudioSource?.isNotEmpty == true,
+            waitForCachedPlayback: true,
           );
         }
       }),
