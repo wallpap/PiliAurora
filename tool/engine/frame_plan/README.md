@@ -77,7 +77,7 @@ build/frame-plan-validation/plan_test
 
 `prepare_device_probe.py` 复用运动夹具数据，生成使用正式 Binding、弹幕组件和原生引擎的设备入口；它使用引擎目标时间，不加载 preload 库。通过 `build_apk.py --target build/frame-plan-engine-probe/probe.dart --dart-define=JANK_MEDIA_URI=<原片URI> --output <隔离探针APK>` 构建。
 
-设备诊断可设置 `log.tag.PILI_FRAME_PLAN=DEBUG`，读取 `submit` 与 `present` 的同一 EGL frame ID。采集结束恢复原属性。`egl_frame_association.py` 保留缺失记录，Surface 代次须分段。设备结果和原始采样放在本地 `doc/dev/`、`build/`。
+设备诊断可设置 `log.tag.PILI_FRAME_PLAN=DEBUG`，读取 `submit` 与 `present` 的同一 EGL frame ID。采集结束恢复原属性。`egl_frame_association.py` 保留缺失记录，Surface 代次须分段。设备结果和原始采样保存在本地验证目录。
 
 ## 正式 Release 与多架构装配
 

@@ -46,7 +46,7 @@ Android 帧计划测试包使用[隔离引擎构建入口](../tool/engine/frame_
 Windows 帧节奏自编引擎使用[固定补丁与隔离构建入口](../tool/engine/windows_frame_pacing/README.md)。先构建并通过原生回归，再显式装配同模式的 Profile/Release 引擎：
 
 ```powershell
-pwsh -NoProfile -File tool/build.ps1 -Platform windows -Mode profile -WindowsEngineLibrary E:/engine/windows-pacing/flutter/engine/src/out/piliaurora_windows_profile/flutter_windows.dll
+pwsh -NoProfile -File tool/build.ps1 -Platform windows -Mode profile -WindowsEngineLibrary <engine-root>/flutter/engine/src/out/piliaurora_windows_profile/flutter_windows.dll
 ```
 
 脚本核对框架／引擎固定提交、模式、x64 架构、当前补丁／overlay、DLL 摘要及原生回归状态，并在应用输出目录保留 `engine-identity.json`。省略 `-WindowsEngineLibrary` 使用 FVM 引擎并清除旧身份文件；正式发布与 CI 使用 [Git 跟踪的 Release 预编译引擎](../third_party/flutter_engine/README.md)。
@@ -75,14 +75,14 @@ fvm flutter test --no-pub test/utils/app_release_test.dart
 
 ## 静态检查与测试
 
-完成验证后，在提交说明中记录实际执行的命令及结果，便于复查。
+提交时记录实际执行的命令和结果。
 
 ```powershell
 fvm flutter analyze --no-pub lib test tool
 fvm flutter test
 ```
 
-常规分析覆盖应用、测试和工具代码。本地依赖包有各自的依赖上下文；更新依赖包时，按[依赖维护流程](../third_party/README.md)单独检查。无路径参数的全仓库分析还可能扫描本地实验和上游源码，其结果需按来源区分。
+常规分析覆盖应用、测试和工具代码。本地依赖包有各自的依赖上下文；更新依赖包时，按[依赖维护流程](../third_party/README.md)单独检查。全仓库分析会包含上游源码和实验代码，结果按来源区分。
 
 PR 检查由 `.github/workflows/checks.yml` 独立执行，以只读仓库权限运行依赖验收、CI 测试、Android 主机探针、采集器单元测试、呈现引擎身份与 APK 装配回归及 Windows 采样门控主机探针。严格分析范围为 `lib/plugin/pl_player lib/pages/danmaku test tool`；全量分析还应手动运行上述命令，当前 `lib/common/widgets/flutter/` 的上游控件副本存在既存提示。
 
@@ -135,7 +135,7 @@ fvm flutter test tool/experiments/danmaku/
 | Android 或 JNI | Android 构建和相关测试 |
 | Windows 窗口或 WebView | Windows 构建和对应平台测试 |
 
-测试和构建只覆盖实际运行过的环境。GPU、MediaCodec、驱动、真实 WebView 和音频输出还需要在目标设备上检查。
+现有测试和构建覆盖已运行的环境。GPU、MediaCodec、驱动、真实 WebView 和音频输出还需在目标设备上检查。
 
 Windows 输出与 shader 更新的验证入口见[视频输出说明](windows-video-output.md#原生库与验证)；设备探针的输入和副作用见[平台探针](../tool/probes/README.md)。
 

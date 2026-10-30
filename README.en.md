@@ -7,7 +7,7 @@
 
 PiliAurora is a third-party Bilibili client for Android and Windows x64, built with Flutter and based on [PiliPlus 2.1.5](https://github.com/bggRGjQaUbCoE/PiliPlus/tree/2.1.5).
 
-It retains upstream browsing, playback, social features, and multi-account support while focusing on playback resource usage. It reworks Windows danmaku rendering and video output, and adds separate video and live-stream windows, danmaku merging and frame-rate controls, and native sticker management. Danmaku are timed comments displayed over the video.
+The project retains upstream browsing, playback, social features, and multi-account support. It also adjusts playback resource usage, Windows danmaku rendering, and video output, and adds separate video and live-stream windows, danmaku merging and frame-rate controls, and native sticker management. Danmaku are timed comments displayed over the video.
 
 [Download](https://github.com/wallpap/PiliAurora/releases/latest) · [Changelog](doc/releases/v1.6.4.md) · [Report an issue](https://github.com/wallpap/PiliAurora/issues) · [License](LICENSE)
 
@@ -74,7 +74,7 @@ Android also has an experimental option to scale output to the screen resolution
 
 The home page and message entry points share unread state. Replies, mentions, likes, system notifications, and direct messages follow the primary account. Switching accounts discards pending responses from the previous account. Conversation actions update shared state, chat history is deduplicated, and stale pagination results are discarded.
 
-Direct messages support text, images, and share cards. Cards and accompanying text share a send lock and report their results separately. Drafts are retained when delivery is awaiting confirmation, with a prompt to check the conversation history. See the [messaging module](lib/services/messaging/README.md).
+Direct messages support text, images, and share cards. Cards and accompanying text share a send lock and report their results separately. Drafts are retained when delivery is awaiting confirmation, with a prompt to check the conversation history.
 
 ### Blacklist filtering
 
@@ -120,7 +120,7 @@ User guides, developer guides, and release notes are listed in the [documentatio
 
 - Usage: [Danmaku settings](doc/danmaku-merge.md), [Windows playback windows](doc/windows-playback-windows.md).
 - Development: [Build and test](doc/build-and-test.md), [Feature map](doc/features.md), [Architecture](doc/architecture.md).
-- Troubleshooting: [Maintenance guide](doc/maintenance.md), [Windows video output](doc/windows-video-output.md), [Messaging module](lib/services/messaging/README.md).
+- Troubleshooting: [Maintenance guide](doc/maintenance.md), [Windows video output](doc/windows-video-output.md).
 
 ## Contributing
 

@@ -7,7 +7,7 @@
 - [mpv #18603](https://github.com/mpv-player/mpv/pull/18603)：`video/out/opengl/hwdec_d3d11egl.c` 的 `uninit()` 在移除设备后调用 `av_buffer_unref(&p->hwctx.av_device_ref)`，再释放驱动自身的 D3D11 引用，解决渲染器销毁后设备仍存活的问题。
 - [mpv #18604](https://github.com/mpv-player/mpv/pull/18604)：`osdep/language-win.c` 的 `apppend_langs()` 增加 `pos += wcslen(buf + pos) + 1`，正确遍历 Windows 多个首选界面语言。
 
-本机源码位于 `E:/AIGC/allowed/mpv-pr18603/mpv-local`：从 #18603 提交 `8fa4c6877abe110a1c07f696ff3792f56b81ccf4` 的源码副本加入上述语言修复；父基线为 `c3ac7f39514c7f45bc38a18e66887240539ee33c`。未修改原有验证 checkout。
+源码取自 #18603 提交 `8fa4c6877abe110a1c07f696ff3792f56b81ccf4` 的副本，并加入上述语言修复；父基线为 `c3ac7f39514c7f45bc38a18e66887240539ee33c`。未修改原有验证 checkout。
 
 构建使用便携 MSYS2 UCRT64，GCC 16.2.0、Meson 1.12.1、Ninja 1.13.2、FFmpeg 9.0.2、libass 0.17.5、libplacebo 7.360.1、ANGLE 890b5d8f。配置为 `debugoptimized`、`--werror`，开启 libmpv、cplayer、tests、egl-angle、egl-angle-lib、egl-angle-win32、d3d-hwaccel 和 d3d11，关闭 PDF/manpage 生成。
 
@@ -19,7 +19,7 @@
 
 ## 验证
 
-合并源码使用 `--werror` 完整编译通过；上游现有 Meson 测试以 `GGML_NO_BACKTRACE=1`、`-j8` 执行，37/37 通过。日志在 `E:/AIGC/allowed/mpv-pr18603/logs/{configure,build,tests}-local.log`。
+合并源码使用 `--werror` 完整编译通过；上游现有 Meson 测试以 `GGML_NO_BACKTRACE=1`、`-j8` 执行，37/37 通过。构建和测试日志保留在对应的本地验证目录。
 
 本地包以 AV1 852×480、输出 1280×720、Anime4K 关闭/效率/质量/再次关闭四阶段（各 2 秒）进行六轮创建、播放、销毁：所有阶段使用 `d3d11va`，帧缓冲非均匀；每轮释放后设备引用均为 0，当前私有内存为 428.68、433.42、427.95、434.34、431.35、437.33 MiB。记录位于 `build/local-libmpv-validation/results.jsonl`。
 

@@ -19,7 +19,7 @@
 | `flutter test --no-pub` | 335 项通过，其中包含 44 项依赖维护测试及发布版图标组件测试。 |
 | `dart analyze tool/check_dependencies.dart test/architecture/dependency_policy_test.dart test/common/widgets/font_awesome_icons_test.dart` | 无诊断。 |
 | `flutter analyze --no-pub lib test tool` | 0 error、0 warning、28 info；与迁移前应用代码诊断一致。|
-| `flutter analyze --no-pub` | 2 error、1 warning、401 info。error/warning 均为迁移前已有的本地实验文件（`doc/dev/local/tool/benchmarks/playback_config_test.dart`，该文件已在 2026-10-11 的测试与工具整理中移除）问题。新增本地上游源码产生 351 项 info |
+| `flutter analyze --no-pub` | 2 error、1 warning、401 info。错误和警告来自迁移前已有的本地实验代码，该代码已在 2026-10-11 的测试与工具整理中移除。新增本地上游源码产生 351 项 info |
 | `flutter build windows --debug --no-pub` | 成功，输出 `build/windows/x64/runner/Debug/PiliAurora.exe`。 |
 | `flutter build windows --release --no-pub` | 成功，输出 `build/windows/x64/runner/Release/PiliAurora.exe`，验证正式编译路径。 |
 | `flutter build apk --debug --no-pub` | 成功，输出 `build/app/outputs/flutter-apk/app-debug.apk`。 |

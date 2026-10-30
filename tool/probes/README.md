@@ -336,7 +336,7 @@ Windows 的 ready 结果要求输出纹理已符合屏幕限幅，避免页面�
 使用持续运动、含音轨且超过 20 秒的 MP4 样片：
 
 ```powershell
-fvm flutter build windows --debug --no-pub --target tool/probes/playback/desktop_window_acceptance.dart --dart-define=WINDOW_PROBE_MEDIA=E:/media/fixture.mp4 --dart-define=WINDOW_PROBE_REPORT=E:/Code/project/PiliAurora/build/window-validation/window.json
+fvm flutter build windows --debug --no-pub --target tool/probes/playback/desktop_window_acceptance.dart --dart-define=WINDOW_PROBE_MEDIA=E:/media/fixture.mp4 --dart-define=WINDOW_PROBE_REPORT=build/window-validation/window.json
 & build/windows/x64/runner/Debug/PiliAurora.exe
 ```
 

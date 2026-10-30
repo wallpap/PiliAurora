@@ -21,7 +21,7 @@ ANGLE D3D11 设备同时将最大排队帧数设为一帧，限制呈现积压�
 构建使用独立目录，保留原 FVM SDK；源码与工具包占用较大空间，应预留足够磁盘容量。
 
 ```powershell
-python tool/engine/windows_frame_pacing/build_engine.py --root E:/engine/windows-pacing --flutter-sdk E:/SDK/fvm/versions/3.47.5 --visual-studio D:/VS
+python tool/engine/windows_frame_pacing/build_engine.py --root <engine-root> --flutter-sdk <flutter-sdk> --visual-studio <visual-studio-root>
 ```
 
 默认编译 Profile 引擎并运行相关原生回归；`--mode release` 编译 Release。
@@ -43,7 +43,7 @@ DLL 摘要、运行模式、架构和原生测试状态，格式遵循[共同身
 ## 对照采集
 
 ```powershell
-pwsh -NoProfile -File tool/probes/windows/measure_danmaku.ps1 -PresentMonPath E:/tools/PresentMon-2.5.1-x64.exe -EngineLibrary E:/engine/windows-pacing/flutter/engine/src/out/piliaurora_windows_profile/flutter_windows.dll
+pwsh -NoProfile -File tool/probes/windows/measure_danmaku.ps1 -PresentMonPath <presentmon.exe> -EngineLibrary <engine-root>/flutter/engine/src/out/piliaurora_windows_profile/flutter_windows.dll
 ```
 
 采集入口通过统一构建脚本生成对应配置的探针，检查 Profile/x64、应用配置和引擎身份；`-SkipBuild` 复用相同身份的输出。
@@ -53,7 +53,7 @@ pwsh -NoProfile -File tool/probes/windows/measure_danmaku.ps1 -PresentMonPath E:
 ## 应用构建
 
 ```powershell
-pwsh -NoProfile -File tool/build.ps1 -Platform windows -Mode profile -WindowsEngineLibrary E:/engine/windows-pacing/flutter/engine/src/out/piliaurora_windows_profile/flutter_windows.dll
+pwsh -NoProfile -File tool/build.ps1 -Platform windows -Mode profile -WindowsEngineLibrary <engine-root>/flutter/engine/src/out/piliaurora_windows_profile/flutter_windows.dll
 ```
 
 应用构建核对模式、固定提交、当前补丁、DLL 摘要和原生回归结果，构建普通入口后装配
