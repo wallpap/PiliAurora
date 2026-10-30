@@ -88,6 +88,9 @@ class NativePlaybackRuntime
       StreamController<PlaybackRuntimeEvent>.broadcast(sync: true);
   final Completer<void> _released = Completer<void>();
   final Map<int, _NativeFileBinding> _bindings = {};
+
+  @visibleForTesting
+  int get retainedNativeFileCount => _bindings.length;
   final List<StreamSubscription<dynamic>> _subscriptions = [];
   final Map<String, double> _lastPts = {};
 
@@ -710,6 +713,7 @@ class NativePlaybackRuntime
     final binding = await _waitForActiveBinding().timeout(_remaining(context));
     if (binding == null) return;
     if (binding.unloaded && binding.endFileSeen) {
+      _bindings.remove(binding.entryId);
       _nativeOpenNeedsRetirement = false;
       _activeBinding = null;
       return;
@@ -2193,6 +2197,8 @@ class NativePlaybackRuntime
       }
       _player = null;
       _videoController = null;
+      _bindings.clear();
+      _activePlan = null;
       _videoControllerListenable.value = null;
       await _closeRuntimeStreams();
       if (!_released.isCompleted) _released.complete();

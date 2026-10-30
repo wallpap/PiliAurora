@@ -13,6 +13,26 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   tearDownAll(Diagnostics.instance.dispose);
 
+  test('连续自然结束后加载新媒体不积累旧文件绑定', () async {
+    final fixture = _Fixture();
+    addTearDown(fixture.close);
+    for (var i = 0; i < 12; i++) {
+      expect((await fixture.load(loadId: i + 1)).loaded, isTrue);
+      expect(fixture.runtime.retainedNativeFileCount, 1);
+      await fixture.player.unload();
+      fixture.player.endFile();
+      await _turn();
+      fixture.player.started = false;
+      fixture.player.entryId++;
+    }
+    fixture.output.releaseReceipt.complete();
+    expect(
+      (await fixture.runtime.shutdown()).outcome,
+      PlaybackShutdownOutcome.released,
+    );
+    expect(fixture.runtime.retainedNativeFileCount, 0);
+  });
+
   test('keep-open EOF 按文件归属通知，重复事件合并且 seek 后可再次结束', () async {
     final fixture = _Fixture();
     addTearDown(fixture.close);
@@ -330,7 +350,7 @@ class _Fixture {
     await _turn();
   }
 
-  Future<PlaybackRuntimeLoadResult> load() => runtime.load(
+  Future<PlaybackRuntimeLoadResult> load({int loadId = 1}) => runtime.load(
     PlaybackPlan(
       contentKey: 'shutdown-fixture',
       source: PlaybackSourceSnapshot.fromDataSource(
@@ -348,7 +368,7 @@ class _Fixture {
     PlaybackExecutionContext(
       requestId: 1,
       runtimeId: runtime.runtimeId,
-      loadId: 1,
+      loadId: loadId,
       isCurrent: () => true,
       deadline: const Duration(seconds: 10),
       monotonicNow: () => now,
@@ -405,6 +425,7 @@ class _Player implements NativePlayer {
   bool openTimesOut = false;
   bool openFailsBeforeSubmission = false;
   bool started = false;
+  int entryId = 7;
   @override
   bool disposed = false;
   @override
@@ -435,7 +456,7 @@ class _Player implements NativePlayer {
     startFile();
     events.add(
       NativeFileLoaded(
-        playlistEntryId: 7,
+        playlistEntryId: entryId,
         videoOutputParameters: hasVideo
             ? const NativeVideoOutputParameters(
                 width: 640,
@@ -470,16 +491,16 @@ class _Player implements NativePlayer {
   void startFile() {
     if (started) return;
     started = true;
-    events.add(const NativeStartFile(playlistEntryId: 7));
+    events.add(NativeStartFile(playlistEntryId: entryId));
   }
 
   Future<void> unload() async {
     await hook?.call(
-      const NativeHookRequest(
+      NativeHookRequest(
         hookId: 1,
         name: NativeHookName.onUnload,
         nativeHookName: 'on_unload',
-        playlistEntryId: 7,
+        playlistEntryId: entryId,
         teardown: true,
       ),
       _HookApi(),
@@ -489,8 +510,8 @@ class _Player implements NativePlayer {
   void endFile() {
     if (!events.isClosed) {
       events.add(
-        const NativeEndFile(
-          playlistEntryId: 7,
+        NativeEndFile(
+          playlistEntryId: entryId,
           reason: NativeEndFileReason.stop,
           error: 0,
         ),
