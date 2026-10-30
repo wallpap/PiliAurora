@@ -468,7 +468,9 @@ class _LoginPageState extends State<LoginPage> {
                 ),
                 Obx(
                   () => TextButton.icon(
-                    onPressed: _loginPageCtr.smsSendCooldown > 0
+                    onPressed:
+                        _loginPageCtr.smsSendCooldown > 0 ||
+                            _loginPageCtr.smsSending.value
                         ? null
                         : _loginPageCtr.sendSmsCode,
                     icon: const Icon(Icons.send),

@@ -40,6 +40,7 @@ class LoginPageController extends GetxController
   late var selectedCountryCodeId = Login.dialPrefix.first;
   late String captchaKey = '';
   late final RxInt smsSendCooldown = 0.obs;
+  late final RxBool smsSending = false.obs;
   late int smsSendTimestamp = 0;
 
   // 定时器
@@ -47,6 +48,8 @@ class LoginPageController extends GetxController
   Timer? smsSendCooldownTimer;
 
   bool _isReq = false;
+  int _qrGeneration = 0;
+  int _lastTabIndex = 0;
 
   @override
   void onInit() {
@@ -61,6 +64,7 @@ class LoginPageController extends GetxController
       ..removeListener(_handleTabChange)
       ..dispose();
     qrCodeTimer?.cancel();
+    _qrGeneration++;
     smsSendCooldownTimer?.cancel();
     telTextController.dispose();
     usernameTextController.dispose();
@@ -71,11 +75,32 @@ class LoginPageController extends GetxController
   }
 
   Future<void> refreshQRCode() async {
-    final res = await LoginHttp.getHDcode();
+    if (isClosed) return;
+    final generation = ++_qrGeneration;
+    qrCodeTimer?.cancel();
+    _isReq = false;
+    codeInfo.value = LoadingState.loading();
+    qrCodeLeftTime.value = 180;
+    statusQRCode.value = '';
+    late final LoadingState<({String authCode, String url})> res;
+    try {
+      res = await LoginHttp.getHDcode();
+    } catch (_) {
+      if (!isClosed && generation == _qrGeneration) {
+        codeInfo.value = const Error('二维码申请失败，请重试');
+        statusQRCode.value = '二维码申请失败，请重试';
+        qrCodeLeftTime.value = 0;
+      }
+      return;
+    }
+    if (isClosed || generation != _qrGeneration) return;
     if (res case Success(:final response)) {
-      qrCodeTimer?.cancel();
       codeInfo.value = res;
       qrCodeTimer = Timer.periodic(const Duration(milliseconds: 1000), (t) {
+        if (isClosed || generation != _qrGeneration) {
+          t.cancel();
+          return;
+        }
         final left = 180 - t.tick;
         if (left <= 0) {
           t.cancel();
@@ -87,54 +112,77 @@ class LoginPageController extends GetxController
         if (_isReq || tabController.index != 2) return;
 
         _isReq = true;
-        LoginHttp.codePoll(response.authCode).then((value) async {
-          _isReq = false;
-          if (value['status']) {
-            t.cancel();
-            statusQRCode.value = '扫码成功';
-            await setAccount(
-              value['data'],
-              value['data']['cookie_info']['cookies'],
-            );
-            Get.back();
-          } else if (value['code'] == 86038) {
-            t.cancel();
-            qrCodeLeftTime.value = 0;
-          } else {
-            statusQRCode.value = value['msg'];
-          }
-        });
+        LoginHttp.codePoll(response.authCode)
+            .then((value) async {
+              if (isClosed || generation != _qrGeneration) return;
+              if (value['status']) {
+                t.cancel();
+                statusQRCode.value = '扫码成功';
+                await setAccount(
+                  value['data'],
+                  value['data']['cookie_info']['cookies'],
+                );
+                if (!isClosed && generation == _qrGeneration) Get.back();
+              } else if (value['code'] == 86038) {
+                t.cancel();
+                qrCodeLeftTime.value = 0;
+              } else {
+                statusQRCode.value = value['msg'];
+                if (value['code'] == null) {
+                  t.cancel();
+                  qrCodeLeftTime.value = 0;
+                }
+              }
+            })
+            .catchError((Object error, StackTrace stackTrace) {
+              if (!isClosed && generation == _qrGeneration) {
+                statusQRCode.value = '二维码状态查询失败，请重试';
+                qrCodeLeftTime.value = 0;
+                t.cancel();
+              }
+            })
+            .whenComplete(() {
+              if (generation == _qrGeneration) _isReq = false;
+            });
       });
+    } else {
+      codeInfo.value = res;
+      qrCodeLeftTime.value = 0;
     }
   }
 
   void _handleTabChange() {
-    if (tabController.index == 2) {
-      if (qrCodeTimer == null || !qrCodeTimer!.isActive) {
-        refreshQRCode();
-      }
+    if (_lastTabIndex == tabController.index) return;
+    _lastTabIndex = tabController.index;
+    if (tabController.index != 2) {
+      qrCodeTimer?.cancel();
+      _qrGeneration++;
+      _isReq = false;
+      return;
+    }
+    if (qrCodeTimer == null || !qrCodeTimer!.isActive) {
+      refreshQRCode();
     }
   }
 
   // 申请极验验证码
-  void getCaptcha(
+  Future<void> getCaptcha(
     String geeGt,
     String geeChallenge,
-    VoidCallback onSuccess,
-  ) {
-    GeetestWebviewDialog.geetest(geeGt, geeChallenge).then((res) {
-      if (res != null) {
-        captchaData
-          ..validate = res['geetest_validate']
-          ..seccode = res['geetest_seccode']
-          ..geetest = GeetestData(
-            challenge: res['geetest_challenge'],
-            gt: geeGt,
-          );
-        SmartDialog.showToast('验证成功');
-        onSuccess();
-      }
-    });
+    FutureOr<void> Function() onSuccess,
+  ) async {
+    final res = await GeetestWebviewDialog.geetest(geeGt, geeChallenge);
+    if (!isClosed && res != null) {
+      captchaData
+        ..validate = res['geetest_validate']
+        ..seccode = res['geetest_seccode']
+        ..geetest = GeetestData(
+          challenge: res['geetest_challenge'],
+          gt: geeGt,
+        );
+      SmartDialog.showToast('验证成功');
+      await onSuccess();
+    }
   }
 
   static String validateCookie(String cookie) {
@@ -496,6 +544,19 @@ class LoginPageController extends GetxController
 
   // app端验证码
   Future<void> sendSmsCode() async {
+    if (isClosed || smsSending.value || smsSendCooldown.value > 0) return;
+    smsSending.value = true;
+    try {
+      await _sendSmsCode();
+    } catch (_) {
+      if (!isClosed) SmartDialog.showToast('发送验证码失败，请重试');
+    } finally {
+      smsSending.value = false;
+    }
+  }
+
+  Future<void> _sendSmsCode() async {
+    if (isClosed) return;
     if (telTextController.text.isEmpty) {
       SmartDialog.showToast('手机号不能为空');
       return;
@@ -551,17 +612,19 @@ class LoginPageController extends GetxController
       geeChallenge: captchaData.geetest?.challenge,
       recaptchaToken: captchaData.token,
     );
+    if (isClosed) return;
     if (res['status']) {
       SmartDialog.showToast('发送成功');
       smsSendTimestamp = DateTime.now().millisecondsSinceEpoch;
       smsSendCooldown.value = 60;
       captchaKey = res['data']['captcha_key'];
+      smsSendCooldownTimer?.cancel();
       smsSendCooldownTimer = Timer.periodic(const Duration(seconds: 1), (
         timer,
       ) {
         smsSendCooldown.value = 60 - timer.tick;
         if (smsSendCooldown <= 0) {
-          smsSendCooldownTimer?.cancel();
+          timer.cancel();
           smsSendCooldown.value = 0;
         }
       });
@@ -585,6 +648,7 @@ class LoginPageController extends GetxController
               '验证信息错误：${res["msg"]}\n返回内容：${res["data"]}，尝试另一个验证码接口',
             );
             final preCaptureRes = await LoginHttp.preCapture();
+            if (isClosed) return;
             if (!preCaptureRes['status'] || preCaptureRes['data'] == null) {
               SmartDialog.showToast(
                 "获取验证码失败，请尝试其它登录方式\n"
@@ -602,7 +666,7 @@ class LoginPageController extends GetxController
             return;
           }
 
-          getCaptcha(geeGt!, geeChallenge!, sendSmsCode);
+          await getCaptcha(geeGt!, geeChallenge!, _sendSmsCode);
           break;
         default:
           SmartDialog.showToast(res['msg']);
