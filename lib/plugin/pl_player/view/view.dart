@@ -107,6 +107,7 @@ class PLVideoPlayer extends StatefulWidget {
     this.introController,
     required this.headerControl,
     this.bottomControl,
+    this.onRetry,
     this.danmuWidget,
     this.showEpisodes,
     this.showViewPoints,
@@ -122,6 +123,7 @@ class PLVideoPlayer extends StatefulWidget {
   final CommonIntroController? introController;
   final Widget headerControl;
   final Widget? bottomControl;
+  final VoidCallback? onRetry;
   final Widget? danmuWidget;
   final void Function([
     int?,
@@ -2248,7 +2250,7 @@ class _PLVideoPlayerState extends State<PLVideoPlayer>
                     (plPlayerController.buffered.value -
                             plPlayerController.position.value)
                         .clamp(0, 1 << 30),
-                onRetry: plPlayerController.refreshPlayer,
+                onRetry: widget.onRetry ?? plPlayerController.refreshPlayer,
               );
             } else {
               return const SizedBox.shrink();

@@ -29,6 +29,50 @@ void main() {
   });
   tearDownAll(Hive.close);
 
+  _recoveryTest('本地媒体手动重试保留暂停和续播位置', (f) async {
+    await f.load(local: true, start: PlaybackStartPolicy.pause);
+    f.runtime.player.state.position = const Duration(seconds: 42);
+    await f.controller.refreshPlayer();
+    expect(f.runtime.loads, hasLength(2));
+    expect(f.runtime.loads.last.reloadPosition, const Duration(seconds: 42));
+    expect(f.controller.wantsToPlay, isFalse);
+  });
+
+  _recoveryTest('视频故障优先切视频备用源，保留健康音轨', (f) async {
+    await GStorage.setting.put('enableMultiCdn', true);
+    try {
+      await f.load(
+        videoCandidates: const ['https://example.test/video-backup.mp4'],
+        audioCandidates: const ['https://example.test/audio-backup.m4a'],
+      );
+      f.runtime.videoHealthy = false;
+      await f.advance(3);
+      final source = f.runtime.loads.last.source;
+      expect(
+        source.currentVideoSource,
+        'https://example.test/video-backup.mp4',
+      );
+      expect(source.currentAudioSource, 'https://example.test/movie.m4a');
+    } finally {
+      await GStorage.setting.delete('enableMultiCdn');
+    }
+  });
+
+  _recoveryTest('连续故障跨加载限频，手动重试可立即执行', (f) async {
+    await f.load();
+    f.runtime
+      ..recoverOnLoad = false
+      ..videoHealthy = false;
+    await f.advance(3);
+    expect(f.runtime.loads, hasLength(2));
+    await f.advance(9);
+    expect(f.runtime.loads, hasLength(2));
+    await f.advance(1);
+    expect(f.runtime.loads, hasLength(3));
+    await f.controller.refreshPlayer();
+    expect(f.runtime.loads, hasLength(4));
+  });
+
   for (final mode in _Mode.values) {
     _recoveryTest('${mode.name}提前 EOF 从中断位置恢复，避免触发连播', (f) async {
       await f.load();
@@ -63,6 +107,48 @@ void main() {
     expect(f.runtime.loads, hasLength(1));
     expect(f.runtime.repairs, 0);
     expect(f.controller.audioRecoveryStatus.value, AudioRecoveryStatus.idle);
+  });
+
+  for (final bufferingFirst in [true, false]) {
+    _recoveryTest('跳转${bufferingFirst ? '先缓冲' : '先停帧'}，画面恢复后不重载', (f) async {
+      await f.load();
+      if (bufferingFirst) f.runtime.setBuffering(true);
+      f.runtime
+        ..seeking = true
+        ..videoHealthy = false;
+      f.runtime.player.state.position = const Duration(seconds: 60);
+      f.runtime.setBuffering(false);
+      f.runtime.seeking = false;
+      f.runtime.emitActual();
+      if (!bufferingFirst) {
+        f.runtime
+          ..setBuffering(true)
+          ..setBuffering(false);
+      }
+      await f.tester.pump();
+      expect(f.controller.isVideoStalled.value, isTrue);
+
+      f.runtime.videoHealthy = true;
+      await f.advance(3);
+      expect(f.controller.isVideoStalled.value, isFalse);
+      expect(f.runtime.loads, hasLength(1));
+    });
+  }
+
+  _recoveryTest('断流与短暂停帧合并后，画面恢复仍保留缓存耗尽时的恢复机会', (f) async {
+    await f.load();
+    f.readFailure();
+    f.runtime.videoHealthy = false;
+    f.runtime.emitActual();
+    await f.tester.pump();
+    f.runtime.videoHealthy = true;
+    await f.advance(3);
+    expect(f.runtime.loads, hasLength(1));
+
+    f.runtime.player.state.buffer = f.runtime.player.state.position;
+    f.runtime.setBuffering(true);
+    await f.advance(3, advancing: false);
+    expect(f.runtime.loads, hasLength(2));
   });
 
   _recoveryTest('缓冲标志置位但缓存仍推进时不误判画面故障，持续停滞后再恢复', (f) async {
@@ -327,7 +413,17 @@ void main() {
     f.runtime
       ..recoverOnLoad = false
       ..videoHealthy = false;
-    await f.advance(18);
+    await f.advance(3);
+    expect(f.runtime.loads, hasLength(2));
+    await f.advance(9);
+    expect(f.runtime.loads, hasLength(2));
+    await f.advance(1);
+    expect(f.runtime.loads, hasLength(3));
+    await f.advance(14);
+    expect(f.runtime.loads, hasLength(3));
+    await f.advance(1);
+    expect(f.runtime.loads, hasLength(4));
+    await f.advance(5);
     expect(f.runtime.loads, hasLength(4));
     expect(f.controller.currentPlaybackSnapshot.phase, PlaybackPhase.failed);
     expect(
@@ -355,6 +451,53 @@ void main() {
     await f.advance(12, advancing: false);
     expect(f.runtime.loads, hasLength(1));
     expect(f.runtime.repairs, 0);
+  });
+
+  _recoveryTest('限频等待中的重载在权限失败后取消', (f) async {
+    await f.load();
+    f.runtime
+      ..recoverOnLoad = false
+      ..videoHealthy = false;
+    await f.advance(6);
+    expect(f.runtime.loads, hasLength(2));
+    f.runtime.player.playback.logs.add(
+      const PlayerLog(
+        prefix: 'ffmpeg',
+        level: 'error',
+        text: 'HTTP error 403 Forbidden',
+      ),
+    );
+    await f.advance(12);
+    expect(f.runtime.loads, hasLength(2));
+  });
+
+  _recoveryTest('提前 EOF 在限频期保持停止，到期后从中断位置恢复', (f) async {
+    await f.load();
+    f.runtime.complete(at: const Duration(seconds: 1));
+    await f.tester.pump();
+    expect(f.runtime.loads, hasLength(2));
+    f.runtime.complete(at: const Duration(seconds: 2));
+    await f.tester.pump();
+    await f.advance(9, advancing: false);
+    expect(f.runtime.loads, hasLength(2));
+    expect(f.runtime.player.state.playing, isFalse);
+    await f.advance(1, advancing: false);
+    expect(f.runtime.loads, hasLength(3));
+    expect(f.runtime.loads.last.reloadPosition, const Duration(seconds: 2));
+    expect(f.controller.wantsToPlay, isTrue);
+  });
+
+  _recoveryTest('限频等待期间恢复画面，取消遗留的整段重载', (f) async {
+    await f.load();
+    f.runtime
+      ..recoverOnLoad = false
+      ..videoHealthy = false;
+    await f.advance(6);
+    expect(f.runtime.loads, hasLength(2));
+    f.runtime.videoHealthy = true;
+    await f.advance(15);
+    expect(f.runtime.loads, hasLength(2));
+    expect(f.controller.isVideoStalled.value, isFalse);
   });
 
   _recoveryTest('本地文件不进入网络与外部音轨重连', (f) async {
@@ -415,6 +558,8 @@ class _Fixture {
     String key = 'movie',
     PlaybackStartPolicy start = PlaybackStartPolicy.play,
     bool local = false,
+    List<String> videoCandidates = const [],
+    List<String> audioCandidates = const [],
   }) async {
     runtime.hasVideo = mode != _Mode.audioOnly;
     runtime.hasAudio = mode != _Mode.videoOnly;
@@ -430,6 +575,8 @@ class _Fixture {
               )
             : NetworkSource(
                 videoSource: 'https://example.test/$key.mp4',
+                videoCandidates: videoCandidates,
+                audioCandidates: audioCandidates,
                 audioSource: mode == _Mode.separate
                     ? 'https://example.test/$key.m4a'
                     : null,

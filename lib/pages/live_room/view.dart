@@ -288,7 +288,7 @@ class _LiveRoomPageState extends State<LiveRoomPage>
                     headerControl: header,
                     bottomControl: bottom,
                     failed: plPlayerController.dataStatus.error,
-                    onRetry: _liveRoomController.queryLiveUrl,
+                    onRetry: _liveRoomController.retryPlayback,
                     fill: fill,
                   ),
                 ),
@@ -300,6 +300,7 @@ class _LiveRoomPageState extends State<LiveRoomPage>
               fill: fill,
               alignment: alignment,
               plPlayerController: plPlayerController,
+              onRetry: _liveRoomController.retryPlayback,
               headerControl: header,
               bottomControl: bottom,
               danmuWidget: !needDm

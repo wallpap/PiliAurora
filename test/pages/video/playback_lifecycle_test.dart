@@ -180,17 +180,32 @@ void main() {
     controller.closePlayback();
   });
 
-  test('重新解析已加载媒体时保留暂停，并提交暂停加载请求', () async {
+  test('本地文件暂停且关闭预加载时，手动重试仍执行页面加载', () async {
+    final controller = page()
+      ..isFileSource = true
+      ..autoPlay = false;
+    await controller.retryPlayback();
+    expect(controller.loads, hasLength(1));
+    expect(controller.loads.single.autoplay, isFalse);
+    controller.closePlayback();
+  });
+
+  test('手动重试重新查询地址，并保留暂停和续播位置', () async {
     final controller = page();
     final initial = controller.queryVideoUrl();
     (await adapter.next()).complete(media(1));
     await initial;
     await controller.plPlayerController.pause();
-    final reset = controller.queryVideoUrl(fromReset: true);
-    (await adapter.next()).complete(media(1));
+    controller.playedTime = const Duration(seconds: 27);
+    final reset = controller.retryPlayback();
+    final request = await adapter.next();
+    expect(request.options.queryParameters['cid'], 1);
+    request.complete(media(2));
     await reset;
     expect(controller.loads.length, 2);
     expect(controller.loads.last.autoplay, isFalse);
+    expect(controller.loads.last.source, 'https://example.com/video/2');
+    expect(controller.plans.last.reloadPosition, const Duration(seconds: 27));
     controller.closePlayback();
   });
 
@@ -292,6 +307,7 @@ class _VideoController extends VideoDetailController {
   int _routeLoadGeneration = 0;
   void Function()? _cancelQuery;
   final loads = <({int cid, String? source, bool autoplay})>[];
+  final plans = <PlaybackPlan>[];
   final routeLoads = <({PlaybackPlan plan, PlaybackStartPolicy start})>[];
   @override
   bool get isClosed => closed;
@@ -320,6 +336,7 @@ class _VideoController extends VideoDetailController {
     if (!isCurrent()) return const LoadResult.superseded();
     if (plan == null) return const LoadResult.noMedia();
     if (shouldLoad?.call() == false) return const LoadResult.noMedia();
+    plans.add(plan);
     loads.add((
       cid: cid.value,
       source: plan.source.currentVideoSource,

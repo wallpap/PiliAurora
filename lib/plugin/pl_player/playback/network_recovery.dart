@@ -38,7 +38,8 @@ class PlaybackNetworkRecovery {
   bool _allowNativeRecovery = true;
   bool _waitForCachedPlayback = false;
   bool _tryNextCdn = false;
-  bool _requireVideoProgress = false;
+  bool _videoFailurePending = false;
+  bool _networkFailurePending = false;
   RecoveryState? _failureState;
   RecoveryState? _previousState;
   (int, bool)? _scheduledAttempt;
@@ -60,11 +61,23 @@ class PlaybackNetworkRecovery {
   }) {
     if (_disposed || _permissionDenied || _inFlight || !isCurrent()) return;
     if (_timer != null) {
-      _requireEmptyBuffer &= requireEmptyBuffer;
-      _allowNativeRecovery &= allowNativeRecovery;
-      _waitForCachedPlayback |= waitForCachedPlayback;
       _tryNextCdn |= tryNextCdn;
-      _requireVideoProgress &= requireVideoProgress;
+      if (requireVideoProgress) {
+        _videoFailurePending = true;
+        return;
+      }
+      if (_networkFailurePending) {
+        _requireEmptyBuffer &= requireEmptyBuffer;
+        _allowNativeRecovery &= allowNativeRecovery;
+        _waitForCachedPlayback |= waitForCachedPlayback;
+      } else {
+        _networkFailurePending = true;
+        _requireEmptyBuffer = requireEmptyBuffer;
+        _allowNativeRecovery = allowNativeRecovery;
+        _waitForCachedPlayback = waitForCachedPlayback;
+        _failureState = _previousState = readState();
+        _stalledChecks = 0;
+      }
       if (!requireEmptyBuffer) _failureState = readState();
       return;
     }
@@ -78,7 +91,8 @@ class PlaybackNetworkRecovery {
     _allowNativeRecovery = allowNativeRecovery;
     _waitForCachedPlayback = waitForCachedPlayback;
     _tryNextCdn = tryNextCdn;
-    _requireVideoProgress = requireVideoProgress;
+    _videoFailurePending = requireVideoProgress;
+    _networkFailurePending = !requireVideoProgress;
     _scheduledAttempt = throttle ? (candidate, requireEmptyBuffer) : null;
     _failureState = _previousState = readState();
     _stalledChecks = 0;
@@ -89,7 +103,7 @@ class PlaybackNetworkRecovery {
     _timer = null;
     if (_disposed || _permissionDenied || !isCurrent()) return;
     final videoStalled = videoProgressing?.call() == false;
-    if (_requireVideoProgress && !videoStalled) {
+    if (!_networkFailurePending && !videoStalled) {
       if (_scheduledAttempt case final key?) _attempted.remove(key);
       return;
     }
@@ -97,6 +111,11 @@ class PlaybackNetworkRecovery {
     if (state == null) return;
     if (canRecover?.call() == false) {
       _timer = Timer(delay, _check);
+      return;
+    }
+    // 合并触发来源时分别确认故障，短暂停帧恢复后继续沿用网络侧的缓存判断。
+    if (_videoFailurePending && videoStalled) {
+      unawaited(_reload());
       return;
     }
     final lastCheck = _previousState;

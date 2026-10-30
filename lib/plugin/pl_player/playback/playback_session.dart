@@ -151,6 +151,7 @@ class PlaybackSession implements PlaybackMediaClock {
   _RecoveryIncident? _recoveryIncident;
   Duration? _healthySince;
   Timer? _healthyCheck;
+  Timer? _recoveryCheck;
   PlaybackSnapshot _snapshot = PlaybackSnapshot(
     snapshotVersion: 0,
     phase: PlaybackPhase.idle,
@@ -171,6 +172,13 @@ class PlaybackSession implements PlaybackMediaClock {
   bool get isDisposed => _disposed || _closingRequested;
   PlaybackSnapshot get currentSnapshot => _snapshot;
   PlaybackPlan? get currentPlan => _currentPlan;
+  Duration? get resumePosition {
+    final plan = identical(_lastLoadOwner, _activeOwner)
+        ? _lastLoadPlan ?? _currentPlan
+        : _currentPlan;
+    return plan == null ? null : _planForReload(plan).reloadPosition;
+  }
+
   Stream<PlaybackSessionTrace> get trace => _traceController.stream;
   Future<void> get drained => _operations.drained;
 
@@ -299,12 +307,7 @@ class PlaybackSession implements PlaybackMediaClock {
       }
       if (recoveryRemaining < requestBudget) requestBudget = recoveryRemaining;
     }
-    if (!automaticRecovery &&
-        _currentPlan?.contentKey != acceptedPlan.contentKey) {
-      _recoveryIncident = null;
-      _healthySince = null;
-      _healthyCheck?.cancel();
-    }
+    if (!automaticRecovery) _resetRecovery();
 
     final request = _acceptRequest(
       owner,
@@ -334,6 +337,7 @@ class PlaybackSession implements PlaybackMediaClock {
   }) {
     final rejected = _rejectLoad(owner);
     if (rejected != null) return Future.value(rejected);
+    _resetRecovery();
     final request = _acceptRequest(owner, start, PlaybackStage.resolving);
     if (request == null) {
       return Future.value(_closedOrInactive(owner));
@@ -684,7 +688,9 @@ class PlaybackSession implements PlaybackMediaClock {
       if (plan.timeline.kind == PlaybackTimelineKind.live &&
           !plan.configuration.audioOnly &&
           result.output.strategy == PlaybackOutputStrategy.noVideo) {
-        final next = plan.source.advanceCandidate();
+        final next = plan.source.advanceCandidate(
+          failedTrack: PlaybackRecoveryTrack.video,
+        );
         if (next != null) {
           _emitTrace('load.missing-video', {
             'loadId': thisLoadId,
@@ -1446,6 +1452,9 @@ class PlaybackSession implements PlaybackMediaClock {
     if (rejection != null) return Future.value(rejection);
     final incident = _ensureRecoveryIncident(plan.contentKey)
       ..sourceEnded |= sourceEnded;
+    if (incident.stopped) {
+      return Future.value(const LoadResult.superseded());
+    }
     _updateRecoveryClock();
     if (_shouldDeferRecovery(owner)) {
       incident.deferredPlan = plan.withConfiguration(_desiredConfiguration);
@@ -1457,6 +1466,27 @@ class PlaybackSession implements PlaybackMediaClock {
       _publish();
       return Future.value(const LoadResult.deferred());
     }
+    if (incident.attempts >= 3 || _recoveryRemaining() <= Duration.zero) {
+      final failure = _recoveryBudgetFailure();
+      _publishFailure(failure);
+      return Future.value(LoadResult.failed(failure));
+    }
+    if (incident.lastAttemptAt case final last?) {
+      final interval = Duration(seconds: incident.attempts == 1 ? 10 : 15);
+      final remaining = last + interval - _now();
+      if (remaining > Duration.zero) {
+        // 限频归属于本次内容故障，原生重新加载后继续保留。
+        incident.deferredPlan = plan.withConfiguration(_desiredConfiguration);
+        _recoveryCheck?.cancel();
+        _recoveryCheck = Timer(remaining, () {
+          _recoveryCheck = null;
+          _resumeDeferredRecovery();
+        });
+        return Future.value(const LoadResult.deferred());
+      }
+    }
+    _recoveryCheck?.cancel();
+    _recoveryCheck = null;
     if (_recoveryIncident == incident) {
       incident
         ..deferredPlan = null
@@ -1479,6 +1509,17 @@ class PlaybackSession implements PlaybackMediaClock {
     incident.attempts++;
     incident.lastAttemptAt = _now();
     return true;
+  }
+
+  void _stopRecovery(PlaybackOwner owner) {
+    final plan = _currentPlan;
+    if (!owner.isActive || plan == null) return;
+    _ensureRecoveryIncident(plan.contentKey)
+      ..stopped = true
+      ..deferredPlan = null
+      ..sourceEnded = false;
+    _recoveryCheck?.cancel();
+    _recoveryCheck = null;
   }
 
   _RecoveryIncident _ensureRecoveryIncident(String contentKey) {
@@ -1564,7 +1605,7 @@ class PlaybackSession implements PlaybackMediaClock {
         ? _lastLoadPlan ?? _currentPlan
         : _currentPlan;
     if (plan == null) return Future.value(const LoadResult.noMedia());
-    _recoveryIncident = null;
+    _resetRecovery();
     final retryPlan = _planForReload(plan);
     return _load(owner, retryPlan, start: PlaybackStartPolicy.preserve);
   }
@@ -1659,6 +1700,7 @@ class PlaybackSession implements PlaybackMediaClock {
           return;
         }
         // 播完后停止页面的播放意图，返回重载时保持停止；连播由页面显式发起。
+        _resetRecovery();
         owner._playing = false;
         _intentRevision++;
         _settlePlayingWaiters(const CommandResult.superseded());
@@ -1721,12 +1763,18 @@ class PlaybackSession implements PlaybackMediaClock {
       return;
     }
     if (now - _healthySince! >= const Duration(seconds: 10)) {
-      _recoveryIncident = null;
-      _healthySince = null;
-      _healthyCheck?.cancel();
-      _healthyCheck = null;
+      _resetRecovery();
       _emitTrace('recovery.healthy', {'loadId': _loadId});
     }
+  }
+
+  void _resetRecovery() {
+    _recoveryIncident = null;
+    _healthySince = null;
+    _healthyCheck?.cancel();
+    _healthyCheck = null;
+    _recoveryCheck?.cancel();
+    _recoveryCheck = null;
   }
 
   void _scheduleHealthyCheck(Duration remaining) {
@@ -1739,6 +1787,8 @@ class PlaybackSession implements PlaybackMediaClock {
 
   void _publishFailure(PlaybackFailure failure) {
     if (_closingRequested || _disposed) return;
+    _recoveryCheck?.cancel();
+    _recoveryCheck = null;
     _intentRevision++;
     _settlePlayingWaiters(const CommandResult.superseded());
     _failure = failure;
@@ -1976,9 +2026,7 @@ class PlaybackSession implements PlaybackMediaClock {
     _shutdownStarted = true;
     _phase = PlaybackPhase.closing;
     _stage = PlaybackStage.closing;
-    _healthyCheck?.cancel();
-    _healthyCheck = null;
-    _healthySince = null;
+    _resetRecovery();
     _invalidateMediaAnchor();
     _supersedeAcceptedRequest();
     _operations.dispose();
@@ -2280,6 +2328,8 @@ class PlaybackOwner {
   Future<LoadResult> recover(PlaybackPlan plan) =>
       _session._recover(this, plan);
 
+  void stopRecovery() => _session._stopRecovery(this);
+
   Future<CommandResult> setPlaying(bool playing) =>
       _session._setPlaying(this, playing);
 
@@ -2487,6 +2537,7 @@ class _RecoveryIncident {
   PlaybackPlan? deferredPlan;
   // EOF 后原生已停止，延期恢复仍由用户的播放意图决定。
   bool sourceEnded = false;
+  bool stopped = false;
 }
 
 class _SnapshotSubscriber {

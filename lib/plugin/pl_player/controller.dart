@@ -1054,6 +1054,7 @@ class PlPlayerController
   }
 
   PlaybackSnapshot get currentPlaybackSnapshot => _session.currentSnapshot;
+  Duration? get playbackResumePosition => _session.resumePosition;
 
   PlaybackRuntimeConfig _captureRuntimeConfiguration() {
     final enabled = Pref.enableHA;
@@ -1396,13 +1397,14 @@ class PlPlayerController
   Future<void>? refreshPlayer({
     bool tryNextCdn = false,
     bool automaticRecovery = false,
+    PlaybackRecoveryTrack? failedTrack,
   }) {
     final owner = _activeOwner;
     final plan = currentPlaybackPlan;
     if (owner == null ||
         !owner.isActive ||
         plan == null ||
-        !plan.source.isNetwork ||
+        (automaticRecovery && !plan.source.isNetwork) ||
         processing) {
       return null;
     }
@@ -1411,6 +1413,7 @@ class PlPlayerController
     if (tryNextCdn && Pref.enableMultiCdn) {
       final next = plan.source.advanceCandidate(
         audioOnly: audioOnly,
+        failedTrack: failedTrack,
       );
       if (next != null) {
         reloadPlan = plan.withSource(next);
@@ -1460,6 +1463,11 @@ class PlPlayerController
       reload: (tryNextCdn) => refreshPlayer(
         tryNextCdn: tryNextCdn,
         automaticRecovery: true,
+        failedTrack:
+            _session.currentSnapshot.configuration.desired.audioOnly ||
+                _session.currentSnapshot.capabilities.hasVideo == false
+            ? PlaybackRecoveryTrack.audio
+            : PlaybackRecoveryTrack.video,
       ),
       onError: Utils.reportError,
       canRecover: () =>
@@ -1477,12 +1485,13 @@ class PlPlayerController
             snapshot.actual.videoProgressing != false;
       },
       onRetry: () => SmartDialog.showToast(
-        '视频链接打开失败，重试中',
-        displayTime: const Duration(milliseconds: 500),
+        '连接中断，正在恢复播放',
+        displayTime: const Duration(seconds: 2),
       ),
     );
     if (permissionDenied) {
       _networkRecovery!.stopForPermissionFailure();
+      _activeOwner?.stopRecovery();
       return;
     }
     _networkRecovery!.schedule(
@@ -1585,6 +1594,7 @@ class PlPlayerController
       reload: () => refreshPlayer(
         tryNextCdn: true,
         automaticRecovery: true,
+        failedTrack: PlaybackRecoveryTrack.audio,
       ),
       onDiagnostic: (action) => _diagnostics?.event(
         action,

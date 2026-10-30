@@ -250,6 +250,11 @@ class LiveRoomController extends GetxController {
     }
   }
 
+  Future<void> retryPlayback() async {
+    if (plPlayerController.processing) return;
+    await queryLiveUrl(startPolicy: PlaybackStartPolicy.preserve);
+  }
+
   Future<void> queryLiveUrl({
     bool autoFullScreenFlag = false,
     PlaybackStartPolicy? startPolicy,

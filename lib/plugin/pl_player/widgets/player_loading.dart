@@ -18,7 +18,7 @@ class PlayerLoadingIndicator extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Center(
     child: GestureDetector(
-      onTap: onRetry,
+      onTap: failed ? onRetry : null,
       child: Container(
         padding: const EdgeInsets.all(20),
         decoration: const BoxDecoration(

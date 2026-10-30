@@ -530,6 +530,13 @@ void main() {
     expect(controller.chatBuffer.historyCount, 2);
   });
 
+  test('直播手动重试重新查询地址并保留播放意图', () async {
+    final controller = createController();
+    controller.routeQueryPolicies.clear();
+    await controller.retryPlayback();
+    expect(controller.routeQueryPolicies, [PlaybackStartPolicy.preserve]);
+  });
+
   test(
     'route return re-resolves a plan canceled before it was accepted',
     () async {

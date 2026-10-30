@@ -33,6 +33,42 @@ void main() {
     expect(attempted.length, 6);
   });
 
+  test('按故障轨道切换候选，保留另一轨道，耗尽后不轮换健康轨道', () {
+    final source = PlaybackSourceSnapshot.fromDataSource(
+      NetworkSource(
+        videoSource: 'video-primary',
+        audioSource: 'audio-primary',
+        videoCandidates: const ['video-backup'],
+        audioCandidates: const ['audio-backup'],
+      ),
+    );
+    for (final track in PlaybackRecoveryTrack.values) {
+      final next = source.advanceCandidate(failedTrack: track)!;
+      expect(
+        (next.currentVideoSource, next.currentAudioSource),
+        track == PlaybackRecoveryTrack.video
+            ? ('video-backup', 'audio-primary')
+            : ('video-primary', 'audio-backup'),
+      );
+      expect(next.advanceCandidate(failedTrack: track), isNull);
+    }
+  });
+
+  test('合并音视频源的音频故障切换主地址', () {
+    final source = PlaybackSourceSnapshot.fromDataSource(
+      NetworkSource(
+        videoSource: 'combined-primary',
+        audioSource: null,
+        videoCandidates: const ['combined-backup'],
+      ),
+    );
+    final next = source.advanceCandidate(
+      failedTrack: PlaybackRecoveryTrack.audio,
+    )!;
+    expect(next.currentVideoSource, 'combined-backup');
+    expect(next.currentAudioSource, isNull);
+  });
+
   group('nativeMediaSource', () {
     test('网络源带独立音轨时主 URL 直接作为播放目标', () {
       final media = nativeMediaSource(source: net());

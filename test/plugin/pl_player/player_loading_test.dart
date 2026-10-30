@@ -17,6 +17,8 @@ void main() {
     await tester.pumpWidget(host(failed: false));
     expect(find.text('正在恢复声音...'), findsOneWidget);
     expect(find.byType(CircularProgressIndicator), findsOneWidget);
+    await tester.tap(find.text('正在恢复声音...'));
+    expect(retries, 0);
     await tester.pumpWidget(host(failed: true));
     expect(find.byType(CircularProgressIndicator), findsNothing);
     await tester.tap(find.text('声音恢复失败，点击重试'));

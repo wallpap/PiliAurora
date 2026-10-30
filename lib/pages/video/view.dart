@@ -1196,13 +1196,14 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
                     : null,
                 failed:
                     videoDetailController.plPlayerController.dataStatus.error,
-                onRetry: () => videoDetailController.queryVideoUrl(),
+                onRetry: videoDetailController.retryPlayback,
               ),
             )
           : PLVideoPlayer(
               maxWidth: width,
               maxHeight: height,
               plPlayerController: plPlayerController!,
+              onRetry: videoDetailController.retryPlayback,
               videoDetailController: videoDetailController,
               introController: introController,
               headerControl: HeaderControl(

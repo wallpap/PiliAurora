@@ -77,6 +77,8 @@ enum PlaybackConfigurationKey {
   mediaOptions,
 }
 
+enum PlaybackRecoveryTrack { video, audio }
+
 /// 一次播放来源的不可变快照。候选切换只产生新对象，不改写已提交计划。
 class PlaybackSourceSnapshot {
   PlaybackSourceSnapshot._({
@@ -137,10 +139,24 @@ class PlaybackSourceSnapshot {
 
   FileSource? get fileSource => _fileSource;
 
-  PlaybackSourceSnapshot? advanceCandidate({bool audioOnly = false}) {
+  PlaybackSourceSnapshot? advanceCandidate({
+    bool audioOnly = false,
+    PlaybackRecoveryTrack? failedTrack,
+  }) {
     var nextVideo = videoIndex;
     var nextAudio = audioIndex;
-    if (audioIndex + 1 < audioCandidates.length) {
+    if (audioOnly || failedTrack == PlaybackRecoveryTrack.audio) {
+      if (audioCandidates.isNotEmpty) {
+        if (audioIndex + 1 >= audioCandidates.length) return null;
+        nextAudio++;
+      } else {
+        if (videoIndex + 1 >= videoCandidates.length) return null;
+        nextVideo++;
+      }
+    } else if (failedTrack == PlaybackRecoveryTrack.video) {
+      if (videoIndex + 1 >= videoCandidates.length) return null;
+      nextVideo++;
+    } else if (audioIndex + 1 < audioCandidates.length) {
       nextAudio++;
     } else if ((!audioOnly || audioCandidates.isEmpty) &&
         videoIndex + 1 < videoCandidates.length) {

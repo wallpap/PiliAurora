@@ -642,12 +642,14 @@ void main() {
   });
 
   test('网络点播提前 EOF 保留意图和位置并受三次恢复预算约束', () async {
+    var now = Duration.zero;
     final runtime = _FakeRuntime()..position = const Duration(seconds: 2);
-    final session = PlaybackSession(runtime: runtime);
+    final session = PlaybackSession(runtime: runtime, monotonicNow: () => now);
     final owner = session.attach();
     try {
       await owner.load(_plan('truncated'), start: PlaybackStartPolicy.play);
       for (var i = 0; i < 3; i++) {
+        now = Duration(seconds: [0, 10, 25][i]);
         runtime._events.add(
           PlaybackRuntimeEnded(
             runtimeId: runtime.runtimeId,
@@ -1427,6 +1429,7 @@ void main() {
     );
 
     for (var i = 0; i < 3; i++) {
+      now = Duration(seconds: [0, 10, 25][i]);
       final result = await owner.recover(plan);
       expect(
         result.outcome,
@@ -1436,12 +1439,12 @@ void main() {
     }
     expect(runtime.loadedKeys, ['movie', 'movie', 'movie', 'movie']);
 
-    now = const Duration(seconds: 1);
+    now = const Duration(seconds: 26);
     runtime.emitActual(
       session.loadId,
       const PlaybackActual(playing: true, videoProgressing: true),
     );
-    now = const Duration(seconds: 11);
+    now = const Duration(seconds: 36);
     runtime.emitActual(
       session.loadId,
       const PlaybackActual(playing: true, videoProgressing: true),
@@ -1551,6 +1554,7 @@ void main() {
           LoadOutcome.ready,
         );
         for (var i = 0; i < 3; i++) {
+          now = Duration(seconds: [0, 10, 25][i]);
           expect((await owner.recover(plan)).outcome, LoadOutcome.ready);
         }
         void observe() => runtime.emitActual(
@@ -1562,9 +1566,9 @@ void main() {
             videoProgressing: scenario.video,
           ),
         );
-        now = const Duration(seconds: 1);
+        now = const Duration(seconds: 26);
         observe();
-        now = const Duration(seconds: 11);
+        now = const Duration(seconds: 36);
         observe();
         final result = await owner.recover(plan);
         expect(
@@ -1599,6 +1603,7 @@ void main() {
     );
 
     for (var i = 0; i < 3; i++) {
+      now = Duration(seconds: [0, 10, 25][i]);
       expect((await owner.recover(plan)).outcome, LoadOutcome.ready);
     }
     now = const Duration(seconds: 30);

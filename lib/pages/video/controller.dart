@@ -704,7 +704,7 @@ class VideoDetailController extends GetxController
 
   void _rememberPlaybackState() {
     _autoPlay.value = plPlayerController.currentPlaybackSnapshot.intent.playing;
-    playedTime = plPlayerController.videoPlayerController?.state.position;
+    playedTime = plPlayerController.playbackResumePosition ?? playedTime;
   }
 
   bool _shouldInitializePlayer({bool force = false}) =>
@@ -987,6 +987,20 @@ class VideoDetailController extends GetxController
 
   Volume? volume;
 
+  Future<void> retryPlayback() async {
+    if (isClosed || !playbackOwner.isActive || plPlayerController.processing) {
+      return;
+    }
+    if (isFileSource && plPlayerController.currentPlaybackPlan != null) {
+      _rememberPlaybackState();
+      defaultST = null;
+    }
+    await queryVideoUrl(
+      fromReset: true,
+      startPolicy: PlaybackStartPolicy.preserve,
+    );
+  }
+
   // 视频链接
   /// TODO: merge [DownloadHttp.getVideoUrl].
   Future<void> queryVideoUrl({
@@ -995,8 +1009,13 @@ class VideoDetailController extends GetxController
     PlaybackStartPolicy? startPolicy,
   }) async {
     if (isClosed || !playbackOwner.isActive) return;
-    if (isFileSource) return _initPlayerIfNeeded(autoFullScreenFlag);
-    if (fromReset && _networkSource != null) _rememberPlaybackState();
+    if (isFileSource) {
+      return _initPlayerIfNeeded(autoFullScreenFlag, force: fromReset);
+    }
+    if (fromReset && _networkSource != null) {
+      _rememberPlaybackState();
+      defaultST = null;
+    }
     final identity = (bvid, cid.value, epId, seasonId);
     final contentKey = isUgc
         ? 'ugc:$bvid:${cid.value}'
