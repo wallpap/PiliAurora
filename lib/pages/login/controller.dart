@@ -312,6 +312,7 @@ class LoginPageController extends GetxController
                       "获取验证码失败，请尝试其它登录方式\n"
                       "(${preCaptureRes['code']}) ${preCaptureRes['msg']} ${preCaptureRes['data']}",
                     );
+                    return;
                   }
                   String geeGt = preCaptureRes['data']['gee_gt'];
                   String geeChallenge = preCaptureRes['data']['gee_challenge'];

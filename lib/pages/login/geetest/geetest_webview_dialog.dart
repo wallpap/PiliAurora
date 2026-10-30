@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:pili_aurora/http/browser_ua.dart';
 import 'package:pili_aurora/services/logger.dart';
 import 'package:pili_aurora/services/webview_environment.dart';
@@ -23,9 +25,37 @@ class GeetestWebviewDialog extends StatefulWidget {
 }
 
 class _GeetestWebviewDialogState extends State<GeetestWebviewDialog> {
+  Timer? _timeout;
+  bool _finished = false;
+
   static const _geetestJsUri =
       'https://static.geetest.com/static/js/fullpage.0.0.0.js';
   static const _geetestConfigUri = 'https://api.geetest.com/gettype.php';
+
+  @override
+  void initState() {
+    super.initState();
+    _timeout = Timer(const Duration(seconds: 45), _close);
+  }
+
+  @override
+  void dispose() {
+    _timeout?.cancel();
+    super.dispose();
+  }
+
+  void _close() {
+    _finish();
+  }
+
+  void _finish([Map<String, dynamic>? data]) {
+    if (!mounted || _finished || ModalRoute.of(context)?.isCurrent != true) {
+      return;
+    }
+    _finished = true;
+    _timeout?.cancel();
+    Navigator.of(context).pop(data);
+  }
 
   static String _buildHtml(String gt, String challenge) {
     final ts = DateTime.now().millisecondsSinceEpoch;
@@ -61,7 +91,7 @@ class _GeetestWebviewDialogState extends State<GeetestWebviewDialog> {
           initialSettings: InAppWebViewSettings(
             clearCache: true,
             javaScriptEnabled: true,
-            forceDark: ForceDark.AUTO,
+            forceDark: ForceDark.OFF,
             useHybridComposition: true,
             algorithmicDarkeningAllowed: true,
             useShouldOverrideUrlLoading: true,
@@ -98,7 +128,7 @@ class _GeetestWebviewDialogState extends State<GeetestWebviewDialog> {
                 callback: (args) {
                   if (args.isNotEmpty) {
                     if (args[0] case Map<String, dynamic> data) {
-                      Get.back(result: data);
+                      _finish(data);
                       return;
                     }
                   }
@@ -109,11 +139,12 @@ class _GeetestWebviewDialogState extends State<GeetestWebviewDialog> {
                 handlerName: 'error',
                 callback: (args) {
                   logger.scoped('geetest').w('验证码组件报告错误');
+                  _close();
                 },
               )
               ..addJavaScriptHandler(
                 handlerName: 'close',
-                callback: (args) => Get.back(),
+                callback: (args) => _close(),
               );
           },
         ),
@@ -122,7 +153,7 @@ class _GeetestWebviewDialogState extends State<GeetestWebviewDialog> {
           top: 8,
           child: IconButton(
             icon: const Icon(Icons.close),
-            onPressed: Get.back,
+            onPressed: _close,
             tooltip: '关闭',
           ),
         ),
