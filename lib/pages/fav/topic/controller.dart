@@ -38,12 +38,11 @@ class FavTopicController
   Future<LoadingState<FavTopicData>> customGetData() =>
       FavHttp.favTopic(page: page);
 
-  Future<void> onRemove(int index, int id) async {
+  Future<void> onRemove(int id) async {
     final res = await FavHttp.delFavTopic(id);
     if (res.isSuccess) {
-      loadingState
-        ..value.data!.removeAt(index)
-        ..refresh();
+      loadingState.value.data!.removeWhere((item) => item.id == id);
+      loadingState.refresh();
       SmartDialog.showToast('已取消收藏');
     } else {
       res.toast();

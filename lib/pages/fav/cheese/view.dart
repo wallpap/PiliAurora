@@ -67,8 +67,7 @@ class _FavCheesePageState extends State<FavCheesePage>
                     onRemove: () => showConfirmDialog(
                       context: context,
                       title: const Text('确定取消收藏该课堂？'),
-                      onConfirm: () =>
-                          _controller.onRemove(index, item.seasonId!),
+                      onConfirm: () => _controller.onRemove(item.seasonId!),
                     ),
                   );
                 },

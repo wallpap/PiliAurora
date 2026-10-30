@@ -188,13 +188,9 @@ class _FavPgcChildPageState extends State<FavPgcChildPage>
                       followStatus: widget.followStatus,
                       onUpdateStatus: (followStatus) {
                         if (followStatus == -1) {
-                          _favPgcController.pgcDel(
-                            index,
-                            item.seasonId,
-                          );
+                          _favPgcController.pgcDel(item.seasonId);
                         } else {
                           _favPgcController.onUpdate(
-                            index,
                             followStatus,
                             item.seasonId,
                           );

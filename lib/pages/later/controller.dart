@@ -48,7 +48,6 @@ mixin BaseLaterController
   // single
   void toViewDel(
     BuildContext context,
-    int index,
     int? aid,
   ) {
     showDialog(
@@ -69,9 +68,10 @@ mixin BaseLaterController
               Get.back();
               final res = await UserHttp.toViewDel(aids: aid.toString());
               if (res.isSuccess) {
-                loadingState
-                  ..value.data!.removeAt(index)
-                  ..refresh();
+                loadingState.value.data!.removeWhere(
+                  (item) => item.aid == aid,
+                );
+                loadingState.refresh();
                 updateCount?.call(1);
               }
             },
