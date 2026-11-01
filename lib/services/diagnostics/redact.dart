@@ -12,7 +12,7 @@ abstract final class DiagnosticRedactor {
   // 整段查询一并移除，不能只枚举已知 token 名称而漏掉其他签名参数。
   static final _query = RegExp(r'''\?[^\s<>"']+''');
   static final _assignment = RegExp(
-    r'''((?:authorization|cookie|set-cookie|[\w-]*token|access[_-]?key|api[_-]?key|password|passwd|secret|credential|private[_-]?key|SESSDATA|bili_jct|csrf|buvid\w*|DedeUserID|sign(?:ature)?|w_rid|upsig|auth[_-]?(?:code|key)|ticket)["']?\s*[=:]\s*)([^\r\n,;}]+)''',
+    r'''((?:authorization|cookie|set-cookie|\b[\w-]*token|access[_-]?key|api[_-]?key|password|passwd|secret|credential|private[_-]?key|SESSDATA|bili_jct|csrf|buvid\w*|DedeUserID|sign(?:ature)?|w_rid|upsig|auth[_-]?(?:code|key)|ticket)["']?\s*[=:]\s*)([^\r\n,;}]+)''',
     caseSensitive: false,
   );
   static final _bearer = RegExp(

@@ -4,6 +4,26 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:pili_aurora/services/diagnostics/redact.dart';
 
 void main() {
+  test(
+    'long ordinary words stay intact and prefixed token keys stay redacted',
+    () {
+      final ordinary = 'x' * 65000;
+      expect(DiagnosticRedactor.text(ordinary, maxLength: 65536), ordinary);
+      final output = DiagnosticRedactor.text(
+        'accessToken=prefixed-secret\nx-custom-token: hyphen-secret\n'
+        '"token":"quoted-secret"\n${'a' * 12000}Token=long-prefix-secret',
+        maxLength: 65536,
+      );
+      for (final secret in [
+        'prefixed-secret',
+        'hyphen-secret',
+        'quoted-secret',
+        'long-prefix-secret',
+      ]) {
+        expect(output, isNot(contains(secret)));
+      }
+    },
+  );
   test('redaction remains stable through error and toast boundaries', () {
     final once = DiagnosticRedactor.text(
       'GET https://user:pass@example.test:8443/path?access_key=secret#private',
@@ -12,17 +32,26 @@ void main() {
     expect(once, 'GET https://example.test:8443/path?<redacted>');
   });
   test('redacts signatures, auth parameters and websocket credentials', () {
-    final output = jsonEncode(DiagnosticRedactor.clean({
-      'sign': 'map-sign-secret',
-      'w_rid': 'map-wrid-secret',
-      'authCode': 'map-auth-secret',
-      'message': 'sign=text-sign-secret\naccessToken=text-token-secret\n'
-          'Basic basic-secret\nwss://user:pass@example.com:8443/socket?ticket=ws-secret#fragment-secret',
-    }));
+    final output = jsonEncode(
+      DiagnosticRedactor.clean({
+        'sign': 'map-sign-secret',
+        'w_rid': 'map-wrid-secret',
+        'authCode': 'map-auth-secret',
+        'message':
+            'sign=text-sign-secret\naccessToken=text-token-secret\n'
+            'Basic basic-secret\nwss://user:pass@example.com:8443/socket?ticket=ws-secret#fragment-secret',
+      }),
+    );
     for (final secret in [
-      'map-sign-secret', 'map-wrid-secret', 'map-auth-secret',
-      'text-sign-secret', 'text-token-secret', 'basic-secret',
-      'user:pass', 'ws-secret', 'fragment-secret',
+      'map-sign-secret',
+      'map-wrid-secret',
+      'map-auth-secret',
+      'text-sign-secret',
+      'text-token-secret',
+      'basic-secret',
+      'user:pass',
+      'ws-secret',
+      'fragment-secret',
     ]) {
       expect(output, isNot(contains(secret)));
     }
