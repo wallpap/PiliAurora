@@ -1,3 +1,4 @@
+import 'package:pili_aurora/common/widgets/inactive_feed_sliver.dart';
 import 'package:pili_aurora/common/widgets/flutter/refresh_indicator.dart';
 import 'package:pili_aurora/common/widgets/loading_widget/http_error.dart';
 import 'package:pili_aurora/common/widgets/video_card/video_card_h.dart';
@@ -60,21 +61,23 @@ class _ZonePageState extends State<ZonePage>
       Loading() => gridSkeleton,
       Success(:final response) =>
         response != null && response.isNotEmpty
-            ? SliverGrid.builder(
-                gridDelegate: gridDelegate,
-                itemBuilder: (context, index) {
-                  final item = response[index];
-                  if (item is HotVideoItemModel) {
-                    return VideoCardH(
-                      videoItem: item,
-                      onRemove: () => controller.loadingState
-                        ..value.data!.removeAt(index)
-                        ..refresh(),
-                    );
-                  }
-                  return PgcRankItem(item: item);
-                },
-                itemCount: response.length,
+            ? InactiveFeedSliver(
+                sliver: SliverGrid.builder(
+                  gridDelegate: gridDelegate,
+                  itemBuilder: (context, index) {
+                    final item = response[index];
+                    if (item is HotVideoItemModel) {
+                      return VideoCardH(
+                        videoItem: item,
+                        onRemove: () => controller.loadingState
+                          ..value.data!.removeAt(index)
+                          ..refresh(),
+                      );
+                    }
+                    return PgcRankItem(item: item);
+                  },
+                  itemCount: response.length,
+                ),
               )
             : HttpError(onReload: controller.onReload),
       Error(:final errMsg) => HttpError(

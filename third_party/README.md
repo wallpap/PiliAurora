@@ -56,6 +56,8 @@ Windows x64 的 cnativeapi 使用 [预编译入口](nativeapi/README.md)，内�
 
 Flutter SDK 与 `material_ui` 补丁由 `lib/scripts/patch.ps1` 管理，构建脚本按实际依赖解析路径应用补丁，详见[工具入口](../tool/README.md#平台构建)。
 
+Windows 另应用 `rendering_semantics.patch` 与 `sliver_child_lifecycle.patch`：释放被祖先隐藏的语义缓存，并结束 Sliver 临时插入引用的生命周期。Android 构建会反向恢复这两份补丁；对应的隐藏页面弱引用回归须先应用 Windows 补丁。两份补丁沿用 Flutter 的 BSD 许可，不修改引擎二进制。
+
 Android 帧计划引擎补丁单独维护在 [`tool/engine/frame_plan/`](../tool/engine/frame_plan/README.md)，固定 Flutter 框架与引擎提交，并应用到隔离检出。常规 FVM 构建流程保持原有入口；自编引擎的源码材料、构建命令与 APK 身份校验见该目录说明。
 
 Windows 帧节奏引擎补丁维护在 [`tool/engine/windows_frame_pacing/`](../tool/engine/windows_frame_pacing/README.md)，固定 Flutter 3.47.5 引擎与 depot_tools 提交，使用 Flutter 的 BSD 许可。源码、工具链和 DLL 保存在独立本地目录；应用构建通过 `-WindowsEngineLibrary` 选用同模式 DLL，并登记补丁、DLL 摘要和原生回归状态。

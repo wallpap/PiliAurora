@@ -58,7 +58,7 @@ flowchart TD
 - 首页控制器连续下载所需批次，下载与黑名单同步、合作作者检查重叠，发布前完成黑名单准备。App 推荐按 `idx/pull` 顺序请求；Web 首包按容量请求 20–50 项，首包之后最多同时下载两页，按索引合并并去重。刷新保留历史内容和位置提示，后续分页追加在历史之后。
 - 首页滚动分页及其他发现列表使用 `lib/common/widgets/feed_pagination.dart` 按实际滚动范围与预取距离加载，避免构建末项触发请求。首页首屏补足由控制器负责；连续五页无有效增长时停止，分页失败保留内容并提供点击重试，刷新、切账号和退出会使旧查询失效。相关测试位于 `test/pages/rcmd/` 与 `test/common/widgets/feed_pagination_test.dart`。
 - “账号与隐私 → 增强黑名单屏蔽”默认开启。发现类列表按作者 UID 过滤并沿原来源补位；子开关“检查合作视频作者”默认开启，对列表明确标识的合作视频补查 `staff`，任一作者命中即屏蔽。补查共用缓存和并发限额，收藏、历史、稍后再看和详情访问沿用原行为。适用范围、请求开销和回归入口见[信息流黑名单屏蔽](content-filtering.md)。
-- 主导航、首页与排行通过 `TabActivity` / `TickerMode` 标记活动标签。`CachedImage` 在隐藏时卸载图片，页面数据和滚动位置继续保留；解码器创建与首帧交付共用两个并发名额，原生请求完成后归还名额。内存 LRU 仍为 64 MiB / 256 项，实际 RSS 与帧耗时需实机测量。
+- 主导航、首页与排行通过 `TabActivity` / `TickerMode` 标记活动标签。`CachedImage` 在隐藏时卸载图片，页面数据和滚动位置继续保留；解码器创建与首帧交付共用两个并发名额，原生请求完成后归还名额。内存 LRU 为 64 MiB，最多 256 项；该账面值不包含全部原生纹理占用，实际 RSS 与帧耗时需实机测量。
 - `NetworkImgLayer` 按卡片物理尺寸与 1 Mi 像素预算为 B 站 CDN 的质量型缩略请求补充宽高，让动图源文件同步缩小；已有尺寸或裁剪参数的请求继续沿用原构图，原图查看与下载沿用原地址。
 
 ## 视频、文章、番剧与音频
@@ -66,6 +66,7 @@ flowchart TD
 - 页面：`lib/pages/video/`、`article/`、`article_list/`、`pgc/`、`audio/`、`music/`。
 - API：`lib/http/video.dart`、`pgc.dart`、`music.dart`、`reply.dart`。
 - 播放：`lib/plugin/pl_player/`；播放诊断见 `lib/services/diagnostics/player_diagnostics.dart`。
+- 视频全屏时，`VideoDetailOffstage` 保留简介、评论和分集面板的状态，并通过 `TickerMode` 停止隐藏面板的动画与图片解码。
 - 模型：`lib/models/remote/video/`、`pgc/` 及顶层视频模型。
 - 修改前确认详情、播放地址和弹幕使用的资源标识（aid、bvid、cid），再调整页面。
 

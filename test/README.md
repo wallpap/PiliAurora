@@ -2,6 +2,10 @@
 
 从仓库根目录运行 `fvm flutter test`。传入文件或目录可选择对应范围，环境与平台验证要求见[构建与测试说明](../doc/build-and-test.md)。
 
+本地 Windows WebView 包的 `third_party/flutter_inappwebview_windows/test/webview_environment_channel_test.dart`
+使用模拟通道检查多个 Environment 的独立创建与释放，防止实例 dispose 误发到静态工厂 id；
+可从仓库根目录单独运行，已接入 CI。网页纹理、Cookie 和原生图形资源仍由 Windows 设备验证。
+
 `common/widgets/image/` 覆盖图片恢复时的单次取帧、原生取消后的解码名额归还、动画时长与有限循环、CDN 缩略尺寸及淡入过渡。`pages/home/controller_lifecycle_test.dart` 检查 Get 删除时的诊断源与 Ticker 释放；`router/get_route_lifecycle_test.dart` 检查真实出栈后路由引用清理及永久依赖保留。这些回归已接入 `tool/run-ci-tests.ps1`。
 
 | 目录 | 范围 |
@@ -86,4 +90,8 @@ fvm flutter test test/services/diagnostics/ test/pages/about/diagnostics_page_te
 
 按需实验位于 [`tool/experiments/`](../tool/experiments/README.md)，原生或设备探针位于 [`tool/probes/`](../tool/probes/README.md)，各入口和执行条件由对应目录文档说明。
 
+
 旧 Canvas 屏幕的绘制、轨道、静音与 DPI 回归统一放在 `tool/experiments/danmaku/baseline/`，按需运行；`pages/danmaku/frame_rate_ticker_test.dart` 和 `text_renderer_test.dart` 保留当前窗口内核共用的调度及文字栅格回归。
+
+
+Windows 保活页面内存回归：先执行 `pwsh -File lib/scripts/patch.ps1 windows -SkipPubGet`，再运行 `fvm flutter test --no-pub test/common/widgets/inactive_sliver_cache_test.dart test/common/widgets/inactive_sliver_semantics_test.dart test/common/widgets/image/retained_layer_release_test.dart`。语义回归用弱引用核对已销毁卡片确实可回收，同时检查 State、数据、ScrollPosition、偏移、Focus 与语义恢复。绘制回归覆盖真实 Picture/source 释放、像素恢复与外部 Texture 保护；真实进程 Private/RSS 阈值由独立 Release 探针验证。

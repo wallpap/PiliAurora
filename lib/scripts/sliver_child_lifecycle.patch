@@ -1,0 +1,18 @@
+--- a/packages/flutter/lib/src/widgets/sliver.dart
++++ b/packages/flutter/lib/src/widgets/sliver.dart
+@@ -1053,6 +1053,7 @@
+       }
+     } finally {
+       _currentlyUpdatingChildIndex = null;
++      _currentBeforeChild = null;
+       renderObject.debugChildIntegrityEnabled = true;
+     }
+   }
+@@ -1077,6 +1078,7 @@
+         newChild = updateChild(_childElements[index], _build(index, adaptorWidget), index);
+       } finally {
+         _currentlyUpdatingChildIndex = null;
++        _currentBeforeChild = null;
+       }
+       if (newChild != null) {
+         _childElements[index] = newChild;

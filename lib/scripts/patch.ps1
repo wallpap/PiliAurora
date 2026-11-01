@@ -178,6 +178,10 @@ $TextPainterPatch = "lib/scripts/text_painter.patch"
 
 $SliverPatch = "lib/scripts/sliver.patch"
 
+# Windows 保活页面隐藏后释放语义子树缓存与列表临时插入引用。
+$RenderingSemanticsPatch = "lib/scripts/rendering_semantics.patch"
+$SliverChildLifecyclePatch = "lib/scripts/sliver_child_lifecycle.patch"
+
 $RefreshIndicatorPatch = "lib/scripts/refresh_indicator.patch"
 
 # TODO: remove
@@ -215,7 +219,11 @@ $patches = @($ModalBarrierPatch, $TextSelectionPatch, $MouseCursorPatch,
             $TextPainterPatch, $SliverPatch, $RefreshIndicatorPatch)
 
 $androidPatches = @($BottomSheetAndroidPatch, $ScrollViewPatch, $NavigatorPatch)
+$windowsMemoryPatches = @($RenderingSemanticsPatch, $SliverChildLifecyclePatch)
 if ($platform -eq "android") {
+    foreach ($patch in $windowsMemoryPatches) {
+        Apply-Patch (Join-Path $Workspace $patch) -Reverse
+    }
     $patches += $androidPatches
 }
 elseif ($platform -eq "windows") {
@@ -223,6 +231,7 @@ elseif ($platform -eq "windows") {
     foreach ($patch in $androidPatches) {
         Apply-Patch (Join-Path $Workspace $patch) -Reverse
     }
+    $patches += $windowsMemoryPatches
 }
 
 foreach ($patch in $patches) {

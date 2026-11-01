@@ -1,6 +1,7 @@
 import 'package:pili_aurora/common/skeleton/video_card_v.dart';
 import 'package:pili_aurora/common/sliver_single_child_delegate.dart';
 import 'package:pili_aurora/common/style.dart';
+import 'package:pili_aurora/common/widgets/inactive_feed_sliver.dart';
 import 'package:pili_aurora/common/widgets/button/icon_button.dart';
 import 'package:pili_aurora/common/widgets/button/more_btn.dart';
 import 'package:pili_aurora/common/widgets/flutter/refresh_indicator.dart';
@@ -232,25 +233,27 @@ class _LivePageState extends State<LivePage>
                 ),
               ),
           response != null && response.isNotEmpty
-              ? SliverGrid.builder(
-                  gridDelegate: gridDelegate,
-                  itemBuilder: (context, index) {
-                    if (index == response.length - 1) {
-                      controller.onLoadMore();
-                    }
-                    final item = response[index];
-                    if (item is LiveCardList) {
+              ? InactiveFeedSliver(
+                  sliver: SliverGrid.builder(
+                    gridDelegate: gridDelegate,
+                    itemBuilder: (context, index) {
+                      if (index == response.length - 1) {
+                        controller.onLoadMore();
+                      }
+                      final item = response[index];
+                      if (item is LiveCardList) {
+                        return LiveCardVApp(
+                          item: item.cardData!.smallCardV1!,
+                          showFirstFrame: controller.showFirstFrame,
+                        );
+                      }
                       return LiveCardVApp(
-                        item: item.cardData!.smallCardV1!,
+                        item: item,
                         showFirstFrame: controller.showFirstFrame,
                       );
-                    }
-                    return LiveCardVApp(
-                      item: item,
-                      showFirstFrame: controller.showFirstFrame,
-                    );
-                  },
-                  itemCount: response.length,
+                    },
+                    itemCount: response.length,
+                  ),
                 )
               : HttpError(onReload: controller.onReload),
         ],

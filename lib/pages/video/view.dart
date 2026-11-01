@@ -776,7 +776,7 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
             height: videoHeight,
           ),
         ),
-        Offstage(
+        VideoDetailOffstage(
           offstage: isFullScreen,
           child: SizedBox(
             width: introWidth,
@@ -821,7 +821,7 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
           return Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Offstage(
+              VideoDetailOffstage(
                 offstage: isFullScreen,
                 child: SizedBox(
                   width: introWidth,
@@ -840,7 +840,7 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
                   height: videoHeight,
                 ),
               ),
-              Offstage(
+              VideoDetailOffstage(
                 offstage: isFullScreen,
                 child: SizedBox(
                   width: introWidth,
@@ -908,7 +908,7 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
               ),
             ),
             if (!videoDetailController.isFileSource)
-              Offstage(
+              VideoDetailOffstage(
                 offstage: isFullScreen,
                 child: SizedBox(
                   width: width,
@@ -924,7 +924,7 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
               ),
           ],
         ),
-        Offstage(
+        VideoDetailOffstage(
           offstage: isFullScreen,
           child: SizedBox(
             width: maxWidth - width - padding.horizontal,
@@ -1035,7 +1035,7 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
             height: videoHeight,
           ),
         ),
-        Offstage(
+        VideoDetailOffstage(
           offstage: isFullScreen,
           child: SizedBox(
             width: maxWidth - padding.horizontal,

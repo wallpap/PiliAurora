@@ -1,6 +1,7 @@
 import 'dart:math';
 
 import 'package:pili_aurora/common/style.dart';
+import 'package:pili_aurora/common/widgets/inactive_feed_sliver.dart';
 import 'package:pili_aurora/common/widgets/button/more_btn.dart';
 import 'package:pili_aurora/common/widgets/flutter/refresh_indicator.dart';
 import 'package:pili_aurora/common/widgets/loading_widget/http_error.dart';
@@ -313,15 +314,17 @@ class _PgcPageState extends State<PgcPage> with AutomaticKeepAliveClientMixin {
       Loading() => const SliverToBoxAdapter(),
       Success(:final response) =>
         response != null && response.isNotEmpty
-            ? SliverGrid.builder(
-                gridDelegate: gridDelegate,
-                itemBuilder: (context, index) {
-                  if (index == response.length - 1) {
-                    controller.onLoadMore();
-                  }
-                  return PgcCardVPgcIndex(item: response[index]);
-                },
-                itemCount: response.length,
+            ? InactiveFeedSliver(
+                sliver: SliverGrid.builder(
+                  gridDelegate: gridDelegate,
+                  itemBuilder: (context, index) {
+                    if (index == response.length - 1) {
+                      controller.onLoadMore();
+                    }
+                    return PgcCardVPgcIndex(item: response[index]);
+                  },
+                  itemCount: response.length,
+                ),
               )
             : HttpError(onReload: controller.onReload),
       Error(:final errMsg) => HttpError(

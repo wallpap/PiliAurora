@@ -7,6 +7,7 @@ import 'package:pili_aurora/common/style.dart';
 import 'package:pili_aurora/common/widgets/floating_navigation_bar.dart';
 import 'package:pili_aurora/common/widgets/flutter/pop_scope.dart';
 import 'package:pili_aurora/common/widgets/image/network_img_layer.dart';
+import 'package:pili_aurora/common/widgets/inactive_paint_cleanup.dart';
 import 'package:pili_aurora/common/widgets/main_layout.dart';
 import 'package:pili_aurora/common/widgets/route_aware_mixin.dart';
 import 'package:pili_aurora/common/widgets/tab_activity.dart';
@@ -580,7 +581,7 @@ class _MainAppState extends PopScopeState<MainApp>
             Obx(
               () => TickerMode(
                 enabled: _mainController.selectedIndex.value == index,
-                child: tab.page,
+                child: InactivePaintCleanup(child: tab.page),
               ),
             ),
         ],

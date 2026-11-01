@@ -41,6 +41,13 @@ jobs:
         shell: pwsh
         run: pwsh -NoProfile -File tool/run-ci-tests.ps1 -FlutterTool path
 
+      - name: Test Windows page and WebView retention
+        shell: pwsh
+        run: |
+          lib/scripts/patch.ps1 windows -SkipPubGet
+          flutter test --no-pub test/common/widgets/inactive_sliver_cache_test.dart test/common/widgets/inactive_sliver_semantics_test.dart test/common/widgets/pipeline_owner_semantics_test.dart test/common/widgets/image/retained_layer_release_test.dart
+          flutter test --no-pub third_party/flutter_inappwebview_windows/test/webview_environment_channel_test.dart
+
       - name: Run Android host probes
         shell: pwsh
         run: pwsh -NoProfile -File tool/run-native-probes.ps1

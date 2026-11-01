@@ -1,4 +1,5 @@
 import 'package:material_ui/material_ui.dart';
+import 'package:pili_aurora/common/widgets/inactive_paint_cleanup.dart';
 
 /// 保活标签页仅在进入视口时启用动画与图片；业务状态和滚动位置继续保留。
 class TabActivity extends StatelessWidget {
@@ -22,7 +23,7 @@ class TabActivity extends StatelessWidget {
       enabled: controller.indexIsChanging
           ? index == controller.index || index == controller.previousIndex
           : (controller.animation!.value - index).abs() < 1,
-      child: child!,
+      child: InactivePaintCleanup(child: child!),
     ),
   );
 }

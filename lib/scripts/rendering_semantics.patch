@@ -1,0 +1,150 @@
+--- a/packages/flutter/lib/src/rendering/object.dart
++++ b/packages/flutter/lib/src/rendering/object.dart
+@@ -1406,6 +1406,7 @@
+     } else if (_semanticsOwner != null) {
+       _semanticsOwner?.dispose();
+       _semanticsOwner = null;
++      _semanticsNeedingBlockedChildCleanup.clear();
+       onSemanticsOwnerDisposed?.call();
+     }
+   }
+@@ -1425,6 +1426,11 @@
+   ///
+   /// All nodes in this set are guaranteed to be semantics boundaries.
+   final Set<RenderObject> _nodesNeedingSemanticsUpdate = <RenderObject>{};
++
++  // Dirty branches may be excluded by visitChildrenForSemantics. Defer cached
++  // node cleanup until phase 1 identifies which branches remain blocked.
++  final Set<_RenderObjectSemantics> _semanticsNeedingBlockedChildCleanup =
++      <_RenderObjectSemantics>{};
+ 
+   /// Nodes that need semantics geometry update.
+   ///
+@@ -1450,6 +1456,7 @@
+   // what this method does.
+   void flushSemantics() {
+     if (_semanticsOwner == null) {
++      _semanticsNeedingBlockedChildCleanup.clear();
+       return;
+     }
+     if (!kReleaseMode) {
+@@ -1487,6 +1494,30 @@
+           continue;
+         }
+         node._semantics.updateChildren();
++      }
++      final List<_RenderObjectSemantics> blockedChildCleanup = _semanticsNeedingBlockedChildCleanup
++          .toList();
++      _semanticsNeedingBlockedChildCleanup.clear();
++      blockedChildCleanup.sort(
++        (_RenderObjectSemantics a, _RenderObjectSemantics b) =>
++            a.renderObject.depth - b.renderObject.depth,
++      );
++      final Set<RenderObject> clearedBlockedSubtrees = <RenderObject>{};
++      void recordClearedSubtree(RenderObject object) {
++        clearedBlockedSubtrees.add(object);
++        object.visitChildren(recordClearedSubtree);
++      }
++
++      for (final _RenderObjectSemantics semantics in blockedChildCleanup) {
++        final RenderObject object = semantics.renderObject;
++        if (object.owner == this &&
++            semantics.parentDataDirty &&
++            !clearedBlockedSubtrees.contains(object)) {
++          // Use the virtual hook: some render objects own additional semantics
++          // nodes, such as Scrollable's inner scrolling node.
++          object.clearSemantics();
++          recordClearedSubtree(object);
++        }
+       }
+       if (!kReleaseMode) {
+         FlutterTimeline.finishSync();
+@@ -1818,6 +1849,7 @@
+     _nodesNeedingCompositingBitsUpdate.clear();
+     _nodesNeedingPaint.clear();
+     _nodesNeedingSemanticsUpdate.clear();
++    _semanticsNeedingBlockedChildCleanup.clear();
+   }
+ }
+ 
+@@ -2507,6 +2539,13 @@
+     if (_semantics.configProvider.effective.isSemanticBoundary &&
+         (_semantics.parentDataDirty || !_semantics.built)) {
+       markNeedsSemanticsUpdate();
++    }
++    // A dirty non-boundary may move between owners after layout and remain
++    // blocked without another markNeedsSemanticsUpdate in the new owner.
++    if (owner._semanticsOwner != null &&
++        _semantics.parentDataDirty &&
++        owner._semanticsNeedingBlockedChildCleanup.add(_semantics)) {
++      owner.requestVisualUpdate();
+     }
+   }
+ 
+@@ -3901,7 +3940,8 @@
+ 
+   /// Removes all semantics from this render object and its descendants.
+   ///
+-  /// Should only be called on objects whose [parent] is not a [RenderObject].
++  /// Should only be called on objects whose [parent] is not a [RenderObject],
++  /// or by [PipelineOwner] for a blocked branch after invalidating its ancestors.
+   ///
+   /// Override this method if you instantiate new [SemanticsNode]s in an
+   /// overridden [assembleSemanticsNode] method, to dispose of those nodes.
+@@ -6014,7 +6054,26 @@
+     } else {
+       effectiveChildParentData = childParentData;
+     }
+-    for (final _RenderObjectSemantics childSemantics in _getNonBlockedChildren()) {
++    final List<_RenderObjectSemantics> nonBlockedChildren = _getNonBlockedChildren();
++    final Set<RenderObject> includedBranches = <RenderObject>{};
++    for (final _RenderObjectSemantics child in nonBlockedChildren) {
++      RenderObject branch = child.renderObject;
++      while (branch.parent != null && branch.parent != renderObject) {
++        branch = branch.parent!;
++      }
++      includedBranches.add(branch);
++    }
++    renderObject.visitChildren((RenderObject child) {
++      final _RenderObjectSemantics semantics = child._semantics;
++      if (!includedBranches.contains(child) && !semantics.parentDataDirty) {
++        // An excluded child is blocked even when no descendant changed its
++        // semantics. Invalidating it also prevents stale child caches from
++        // being reused if this branch is later included again.
++        semantics.parentData = null;
++        renderObject.owner!._semanticsNeedingBlockedChildCleanup.add(semantics);
++      }
++    });
++    for (final _RenderObjectSemantics childSemantics in nonBlockedChildren) {
+       assert(!childSemantics.renderObject._needsLayout);
+       childSemantics._didUpdateParentData(effectiveChildParentData);
+       for (final _SemanticsFragment fragment in childSemantics.mergeUp) {
+@@ -6543,6 +6602,17 @@
+         }
+       }
+     }
++
++    // Hidden or blocked branches are not visited by flushSemantics. Their
++    // cached fragments can otherwise retain children that have been removed
++    // from the render tree, even after those children have been disposed.
++    for (
++      RenderObject? blocked = renderObject;
++      blocked != null && blocked._semantics.parentDataDirty;
++      blocked = blocked.parent
++    ) {
++      renderObject.owner!._semanticsNeedingBlockedChildCleanup.add(blocked._semantics);
++    }
+   }
+ 
+   void _marksConflictsInMergeGroup(List<_SemanticsFragment> mergeGroup, {bool isMergeUp = false}) {
+@@ -6577,6 +6647,10 @@
+     cachedSemanticsNode = null;
+     parentData = null;
+     geometry = null;
++    parentInSemanticsTree = null;
++    firstAncestorNodeWithCleanGeometry = null;
++    _currentTreeShapeToken = Object();
++    _producedSiblingNodesAndOwners.clear();
+     _blocksPreviousSibling = null;
+     _containsIncompleteFragment = false;
+     mergeUp.clear();

@@ -1,5 +1,23 @@
 import 'package:material_ui/material_ui.dart';
 
+/// 全屏时保留详情状态，并停止隐藏面板的动画与图片解码。
+class VideoDetailOffstage extends StatelessWidget {
+  const VideoDetailOffstage({
+    super.key,
+    required this.offstage,
+    required this.child,
+  });
+
+  final bool offstage;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) => Offstage(
+    offstage: offstage,
+    child: TickerMode(enabled: !offstage, child: child),
+  );
+}
+
 /// The detail page's overview, comments and playlist share one constrained area.
 class VideoDetailPanels extends StatelessWidget {
   const VideoDetailPanels({
