@@ -328,6 +328,60 @@ void main() {
     await settle();
   });
 
+  test('分类阅读后不被紧随其后的旧未读数重新点亮', () async {
+    var queries = 0;
+    final overview = UnreadOverview(
+      session,
+      query: () async {
+        queries++;
+        return const UnreadQueryResult({
+          MsgUnReadType.reply: 4,
+          MsgUnReadType.at: 2,
+        });
+      },
+    );
+    addTearDown(overview.dispose);
+    await overview.refresh();
+    final feed = FeedHandle<int>(
+      session: session,
+      request: (account, cursor) async => Success(FeedPage(items: const [1])),
+      idOf: (item) => item,
+      notifyUnreadOnRefresh: true,
+      readType: MsgUnReadType.reply,
+    );
+    await feed.refresh();
+    feed.dispose();
+    await settle();
+    expect(overview.state.value.counts[MsgUnReadType.reply], 0);
+    expect(overview.state.value.counts[MsgUnReadType.at], 2);
+    expect(queries, 1);
+    // 后续主动查询仍可取得新消息，不永久屏蔽该分类。
+    await overview.refresh();
+    expect(overview.state.value.counts[MsgUnReadType.reply], 4);
+  });
+  test('分类阅读成功后，在途未读旧响应不能恢复角标', () async {
+    final pending = Completer<UnreadQueryResult>();
+    var queries = 0;
+    final overview = UnreadOverview(
+      session,
+      query: () async => queries++ == 0
+          ? const UnreadQueryResult({MsgUnReadType.at: 2})
+          : pending.future,
+    );
+    addTearDown(overview.dispose);
+    await overview.refresh();
+    final stale = overview.refresh();
+    await settle();
+    session.notifyChanged(
+      MessagingChangeKind.unread,
+      readType: MsgUnReadType.at,
+    );
+    pending.complete(const UnreadQueryResult({MsgUnReadType.at: 2}));
+    await stale;
+    expect(overview.state.value.counts[MsgUnReadType.at], 0);
+    expect(overview.state.value.refreshing, isFalse);
+  });
+
   test('查询失败保留旧数值，缺失分类保持未知', () async {
     int count = 0;
     final overview = UnreadOverview(

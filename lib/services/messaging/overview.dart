@@ -52,11 +52,15 @@ class UnreadOverview {
     _subscription = session.changes.listen((change) {
       if (change.kind == MessagingChangeKind.unread) {
         if (change.readType case final type?) {
+          // 阅读成功就是本地确认；立即重查可能拿到远端尚未收敛的旧数值。
+          _generation++;
+          _pending = null;
           state.value = UnreadSnapshot(
             counts: {...state.value.counts, type: 0},
             errors: {...state.value.errors}..remove(type),
             updatedAt: DateTime.now(),
           );
+          return;
         }
         invalidate();
       }
