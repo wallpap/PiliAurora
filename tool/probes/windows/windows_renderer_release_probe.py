@@ -72,7 +72,8 @@ inline void mpv_render_context_set_update_callback(mpv_render_context*, void (*)
 inline void mpv_render_context_free(mpv_render_context* context) {
   CheckBarrier(); ++context_frees; delete context;
 }
-inline uint64_t mpv_render_context_update(mpv_render_context*) { return MPV_RENDER_UPDATE_FRAME; }
+inline uint64_t render_update_flags = MPV_RENDER_UPDATE_FRAME;
+inline uint64_t mpv_render_context_update(mpv_render_context*) { return render_update_flags; }
 inline std::function<void()> render_hook;
 inline int mpv_render_context_render(mpv_render_context*, mpv_render_param*) {
   if(render_hook) render_hook();
@@ -190,6 +191,29 @@ static void Settled(Fixture& f) {
 }
 int main() {
   try {
+    {
+      Fixture f;
+      const OutputOperationToken token{1, 1, 1, 0};
+      f.output->BeginOutputForLoad(token, [](bool okay) { Require(okay, "token rejected"); });
+      f.Drain();
+      f.pool.Post([&] {
+        f.output->Render();
+        Require(f.output->texture_sampling_frames_.empty(), "unprepared output reports consumption");
+        f.output->output_prepared_ = true;
+        render_update_flags = 0;
+        f.output->Render();
+        Require(f.output->texture_sampling_frames_.size() == 1,
+                "paused first prepared redraw has no consumption identity");
+        f.output->texture_sampling_frames_.clear();
+        f.output->Render();
+        Require(f.output->texture_sampling_frames_.empty(), "unchanged redraw invents another frame");
+        f.output->active_token_ = OutputOperationToken{1, 2, 2, 0};
+        f.output->Render();
+        Require(f.output->texture_sampling_frames_.empty(), "old file frame accepted for new token");
+        render_update_flags = MPV_RENDER_UPDATE_FRAME;
+      }).get();
+      std::cout << "PASS paused first prepared redraw preserves genuine new-file consumption" << std::endl;
+    }
     {
       Fixture f;
       f.output->SetTextureUpdateCallback([](auto, auto, auto) {});

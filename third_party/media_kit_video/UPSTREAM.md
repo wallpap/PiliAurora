@@ -1,6 +1,6 @@
 # media_kit_video 本地版本
 
-- 本地版本：`1.2.5+piliaurora.13`；来源包版本：`1.2.5`。
+- 本地版本：`1.2.5+piliaurora.14`；来源包版本：`1.2.5`。
 - 来源仓库：https://github.com/My-Responsitories/media-kit.git
 - 来源提交：`73771ec38176be2d984a3049c28177bce23b54a0`。
 - 来源子目录：`media_kit_video`。
@@ -60,3 +60,5 @@ Windows 支持在创建输出时指定固定尺寸。初始纹理 ID 与视频�
 2026-10-23（piliaurora.11）：Android Surface 与 JNI 全局引用完整创建后再登记到输出；构造失败、JNI 引用创建抛错或返回零句柄时，回收本次新建的 Surface 并向平台通道传播错误。回滚释放失败时保留 Surface 所有权与原始错误，后续输出释放继续回收。主机故障探针补齐创建失败、零句柄、回滚失败与重试恢复。
 
 2026-10-26（piliaurora.12）：Windows 每个渲染任务处理一帧，持续到达的更新合并后排回队尾，避免渲染循环长期占用输出线程、阻塞卸载时的输出代次撤销。`tool/probes/windows/windows_renderer_release_probe.py` 通过连续更新期间排入撤销请求，检查渲染与卸载任务的交替执行。
+
+2026-11-01（piliaurora.14）：Windows 暂停重载时，新文件帧可先于输出准备到达。准备后的首次重绘即使没有新的 mpv 更新标志，也为已经确认属于当前 token 的帧登记真实纹理消费身份，避免 EOF 后暂停跳转一直等待首帧；后续不变重绘不重复报告，旧 token 帧仍被拒绝。生产渲染器主机探针覆盖该顺序及旧帧隔离，Windows 设备探针新增自然 EOF 后暂停定位、连续定位与复播检查。

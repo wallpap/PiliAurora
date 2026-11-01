@@ -277,6 +277,7 @@ class PlaybackSession implements PlaybackMediaClock {
     bool automaticRecovery = false,
     bool retainRequestId = false,
     bool preservePendingConfiguration = false,
+    bool restartAfterEnd = false,
   }) {
     final rejected = _rejectLoad(owner);
     if (rejected != null) return Future.value(rejected);
@@ -323,6 +324,7 @@ class PlaybackSession implements PlaybackMediaClock {
     if (!preservePendingConfiguration) _configurationPending.clear();
     request
       ..recovery = automaticRecovery
+      ..restartAfterEnd = restartAfterEnd
       ..finalPlan = acceptedPlan;
     _publish();
     _scheduleLoad(request, acceptedPlan);
@@ -561,7 +563,12 @@ class PlaybackSession implements PlaybackMediaClock {
         _stage = PlaybackStage.reconcilingIntent;
         _writerLoadRequestId = request.id;
         _publish();
-        final playResult = await _ensureWriter();
+        var playResult = await _ensureWriter();
+        // 意图更新只取代旧 writer 回执；当前加载仍须等最新播放/暂停落实。
+        while (_isRequestCurrent(request) &&
+            playResult.outcome == CommandOutcome.superseded) {
+          playResult = await _ensureWriter();
+        }
         _writerLoadRequestId = null;
         if (!_isRequestCurrent(request)) return;
         if (playResult.outcome != CommandOutcome.applied) {
@@ -635,7 +642,8 @@ class PlaybackSession implements PlaybackMediaClock {
     PlaybackOperationContext operation,
   ) async {
     var plan = initialPlan;
-    if (identical(_lastLoadOwner, request.owner) &&
+    if (!request.restartAfterEnd &&
+        identical(_lastLoadOwner, request.owner) &&
         _lastLoadPlan?.contentKey == plan.contentKey) {
       plan = _planForReload(plan);
     }
@@ -793,6 +801,13 @@ class PlaybackSession implements PlaybackMediaClock {
     if ((_currentPlan == null && _acceptedRequest == null) ||
         (owner._requiresLoad && !identical(_acceptedRequest?.owner, owner))) {
       return Future.value(const CommandResult.noMedia());
+    }
+    if (_phase == PlaybackPhase.ended && playing) {
+      return _restartAfterEnd(
+        owner,
+        Duration.zero,
+        start: PlaybackStartPolicy.play,
+      );
     }
     final previous = owner._playing;
     owner._playing = playing;
@@ -1012,10 +1027,13 @@ class PlaybackSession implements PlaybackMediaClock {
           ? const CommandResult.notReady()
           : const CommandResult.noMedia();
     }
-    if (_phase == PlaybackPhase.loading || _phase == PlaybackPhase.recovering) {
+    final restartAfterEnd =
+        _phase == PlaybackPhase.ended ||
+        (_phase == PlaybackPhase.loading &&
+            _acceptedRequest?.restartAfterEnd == true);
+    if (_phase != PlaybackPhase.ready && !restartAfterEnd) {
       return const CommandResult.notReady();
     }
-    if (_phase != PlaybackPhase.ready) return const CommandResult.notReady();
     if (_capabilities.seekSupport == PlaybackSeekSupport.unknown) {
       return const CommandResult.capabilityPending();
     }
@@ -1029,6 +1047,13 @@ class PlaybackSession implements PlaybackMediaClock {
     }
     final request = _requestId;
     final load = _loadId;
+    if (restartAfterEnd) {
+      return _restartAfterEnd(
+        owner,
+        target,
+        start: PlaybackStartPolicy.preserve,
+      );
+    }
     final seekSequence = ++_seekSequence;
     _invalidateMediaAnchor();
     _pendingSeekSequence = seekSequence;
@@ -1282,6 +1307,30 @@ class PlaybackSession implements PlaybackMediaClock {
     };
   }
 
+  Future<CommandResult> _restartAfterEnd(
+    PlaybackOwner owner,
+    Duration target, {
+    required PlaybackStartPolicy start,
+  }) async {
+    final plan = _currentPlan!;
+    // EOF 也可能来自已卸载的文件；重新加载并接受新请求，隔离旧结束事件。
+    final result = await _load(
+      owner,
+      PlaybackPlan(
+        contentKey: plan.contentKey,
+        source: plan.source,
+        timeline: plan.timeline,
+        configuration: _desiredConfiguration,
+        startPosition: target,
+        reloadPosition: target,
+        metadata: plan.metadata,
+      ),
+      start: start,
+      restartAfterEnd: true,
+    );
+    return _loadCommandResult(result, 'restart-after-end');
+  }
+
   Future<CommandResult> _reloadForConfiguration(PlaybackOwner owner) async {
     final plan = _currentPlan;
     if (plan == null) return const CommandResult.noMedia();
@@ -1293,6 +1342,10 @@ class PlaybackSession implements PlaybackMediaClock {
       retainRequestId: true,
       preservePendingConfiguration: true,
     );
+    return _loadCommandResult(result, 'configuration-reload');
+  }
+
+  CommandResult _loadCommandResult(LoadResult result, String operation) {
     return switch (result.outcome) {
       LoadOutcome.ready => const CommandResult.applied(),
       LoadOutcome.noMedia => const CommandResult.noMedia(),
@@ -1305,10 +1358,10 @@ class PlaybackSession implements PlaybackMediaClock {
             ? CommandResult.failed(
                 PlaybackFailure(
                   category: PlaybackFailureCategory.unknown,
-                  operation: 'configuration-reload',
+                  operation: operation,
                   stage: _stage,
                   recoverable: false,
-                  cause: '配置重载失败，但运行时未提供失败详情。',
+                  cause: '重载失败，但运行时未提供失败详情。',
                 ),
               )
             : CommandResult.failed(result.failure!),
@@ -2512,6 +2565,7 @@ class _AcceptedRequest {
   bool resolved = false;
   bool Function()? shouldLoad;
   bool recovery = false;
+  bool restartAfterEnd = false;
 
   void registerCancel(void Function() cancel) {
     if (cancelled.isCompleted) {

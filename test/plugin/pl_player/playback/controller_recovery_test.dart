@@ -6,6 +6,7 @@ import 'package:hive_ce/hive.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:pili_aurora/plugin/pl_player/controller.dart';
 import 'package:pili_aurora/plugin/pl_player/models/data_source.dart';
+import 'package:pili_aurora/plugin/pl_player/models/play_status.dart';
 import 'package:pili_aurora/plugin/pl_player/playback/audio_recovery.dart';
 import 'package:pili_aurora/plugin/pl_player/playback/native_playback_runtime.dart';
 import 'package:pili_aurora/plugin/pl_player/playback/playback_contracts.dart';
@@ -28,6 +29,41 @@ void main() {
         );
   });
   tearDownAll(Hive.close);
+
+  _recoveryTest('片尾跳转后控制器进度同步到新位置', (f) async {
+    await f.load(local: true);
+    f.runtime.complete();
+    await f.tester.pump();
+    expect(f.controller.playerStatus, PlayerStatus.completed);
+    f.controller.position.value = 300;
+    f.controller.updateDuration(const Duration(minutes: 5));
+    await f.controller.seekTo(const Duration(seconds: 42));
+    await f.tester.pump();
+    expect(f.controller.position.value, 42);
+    expect(f.controller.positionInMilliseconds, 42000);
+    expect(f.controller.playerStatus, PlayerStatus.paused);
+  });
+
+  _recoveryTest('片尾连续跳转时旧结果不覆盖最新进度', (f) async {
+    await f.load(local: true);
+    f.runtime.complete();
+    await f.tester.pump();
+    f.controller.position.value = 300;
+    f.controller.updateDuration(const Duration(minutes: 5));
+    final gate = Completer<void>();
+    f.runtime.beforeLoad = (plan) async {
+      if (plan.reloadPosition == const Duration(seconds: 42)) await gate.future;
+    };
+    final first = f.controller.seekTo(const Duration(seconds: 42));
+    await f.tester.pump();
+    final latest = f.controller.seekTo(const Duration(seconds: 90));
+    await f.tester.pump();
+    gate.complete();
+    await Future.wait([first, latest]);
+    await f.tester.pump();
+    expect(f.controller.position.value, 90);
+    expect(f.controller.positionInMilliseconds, 90000);
+  });
 
   _recoveryTest('本地媒体手动重试保留暂停和续播位置', (f) async {
     await f.load(local: true, start: PlaybackStartPolicy.pause);
@@ -660,6 +696,7 @@ class _Runtime extends NativePlaybackRuntime {
   @override
   Duration get position => player.state.position;
   final loads = <PlaybackPlan>[];
+  Future<void> Function(PlaybackPlan)? beforeLoad;
   bool hasVideo = true;
   bool hasAudio = true;
   bool videoHealthy = true;
@@ -712,6 +749,7 @@ class _Runtime extends NativePlaybackRuntime {
     PlaybackExecutionContext context,
   ) async {
     loads.add(plan);
+    await beforeLoad?.call(plan);
     loadId = context.loadId;
     player.state
       ..completed = false

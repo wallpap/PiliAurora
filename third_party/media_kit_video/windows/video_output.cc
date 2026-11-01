@@ -360,6 +360,8 @@ bool VideoOutput::Render() {
         output_prepared_ && active_token_.has_value() &&
         !active_token_invalidated_ && frame_seen_token_.has_value() &&
         *frame_seen_token_ == *active_token_;
+    const bool first_current_file_frame =
+        current_file_frame && rendered_frame_token_ != active_token_;
     if (current_file_frame) rendered_frame_token_ = *active_token_;
     if (current_file_frame && frame_updated && sampling_enabled_ &&
         sampling_admission_ == "blocked" && !resize_in_progress_)
@@ -368,7 +370,8 @@ bool VideoOutput::Render() {
       std::lock_guard<std::mutex> lock(textures_mutex_);
       if (current_file_frame) {
         texture_frame_tokens_[texture_id_] = *active_token_;
-        if (frame_updated)
+        // 暂停加载的新帧可能先于输出准备；准备后的首次重绘仍需消费回执。
+        if (frame_updated || first_current_file_frame)
           texture_sampling_frames_.insert_or_assign(
               texture_id_,
               TextureFrameIdentity{

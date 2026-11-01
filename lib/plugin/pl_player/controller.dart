@@ -776,6 +776,7 @@ class PlPlayerController
   PlaybackBackgroundPolicy? _backgroundPolicy;
   StreamSubscription<bool>? _backgroundPolicySubscription;
   bool _audioSeekInProgress = false;
+  int _seekRevision = 0;
   PlaybackOwner? _activeOwner;
   StreamSubscription<PlaybackSnapshot>? _snapshotSubscription;
   PlaybackPlan? _currentPlan;
@@ -941,7 +942,8 @@ class PlPlayerController
     final wasBuffering = isBuffering.value;
     if ((snapshot.phase == PlaybackPhase.loading ||
             snapshot.phase == PlaybackPhase.recovering) &&
-        !dataStatus.loading) {
+        !dataStatus.loading &&
+        !_audioSeekInProgress) {
       _progressProjection.begin(Duration(seconds: position.value));
     }
     if (snapshot.actual.buffering case final buffering?) {
@@ -1904,6 +1906,7 @@ class PlPlayerController
   }
 
   Future<void> seek(Duration position, {bool isSeek = false}) async {
+    final revision = ++_seekRevision;
     _progressProjection.begin(position);
     _audioSeekInProgress = true;
     _audioRecovery?.onPlaybackChanged();
@@ -1918,7 +1921,8 @@ class PlPlayerController
       final owner = _activeOwner;
       if (owner == null || !owner.isActive) return;
       final result = await owner.seek(position);
-      if (result.outcome != CommandOutcome.applied) {
+      if (revision == _seekRevision &&
+          result.outcome != CommandOutcome.applied) {
         if (_videoPlayerController case final player?) {
           _progressProjection.begin(player.state.position);
         }
@@ -1944,11 +1948,13 @@ class PlPlayerController
         },
       );
     } finally {
-      _audioSeekInProgress = false;
-      if (_videoPlayerController case final player?) {
-        _publishPlaybackPosition(player.state.position);
+      if (revision == _seekRevision) {
+        _audioSeekInProgress = false;
+        if (_videoPlayerController case final player?) {
+          _publishPlaybackPosition(player.state.position);
+        }
+        _audioRecovery?.onPlaybackChanged();
       }
-      _audioRecovery?.onPlaybackChanged();
     }
   }
 

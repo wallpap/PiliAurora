@@ -744,6 +744,220 @@ void main() {
     });
   }
 
+  test('片尾 seek 重载目标位置并保留暂停意图和最新配置', () async {
+    final runtime = _FakeRuntime()..position = const Duration(seconds: 10);
+    final session = PlaybackSession(runtime: runtime);
+    final owner = session.attach();
+    try {
+      await owner.load(_plan('tail'), start: PlaybackStartPolicy.play);
+      final oldLoad = session.loadId;
+      runtime._events.add(
+        PlaybackRuntimeEnded(
+          runtimeId: runtime.runtimeId,
+          loadId: oldLoad,
+        ),
+      );
+      final action = session.currentSnapshot.pendingAction!;
+      await owner.setVolume(37);
+      expect(
+        (await owner.seek(const Duration(seconds: 4))).outcome,
+        CommandOutcome.applied,
+      );
+      expect(
+        runtime.loadedPlans.last.startPosition,
+        const Duration(seconds: 4),
+      );
+      expect(
+        runtime.loadedPlans.last.reloadPosition,
+        const Duration(seconds: 4),
+      );
+      expect(runtime.loadedPlans.last.configuration.volume, 37);
+      expect(runtime.seekCalls, isEmpty);
+      expect(runtime.playCalls.last, isFalse);
+      expect(session.currentSnapshot.phase, PlaybackPhase.ready);
+      expect(session.currentSnapshot.pendingAction, isNull);
+      expect(
+        (await owner.acknowledgeAction(action)).outcome,
+        CommandOutcome.superseded,
+      );
+      runtime._events.add(
+        PlaybackRuntimeEnded(
+          runtimeId: runtime.runtimeId,
+          loadId: oldLoad,
+        ),
+      );
+      expect(session.currentSnapshot.phase, PlaybackPhase.ready);
+      runtime.position = const Duration(seconds: 10);
+      runtime._events.add(
+        PlaybackRuntimeEnded(
+          runtimeId: runtime.runtimeId,
+          loadId: session.loadId,
+        ),
+      );
+      expect(session.currentSnapshot.phase, PlaybackPhase.ended);
+      expect(session.currentSnapshot.pendingAction!.id, isNot(action.id));
+    } finally {
+      owner.close();
+      await session.shutdown();
+    }
+  });
+
+  for (final playing in [false, true]) {
+    test('片尾复播从零重载，在途最新播放意图生效：$playing', () async {
+      final runtime = _FakeRuntime()..position = const Duration(seconds: 10);
+      final session = PlaybackSession(runtime: runtime);
+      final owner = session.attach();
+      final opened = Completer<void>();
+      try {
+        await owner.load(_plan('tail'), start: PlaybackStartPolicy.play);
+        runtime._events.add(
+          PlaybackRuntimeEnded(
+            runtimeId: runtime.runtimeId,
+            loadId: session.loadId,
+          ),
+        );
+        runtime.onLoad = (plan, context, index) async {
+          await opened.future;
+          return _loaded(context, plan);
+        };
+        final replay = owner.setPlaying(true);
+        await _until(() => runtime.loadedPlans.length == 2);
+        await owner.setPlaying(false);
+        if (playing) await owner.setPlaying(true);
+        opened.complete();
+        expect((await replay).outcome, CommandOutcome.applied);
+        expect(runtime.loadedPlans.last.reloadPosition, Duration.zero);
+        expect(runtime.playCalls.last, playing);
+        expect(session.currentSnapshot.intent.playing, playing);
+      } finally {
+        if (!opened.isCompleted) opened.complete();
+        owner.close();
+        await session.shutdown();
+      }
+    });
+  }
+
+  test('片尾复播协调播放时暂停，等待 writer 落实较新意图', () async {
+    final runtime = _FakeRuntime()..position = const Duration(seconds: 10);
+    final session = PlaybackSession(runtime: runtime);
+    final owner = session.attach();
+    final playing = Completer<void>();
+    final finishPlay = Completer<void>();
+    try {
+      await owner.load(_plan('tail'), start: PlaybackStartPolicy.play);
+      runtime._events.add(
+        PlaybackRuntimeEnded(
+          runtimeId: runtime.runtimeId,
+          loadId: session.loadId,
+        ),
+      );
+      runtime.onSetPlaying = (value, context, index) async {
+        if (value) {
+          playing.complete();
+          await finishPlay.future;
+        }
+        runtime.playCalls.add(value);
+        return const PlaybackRuntimeCommandResult();
+      };
+      final replay = owner.setPlaying(true);
+      await playing.future;
+      await owner.setPlaying(false);
+      finishPlay.complete();
+      expect((await replay).outcome, CommandOutcome.applied);
+      expect(session.currentSnapshot.phase, PlaybackPhase.ready);
+      expect(session.currentSnapshot.intent.playing, isFalse);
+      expect(runtime.playCalls.last, isFalse);
+    } finally {
+      if (!finishPlay.isCompleted) finishPlay.complete();
+      owner.close();
+      await session.shutdown();
+    }
+  });
+
+  test('片尾连续 seek 取代在途重载，保留期间最新播放意图', () async {
+    final runtime = _FakeRuntime()..position = const Duration(seconds: 10);
+    final session = PlaybackSession(runtime: runtime);
+    final owner = session.attach();
+    final opened = Completer<void>();
+    try {
+      await owner.load(_plan('tail'), start: PlaybackStartPolicy.play);
+      runtime._events.add(
+        PlaybackRuntimeEnded(
+          runtimeId: runtime.runtimeId,
+          loadId: session.loadId,
+        ),
+      );
+      runtime.onLoad = (plan, context, index) async {
+        if (index == 1) await opened.future;
+        return _loaded(context, plan);
+      };
+      final first = owner.seek(const Duration(seconds: 2));
+      await _until(() => runtime.loadedPlans.length == 2);
+      await owner.setPlaying(true);
+      final second = owner.seek(const Duration(seconds: 5));
+      final latest = owner.seek(const Duration(seconds: 7));
+      expect((await first).outcome, CommandOutcome.superseded);
+      expect((await second).outcome, CommandOutcome.superseded);
+      opened.complete();
+      expect((await latest).outcome, CommandOutcome.applied);
+      expect(runtime.loadedPlans, hasLength(3));
+      expect(
+        runtime.loadedPlans.last.reloadPosition,
+        const Duration(seconds: 7),
+      );
+      expect(runtime.playCalls.last, isTrue);
+      expect(session.currentSnapshot.intent.playing, isTrue);
+    } finally {
+      if (!opened.isCompleted) opened.complete();
+      owner.close();
+      await session.shutdown();
+    }
+  });
+
+  test('片尾 seek 范围和能力校验不触发重载，复播失败如实返回', () async {
+    final runtime = _FakeRuntime()..position = const Duration(seconds: 10);
+    final session = PlaybackSession(runtime: runtime);
+    final owner = session.attach();
+    try {
+      await owner.load(_plan('tail'), start: PlaybackStartPolicy.play);
+      runtime._events.add(
+        PlaybackRuntimeEnded(
+          runtimeId: runtime.runtimeId,
+          loadId: session.loadId,
+        ),
+      );
+      expect(
+        (await owner.seek(const Duration(seconds: 11))).outcome,
+        CommandOutcome.outOfRange,
+      );
+      for (final support in [
+        PlaybackSeekSupport.unknown,
+        PlaybackSeekSupport.unsupported,
+      ]) {
+        runtime._events.add(
+          PlaybackRuntimeCapabilitiesChanged(
+            runtimeId: runtime.runtimeId,
+            loadId: session.loadId,
+            capabilities: PlaybackCapabilities(seekSupport: support),
+          ),
+        );
+        expect(
+          (await owner.seek(Duration.zero)).outcome,
+          support == PlaybackSeekSupport.unknown
+              ? CommandOutcome.capabilityPending
+              : CommandOutcome.unsupported,
+        );
+      }
+      expect(runtime.loadedPlans, hasLength(1));
+      runtime.onLoad = (plan, context, index) async => _failedLoad(context);
+      expect((await owner.setPlaying(true)).outcome, CommandOutcome.failed);
+      expect(session.currentSnapshot.phase, PlaybackPhase.failed);
+    } finally {
+      owner.close();
+      await session.shutdown();
+    }
+  });
+
   test('seek 命令回执在途时提前 EOF 不抢占，结束后按新位置恢复', () async {
     final pending = Completer<PlaybackRuntimeCommandResult>();
     final runtime = _FakeRuntime()

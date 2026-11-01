@@ -40,6 +40,7 @@ Future<void> main() async {
   final rapidOnly = config['rapidOnly'] == true;
   final diagnosticReplayOnly = config['diagnosticReplayOnly'] == true;
   final startupOnly = config['startupOnly'] == true;
+  final eofOnly = config['eofOnly'] == true;
   final switchSources = (config['switchSources'] as List?)?.cast<String>();
   final switchOnly = switchSources != null;
   final mountAfterLoad = config['mountAfterLoad'] == true;
@@ -131,6 +132,17 @@ Future<void> main() async {
     String name,
     Future<Map<String, Object?>> Function() body,
   ) async {
+    if (eofOnly &&
+        !{
+          'paused-load',
+          'natural-eof',
+          'eof-paused-seek',
+          'eof-latest-seek',
+          'eof-replay',
+          'shutdown-released',
+        }.contains(name)) {
+      return;
+    }
     if (startupOnly && name != 'paused-load' && name != 'shutdown-released') {
       return;
     }
@@ -268,7 +280,10 @@ Future<void> main() async {
 
   try {
     await test('paused-load', () async {
-      final result = await owner.load(plan(), start: PlaybackStartPolicy.pause);
+      final result = await owner.load(
+        plan(sound: eofOnly && audio.isNotEmpty ? audio : null),
+        start: PlaybackStartPolicy.pause,
+      );
       report['initialLoad'] = {
         'outcome': result.outcome.name,
         'operation': result.failure?.operation,
@@ -433,6 +448,7 @@ Future<void> main() async {
       );
       return {
         'positionMs': runtime.player!.state.position.inMilliseconds,
+        'videoFramePresented': runtime.videoFramePresented.value,
         ...await pixels(),
       };
     });
@@ -608,6 +624,90 @@ Future<void> main() async {
         'EOF retained play intent',
       );
       return {'phase': session.currentSnapshot.phase.name};
+    });
+    await test('eof-paused-seek', () async {
+      final result = await owner.seek(
+        const Duration(milliseconds: seekTargetMs),
+      );
+      report['eofSeek'] = {
+        'outcome': result.outcome.name,
+        'phase': session.currentSnapshot.phase.name,
+        'stage': session.currentSnapshot.stage.name,
+        'intent': session.currentSnapshot.intent.playing,
+        'positionMs': runtime.player!.state.position.inMilliseconds,
+        'failureOperation': result.failure?.operation,
+      };
+      check(result.outcome == CommandOutcome.applied, 'EOF seek failed');
+      check(!runtime.player!.state.playing, 'EOF seek lost pause intent');
+      await waitFor(
+        () =>
+            (runtime.player!.state.position.inMilliseconds - seekTargetMs)
+                .abs() <
+            1000,
+      );
+      final texture = await pixels();
+      check(
+        runtime.videoFramePresented.value,
+        'EOF seek retained waiting-for-frame',
+      );
+      return {
+        ...texture,
+        ...report['eofSeek'] as Map<String, Object?>,
+        'videoFramePresented': runtime.videoFramePresented.value,
+      };
+    });
+    Future<void> finishAgain() async {
+      await owner.seek(
+        runtime.player!.state.duration - const Duration(seconds: 1),
+      );
+      await owner.setPlaying(true);
+      await waitFor(() => session.currentSnapshot.phase == PlaybackPhase.ended);
+    }
+
+    await test('eof-latest-seek', () async {
+      await finishAgain();
+      final first = owner.seek(const Duration(seconds: 3));
+      final second = owner.seek(const Duration(seconds: 7));
+      await owner.setPlaying(true);
+      await owner.setPlaying(false);
+      check(
+        (await first).outcome == CommandOutcome.superseded,
+        'old EOF seek not superseded',
+      );
+      check(
+        (await second).outcome == CommandOutcome.applied,
+        'latest EOF seek failed',
+      );
+      await waitFor(
+        () =>
+            (runtime.player!.state.position.inMilliseconds - 7000).abs() < 1000,
+      );
+      check(!runtime.player!.state.playing, 'latest EOF pause lost');
+      return {
+        'positionMs': runtime.player!.state.position.inMilliseconds,
+        ...await pixels(),
+      };
+    });
+    await test('eof-replay', () async {
+      await finishAgain();
+      final result = await owner.setPlaying(true);
+      check(result.outcome == CommandOutcome.applied, 'EOF replay failed');
+      await waitFor(
+        () =>
+            runtime.player!.state.position > const Duration(milliseconds: 300),
+      );
+      check(
+        runtime.player!.state.position < const Duration(seconds: 5),
+        'EOF replay retained tail position',
+      );
+      check(
+        session.currentSnapshot.intent.playing,
+        'EOF replay lost play intent',
+      );
+      return {
+        'positionMs': runtime.player!.state.position.inMilliseconds,
+        ...await pixels(),
+      };
     });
   } finally {
     mount.cancel();
