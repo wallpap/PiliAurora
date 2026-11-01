@@ -26,13 +26,19 @@ class MultiImageStreamCompleter extends ImageStreamCompleter {
         _scale = scale {
     codec.listen(
       (event) {
+        if (__disposed) {
+          event.dispose();
+          return;
+        }
         if (_timer != null) {
+          _nextImageCodec?.dispose();
           _nextImageCodec = event;
         } else {
           _handleCodecReady(event);
         }
       },
       onError: (Object error, StackTrace stack) {
+        if (__disposed) return;
         reportError(
           context: ErrorDescription('resolving an image codec'),
           exception: error,
@@ -60,6 +66,8 @@ class MultiImageStreamCompleter extends ImageStreamCompleter {
 
   ui.Codec? _codec;
   ui.Codec? _nextImageCodec;
+  ui.Codec? _decodingCodec;
+  final _retiredCodecs = Set<ui.Codec>.identity();
   final double _scale;
   final InformationCollector? _informationCollector;
 
@@ -91,14 +99,20 @@ class MultiImageStreamCompleter extends ImageStreamCompleter {
   bool __disposed = false;
 
   void _switchToNewCodec() {
-    _framesEmitted = 0;
     _timer = null;
-    _handleCodecReady(_nextImageCodec!);
+    final codec = _nextImageCodec!;
     _nextImageCodec = null;
+    _handleCodecReady(codec);
   }
 
   void _handleCodecReady(ui.Codec codec) {
+    if (_codec case final previous?) _retireCodec(previous);
+    _nextFrame?.image.dispose();
+    _nextFrame = null;
     _codec = codec;
+    _framesEmitted = 0;
+    _shownTimestamp = null;
+    _frameDuration = null;
 
     if (hasListeners) {
       _decodeNextFrameAndSchedule();
@@ -107,15 +121,20 @@ class MultiImageStreamCompleter extends ImageStreamCompleter {
 
   void _handleAppFrame(Duration timestamp) {
     _frameCallbackScheduled = false;
-    if (!hasListeners) return;
+    if (__disposed || !hasListeners || _nextFrame == null || _codec == null) {
+      return;
+    }
     if (_isFirstFrame() || _hasFrameDurationPassed(timestamp)) {
-      _emitFrame(ImageInfo(image: _nextFrame!.image, scale: _scale));
+      final codec = _codec!;
+      final frame = _nextFrame!;
+      _nextFrame = null;
+      _emitFrame(ImageInfo(image: frame.image, scale: _scale));
+      if (__disposed || !identical(codec, _codec)) return;
       _shownTimestamp = timestamp;
       _frameDuration = clampGifFrameDuration(
-        _nextFrame!.duration,
+        frame.duration,
         minimumGifFrameDuration: minimumGifFrameDuration,
       );
-      _nextFrame = null;
       if (_framesEmitted % _codec!.frameCount == 0 && _nextImageCodec != null) {
         _switchToNewCodec();
       } else {
@@ -123,6 +142,9 @@ class MultiImageStreamCompleter extends ImageStreamCompleter {
         if (_codec!.repetitionCount == -1 ||
             completedCycles <= _codec!.repetitionCount) {
           _decodeNextFrameAndSchedule();
+        } else {
+          _retireCodec(_codec!);
+          _codec = null;
         }
       }
       return;
@@ -140,9 +162,31 @@ class MultiImageStreamCompleter extends ImageStreamCompleter {
   }
 
   Future<void> _decodeNextFrameAndSchedule() async {
+    final codec = _codec;
+    if (__disposed || codec == null || _decodingCodec != null) return;
+    _decodingCodec = codec;
     try {
-      _nextFrame = await _codec!.getNextFrame();
+      final frame = await codec.getNextFrame();
+      if (__disposed || !identical(codec, _codec)) {
+        frame.image.dispose();
+        return;
+      }
+      _nextFrame = frame;
+      if (codec.frameCount == 1) {
+        if (hasListeners) {
+          // setImage接管此帧；不能继续在_nextFrame中保留同一个句柄。
+          _nextFrame = null;
+          _emitFrame(ImageInfo(image: frame.image, scale: _scale));
+          if (identical(codec, _codec)) {
+            _codec = null;
+            _retireCodec(codec);
+          }
+        }
+      } else if (hasListeners) {
+        _scheduleAppFrame();
+      }
     } on Object catch (exception, stack) {
+      if (__disposed || !identical(codec, _codec)) return;
       reportError(
         context: ErrorDescription('resolving an image frame'),
         exception: exception,
@@ -150,26 +194,27 @@ class MultiImageStreamCompleter extends ImageStreamCompleter {
         informationCollector: _informationCollector,
         silent: true,
       );
-      return;
-    }
-    if (_codec!.frameCount == 1) {
-      // ImageStreamCompleter listeners removed while waiting for next frame to
-      // be decoded.
-      // There's no reason to emit the frame without active listeners.
-      if (!hasListeners) {
-        return;
+    } finally {
+      _decodingCodec = null;
+      if (_retiredCodecs.remove(codec)) codec.dispose();
+      if (!__disposed && !identical(codec, _codec) && hasListeners) {
+        _decodeNextFrameAndSchedule();
       }
-
-      // This is not an animated image, just return it and don't schedule more
-      // frames.
-      _emitFrame(ImageInfo(image: _nextFrame!.image, scale: _scale));
-      return;
     }
-    _scheduleAppFrame();
+  }
+
+  void _retireCodec(ui.Codec codec) {
+    // 原生dispose可能丢弃在途回调，待回执归还FrameInfo后再销毁codec。
+    if (identical(codec, _decodingCodec)) {
+      _retiredCodecs.add(codec);
+    } else {
+      codec.dispose();
+    }
   }
 
   void _scheduleAppFrame() {
-    if (_frameCallbackScheduled) {
+    _timer = null;
+    if (__disposed || _frameCallbackScheduled) {
       return;
     }
     _frameCallbackScheduled = true;
@@ -184,8 +229,22 @@ class MultiImageStreamCompleter extends ImageStreamCompleter {
   @override
   void addListener(ImageStreamListener listener) {
     __hadAtLeastOneListener = true;
-    if (!hasListeners && _codec != null) _decodeNextFrameAndSchedule();
+    final resume = !hasListeners;
     super.addListener(listener);
+    if (resume && _nextFrame != null && _codec?.frameCount == 1) {
+      final frame = _nextFrame!;
+      _nextFrame = null;
+      final codec = _codec!;
+      _emitFrame(ImageInfo(image: frame.image, scale: _scale));
+      if (identical(codec, _codec)) {
+        _codec = null;
+        _retireCodec(codec);
+      }
+    } else if (resume && _nextFrame != null) {
+      _scheduleAppFrame();
+    } else if (resume && _codec != null) {
+      _decodeNextFrameAndSchedule();
+    }
   }
 
   @override
@@ -215,6 +274,14 @@ class MultiImageStreamCompleter extends ImageStreamCompleter {
     }
 
     __disposed = true;
+    _timer?.cancel();
+    _timer = null;
+    _nextFrame?.image.dispose();
+    _nextFrame = null;
+    if (_codec case final codec?) _retireCodec(codec);
+    _codec = null;
+    _nextImageCodec?.dispose();
+    _nextImageCodec = null;
 
     _chunkSubscription?.onData(null);
     _chunkSubscription?.cancel();

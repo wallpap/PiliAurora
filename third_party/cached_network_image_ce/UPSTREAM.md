@@ -1,6 +1,6 @@
 # cached_network_image_ce 本地版本
 
-- 本地版本：`4.6.4+piliaurora.2`；来源包版本：`4.6.4`。
+- 本地版本：`4.6.4+piliaurora.3`；来源包版本：`4.6.4`。
 - 来源仓库：https://github.com/My-Responsitories/flutter_cached_network_image_ce.git
 - 来源提交：`dacec4de669b4c52c59576509db069e3194408ac`。
 - 来源子目录：`cached_network_image`。
@@ -11,6 +11,10 @@
 导入时除包版本、禁止发布声明及必要依赖声明外，不重写来源实现。
 这些包不是 pub.dev 同名版本的镜像，不可仅修改根版本号宣称已升级。
 更新流程见 `../README.md`，来源登记见 `../dependencies.json`。
+
+## piliaurora.3：解码器与帧生命周期
+
+`MultiImageStreamCompleter` 在单帧交付完成、替换解码器和最后一个监听者及保活句柄退出时释放对应 codec；排队 codec 被覆盖、销毁后的迟到 codec 和帧也会归还。在途取帧等待回执后再销毁旧 codec，避免原生销毁丢弃回调。已交付帧的所有权交给 `ImageStreamCompleter`，不重复释放。保留有效监听者和缓存保活期间的图片及动画行为。回归见根项目 `test/common/widgets/image/multi_image_stream_lifecycle_test.dart`。
 
 ## piliaurora.2：接口包合并
 

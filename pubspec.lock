@@ -214,7 +214,7 @@ packages:
       path: "third_party/cached_network_image_ce"
       relative: true
     source: path
-    version: "4.6.4+piliaurora.2"
+    version: "4.6.4+piliaurora.3"
   canvas_danmaku:
     dependency: "direct main"
     description:

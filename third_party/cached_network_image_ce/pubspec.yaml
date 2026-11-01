@@ -8,7 +8,7 @@ topics:
   - cache
   - image
   - network-image
-version: 4.6.4+piliaurora.2
+version: 4.6.4+piliaurora.3
 
 environment:
   sdk: ^3.0.0
