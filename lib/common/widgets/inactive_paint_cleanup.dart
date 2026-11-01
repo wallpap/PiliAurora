@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/widgets.dart';
+import 'package:pili_aurora/services/diagnostics/diagnostics.dart';
 
 /// Windows 隐藏的保活页面卸载图片后，同时交还旧绘制记录。
 ///
@@ -70,16 +71,28 @@ class _RenderInactivePaintCleanup extends RenderProxyBox {
     SchedulerBinding.instance.addPostFrameCallback((_) {
       _cleanupScheduled = false;
       if (!attached || _active) return;
-      _releasePictureContents();
+      _measureReleasePictureContents();
       final generation = _activityGeneration;
       // PageView 可在下一帧才将旧页放入保活桶；首遍仍 attached 的
       // native 父层须等 detach 后再交还。每次停用仅补一遍，不循环。
       SchedulerBinding.instance.addPostFrameCallback((_) {
         if (!attached || _active || generation != _activityGeneration) return;
-        _releasePictureContents();
+        _measureReleasePictureContents();
       });
       SchedulerBinding.instance.ensureVisualUpdate();
     });
+  }
+
+  void _measureReleasePictureContents() {
+    final operation = Diagnostics.instance.begin(
+      'inactivePaintCleanup',
+      '释放隐藏页绘制记录',
+    );
+    try {
+      _releasePictureContents();
+    } finally {
+      operation?.finish();
+    }
   }
 
   void _releasePictureContents() {

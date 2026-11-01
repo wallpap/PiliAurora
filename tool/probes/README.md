@@ -530,3 +530,28 @@ fvm dart --packages=.dart_tool/package_config.json tool/probes/windows/inspect_v
 ```
 
 该工具与通用堆分析一样不解码对象值，路径仅使用类名和字段名。单次堆快照的根可达性用于定位保活链；修复效果还需同场景前后对照和独立 Release 内存验收。
+
+## Windows 切页与播放卡顿对照
+
+`windows/stutter_validation.dart` 使用与内存探针相同的隔离存储入口，执行首页首次加载、
+复访与两轮同内容播放。复访、播放均按 debug/off/off/debug 顺序对照诊断开关，
+切换后先静置，再由独立 FrameTiming 和 5ms Timer 保留帧耗时、真实帧时间和唤醒间隔。
+`inactivePaintCleanup` 单独记录绘制层清理耗时；`grpcDecode` 另记录排队、解析及消费耗时，
+消费包含异步任务等待，后台解析计时包含 isolate 调度，均不能直接等同于 UI CPU 时间。
+
+```powershell
+pwsh -File tool/build.ps1 -Platform windows -Mode release -Target tool/probes/windows/stutter_validation.dart -SkipPubGet
+$env:PILIAURORA_MEMORY_ROOT = '<独立测试种子目录>'
+$env:PILIAURORA_STUTTER_OUTPUT = '<本地输出目录>/report.json'
+# 将完整构建目录复制到独立位置后启动该位置的 PiliAurora.exe。
+python tool/probes/windows/analyze_stutter.py --input <report.json> --logs <测试种子/support/diagnostics> --output <summary.json>
+```
+
+探针会切页、静音播放及改变隔离设置；不要指向现用账号存储。结束时按内存探针相同方式
+关闭窗口，再恢复正常发布入口。日志、账号种子、快照和实验报告放在本地忽略目录。
+在线列表可变化，先检查 `validWorkload`、各tab的loaded状态和播放进度；首次使用与复访分段解释。
+
+可选 PresentMon 使用测试PID、独立session_name和 `--qpc_time`。在采集期间保存同一时刻的
+UTC纳秒、QPC纳秒为 `utcNs/qpcNs`，并记录真实QueryPerformanceFrequency。
+离线分析另传 `--present <csv> --qpc-anchor <json> --qpc-frequency <频率>`。
+DXGI提交间隔与实际屏幕呈现分开解释；显示时间为NA时保留缺测，不按零延迟处理。

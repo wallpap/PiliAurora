@@ -149,10 +149,14 @@ abstract final class GrpcReq {
       final data = response.data;
       if (data is Uint8List) {
         final background = isolate && GrpcDecodePolicy.shouldUseIsolate(data);
+        final decodeDetails = <String, Object?>{
+          'bytes': data.length,
+          'background': background,
+        };
         final operation = Diagnostics.instance.begin(
           'grpcDecode',
           '解析 gRPC 响应',
-          details: {'bytes': data.length, 'background': background},
+          details: decodeDetails,
         );
         try {
           final decodedLimit = danmakuWork
@@ -172,16 +176,34 @@ abstract final class GrpcReq {
             inspectDecoded,
             danmakuWork ? DanmakuWorkQuota.instance.maxBytes : null,
           );
-          Future<(LoadingState<T>, int)> decode() async => background
-              ? await compute(_parse<T>, parseArgs)
-              : _parse<T>(parseArgs);
+          Future<(LoadingState<T>, int)> decode() async {
+            final watch = operation == null ? null : (Stopwatch()..start());
+            try {
+              return background
+                  ? await compute(_parse<T>, parseArgs)
+                  : _parse<T>(parseArgs);
+            } finally {
+              if (watch != null) {
+                decodeDetails['parseMs'] = watch.elapsedMicroseconds / 1000;
+              }
+            }
+          }
+
+          final admission = operation == null ? null : (Stopwatch()..start());
           final result = danmakuWork
               ? await DanmakuWorkQuota.instance.runWithLease(
                   DanmakuWorkQuota.instance.maxBytes,
                   (lease) async {
+                    if (admission != null) {
+                      decodeDetails['quotaWaitMs'] =
+                          admission.elapsedMicroseconds / 1000;
+                    }
                     final (decoded, storage) = await decode();
                     if (!(workToken?.isCancelled ?? false)) {
                       if (decoded case Success(:final response)) {
+                        final watch = operation == null
+                            ? null
+                            : (Stopwatch()..start());
                         await consume?.call(
                           response,
                           lease.retaining(
@@ -189,6 +211,11 @@ abstract final class GrpcReq {
                             data.length + decodedLimit! + storage,
                           ),
                         );
+                        if (watch != null) {
+                          // 包含消费阶段的后台任务等待，不能当作主 isolate CPU 时间。
+                          decodeDetails['consumeMs'] =
+                              watch.elapsedMicroseconds / 1000;
+                        }
                       }
                     }
                     return decoded;
