@@ -67,6 +67,7 @@ namespace flutter_inappwebview_plugin
         else {
           result_->Error("0", "Cannot create WebViewEnvironment: " + getHRMessage(errorCode));
           if (map_contains(webViewEnvironments, id)) {
+            webViewEnvironments.at(id)->channelDelegate->UnregisterMethodCallHandler();
             webViewEnvironments.erase(id);
           }
         }
@@ -92,6 +93,7 @@ namespace flutter_inappwebview_plugin
           }
         }
         else if (completionHandler) {
+          defaultEnvironment_->channelDelegate->UnregisterMethodCallHandler();
           defaultEnvironment_ = nullptr;
           completionHandler(nullptr);
         }

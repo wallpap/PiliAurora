@@ -78,7 +78,7 @@ class WindowsWebViewEnvironment extends PlatformWebViewEnvironment
     await _staticChannel.invokeMethod('create', args);
 
     env.channel =
-        MethodChannel('com.pichillilorenzo/flutter_webview_environment_$id');
+        MethodChannel('com.pichillilorenzo/flutter_webview_environment_${env.id}');
     env.handler = env.handleMethod;
     env.initMethodCallHandler();
     return env;

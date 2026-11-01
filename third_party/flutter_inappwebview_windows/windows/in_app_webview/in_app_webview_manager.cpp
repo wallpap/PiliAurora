@@ -21,6 +21,16 @@ namespace flutter_inappwebview_plugin
     ChannelDelegate(plugin->registrar->messenger(), InAppWebViewManager::METHOD_CHANNEL_NAME)
   {
     ++manager_count_;
+
+    windowClass_.lpszClassName = CustomPlatformView::CLASS_NAME;
+    windowClass_.lpfnWndProc = &DefWindowProc;
+
+    RegisterClass(&windowClass_);
+  }
+
+  bool InAppWebViewManager::isSupported()
+  {
+    // Cookie/Environment 不使用纹理捕获；首次创建嵌入网页时再准备共享图形资源。
     if (!rohelper_) {
       rohelper_ = std::make_unique<rx::RoHelper>(RO_INIT_SINGLETHREADED);
 
@@ -31,26 +41,23 @@ namespace flutter_inappwebview_plugin
         if (FAILED(rohelper_->CreateDispatcherQueueController(
           options, dispatcher_queue_controller_.put()))) {
           std::cerr << "Creating DispatcherQueueController failed." << std::endl;
-          return;
+          return false;
         }
 
         if (!isGraphicsCaptureSessionSupported()) {
           std::cerr << "Windows::Graphics::Capture::GraphicsCaptureSession is not "
             "supported."
             << std::endl;
-          return;
+          return false;
         }
 
         graphics_context_ = std::make_unique<GraphicsContext>(rohelper_.get());
         compositor_ = graphics_context_->CreateCompositor();
-        valid_ = graphics_context_->IsValid();
+        valid_ = graphics_context_->IsValid() && compositor_;
       }
     }
 
-    windowClass_.lpszClassName = CustomPlatformView::CLASS_NAME;
-    windowClass_.lpfnWndProc = &DefWindowProc;
-
-    RegisterClass(&windowClass_);
+    return valid_;
   }
 
   void InAppWebViewManager::HandleMethodCall(const flutter::MethodCall<flutter::EncodableValue>& method_call,
@@ -218,13 +225,13 @@ namespace flutter_inappwebview_plugin
       return false;
     }
 
-    ABI::Windows::Graphics::Capture::IGraphicsCaptureSessionStatics*
+    winrt::com_ptr<ABI::Windows::Graphics::Capture::IGraphicsCaptureSessionStatics>
       capture_session_statics;
     if (FAILED(rohelper_->GetActivationFactory(
       className,
       __uuidof(
         ABI::Windows::Graphics::Capture::IGraphicsCaptureSessionStatics),
-      (void**)&capture_session_statics))) {
+      capture_session_statics.put_void()))) {
       return false;
     }
 

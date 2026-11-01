@@ -25,14 +25,17 @@ namespace flutter_inappwebview_plugin
     auto& methodName = method_call.method_name();
 
     if (string_equals(methodName, "dispose")) {
+      // 显式释放仍在活动引擎中；整体引擎销毁时 messenger 已不可用。
+      UnregisterMethodCallHandler();
       if (webViewEnvironment->plugin && webViewEnvironment->plugin->webViewEnvironmentManager) {
         std::map<std::string, std::unique_ptr<WebViewEnvironment>>& webViewEnvironments = webViewEnvironment->plugin->webViewEnvironmentManager->webViewEnvironments;
-        auto& id = webViewEnvironment->id;
+        const auto id = webViewEnvironment->id;
         if (map_contains(webViewEnvironments, id)) {
           webViewEnvironments.erase(id);
         }
       }
       result->Success();
+      return;
     }
     else {
       result->NotImplemented();

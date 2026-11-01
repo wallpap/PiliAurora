@@ -98,5 +98,10 @@ namespace flutter_inappwebview_plugin
   WebViewEnvironment::~WebViewEnvironment()
   {
     debugLog("dealloc WebViewEnvironment");
+    // 显式释放/创建失败先注销回调；引擎整体析构不能再访问 messenger。
+    channelDelegate.reset();
+    if (webViewController_) {
+      failedLog(webViewController_->Close());
+    }
   }
 }

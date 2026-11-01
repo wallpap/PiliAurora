@@ -31,7 +31,7 @@ namespace flutter_inappwebview_plugin
     std::map<int64_t, std::unique_ptr<NewWindowRequestedArgs>> windowWebViews;
     int64_t windowAutoincrementId = 0;
 
-    bool isSupported() const { return valid_; }
+    bool isSupported();
     bool isGraphicsCaptureSessionSupported();
     GraphicsContext* graphics_context() const
     {
