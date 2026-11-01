@@ -104,9 +104,21 @@ void main() {
       await Future<void>.delayed(const Duration(milliseconds: 1100));
       await diagnostics.configure(tracing: false);
       await diagnostics.flush();
-      final records = (await File(
-        '${directory.path}/runtime.jsonl',
-      ).readAsLines()).map((line) => jsonDecode(line) as Map).toList();
+      final output = await diagnostics.exportArchive();
+      late List<dynamic> records;
+      try {
+        final zip = ZipDecoder().decodeBytes(await output.readAsBytes());
+        records = const LineSplitter()
+            .convert(
+              utf8.decode(
+                zip.files.firstWhere((f) => f.name == 'runtime.jsonl').content,
+              ),
+            )
+            .map((line) => jsonDecode(line) as Map)
+            .toList();
+      } finally {
+        await output.parent.delete(recursive: true);
+      }
       final snapshots = records
           .where((r) => r['category'] == 'memory.snapshot')
           .toList();
@@ -241,23 +253,41 @@ void main() {
     early.dispose();
   });
 
-  test('forwarded records retain origin and redact private data', () async {
-    diagnostics.receiveRecord({
-      'channel': 'player',
-      'level': 'error',
-      'processId': 123,
-      'route': '/video',
-      'message': 'decoder failed',
-      'details': {'deviceId': 'fixture-device', 'token': 'fixture-token'},
-    }, windowId: 4);
-    await diagnostics.flush();
-    final record = diagnostics.recentLogs.single;
-    expect(record['processId'], 123);
-    expect(record['windowId'], 4);
-    final text = await File('${directory.path}/player.jsonl').readAsString();
-    expect(text, isNot(contains('fixture-device')));
-    expect(text, isNot(contains('fixture-token')));
-  });
+  test(
+    'forwarded records retain origin and defer redaction to export',
+    () async {
+      diagnostics.receiveRecord({
+        'channel': 'player',
+        'level': 'error',
+        'processId': 123,
+        'route': '/video',
+        'message': 'decoder failed',
+        'details': {'deviceId': 'fixture-device', 'token': 'fixture-token'},
+      }, windowId: 4);
+      await diagnostics.flush();
+      final record = diagnostics.recentLogs.single;
+      expect(record['processId'], 123);
+      expect(record['windowId'], 4);
+      final text = await File('${directory.path}/player.jsonl').readAsString();
+      expect(text, contains('fixture-device'));
+      expect(text, contains('fixture-token'));
+      final output = await diagnostics.exportArchive();
+      try {
+        final zip = ZipDecoder().decodeBytes(await output.readAsBytes());
+        final exported = utf8.decode(
+          zip.files.firstWhere((f) => f.name == 'player.jsonl').content,
+        );
+        expect(exported, isNot(contains('fixture-device')));
+        expect(exported, isNot(contains('fixture-token')));
+        expect(
+          await File('${directory.path}/player.jsonl').readAsString(),
+          text,
+        );
+      } finally {
+        await output.parent.delete(recursive: true);
+      }
+    },
+  );
 
   test('flush awaits the forwarding acknowledgement', () async {
     var acknowledged = false;
@@ -647,7 +677,7 @@ void main() {
     expect(layer['mediaAnchor'], containsPair('positionUs', 1000500));
     expect(
       jsonEncode(diagnostics.latest),
-      isNot(contains('fixture-private-value')),
+      contains('fixture-private-value'),
     );
     expect(diagnostics.latest!['diagnostics'], isA<Map>());
     expect(details.first, containsPair('buildMs', 20.0));
@@ -764,6 +794,29 @@ void main() {
         'test',
         "token=export-secret-test\nAudio 'track.m4s?e=export-signed-query&mid=export-user-id' (aac)",
       );
+      final mutable = {
+        'token': 'snapshot-secret',
+        '${'x' * 100}Token': 'long-key-secret',
+      };
+      diagnostics
+        ..register('player', () => {'nested': mutable})
+        ..capture();
+      mutable['token'] = 'later-value';
+      expect(jsonEncode(diagnostics.latest), contains('snapshot-secret'));
+      await diagnostics.flush();
+      final raw = await File('${directory.path}/runtime.jsonl').readAsString();
+      expect(raw, contains('export-secret-test'));
+      final childDir = Directory('${directory.path}/window-9');
+      await childDir.create();
+      await File('${childDir.path}/runtime.jsonl').writeAsString(
+        '${jsonEncode({
+          'channel': 'runtime',
+          'message': {'deviceId': 'child-device-secret'},
+          'details': {'token': 'child-token-secret'},
+        })}\ninvalid partial line',
+      );
+      await File('${childDir.path}/status.json')
+          .writeAsString(jsonEncode({'token': 'child-status-secret'}));
       final file = await diagnostics.exportArchive();
       try {
         final archive = ZipDecoder().decodeBytes(await file.readAsBytes());
@@ -771,8 +824,21 @@ void main() {
           archive.files.map((file) => file.name),
           containsAll(['runtime.jsonl', 'performance.jsonl', 'manifest.json']),
         );
+        expect(
+          await File('${directory.path}/runtime.jsonl').readAsString(),
+          raw,
+        );
         for (final entry in archive.files) {
           final content = utf8.decode(entry.content);
+          for (final secret in [
+            'snapshot-secret',
+            'long-key-secret',
+            'child-device-secret',
+            'child-token-secret',
+            'child-status-secret',
+          ]) {
+            expect(content, isNot(contains(secret)));
+          }
           expect(content, isNot(contains('export-secret-test')));
           expect(content, isNot(contains('export-signed-query')));
           expect(content, isNot(contains('export-user-id')));

@@ -33,7 +33,7 @@ Future<List<Map<String, Object?>>> readDiagnosticHistory(
         }
         try {
           final record = Map<String, Object?>.from(
-            DiagnosticRedactor.clean(jsonDecode(line)) as Map,
+            DiagnosticRedactor.snapshot(jsonDecode(line)) as Map,
           );
           records.add(record);
           while (records.length > 200) {

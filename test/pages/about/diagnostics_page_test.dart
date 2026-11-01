@@ -1,9 +1,25 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter/services.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:pili_aurora/pages/about/diagnostics_page.dart';
 import 'package:pili_aurora/services/diagnostics/diagnostics.dart';
 
 void main() {
+  setUp(() {
+    // 页面测试不等待真实引擎；JSON 通道需匹配生产 codec，避免遗留超时 Timer。
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(
+          const MethodChannel('pili_aurora/graphics_memory', JSONMethodCodec()),
+          (_) async => {'status': 'unsupported'},
+        );
+  });
+  tearDown(() {
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(
+          const MethodChannel('pili_aurora/graphics_memory', JSONMethodCodec()),
+          null,
+        );
+  });
   testWidgets('性能指标在窄屏下铺满双列并支持大字号', (tester) async {
     const width = 360.0;
     tester.view
@@ -49,6 +65,45 @@ void main() {
     );
     expect(tester.takeException(), isNull);
     await diagnostics.configure(tracing: false);
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump(const Duration(milliseconds: 300));
+  });
+
+  testWidgets('复制日志时脱敏，页面记录保留原文', (tester) async {
+    final diagnostics = Diagnostics();
+    addTearDown(diagnostics.dispose);
+    diagnostics.log(DiagnosticLogLevel.error, 'test', {
+      'token': 'copy-secret',
+      'state': 'ready',
+    });
+    String? copied;
+    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+      SystemChannels.platform,
+      (call) async {
+        if (call.method == 'Clipboard.setData') {
+          copied = (call.arguments as Map)['text'] as String;
+        }
+        return null;
+      },
+    );
+    addTearDown(
+      () => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        SystemChannels.platform,
+        null,
+      ),
+    );
+    await tester.pumpWidget(
+      MaterialApp(home: DiagnosticsPage(diagnostics: diagnostics)),
+    );
+    await tester.tap(find.byTooltip('复制日志'));
+    await tester.pump();
+    expect(copied, isNot(contains('copy-secret')));
+    expect(copied, contains('<redacted>'));
+    expect(copied, contains('ready'));
+    expect(
+      diagnostics.recentLogs.single['message'],
+      containsPair('token', 'copy-secret'),
+    );
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.pump(const Duration(milliseconds: 300));
   });

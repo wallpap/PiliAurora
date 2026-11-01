@@ -7,6 +7,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:pili_aurora/common/widgets/app_select_field.dart';
 import 'package:pili_aurora/services/diagnostics/diagnostics.dart';
+import 'package:pili_aurora/services/diagnostics/redact.dart';
 import 'package:pili_aurora/utils/platform_utils.dart';
 import 'package:share_plus/share_plus.dart';
 
@@ -514,7 +515,13 @@ class _LogCardState extends State<_LogCard> {
                   tooltip: '复制日志',
                   icon: const Icon(Icons.copy_outlined, size: 20),
                   onPressed: () async {
-                    await Clipboard.setData(ClipboardData(text: format()));
+                    await Clipboard.setData(
+                      ClipboardData(
+                        text: const JsonEncoder.withIndent('  ').convert(
+                          DiagnosticRedactor.exportRecord(record),
+                        ),
+                      ),
+                    );
                     if (context.mounted) _message(context, '日志已复制');
                   },
                 ),

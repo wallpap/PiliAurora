@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:archive/archive.dart';
 import 'package:pili_aurora/services/diagnostics/app_logger.dart';
 import 'package:pili_aurora/services/diagnostics/diagnostics.dart';
 
@@ -84,7 +85,7 @@ void main() {
   });
 
   test(
-    'structured messages, errors and stack traces are redacted everywhere',
+    'structured messages, errors and stacks stay raw locally and redact on export',
     () async {
       logger.e(
         {'password': 'fixture-password', 'state': 'ready'},
@@ -101,16 +102,27 @@ void main() {
         persisted,
         jsonEncode(diagnostics.recentLogs),
       ]) {
+        expect(output, contains('fixture-password'));
+        expect(output, contains('fixture-key'));
+        expect(output, contains('fixture-stack'));
+      }
+      final archiveFile = await diagnostics.exportArchive();
+      try {
+        final archive = ZipDecoder().decodeBytes(
+          await archiveFile.readAsBytes(),
+        );
+        final output = utf8.decode(
+          archive.files.firstWhere((f) => f.name == 'runtime.jsonl').content,
+        );
         expect(output, isNot(contains('fixture-password')));
         expect(output, isNot(contains('fixture-key')));
         expect(output, isNot(contains('fixture-stack')));
         expect(output, contains('<redacted>'));
         expect(output, contains('ready'));
         expect(output, contains('500'));
+      } finally {
+        await archiveFile.parent.delete(recursive: true);
       }
-      final record = diagnostics.recentLogs.single;
-      expect(record['details'], {'api_key': '<redacted>', 'status': 500});
-      expect(record['stack'], contains('https://example.test/fail?<redacted>'));
     },
   );
 

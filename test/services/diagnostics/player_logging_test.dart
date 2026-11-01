@@ -67,7 +67,7 @@ void main() {
       expect(record['sequence'], isA<int>());
       expect(record['elapsedUs'], isA<int>());
       expect(record['runId'], isA<String>());
-      expect(records.single, isNot(contains('do-not-save')));
+      expect(records.single, contains('do-not-save'));
       await service.configure(playerLevel: DiagnosticLogLevel.trace);
       expect(settings?['playerLevel'], 'trace');
       service.playerLog(

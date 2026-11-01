@@ -367,20 +367,20 @@ class Diagnostics extends ChangeNotifier with WidgetsBindingObserver {
       'channel': player ? 'player' : 'runtime',
       'level': level.name,
       'category': category,
-      'message': DiagnosticRedactor.text(
-        message is Map || message is Iterable
-            ? DiagnosticRedactor.clean(message)
-            : message,
-        maxLength: player ? 65536 : 16384,
-      ),
+      'message': message is Map || message is Iterable
+          ? DiagnosticRedactor.snapshot(message)
+          : DiagnosticRedactor.boundedText(
+              message,
+              maxLength: player ? 65536 : 16384,
+            ),
       if (details != null)
-        'details': DiagnosticRedactor.clean(
+        'details': DiagnosticRedactor.snapshot(
           details,
           maxCharacters: player ? 262144 : 8192,
           maxStringLength: player ? 65536 : 4096,
         ),
       if (stack != null)
-        'stack': DiagnosticRedactor.text(
+        'stack': DiagnosticRedactor.boundedText(
           stack,
           maxLength: player ? 65536 : 4096,
         ),
@@ -513,14 +513,14 @@ class Diagnostics extends ChangeNotifier with WidgetsBindingObserver {
     final player = record['channel'] == 'player';
     final level = DiagnosticLogLevel.parse(record['level'] as String?);
     if (player ? !acceptsPlayer(level) : !accepts(level)) return;
-    final safe = Map<String, Object?>.from(
-      DiagnosticRedactor.clean(
+    final snapshot = Map<String, Object?>.from(
+      DiagnosticRedactor.snapshot(
         record,
         maxCharacters: 524288,
         maxStringLength: 65536,
       ) as Map,
     )..['windowId'] = windowId;
-    _persist(player ? _playerLogs : _logs, safe);
+    _persist(player ? _playerLogs : _logs, snapshot);
   }
 
   VoidCallback register(String name, Map<String, Object?> Function() reader) {
@@ -558,7 +558,7 @@ class Diagnostics extends ChangeNotifier with WidgetsBindingObserver {
   }
 
   void routeChanged(String? name) {
-    _route = DiagnosticRedactor.text((name ?? '/').split('?').first);
+    _route = DiagnosticRedactor.boundedText((name ?? '/').split('?').first);
     log(
       DiagnosticLogLevel.info,
       'navigation',
@@ -680,24 +680,24 @@ class Diagnostics extends ChangeNotifier with WidgetsBindingObserver {
     latest = {
       for (final entry in latest!.entries)
         if (entry.key != 'sources')
-          entry.key: DiagnosticRedactor.clean(entry.value),
+          entry.key: DiagnosticRedactor.snapshot(entry.value),
       'sources': {
         for (final entry in sources.entries.take(64))
           ...Map<String, Object?>.from(
-            DiagnosticRedactor.clean({entry.key: entry.value}) as Map,
+            DiagnosticRedactor.snapshot({entry.key: entry.value}) as Map,
           ),
       },
     };
     // GPU 引擎列表使用独立预算，避免挤占播放器和采集器状态字段。
     if (Platform.isWindows) {
-      latest!['gpu'] = DiagnosticRedactor.clean(_gpuMetrics.sample());
-      latest!['nativeMemory'] = DiagnosticRedactor.clean(
+      latest!['gpu'] = DiagnosticRedactor.snapshot(_gpuMetrics.sample());
+      latest!['nativeMemory'] = DiagnosticRedactor.snapshot(
         _nativeMemoryMetrics.sample(),
       );
-      latest!['memory'] = DiagnosticRedactor.clean(_memoryMetrics.sample());
+      latest!['memory'] = DiagnosticRedactor.snapshot(_memoryMetrics.sample());
       final handles = _graphicsMetrics.snapshot();
       // 每类独立预算；资源明细分块落盘，避免总条目预算截掉后半个上下文。
-      latest!['graphicsHandles'] = DiagnosticRedactor.clean({
+      latest!['graphicsHandles'] = DiagnosticRedactor.snapshot({
         for (final entry in handles.entries)
           if (entry.key != 'groups' && entry.key != 'largestResources')
             entry.key: entry.value,
@@ -707,7 +707,7 @@ class Diagnostics extends ChangeNotifier with WidgetsBindingObserver {
       });
       final graphics = _graphicsMemoryMetrics.sample();
       final contexts = graphics['contexts'] as Map? ?? const {};
-      latest!['graphicsMemory'] = DiagnosticRedactor.clean({
+      latest!['graphicsMemory'] = DiagnosticRedactor.snapshot({
         for (final entry in graphics.entries)
           if (entry.key != 'contexts') entry.key: entry.value,
         'contexts': {
@@ -743,7 +743,7 @@ class Diagnostics extends ChangeNotifier with WidgetsBindingObserver {
     });
   }
 
-  // 性能开关独立于应用日志等级；每批独立脱敏，避免共用预算截断资源。
+  // 性能开关独立于应用日志等级；每批独立限界，避免共用预算截断资源。
   void _writeMemoryRecord(String category, Map<String, Object?> details) =>
       _writeLog(
         _logs,
@@ -885,7 +885,7 @@ class Diagnostics extends ChangeNotifier with WidgetsBindingObserver {
     for (final file in await _childFiles()) {
       if (file.uri.pathSegments.last == 'status.json') {
         statuses.add(
-          DiagnosticRedactor.clean(jsonDecode(await file.readAsString())),
+          DiagnosticRedactor.snapshot(jsonDecode(await file.readAsString())),
         );
       }
     }
@@ -921,7 +921,7 @@ class Diagnostics extends ChangeNotifier with WidgetsBindingObserver {
       await _directory!.create(recursive: true);
       await File('${_directory!.path}/status.json').writeAsString(
         jsonEncode(
-          DiagnosticRedactor.clean({
+          DiagnosticRedactor.snapshot({
             'time': DateTime.now().toUtc().toIso8601String(),
             'runId': _runId,
             'processId': pid,
@@ -973,7 +973,7 @@ class Diagnostics extends ChangeNotifier with WidgetsBindingObserver {
     notifyListeners();
   }
 
-  /// 文件快照和压缩都使用本地文件，压缩移到后台 isolate。
+  /// 文件快照使用本地副本，脱敏和压缩移到后台 isolate。
   Future<File> exportArchive() async {
     final directory = await Directory.systemTemp.createTemp(
       'pili-diagnostics-',
@@ -984,7 +984,7 @@ class Diagnostics extends ChangeNotifier with WidgetsBindingObserver {
           ...?await _logs?.snapshot(directory),
           ...?await _playerLogs?.snapshot(directory),
           ...?await _trace?.snapshot(directory),
-          ...await _legacySnapshots(directory),
+          ...?await _legacyReports?.snapshot(directory),
           ...await _childSnapshots(directory),
         ];
         final manifest = File('${directory.path}/manifest.json');
@@ -1000,7 +1000,7 @@ class Diagnostics extends ChangeNotifier with WidgetsBindingObserver {
             'playerLevel': _playerLevel.name,
             'intervalMs': _intervalMs,
             'droppedRecords': droppedRecords,
-            'app': DiagnosticRedactor.clean(_sources['app']?.call()),
+            'app': DiagnosticRedactor.snapshot(_sources['app']?.call()),
             'notes': '每条 sample 为一个采样周期。RSS/私有提交/缓存值不可相加；null 表示未提供。无 GPU、Dart 堆和各模块独占内存数据。',
           }),
         );
@@ -1020,41 +1020,40 @@ class Diagnostics extends ChangeNotifier with WidgetsBindingObserver {
     }
   }
 
-  Future<List<String>> _legacySnapshots(Directory directory) async {
-    final paths = <String>[];
-    for (final source
-        in await _legacyReports?.snapshot(directory) ?? <String>[]) {
-      // 早期版本保存过原始报告；导出时重新脱敏，历史文件保持原样。
-      final output = File('$source.sanitized');
-      final sink = output.openWrite();
-      try {
-        await for (final line
-            in File(source)
-                .openRead()
-                .transform(const Utf8Decoder(allowMalformed: true))
-                .transform(const LineSplitter())) {
-          try {
-            sink.writeln(
-              jsonEncode(DiagnosticRedactor.clean(jsonDecode(line))),
-            );
-          } on FormatException {
-            // 跳过中断写入留下的不完整报告。
-          }
-        }
-      } finally {
-        await sink.close();
-      }
-      await output.rename(source);
-      paths.add(source);
-    }
-    return paths;
-  }
-
   static Future<void> _zip((List<String>, String) args) async {
     final encoder = ZipFileEncoder()..create(args.$2);
     try {
       for (final path in args.$1) {
-        await encoder.addFile(File(path));
+        final file = File(path);
+        final sanitized = File('$path.sanitized');
+        final sink = sanitized.openWrite();
+        try {
+          await for (final line
+              in file
+                  .openRead()
+                  .transform(const Utf8Decoder(allowMalformed: true))
+                  .transform(const LineSplitter())) {
+            try {
+              final value = jsonDecode(line);
+              final cleaned =
+                  value is Map &&
+                      (value.containsKey('channel') ||
+                          value['type'] == 'sample')
+                  ? DiagnosticRedactor.exportRecord(
+                      Map<String, Object?>.from(value),
+                    )
+                  : DiagnosticRedactor.clean(value);
+              sink.writeln(jsonEncode(cleaned));
+            } on FormatException {
+              // 不完整记录不进入导出包，原始本地文件保持原样。
+            }
+          }
+        } finally {
+          await sink.close();
+        }
+        // 仅替换导出临时副本，返回目录中也不遗留原始快照。
+        await sanitized.rename(path);
+        await encoder.addFile(file);
       }
     } finally {
       await encoder.close();

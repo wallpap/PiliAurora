@@ -38,7 +38,7 @@ Android 高刷屏相位问题应同时记录 Scene、视频刷新和弹幕调度
 
 Android 的 `nativeFrameBatches/nativeFrameSamples` 统计刷新请求批次，`consumedFrameBatches/consumedFrameSamples` 单独统计带当前输出 token 的纹理消费。弹幕相位使用请求时间，消费时间用于首帧与健康证据；两路时间不可混入同一个相位学习器。Windows 保留输出消费诊断，弹幕跟随屏幕，不向图层传入视频帧时序。播放器 `runtime.initialize.*` 日志按资源槽等待、Player 创建和输出创建分别记录累计与分段耗时，可用于区分地址请求和本地初始化的等待。
 
-点播图层的 `mediaAnchor` 记录位置、采样单调时刻、倍速、推进状态、连续域和有效期限；`presentationTimeUs` 是实际呈现的媒体时间，`sampledAtUs` 是读取诊断的单调时刻。结合 `visible/opacity/tickerEnabled` 区分隐藏与时钟冻结。播放器额外记录规范 `session` 的 phase、stage、runtime/request/load 身份、播放意图和 inhibitor。性能记录的各部分及各来源使用独立的有界脱敏预算，慢帧详情不会耗尽后续图层的预算。
+点播图层的 `mediaAnchor` 记录位置、采样单调时刻、倍速、推进状态、连续域和有效期限；`presentationTimeUs` 是实际呈现的媒体时间，`sampledAtUs` 是读取诊断的单调时刻。结合 `visible/opacity/tickerEnabled` 区分隐藏与时钟冻结。播放器额外记录规范 `session` 的 phase、stage、runtime/request/load 身份、播放意图和 inhibitor。性能记录的各部分及各来源使用独立的有界快照预算，导出时再分别脱敏，慢帧详情不会耗尽后续图层的预算。
 
 统计弹幕实际频率时，按 Player、媒体代次和 `targetFrameRate` 分组，对相邻且目标不变、active、非 muted 的采样作累计计数差分；排除暂停、缓冲与目标切换边界。`targetFrameRate=0` 表示跟随屏幕，不能与 60/90 FPS 阶段混算。`locked/independent` 切换本身不足以证明实际更新频率异常。
 
@@ -101,7 +101,7 @@ Android 视频输出建立后，`AndroidRasterScheduling` 将唯一 Raster 线�
 - `lib/pages/setting/pages/logs.dart`：日志等级与性能跟踪设置；`lib/pages/about/diagnostics_page.dart`：诊断记录查看与导出。
 - `lib/pages/log_table/`：服务端金币、经验和登录历史记录。
 
-应用日志和播放器日志分别使用独立队列保留最近 200 条，查看时按记录原始时间排序，页面摘要显示路由、进程与窗口来源。落盘记录包含路由、进程 ID 和运行 ID。Windows 播放子窗口通过现有回环 WebSocket 把脱敏记录转发给主进程，统一写入、轮转和导出；窗口 ID 标识记录来源。关闭子窗口前请求主进程确认写入，等待上限为 3 秒。每个子窗口在连接主窗口前准备独立的本地轮转文件（`diagnostics/window-窗口编号/`），断连后继续保存；转发失败次数见各子窗口 `status.json` 中的 `storage.forwardingFailures`，导出清单的 `children` 字段汇总这些状态；离线窗口的状态时间表示最近一次本地刷新时间。性能采样写入该窗口的 `performance.jsonl`。主窗口导出时先请求已连接子窗口暂停写入并刷新队列，再同时收集子窗口文件，文件名以窗口编号区分；转发成功的日志会同时存在于主进程和子窗口文件中，可按 runId、sequence 识别同一记录。子窗口单文件预算为应用日志 1 MiB、播放器及性能日志 4 MiB，分别保留 2、2、4 个文件。进程被强制终止时，仍可能丢失未落盘队列。主窗口的日志等级、性能开关和采样周期变更会通过 IPC 同步到已连接窗口。
+采集、历史读取与本地落盘只做有界复制，保留原始字段；导出时对主窗口、子窗口及历史报告的文件副本在后台 isolate 脱敏并压缩，原始文件保持不变；复制单条日志时也在复制操作中脱敏。应用日志和播放器日志分别使用独立队列保留最近 200 条，查看时按记录原始时间排序，页面摘要显示路由、进程与窗口来源。落盘记录包含路由、进程 ID 和运行 ID。Windows 播放子窗口通过现有回环 WebSocket 把有界原始记录转发给主进程，统一写入、轮转和导出；窗口 ID 标识记录来源。关闭子窗口前请求主进程确认写入，等待上限为 3 秒。每个子窗口在连接主窗口前准备独立的本地轮转文件（`diagnostics/window-窗口编号/`），断连后继续保存；转发失败次数见各子窗口 `status.json` 中的 `storage.forwardingFailures`，导出清单的 `children` 字段汇总这些状态；离线窗口的状态时间表示最近一次本地刷新时间。性能采样写入该窗口的 `performance.jsonl`。主窗口导出时先请求已连接子窗口暂停写入并刷新队列，再同时收集子窗口文件，文件名以窗口编号区分；转发成功的日志会同时存在于主进程和子窗口文件中，可按 runId、sequence 识别同一记录。子窗口单文件预算为应用日志 1 MiB、播放器及性能日志 4 MiB，分别保留 2、2、4 个文件。进程被强制终止时，仍可能丢失未落盘队列。主窗口的日志等级、性能开关和采样周期变更会通过 IPC 同步到已连接窗口。
 
 导出与清除共用串行协调流程：暂停期间新日志以编码后的字节保存在缓冲，合计上限为 400 条和 8 MiB；容量不足时优先淘汰低等级记录来保留错误。操作结束后恢复写入，溢出计入 droppedRecords；清除会同时清空子窗口旧队列，操作后的新记录仍继续保存。启动中或已断连的窗口跳过协调，其本地文件在本次导出/清除中保留，清单 `storage.skippedChildWindows` 与页面提示列明这些窗口；已连接窗口未在 3 秒内确认时操作报错。父进程意外退出时，子窗口最多暂停 60 秒后自行恢复。压缩使用已复制的快照，期间日志正常写入。
 

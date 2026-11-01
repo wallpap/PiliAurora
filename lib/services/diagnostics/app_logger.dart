@@ -1,6 +1,6 @@
 import 'package:pili_aurora/services/diagnostics/diagnostics.dart';
 
-/// 应用只使用四个日志等级；过滤、存储和脱敏由 Diagnostics 统一负责。
+/// 应用只使用四个日志等级；过滤、存储和导出脱敏由 Diagnostics 统一负责。
 class AppLogger {
   const AppLogger({
     required this.diagnostics,

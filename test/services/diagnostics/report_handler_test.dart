@@ -22,7 +22,7 @@ void main() {
   });
 
   test(
-    'reports share runtime storage, redaction and level filtering',
+    'reports share runtime storage and redact on export',
     () async {
       await diagnostics.initialize(directory: directory);
       final handler = DiagnosticReportHandler(diagnostics: diagnostics);
@@ -48,12 +48,23 @@ void main() {
       expect(record['stack'], 'fixture stack');
       final content = await File('${directory.path}/runtime.jsonl')
           .readAsString();
-      expect(content, contains('<redacted>'));
-      expect(content, isNot(contains('fixture-secret')));
-      expect(content, isNot(contains('fixture-id')));
-      expect(content, isNot(contains('fixture-fingerprint')));
-      expect(content, isNot(contains('fixture-vendor')));
-      expect(content, isNot(contains('fixture-app-token')));
+      expect(content, contains('fixture-app-token'));
+      final output = await diagnostics.exportArchive();
+      late String exported;
+      try {
+        final archive = ZipDecoder().decodeBytes(await output.readAsBytes());
+        exported = utf8.decode(
+          archive.files.firstWhere((f) => f.name == 'runtime.jsonl').content,
+        );
+      } finally {
+        await output.parent.delete(recursive: true);
+      }
+      expect(exported, contains('<redacted>'));
+      expect(exported, isNot(contains('fixture-secret')));
+      expect(exported, isNot(contains('fixture-id')));
+      expect(exported, isNot(contains('fixture-fingerprint')));
+      expect(exported, isNot(contains('fixture-vendor')));
+      expect(exported, isNot(contains('fixture-app-token')));
       expect(content, contains('fixture-model'));
       await diagnostics.configure(level: DiagnosticLogLevel.off);
       expect(await handler.handle(report), isFalse);

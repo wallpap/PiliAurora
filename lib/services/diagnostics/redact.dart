@@ -1,4 +1,4 @@
-/// 日志仅保留诊断所需信息。结构化字段和字符串都经过此入口。
+/// 导出时清洗敏感字段；采集时只复制有界快照，避免正则处理阻塞播放。
 abstract final class DiagnosticRedactor {
   static final _secretKey = RegExp(
     r'authorization|cookie|token|password|passwd|secret|credential|private.?key|api.?key|access.?key|sessdata|bili_jct|csrf|buvid|dedeuserid|identifierforvendor|android.?id|device.?id|fingerprint|signature|^sign$|^w_rid$|^upsig$|auth.?code|auth.?key|ticket',
@@ -69,6 +69,65 @@ abstract final class DiagnosticRedactor {
     int maxStringLength = 4096,
   }) => _clean(value, _Budget(maxCharacters, maxStringLength), 0);
 
+  static Object? snapshot(
+    Object? value, {
+    int maxCharacters = 8192,
+    int maxStringLength = 4096,
+  }) =>
+      _clean(value, _Budget(maxCharacters, maxStringLength, redact: false), 0);
+
+  static String boundedText(Object? value, {int maxLength = 4096}) {
+    final input = value.toString();
+    return input.length <= maxLength
+        ? input
+        : '${input.substring(0, maxLength)}…<truncated>';
+  }
+
+  /// sample 的各字段与来源独立限界，不能让内存明细耗尽后续来源预算。
+  static Map<String, Object?> exportRecord(Map<String, Object?> record) {
+    if (record['type'] == 'sample') {
+      final sources = record['sources'] as Map? ?? const {};
+      return {
+        for (final entry in record.entries)
+          if (entry.key != 'sources') entry.key: clean(entry.value),
+        'sources': {
+          for (final entry in sources.entries.take(64))
+            ...Map<String, Object?>.from(
+              clean({entry.key: entry.value}) as Map,
+            ),
+        },
+      };
+    }
+    // 日志顶层、正文和详情分别处理，保留播放器的长日志和内存分块。
+    final player = record['channel'] == 'player';
+    return {
+      ...Map<String, Object?>.from(
+        clean({
+          for (final entry in record.entries)
+            if (entry.key != 'details' &&
+                entry.key != 'message' &&
+                entry.key != 'stack')
+              entry.key: entry.value,
+        }) as Map,
+      ),
+      if (record.containsKey('message'))
+        'message': text(
+          record['message'] is Map || record['message'] is Iterable
+              ? clean(record['message'])
+              : record['message'],
+          maxLength: player ? 65536 : 16384,
+        ),
+      if (record.containsKey('stack'))
+        'stack': text(record['stack'], maxLength: player ? 65536 : 4096),
+      if (record.containsKey('details'))
+        'details': clean(
+          record['details'],
+          maxCharacters: player ? 262144 : 8192,
+          maxStringLength: player ? 65536 : 4096,
+        ),
+    };
+  }
+
   static Object? _clean(Object? value, _Budget budget, int depth) {
     if (depth > 8 || budget.nodes-- <= 0 || budget.characters <= 0) {
       return '<truncated>';
@@ -76,15 +135,19 @@ abstract final class DiagnosticRedactor {
     if (value == null || value is bool || value is int) return value;
     if (value is double) return value.isFinite ? value : null;
     if (value is Map) {
-      return {
-        for (final entry in value.entries.take(64))
-          text(entry.key).substring(
-            0,
-            text(entry.key).length.clamp(0, 96),
-          ): _secretKey.hasMatch(entry.key.toString())
-              ? '<redacted>'
-              : _clean(entry.value, budget, depth + 1),
-      };
+      final result = <String, Object?>{};
+      for (final entry in value.entries.take(64)) {
+        final key = budget.redact ? text(entry.key) : entry.key.toString();
+        // 原键保留到导出，避免截掉敏感键后缀后失去识别依据。
+        final outputKey = budget.redact
+            ? key.substring(0, key.length.clamp(0, 96))
+            : key;
+        result[outputKey] =
+            budget.redact && _secretKey.hasMatch(entry.key.toString())
+            ? '<redacted>'
+            : _clean(entry.value, budget, depth + 1);
+      }
+      return result;
     }
     if (value is Iterable) {
       return value
@@ -92,7 +155,7 @@ abstract final class DiagnosticRedactor {
           .map((item) => _clean(item, budget, depth + 1))
           .toList();
     }
-    final result = text(
+    final result = (budget.redact ? text : boundedText)(
       value,
       maxLength: budget.characters.clamp(0, budget.maxStringLength),
     );
@@ -103,7 +166,8 @@ abstract final class DiagnosticRedactor {
 }
 
 class _Budget {
-  _Budget(this.characters, this.maxStringLength);
+  _Budget(this.characters, this.maxStringLength, {this.redact = true});
+  final bool redact;
   final int maxStringLength;
   int nodes = 256;
   int characters;
