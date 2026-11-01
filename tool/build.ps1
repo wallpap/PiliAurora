@@ -180,6 +180,19 @@ $presentationConfiguration = $configurationJson | ConvertFrom-Json
 
 $buildTarget = if ($Platform -eq "android") { "apk" } else { "windows" }
 $buildArguments = @("exec", "flutter", "build", $buildTarget, "--$Mode")
+# Flutter 的动画状态行固定占用 72 列（含首帧）；窄终端在最后一列写入
+# 进度字符后会触发自动换行，退格刷新也无法回到上一行，表现为光标错位。
+# 只在确实放不下状态行时关闭颜色/动画，宽终端仍保留正常的进度显示。
+$terminalWidth = 0
+try {
+    $terminalWidth = [int]$Host.UI.RawUI.WindowSize.Width
+}
+catch {
+    # 非交互终端没有窗口尺寸，交给 Flutter 自己判断输出模式。
+}
+if ($terminalWidth -gt 0 -and $terminalWidth -le 72) {
+    $buildArguments += '--no-color'
+}
 if ($Abi) {
     $targetPlatform = switch ($Abi) {
         "armeabi-v7a" { "android-arm" }
