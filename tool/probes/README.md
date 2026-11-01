@@ -395,6 +395,96 @@ ffmpeg -f lavfi -i "testsrc2=size=640x360:rate=30" -f lavfi -i "sine=frequency=4
 
 Windows 采样门控的主机回归可运行 `python tool/probes/windows/windows_frame_sampling_probe.py`（C++17 编译器，默认 `g++`）。该入口抽取生产 render 队列方法，覆盖原始帧身份、开关回执、旧消费通知、准入恢复与同 token 序号连续性。
 
+## Windows 内存观测与 ETW
+
+`windows/memory_logging.dart` 构建独立数据目录的人工复现包。默认数据保存在可执行文件旁的 `memory-data/`，也可由 `PILIAURORA_MEMORY_ROOT` 指定；不读取现用程序的账号或设置。性能记录自动开启，页面操作由复现者完成。构建后将整套输出复制到独立目录，并将测试 exe 命名为 `PiliAuroraMemory-<8至32位十六进制编号>.exe`，保留所有 DLL 与 data 目录：
+
+```powershell
+pwsh -NoProfile -File tool/build.ps1 -Platform windows -Mode release -Target tool/probes/windows/memory_logging.dart
+```
+
+`--smoke` 参数只用 `PILIAURORA_MEMORY_MEDIA` 指定的本地视频验证播放/退出后的原生计数和 VirtualQuery 快照，不连接业务接口。结果写入数据目录的 `smoke.json`，同时保留完整诊断记录；短测不代表完整浏览流程满足 500 MiB 目标。
+
+原生扫描器的主机回归执行真实 VirtualAlloc/VirtualProtect/VirtualFree、文件映射及 image 查询，检查 ID、保护分类、限界、释放复用及启停：
+
+```powershell
+New-Item -ItemType Directory -Force build/probe-validation/memory-metrics
+g++ -std=c++17 -Wall -Wextra -Werror -pedantic -I windows/runner windows/runner/memory_metrics.cpp tool/probes/windows/memory_metrics_probe.cc -o build/probe-validation/memory-metrics/memory_metrics_probe.exe
+& build/probe-validation/memory-metrics/memory_metrics_probe.exe
+```
+
+需要分配/释放调用栈时，在测试程序启动前运行以下命令。Start 通过 UAC 启动隐藏采集进程；提示就绪后，在普通权限下手动运行测试 exe。每次使用一个新输出目录：
+
+```powershell
+pwsh -NoProfile -File tool/probes/windows/record-memory.ps1 -Executable <独立测试exe> -OutputDirectory <新采集目录> -Seconds 300 -Heap
+pwsh -NoProfile -File tool/probes/windows/record-memory.ps1 -Action Stop -OutputDirectory <采集目录>
+pwsh -NoProfile -File tool/probes/windows/record-memory.ps1 -Action Status -OutputDirectory <采集目录>
+```
+
+省略 `-Heap` 仅采 VirtualAllocation；加上它会为该测试 exe 名称临时启用 IFEO 堆追踪，要求启动前不存在同名 IFEO 配置和运行实例。追踪会影响耗时与堆开销，应与常规日志对照。脚本使用 WPR filemode，最长 30 分钟；Stop 或到时后仅停止自己的命名会话，finally 撤销本次堆配置。`status.json` 的 completed、cleanupErrors 和 `wpr.log` 表示实际采集及清理结果，合并 ETL 可能在停止后继续耗时。系统/采集进程异常退出后，按状态文件中的独立名称在管理员终端执行 `wpr -cancel -instancename <session>`、`wpr -heaptracingconfig <exe名称> disable` 恢复，不操作其他会话或现用程序。
+
+ETL 保存本地分配元数据与调用栈，不保存内存内容；VirtualAllocation 为系统范围，ETL 仍可能包含其他进程名、模块路径及系统元数据，不会自动脱敏或上传。用 WPA 按测试进程 PID 和时间段过滤 Virtual Allocations/Heap Allocations，核对事件丢失及分配栈。符号须与对应二进制匹配；原生栈无法直接展开到每个 Dart 对象或驱动内部对象。常规匿名块日志不含地址，和 ETW 以进程、时间、大小、保护类型对应，无法保证唯一逐块匹配。
+
+批处理现有目录或导出的 ZIP：
+
+```powershell
+python tool/probes/windows/analyze_memory.py <日志目录或ZIP> --output build/memory-analysis
+```
+
+输出 performance.csv、memory-snapshots.csv、region-changes.csv 和 summary.json。脚本跳过播放器大段 trace，只保留性能与内存结构化字段；核对检查点/差分批次数量并报告缺失。旧版缺少的字段留空，缺失不等于零；差分与页面操作的时间相关不能单独证明分配原因。完成后按常规构建入口恢复默认应用 target。
+
+## Windows 自动浏览与播放内存验收
+
+`windows/browsing_memory.dart` 自动进入推荐、热门、排行、番剧、影视、直播、动态和我的，
+每页等待加载并滚动不超过一屏，最后进入设置页静置70秒。它复用正常应用路由和数据加载，
+不销毁保活首页。构建后按上节复制完整运行目录、使用独立数据根和编号exe：
+
+```powershell
+pwsh -NoProfile -File tool/build.ps1 -Platform windows -Mode release -Target tool/probes/windows/browsing_memory.dart
+$env:PILIAURORA_BROWSING_ACTIONS = 'resumeRcmd,settingIdle'
+$env:PILIAURORA_BROWSING_OUTPUT = '<独立输出目录>/browsing-probe.json'
+```
+
+独立数据根缺少账号时需要在测试实例登录；不要把现用程序的数据目录直接设为测试根。
+报告只有八页均加载成功且确实进入设置路由时才有 `validWorkload=true`。
+`baselineRetentionTarget.passed` 要求无干预基线的Private和RSS均低于500MiB。
+`resumeValidation.passed` 另检查推荐controller、数据状态与滚动位置保持。
+退出码不能代替这些字段；短停留或未加载内容的结果不属于真实负载验收。
+
+验收可设置 `PILIAURORA_BROWSING_DETAILS=false`：保留相同页面流程、进程/默认堆计数和
+图片缓存标量，省去各stage的完整诊断深复制、UI树遍历和原生详细查询；应用正常性能日志
+仍按原设置采集。阈值始终取 `observedProcess` 的实时Private/RSS，数值标准不变。
+`progress.json` 只写最近stage及stageCount，完整stages历史在最终报告一次性写出。
+轻量模式与详细模式分别标记 `detailedStageSnapshots`，比较时应核对观察开销。
+
+普通FVM引擎不支持实验通道，明确返回unsupported。调查时可显式设置逗号分隔的actions：
+`sampleHeaps` 只查询默认进程堆；`optimizeHeaps` 单次调用HeapOptimizeResources；
+`sampleCPU/purgeCPUResources/purgeCPUFonts/purgeCPUHarfBuzz` 分别使用
+[实验引擎](../engine/windows_memory/README.md) 的独立CPU通道。
+同一实验引擎的 `freeGpuRaster/freeGpuIO` 调用所选上下文的freeGpuResources；
+该Skia API内部会flushAndSubmit，不与单独purge混为同一控制。
+其它cache、frame、GPU purge/Trim、VM GC、路由销毁动作也只用于归因。
+这些动作均在baseline之后执行，后续降低不能算作产品通过。默认action序列含清理动作，
+常规验收应像示例一样显式选择回切与静置，或使用 `--browse-only` 只保留基线。
+
+各stage的 `observedProcess` 是独立实时进程读数，`processHeap` 仅覆盖不可销毁的默认堆，
+不枚举并发创建/销毁的其它堆。Private提交、RSS、私有工作集分别记录，不能相加；
+allocated与committed差额也不全是可释放碎片。停止诊断采集后
+`diagnostics.process` 可能为空或旧值，应使用 `observedProcess`。
+输出中的native、vm、cpu分别保留对应通道的覆盖范围和unsupported/unavailable回执。
+
+`windows/playback_memory.dart` 同样使用隔离存储，自动执行两轮真实推荐视频播放、
+确认进度与原生输出、走正常返回路径，再静置70秒。构建时替换上述target即可；
+`PILIAURORA_PLAYBACK_OUTPUT` 指定报告，`PILIAURORA_PLAYBACK_SECONDS` 默认20，
+`PILIAURORA_PLAYBACK_IDLE_SECONDS` 默认70。须同时检查 `validWorkload`、
+各round的 `nativeResourcesReleased/retentionTargetPassed` 和最终 `passed`。
+采样/插桩引擎的绝对占用不能代替普通Release验收；完成后重建正常 `lib/main.dart`。
+
+两个自动入口在最终采样、日志flush和报告写入完成后，才卸载Widget树并等待新根绘制帧结束，
+让页面同步释放托盘等原生句柄，再销毁测试窗口。该收尾不参与内存阈值判断，报告中的
+`shutdownPolicy` 标明此顺序；不能把结束时的Widget卸载当作正常浏览回收策略。
+仍需核对原生进程退出码；这一帧结束不代表所有异步存储或服务已全部关闭。
+
 ## Windows 图形资源生命周期探针
 
 以下入口编译生产 ANGLE 与 VideoOutput 类，通过外部资源计数替身检查构造失败回滚、共享 EGLDisplay 的跨线程释放、持续渲染期间的卸载任务调度，以及 resize、重建、销毁交错时的纹理注销回执：
@@ -405,3 +495,38 @@ python tool/probes/windows/windows_renderer_release_probe.py
 ```
 
 需要支持 C++17 的 `g++`，可用 `--compiler` 指定路径；`--source-ref` 可选择用于对照的 Git 提交。生成文件位于系统临时目录，运行后清理。
+
+## Windows Profile VM 堆归因
+
+以下工具只用于明确指定的独立测试实例，定位对象类型与引用链。Profile 包含额外的代码、源码映射等元数据，采集也会影响运行时序；其绝对内存不能作为 Release 的内存阈值验收结果。Release 阈值仍需在对应 Release 包、有效浏览负载和无干预基线下验证。
+
+保留 VM service 默认认证，只绑定 loopback。将该测试实例启动日志或完整 service URI 保存在本地文件，不把认证 URI 粘贴到公开日志。采集器只接受 loopback，并要求 `--pid` 与 service 的进程 PID 一致；不会自动查找或连接其他进程。Windows 显式传入固定 SDK 的 `dart.exe`，避免通过 `.bat` 启动辅助进程：
+
+```powershell
+python tool/probes/windows/capture_vm_memory.py --uri-file <本地启动日志或URI文件> --pid <测试PID> --output build/vm-capture-before --heap-snapshot --dart <固定SDK的dart.exe>
+```
+
+`--output` 必须是新目录；`--uri` 可替代 `--uri-file`，但后者可避免认证 URI 出现在命令行中。默认选择名为 `main` 的唯一 isolate，也可用 `--isolate-id` 明确指定。HTTP 调用 `getVM`、`getIsolate`、`getAllocationProfile(gc:true)`，输出 `allocation.json`、`classes.csv`；`gc:true` 只表示请求 GC，不保证一定执行。stdout 仅显示类名、实例数和字节数，不输出对象值或认证 URI。
+
+可选 `--heap-snapshot` 通过 `capture_vm_heap.dart` 和项目现有 `vm_service` 依赖接收 WebSocket 二进制事件，保存 `heap.heapsnapshot`，无需安装全局依赖。辅助进程从 stdin 接收认证 URI，并再次核对 PID。快照失败时在 `allocation.json` 标明状态，已有分配摘要仍保留；失败留下的部分二进制文件不能当作完整快照。
+
+离线分析完整快照：
+
+```powershell
+fvm dart --packages=.dart_tool/package_config.json tool/probes/windows/analyze_vm_heap.dart --input build/vm-capture-before/heap.heapsnapshot --output build/vm-heap-before
+```
+
+输出 `heap-summary.json` 和有界的类摘要，包括类浅层大小、从 snapshot root 可达的大小、最大 retained 候选，以及大存储对象和代表 UI 类的 dominator/应用 owner 字段路径。`--top` 限制摘要数量，`--focus` 可指定逗号分隔的类名。工具不导出 `object.data` 或任意对象的 String 内容；原始快照可能包含这些内容，必须留在本地，不提交、不外传。
+
+当前分析上限为 512 MiB 文件、200 万对象、2000 万引用；dominator 计算最多 50 轮，按 60 秒预算检查，单轮处理可能越过该时间。未收敛时不报告 retained size。类浅层大小与嵌套 retained size 是不同口径，重叠的 retained 值不能相加；快照也可能包含不可达对象，应优先核对 root 可达统计。对照采集必须使用同一构建、同一进程和明确阶段，不能把销毁主路由等诊断操作当作正常浏览修复。
+
+解析检查：`python -m unittest discover -s tool/probes/windows -p capture_vm_memory_test.py`。共享子对象的手工 diamond 图与 String canary 验证可保留在本地 `build/` 实验目录，不需要新增应用测试框架。
+
+
+`windows/inspect_vm_semantics.dart` 针对同一完整快照补充 RenderObject 的 owner/parent 保活统计，区分 attached、detached 与根可达性，并输出有界的 detached RenderParagraph 字段引用路径：
+
+```powershell
+fvm dart --packages=.dart_tool/package_config.json tool/probes/windows/inspect_vm_semantics.dart --input build/vm-capture-before/heap.heapsnapshot --output build/vm-semantics-before.json
+```
+
+该工具与通用堆分析一样不解码对象值，路径仅使用类名和字段名。单次堆快照的根可达性用于定位保活链；修复效果还需同场景前后对照和独立 Release 内存验收。

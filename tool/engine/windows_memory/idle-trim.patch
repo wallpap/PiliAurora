@@ -1,0 +1,81 @@
+diff --git a/engine/src/flutter/shell/platform/windows/flutter_windows_engine.cc b/engine/src/flutter/shell/platform/windows/flutter_windows_engine.cc
+index 57611a61e..6c4fbde59 100644
+--- a/engine/src/flutter/shell/platform/windows/flutter_windows_engine.cc
++++ b/engine/src/flutter/shell/platform/windows/flutter_windows_engine.cc
+@@ -24,6 +24,7 @@
+ #include "flutter/shell/platform/windows/display_manager.h"
+ #include "flutter/shell/platform/windows/flutter_windows_view.h"
+ #include "flutter/shell/platform/windows/keyboard_key_channel_handler.h"
++#include "flutter/shell/platform/windows/idle_gpu_trim_windows.h"
+ #include "flutter/shell/platform/windows/system_utils.h"
+ #include "flutter/shell/platform/windows/task_runner.h"
+ #include "flutter/shell/platform/windows/window_manager.h"
+@@ -536,9 +537,18 @@ bool FlutterWindowsEngine::Run(std::string_view entrypoint) {
+         egl_manager_ ? GetOpenGLRendererConfig() : GetSoftwareRendererConfig();
+   }
+ 
++  if (egl_manager_ && !enable_impeller_) {
++    Microsoft::WRL::ComPtr<ID3D11Device> device;
++    if (egl_manager_->GetDevice(device.GetAddressOf())) {
++      idle_gpu_trim_ = CreateWindowsIdleGpuTrim(device.Get());
++    }
++  }
++
+   auto result = embedder_api_.Run(FLUTTER_ENGINE_VERSION, &renderer_config,
+                                   &args, this, &engine_);
+   if (result != kSuccess || engine_ == nullptr) {
++    if (idle_gpu_trim_) idle_gpu_trim_->Cancel();
++    idle_gpu_trim_.reset();
+     FML_LOG(ERROR) << "Failed to start Flutter engine: error " << result;
+     return false;
+   }
+@@ -556,6 +566,8 @@ bool FlutterWindowsEngine::Run(std::string_view entrypoint) {
+ }
+ 
+ bool FlutterWindowsEngine::Stop() {
++  // 先禁止延时回调，再等待 raster/IO 线程退出；不让任务延长 engine 生命周期。
++  if (idle_gpu_trim_) idle_gpu_trim_->Cancel();
+   if (engine_) {
+     window_manager_->OnEngineShutdown();
+     for (const auto& [callback, registrar] :
+@@ -564,6 +576,7 @@ bool FlutterWindowsEngine::Stop() {
+     }
+     FlutterEngineResult result = embedder_api_.Shutdown(engine_);
+     engine_ = nullptr;
++    idle_gpu_trim_.reset();
+     return (result == kSuccess);
+   }
+   return false;
+@@ -1230,7 +1243,9 @@ bool FlutterWindowsEngine::Present(const FlutterPresentViewInfo* info) {
+ 
+   FlutterWindowsView* view = iterator->second;
+ 
+-  return compositor_->Present(view, info->layers, info->layers_count);
++  const bool presented = compositor_->Present(view, info->layers, info->layers_count);
++  if (presented && idle_gpu_trim_) idle_gpu_trim_->OnPresent();
++  return presented;
+ }
+ 
+ bool FlutterWindowsEngine::HandleDisplayMonitorMessage(HWND hwnd,
+diff --git a/engine/src/flutter/shell/platform/windows/flutter_windows_engine.h b/engine/src/flutter/shell/platform/windows/flutter_windows_engine.h
+index a3ae1ae30..8ef7a61a3 100644
+--- a/engine/src/flutter/shell/platform/windows/flutter_windows_engine.h
++++ b/engine/src/flutter/shell/platform/windows/flutter_windows_engine.h
+@@ -56,6 +56,7 @@ namespace flutter {
+ constexpr FlutterViewId kImplicitViewId = 0;
+ 
+ class FlutterWindowsView;
++class IdleGpuTrim;
+ class DisplayManagerWin32;
+ 
+ // Update the thread priority for the Windows engine.
+@@ -400,6 +401,9 @@ class FlutterWindowsEngine {
+   // This is invoked on the raster thread.
+   bool Present(const FlutterPresentViewInfo* info);
+ 
++  // 所有 view 共用最后一次成功呈现时刻；策略和计时器在 raster 线程执行。
++  std::shared_ptr<IdleGpuTrim> idle_gpu_trim_;
++
+   // The handle to the embedder.h engine instance.
+   FLUTTER_API_SYMBOL(FlutterEngine) engine_ = nullptr;
+ 
