@@ -141,3 +141,30 @@ HTTP 请求失败由诊断拦截器统一记录，账号层负责用户提示。
 - warmingUp、PDH/DXGI 和内存 HRESULT 区分初始化、接口失败与合法零值。无有效引擎实例时不生成负载数值。
 
 播放器和 Flutter 的活动在同 PID 下汇总。当前采样按 LUID 与引擎证据呈现跨显卡活动，未把 ANGLE、纹理复制及硬解设备逐个绑定到播放器实例。混合显卡、驱动不支持、设备丢失与采集开销的实测在目标设备上进行。
+
+## Windows 内存观测
+
+`process.privateBytes` 是进程私有提交，`rssBytes` 包含共享驻留页。系统支持时另记录 `privateWorkingSetBytes`（私有驻留）和 `sharedCommitBytes`；旧系统不支持的字段留空，继续保留原计数器。比较任务管理器与诊断数值时先核对口径，不能把私有提交、全部驻留与私有驻留混为同一指标。
+
+Windows runner 清单启用 SegmentHeap，支持版本从 Windows 10 2004 起；这只选择进程 Win32
+堆实现，不改变各内存指标的定义。WebView 的纹理捕获设备和合成器在首次创建嵌入网页时
+初始化，Cookie/Environment 不预先持有它们。评估回收时仍应分别测真实页面浏览、网页和
+播放退出，不能把单个缓存计数或一次短暂下降当作总进程验收。
+
+性能记录开启时，runner 后台每 5 秒用 `VirtualQuery` 扫描本进程地址空间，主线程只读取缓存；关闭记录和销毁窗口会停止扫描。`memory` 记录 private/RW/WRITECOMBINE、mapped、image、commit/reserve 总量、扫描耗时及缓存年龄，最多展示 8 个大块。RW 与 WRITECOMBINE 分类互斥；这些是虚拟页分类，`privateCommittedBytes` 不等同于进程计数器的 `privateBytes`，reserve 也不是物理驻留。
+
+按 AllocationBase 聚合的大块使用匿名递增 ID，阈值为 1 MiB，最多跟踪 512 个。`runtime.jsonl` 的 `memory.snapshot` 保存观测摘要，`memory.regions.diff` 分批保存 created/changed/released 快照差分。首次、每 60 秒、读取跳号或差分溢出时写 `memory.regions.checkpoint`，其 offset/total 用于核对批次完整性。ID 仅在同一 run/process/session 内关联；观测到地址消失后再复用会产生新 ID。两次扫描之间的短命分配，以及未观测到空档的地址复用无法分辨。扫描本身不是原子快照，也不能提供分配调用栈。
+
+`complete/status/errorCode` 表示扫描是否完成；失败扫描不生成虚假的 released。`omittedAllocationCount/Bytes` 表示未覆盖大块，`eventOverflow` 表示未列出的快照差分，`skippedSnapshots` 表示 Dart 未读取的扫描轮次；落盘丢弃仍看存储计数。记录轮转可能丢失早期块来源，分析时须核对检查点批次，不能将缺失当作释放或零占用。所有内存观测使用性能开关控制，独立于应用日志等级。
+
+`nativeMemory` 每 5 秒读取 media_kit_video 的进程级生命周期计数，包含输出、render context、自有 D3D device、EGL context/Surface、两张 BGRA 纹理、软件缓冲及待 Flutter 注销回执。created/released 为累计数量，count 为当前持有数；播放器页面卸载后仍可读取。estimatedBytes 仅为插件自有纹理/缓冲的名义大小，不涵盖驱动、解码器、Flutter 导入侧和引擎资源，不能与 RSS、Private 或 GPU usage 相加。驱动可在资源释放后保留高水位内存，不能只用 count=0 判断进程已经回落。
+
+`graphicsHandles` 统计观测启用后创建的 Dart Image/Picture 句柄，按来源分组写入
+`memory.graphics.handles`。Image 的名义字节为宽×高×4，clone 分别计数，不能当作底层
+像素的唯一活量。GC finalizer 仅提供尽力观测，不证明原生或 GPU 已释放；启用前创建的
+对象不在覆盖内。分组创建栈需构建时设置 `PILIAURORA_GRAPHICS_STACKS=true`。
+
+`graphicsMemory` 的上下文与资源详情需要专用实验引擎，普通 FVM 引擎返回 unsupported。
+分析时保留该状态，不能将未支持、未覆盖或遗漏的资源当作零占用。
+
+需要真实分配/释放调用栈时，使用[内存探针及 ETW 入口](../tool/probes/README.md#windows-内存观测与-etw)。普通性能记录不需要管理员权限；ETW 使用独立命名会话和测试程序，并在结束后撤销临时堆跟踪配置。

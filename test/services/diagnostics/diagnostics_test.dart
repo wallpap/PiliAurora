@@ -1,9 +1,10 @@
 import 'dart:convert';
 import 'dart:io';
-import 'dart:ui' show FrameTiming;
+import 'dart:ui' show Canvas, FrameTiming, PictureRecorder;
 
 import 'package:archive/archive.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter/services.dart';
 import 'package:pili_aurora/services/diagnostics/diagnostics.dart';
 
 void main() {
@@ -41,6 +42,190 @@ void main() {
     expect(warning['route'], '/video');
     expect(warning['processId'], pid);
   });
+
+  test('Windows memory checkpoints survive redaction and deduplicate cached samples', () async {
+    const channel = MethodChannel('pili_aurora/windows_memory');
+    var sampleId = 1;
+    final regions = List.generate(
+      512,
+      (i) => {
+        'id': i + 1,
+        'committedBytes': 1048576,
+        'reservedBytes': 0,
+        'privateCommittedBytes': 1048576,
+        'privateReservedBytes': 0,
+        'mappedCommittedBytes': 0,
+        'imageCommittedBytes': 0,
+        'privateReadWriteBytes': 1048576,
+        'privateWriteCombineBytes': 0,
+        'privateOtherBytes': 0,
+        'regionCount': 1,
+        'typeFlags': 0x20000,
+        'protectionFlags': 4,
+        'aboveThreshold': true,
+      },
+    );
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(
+          channel,
+          (call) async => call.method == 'sample'
+              ? {
+                  'status': 'sampled',
+                  'sampleId': sampleId,
+                  'tickMs': sampleId * 5000,
+                  'complete': true,
+                  'eventOverflow': 0,
+                  'truncated': false,
+                  'allocations': regions,
+                  'changes': sampleId == 1
+                      ? []
+                      : [
+                          {
+                            'kind': 'changed',
+                            'id': 1,
+                            'before': regions.first,
+                            'after': regions.first,
+                          },
+                        ],
+                }
+              : null,
+        );
+    try {
+      await diagnostics.configure(tracing: true, level: DiagnosticLogLevel.off);
+      for (var i = 0; i < 100 && diagnostics.recentLogs.isEmpty; i++) {
+        await Future<void>.delayed(const Duration(milliseconds: 10));
+      }
+      diagnostics.capture();
+      final memory = diagnostics.latest!['memory'] as Map;
+      expect(memory['largest'], hasLength(8));
+      expect(jsonEncode(memory), isNot(contains('<truncated>')));
+      await Future<void>.delayed(const Duration(milliseconds: 1100));
+      sampleId = 3;
+      await Future<void>.delayed(const Duration(milliseconds: 1100));
+      await diagnostics.configure(tracing: false);
+      await diagnostics.flush();
+      final records = (await File(
+        '${directory.path}/runtime.jsonl',
+      ).readAsLines()).map((line) => jsonDecode(line) as Map).toList();
+      final snapshots = records
+          .where((r) => r['category'] == 'memory.snapshot')
+          .toList();
+      expect(snapshots, hasLength(2));
+      expect((snapshots.last['details'] as Map)['skippedSnapshots'], 1);
+      for (final id in [1, 3]) {
+        final chunks = records.where(
+          (r) =>
+              r['category'] == 'memory.regions.checkpoint' &&
+              (r['details'] as Map)['sampleId'] == id,
+        );
+        final restored = chunks
+            .expand((r) => (r['details'] as Map)['regions'] as List)
+            .toList();
+        expect(restored, hasLength(512));
+        expect((restored.last as Map)['id'], 512);
+        expect(jsonEncode(chunks.toList()), isNot(contains('<truncated>')));
+      }
+    } finally {
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(channel, null);
+    }
+  }, skip: !Platform.isWindows);
+
+  test(
+    'graphics contexts keep complete resource batches and image lifetimes',
+    () async {
+      const channel = MethodChannel(
+        'pili_aurora/graphics_memory',
+        JSONMethodCodec(),
+      );
+      final resources = List.generate(
+        64,
+        (index) => {
+          'id': 'resource_$index',
+          'type': 'Texture',
+          'category': 'Scratch',
+          'bytes': 1048576,
+          'purgeableBytes': 1048576,
+          'wrapped': false,
+          'backingType': 'gl_texture',
+          'backingId': '$index',
+        },
+      );
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(
+            channel,
+            (_) async => {
+              'status': 'sampled',
+              'schemaVersion': 1,
+              'sampleId': 41,
+              'contexts': {
+                for (final name in ['raster', 'io'])
+                  name: {
+                    'available': true,
+                    'resourceBytes': 64 << 20,
+                    'budgetBytes': 128 << 20,
+                    'resources': resources,
+                  },
+              },
+            },
+          );
+      try {
+        await diagnostics.configure(
+          tracing: true,
+          level: DiagnosticLogLevel.off,
+        );
+        await Future<void>.delayed(const Duration(milliseconds: 20));
+        final recorder = PictureRecorder();
+        Canvas(recorder);
+        final picture = recorder.endRecording();
+        final image = picture.toImageSync(16, 16);
+        diagnostics.capture();
+        expect(
+          ((diagnostics.latest!['graphicsHandles'] as Map)['image']
+              as Map)['currentHandles'],
+          1,
+        );
+        image.dispose();
+        picture.dispose();
+        diagnostics.capture();
+        expect(
+          ((diagnostics.latest!['graphicsHandles'] as Map)['image']
+              as Map)['currentHandles'],
+          0,
+        );
+        final contexts =
+            (diagnostics.latest!['graphicsMemory'] as Map)['contexts'] as Map;
+        expect((contexts['raster'] as Map)['budgetBytes'], 128 << 20);
+        expect((contexts['io'] as Map).containsKey('resources'), isFalse);
+        await diagnostics.configure(tracing: false);
+        await diagnostics.flush();
+        final records = (await File(
+          '${directory.path}/runtime.jsonl',
+        ).readAsLines()).map((line) => jsonDecode(line) as Map).toList();
+        for (final name in ['raster', 'io']) {
+          final batches = records
+              .where(
+                (record) =>
+                    record['category'] == 'memory.graphics.resources' &&
+                    (record['details'] as Map)['context'] == name,
+              )
+              .toList();
+          expect(batches, hasLength(8));
+          expect(
+            batches.expand(
+              (record) => (record['details'] as Map)['resources'] as List,
+            ),
+            hasLength(64),
+          );
+          expect(jsonEncode(batches), isNot(contains('<truncated>')));
+        }
+      } finally {
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+            .setMockMethodCallHandler(channel, null);
+      }
+    },
+    skip: !Platform.isWindows,
+  );
 
   test('pre-initialization records are persisted on initialization', () async {
     final early = Diagnostics()

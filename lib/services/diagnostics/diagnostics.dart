@@ -9,8 +9,12 @@ import 'package:flutter/scheduler.dart';
 import 'package:flutter/widgets.dart';
 import 'package:archive/archive_io.dart';
 import 'package:pili_aurora/services/diagnostics/history_reader.dart';
+import 'package:pili_aurora/services/diagnostics/flutter_graphics_metrics.dart';
 import 'package:pili_aurora/services/diagnostics/process_metrics.dart';
 import 'package:pili_aurora/services/diagnostics/windows_gpu_metrics.dart';
+import 'package:pili_aurora/services/diagnostics/windows_native_memory_metrics.dart';
+import 'package:pili_aurora/services/diagnostics/windows_memory_metrics.dart';
+import 'package:pili_aurora/services/diagnostics/windows_graphics_memory_metrics.dart';
 import 'package:pili_aurora/services/diagnostics/record_store.dart';
 import 'package:pili_aurora/services/diagnostics/redact.dart';
 
@@ -68,6 +72,13 @@ class Diagnostics extends ChangeNotifier with WidgetsBindingObserver {
   final Map<String, Object?> Function()? processReader;
   final _processMetrics = ProcessMetrics();
   final _gpuMetrics = WindowsGpuMetrics();
+  final _nativeMemoryMetrics = WindowsNativeMemoryMetrics();
+  final _graphicsMetrics = FlutterGraphicsMetrics();
+  final _graphicsMemoryMetrics = WindowsGraphicsMemoryMetrics();
+  Object? _graphicsSampleId;
+  int? _graphicsRecordTick;
+  late final _memoryMetrics = WindowsMemoryMetrics(onSnapshot: _memorySnapshot);
+  int? _memoryCheckpointTick;
   final _sources = <String, Map<String, Object?> Function()>{};
   final _operations = <String, _OperationStats>{};
   final _gauges = <String, num>{};
@@ -567,6 +578,17 @@ class Diagnostics extends ChangeNotifier with WidgetsBindingObserver {
   void _start() {
     _processMetrics.reset();
     unawaited(_gpuMetrics.start());
+    unawaited(_nativeMemoryMetrics.start());
+    _memoryCheckpointTick = null;
+    unawaited(_memoryMetrics.start());
+    _graphicsSampleId = null;
+    _graphicsRecordTick = null;
+    if (Platform.isWindows) {
+      _graphicsMetrics.start(
+        captureStacks: const bool.fromEnvironment('PILIAURORA_GRAPHICS_STACKS'),
+      );
+      unawaited(_graphicsMemoryMetrics.start());
+    }
     _tracing = true;
     _session = DateTime.now().toUtc().toIso8601String();
     _sequence = 0;
@@ -583,7 +605,7 @@ class Diagnostics extends ChangeNotifier with WidgetsBindingObserver {
       'session': _session,
       'platform': Platform.operatingSystem,
       'runtime': Platform.version.split(' ').first,
-      'notes': 'CPU 为进程用量；图片字节为缓存账面值，不能与 RSS 相加。Windows GPU 为本进程各显卡的引擎负载及显存用量/预算；Dart 堆和各模块独占内存未采集。HTTP 字节仅为服务端声明长度。',
+      'notes': 'CPU 为进程用量；图片、原生视频纹理字节为账面值，不能与 RSS/Private/GPU 相加。Windows memory 为每5秒 VirtualQuery 快照和观测差分，不是逐次分配轨迹；原生视频计数不包含驱动、解码器和 Flutter 导入侧分配。GPU 按适配器保留，跨 LUID 不应直接相加。Dart 堆未采集。HTTP 字节仅为服务端声明长度。',
     });
     _timer = Timer.periodic(
       Duration(milliseconds: _intervalMs),
@@ -669,15 +691,47 @@ class Diagnostics extends ChangeNotifier with WidgetsBindingObserver {
     // GPU 引擎列表使用独立预算，避免挤占播放器和采集器状态字段。
     if (Platform.isWindows) {
       latest!['gpu'] = DiagnosticRedactor.clean(_gpuMetrics.sample());
+      latest!['nativeMemory'] = DiagnosticRedactor.clean(
+        _nativeMemoryMetrics.sample(),
+      );
+      latest!['memory'] = DiagnosticRedactor.clean(_memoryMetrics.sample());
+      final handles = _graphicsMetrics.snapshot();
+      // 每类独立预算；资源明细分块落盘，避免总条目预算截掉后半个上下文。
+      latest!['graphicsHandles'] = DiagnosticRedactor.clean({
+        for (final entry in handles.entries)
+          if (entry.key != 'groups' && entry.key != 'largestResources')
+            entry.key: entry.value,
+        'largestResources': (handles['largestResources'] as List?)
+            ?.take(4)
+            .toList(),
+      });
+      final graphics = _graphicsMemoryMetrics.sample();
+      final contexts = graphics['contexts'] as Map? ?? const {};
+      latest!['graphicsMemory'] = DiagnosticRedactor.clean({
+        for (final entry in graphics.entries)
+          if (entry.key != 'contexts') entry.key: entry.value,
+        'contexts': {
+          for (final entry in contexts.entries)
+            entry.key: {
+              for (final item in (entry.value as Map).entries)
+                if (item.key != 'resources') item.key: item.value,
+            },
+        },
+      });
+      _recordGraphicsSnapshot(graphics, handles);
     }
     _writeTrace(latest!);
     _notifySoon();
   }
 
   void _stop() {
-    unawaited(_gpuMetrics.stop());
     capture();
     _tracing = false;
+    unawaited(_gpuMetrics.stop());
+    unawaited(_nativeMemoryMetrics.stop());
+    unawaited(_memoryMetrics.stop());
+    _graphicsMetrics.stop();
+    unawaited(_graphicsMemoryMetrics.stop());
     _timer?.cancel();
     _timer = null;
     _elapsed.stop();
@@ -687,6 +741,106 @@ class Diagnostics extends ChangeNotifier with WidgetsBindingObserver {
       'session': _session,
       'time': DateTime.now().toUtc().toIso8601String(),
     });
+  }
+
+  // 性能开关独立于应用日志等级；每批独立脱敏，避免共用预算截断资源。
+  void _writeMemoryRecord(String category, Map<String, Object?> details) =>
+      _writeLog(
+        _logs,
+        DiagnosticLogLevel.info,
+        category,
+        'Windows 内存观测',
+        details: details,
+      );
+
+  void _recordGraphicsSnapshot(
+    Map<String, Object?> graphics,
+    Map<String, Object?> handles,
+  ) {
+    final id = graphics['sampleId'];
+    if (id != null && id != _graphicsSampleId) {
+      _graphicsSampleId = id;
+      final contexts = graphics['contexts'] as Map? ?? const {};
+      for (final entry in contexts.entries) {
+        final context = entry.value as Map;
+        final resources = context['resources'] as List? ?? const [];
+        _writeMemoryRecord('memory.graphics.context', {
+          'sampleId': id,
+          'context': entry.key,
+          for (final item in context.entries)
+            if (item.key != 'resources') item.key: item.value,
+        });
+        for (var offset = 0; offset < resources.length; offset += 8) {
+          _writeMemoryRecord('memory.graphics.resources', {
+            'sampleId': id,
+            'context': entry.key,
+            'offset': offset,
+            'total': resources.length,
+            'resources': resources.skip(offset).take(8).toList(),
+          });
+        }
+      }
+    }
+    final tick = _elapsed.elapsedMilliseconds;
+    if (_graphicsRecordTick != null && tick - _graphicsRecordTick! < 5000) {
+      return;
+    }
+    _graphicsRecordTick = tick;
+    final groups = (handles['groups'] as Map? ?? const {}).entries.toList();
+    for (var offset = 0; offset < groups.length; offset += 8) {
+      _writeMemoryRecord('memory.graphics.handles', {
+        'elapsedMs': tick,
+        'offset': offset,
+        'total': groups.length,
+        'groups': {
+          for (final entry in groups.skip(offset).take(8))
+            entry.key: entry.value,
+        },
+      });
+    }
+  }
+
+  void _memorySnapshot(Map<String, Object?> snapshot) {
+    if (!_tracing) return;
+    final id = snapshot['sampleId'];
+    final tick = snapshot['tickMs'] as int? ?? 0;
+    final allocations = snapshot['allocations'] as List? ?? const [];
+    final changes = snapshot['changes'] as List? ?? const [];
+    final checkpoint =
+        snapshot['complete'] == true &&
+        (_memoryCheckpointTick == null ||
+            tick - _memoryCheckpointTick! >= 60000 ||
+            snapshot['skippedSnapshots'] != 0 ||
+            snapshot['eventOverflow'] != 0);
+    _writeMemoryRecord('memory.snapshot', {
+      for (final entry in snapshot.entries)
+        if (entry.key != 'allocations' && entry.key != 'changes')
+          entry.key: entry.value,
+      'checkpoint': checkpoint,
+      'trackedAllocationCount': allocations.length,
+    });
+    if (checkpoint) {
+      _memoryCheckpointTick = tick;
+      for (var i = 0; i < allocations.length; i += 8) {
+        _writeMemoryRecord('memory.regions.checkpoint', {
+          'sampleId': id,
+          'tickMs': tick,
+          'offset': i,
+          'total': allocations.length,
+          'regions': allocations.skip(i).take(8).toList(),
+        });
+      }
+    } else {
+      for (var i = 0; i < changes.length; i += 4) {
+        _writeMemoryRecord('memory.regions.diff', {
+          'sampleId': id,
+          'tickMs': tick,
+          'offset': i,
+          'total': changes.length,
+          'changes': changes.skip(i).take(4).toList(),
+        });
+      }
+    }
   }
 
   void _notifySoon() {

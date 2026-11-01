@@ -197,6 +197,9 @@ inline void glFinish() {}
 MAIN = r'''
 #include "angle_surface_manager.h"
 #include "angle_surface_manager.cc"
+#ifdef MEDIA_KIT_VIDEO_NATIVE_MEMORY_STATS_H_
+static void CheckMemoryEmpty();
+#endif
 static int failures = 0;
 static void Check(bool okay, const std::string& label) {
   if(!okay) { ++failures; std::cout << "FAIL " << label << '\n'; }
@@ -204,6 +207,16 @@ static void Check(bool okay, const std::string& label) {
 static int LiveCom() {
   int count = 0; for(const auto& object : objects) count += object->refs; return count;
 }
+#ifdef MEDIA_KIT_VIDEO_NATIVE_MEMORY_STATS_H_
+static void CheckMemoryEmpty() {
+  const auto snapshot = media_kit_memory::Registry::Instance().Read();
+  for(const auto& resource : snapshot.resources) {
+    Check(resource.count == 0 && resource.estimated_bytes == 0,
+          "native memory resource gauge returns to zero");
+    Check(resource.created == resource.released, "native memory lifetime totals balance");
+  }
+}
+#endif
 int main() {
   for(bool use_legacy : {false, true}) {
     legacy = use_legacy;
@@ -222,6 +235,9 @@ int main() {
       Check(LiveCom() == com_before, fault + " COM references");
       Check(mutexes == mutex_before, fault + " mutex handles");
       Check(contexts.size() + surfaces.size() + displays.size() == egl_before, fault + " EGL rollback");
+#ifdef MEDIA_KIT_VIDEO_NATIVE_MEMORY_STATS_H_
+      CheckMemoryEmpty();
+#endif
       // Isolate counters after a failed baseline case; the assertions above retain the verdict.
       for(auto& object : objects) object->refs = 0;
       mutexes = 0; contexts.clear(); surfaces.clear(); displays.clear(); current_context = nullptr;
@@ -248,6 +264,14 @@ int main() {
     live.SetSize(960, 540);
     live.SetSize(1280, 720);
     Check(contexts.size()==1 && surfaces.size()==1, "resize reuses context");
+#ifdef MEDIA_KIT_VIDEO_NATIVE_MEMORY_STATS_H_
+    const auto stats = media_kit_memory::Registry::Instance().Read();
+    const auto textures = stats.resources[static_cast<size_t>(media_kit_memory::Resource::texture)];
+    Check(textures.count == 2 && textures.estimated_bytes == 1280LL * 720 * 4 * 2,
+          "resize replaces nominal texture bytes");
+    Check(stats.resources[static_cast<size_t>(media_kit_memory::Resource::device)].count == 1,
+          "resize retains one device");
+#endif
   }
   Check(LiveCom()==0 && mutexes==0 && contexts.empty() && surfaces.empty() && displays.empty(),
         "shared display final release");
@@ -268,6 +292,9 @@ int main() {
     Check(live_terminations==0, "cross-thread display stays alive until last user");
   }
   if(!failures) std::cout << "PASS ANGLE constructor fault matrix, shared display and resize ownership\n";
+#ifdef MEDIA_KIT_VIDEO_NATIVE_MEMORY_STATS_H_
+  CheckMemoryEmpty();
+#endif
   return failures ? 1 : 0;
 }
 '''
@@ -302,6 +329,8 @@ def main():
         (output / "fake_platform.h").write_text(PLATFORM.replace("EGL_CONSTANTS", constants), encoding="utf-8")
         (output / "angle_surface_manager.h").write_text('#include "fake_platform.h"\n' + header, encoding="utf-8")
         (output / "angle_surface_manager.cc").write_text(source, encoding="utf-8")
+        if '"native_memory_stats.h"' in header:
+            (output / "native_memory_stats.h").write_text(read("native_memory_stats.h"), encoding="utf-8")
         (output / "probe.cc").write_text(MAIN, encoding="utf-8")
         binary = output / "probe.exe"
         subprocess.run([args.compiler, "-std=c++17", "-O0", "-static-libgcc", "-static-libstdc++",

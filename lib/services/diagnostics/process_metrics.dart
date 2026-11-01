@@ -26,6 +26,10 @@ final class _MemoryCounters extends Struct {
   external int peakPagefile;
   @UintPtr()
   external int privateBytes;
+  @UintPtr()
+  external int privateWorkingSet;
+  @Uint64()
+  external int sharedCommit;
 }
 
 /// Windows 直接读取本进程计数器，不启动 PowerShell 子进程。
@@ -67,6 +71,8 @@ class ProcessMetrics {
       'rssBytes': null,
       'peakRssBytes': null,
       'privateBytes': null,
+      'privateWorkingSetBytes': null,
+      'sharedCommitBytes': null,
       'cpuPercentOneCore': null,
       'cpuPercentMachine': null,
       'processorCount': Platform.numberOfProcessors,
@@ -82,7 +88,18 @@ class ProcessMetrics {
     final times = calloc<Uint64>(4);
     try {
       memory.ref.cb = sizeOf<_MemoryCounters>();
-      if (_memory(-1, memory, sizeOf<_MemoryCounters>()) != 0) {
+      var sampled = _memory(-1, memory, sizeOf<_MemoryCounters>()) != 0;
+      if (sampled) {
+        result['privateWorkingSetBytes'] = memory.ref.privateWorkingSet;
+        result['sharedCommitBytes'] = memory.ref.sharedCommit;
+      } else {
+        // 旧系统回退至 PROCESS_MEMORY_COUNTERS_EX 布局。
+        final legacySize =
+            sizeOf<_MemoryCounters>() - sizeOf<IntPtr>() - sizeOf<Uint64>();
+        memory.ref.cb = legacySize;
+        sampled = _memory(-1, memory, legacySize) != 0;
+      }
+      if (sampled) {
         result.addAll({
           'rssBytes': memory.ref.working,
           'peakRssBytes': memory.ref.peakWorking,

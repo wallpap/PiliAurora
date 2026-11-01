@@ -124,6 +124,11 @@ class PluginRegistrarWindows {
 MAIN = r'''
 #include "video_output.h"
 #include "video_output.cc"
+#ifdef MEDIA_KIT_VIDEO_NATIVE_MEMORY_STATS_H_
+static int64_t MemoryCount(media_kit_memory::Resource resource) {
+  return media_kit_memory::Registry::Instance().Read().resources[static_cast<size_t>(resource)].count;
+}
+#endif
 static void Require(bool condition, const char* message) {
   if(!condition) { std::cerr << "FAIL " << message << std::endl; std::exit(1); }
 }
@@ -158,6 +163,15 @@ struct Fixture {
       std::this_thread::yield();
     }
     done.get();
+#ifdef MEDIA_KIT_VIDEO_NATIVE_MEMORY_STATS_H_
+    const auto stats = media_kit_memory::Registry::Instance().Read();
+    Require(MemoryCount(media_kit_memory::Resource::output) == 0,
+            "destroyed output remains counted");
+    Require(MemoryCount(media_kit_memory::Resource::render_context) == 0,
+            "destroyed render context remains counted");
+    Require(stats.releasing_outputs == 0 && stats.pending_texture_unregistrations == 0,
+            "destroyed output leaves pending release gauges");
+#endif
   }
   ~Fixture() { if(output) Destroy(); }
 };
@@ -165,6 +179,14 @@ static void Settled(Fixture& f) {
   f.Receipts();
   Require(pending_receipts==0, "unregistration not settled");
   Require(unsafe_releases==0, "resource mutation crossed Flutter unregister barrier");
+#ifdef MEDIA_KIT_VIDEO_NATIVE_MEMORY_STATS_H_
+  Require(MemoryCount(media_kit_memory::Resource::output) == 1,
+          "live output missing from process registry");
+  Require(MemoryCount(media_kit_memory::Resource::render_context) == 1,
+          "reset loses or duplicates render context gauge");
+  Require(media_kit_memory::Registry::Instance().Read().pending_texture_unregistrations == 0,
+          "settled Flutter receipts still counted");
+#endif
 }
 int main() {
   try {
@@ -299,6 +321,9 @@ def main():
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text('#include "fake_platform.h"\n', encoding="utf-8")
         header = read("video_output.h")
+        if "media_kit_memory::" in header:
+            (output / "native_memory_stats.h").write_text(read("native_memory_stats.h"), encoding="utf-8")
+            header = '#include "native_memory_stats.h"\n' + header
         (output / "video_output.h").write_text(header.replace(" private:", " public:"), encoding="utf-8")
         (output / "video_output.cc").write_text(read("video_output.cc"), encoding="utf-8")
         (output / "probe.cc").write_text(MAIN, encoding="utf-8")

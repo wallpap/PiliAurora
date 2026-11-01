@@ -77,6 +77,7 @@ bool VideoOutput::CreateRenderContext(int64_t width, int64_t height) {
       };
       // Create render context.
       if (mpv_render_context_create(&render_context_, handle_, params) == 0) {
+        render_memory_.Set(1);
         // Set flag to true, indicating that H/W rendering is supported.
         is_hardware_acceleration_enabled = true;
         std::cout << "media_kit: VideoOutput: Using H/W rendering."
@@ -93,12 +94,14 @@ bool VideoOutput::CreateRenderContext(int64_t width, int64_t height) {
     if (render_context_ != nullptr) {
       mpv_render_context_free(render_context_);
       render_context_ = nullptr;
+      render_memory_.Reset();
     }
     surface_manager_.reset();
     std::cout << "media_kit: VideoOutput: Using S/W rendering." << std::endl;
     // Allocate a "large enough" buffer ahead of time.
     pixel_buffer_ =
         std::make_unique<uint8_t[]>(SW_RENDERING_PIXEL_BUFFER_SIZE);
+    software_memory_.Set(1, SW_RENDERING_PIXEL_BUFFER_SIZE);
     // 初始固定尺寸也必须遵守软件缓冲区容量。
     if (width_) {
       width_ = std::clamp(*width_, int64_t{1},
@@ -113,6 +116,7 @@ bool VideoOutput::CreateRenderContext(int64_t width, int64_t height) {
         {MPV_RENDER_PARAM_INVALID, nullptr},
     };
     mpv_render_context_create(&render_context_, handle_, params);
+    if (render_context_ != nullptr) render_memory_.Set(1);
   }
   return render_context_ != nullptr;
 }
@@ -135,10 +139,12 @@ void VideoOutput::ReleaseRenderContext() {
     mpv_render_context_set_update_callback(render_context_, nullptr, nullptr);
     mpv_render_context_free(render_context_);
     render_context_ = nullptr;
+    render_memory_.Reset();
   }
   if (surface_manager_) surface_manager_->MakeCurrent(false);
   surface_manager_.reset();
   pixel_buffer_.reset();
+  software_memory_.Reset();
 }
 
 void VideoOutput::ResetRenderer(std::function<void(bool)> on_ready) {
@@ -238,6 +244,7 @@ void VideoOutput::ProcessPendingTextureOperations() {
 }
 
 VideoOutput::~VideoOutput() {
+  memory_lifetime_.BeginRelease();
   {
     std::lock_guard<std::mutex> lock(render_callback_mutex_);
     destroyed_.store(true, std::memory_order_release);
@@ -948,6 +955,7 @@ void VideoOutput::UnregisterTexture(int64_t id,
   {
     std::lock_guard<std::mutex> lock(texture_unregistrations_mutex_);
     ++pending_texture_unregistrations_;
+    media_kit_memory::Registry::Instance().PendingTextureUnregistration(1);
   }
   registrar_->texture_registrar()->UnregisterTexture(id, [this, id,
                                                             on_unregistered]() {
@@ -966,6 +974,7 @@ void VideoOutput::UnregisterTexture(int64_t id,
           std::lock_guard<std::mutex> lock(texture_unregistrations_mutex_);
           if (pending_texture_unregistrations_ > 0) {
             --pending_texture_unregistrations_;
+            media_kit_memory::Registry::Instance().PendingTextureUnregistration(-1);
           }
         }
         texture_unregistrations_cv_.notify_all();

@@ -8,6 +8,7 @@
 
 #include "win32_window.h"
 #include "gpu_metrics.h"
+#include "memory_metrics_channel.h"
 
 // A window that does nothing but host a Flutter view.
 class FlutterWindow : public Win32Window {
@@ -27,6 +28,7 @@ class FlutterWindow : public Win32Window {
   // The project to run.
   flutter::DartProject project_;
   std::unique_ptr<GpuMetrics> gpu_metrics_;
+  std::unique_ptr<MemoryMetricsChannel> memory_metrics_;
 
   // The Flutter instance hosted by this window.
   std::unique_ptr<flutter::FlutterViewController> flutter_controller_;

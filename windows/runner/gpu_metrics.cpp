@@ -79,9 +79,13 @@ void GpuMetrics::Stop() {
 void GpuMetrics::Run() {
   PDH_HQUERY query = nullptr;
   PDH_HCOUNTER counter = nullptr;
+  // 在PDH端限定本进程，避免为最终会被丢弃的其它进程格式化整个GPU数组。
+  const std::wstring counter_path =
+      L"\\GPU Engine(pid_" + std::to_wstring(GetCurrentProcessId()) +
+      L"_*)\\Utilization Percentage";
   PDH_STATUS status = PdhOpenQueryW(nullptr, 0, &query);
   if (status == ERROR_SUCCESS)
-    status = PdhAddEnglishCounterW(query, L"\\GPU Engine(*)\\Utilization Percentage", 0, &counter);
+    status = PdhAddEnglishCounterW(query, counter_path.c_str(), 0, &counter);
   if (status == ERROR_SUCCESS) status = PdhCollectQueryData(query);
   bool baseline = false;
   auto previous = GetTickCount64();

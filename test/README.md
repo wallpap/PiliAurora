@@ -90,6 +90,7 @@ fvm flutter test test/services/diagnostics/ test/pages/about/diagnostics_page_te
 
 按需实验位于 [`tool/experiments/`](../tool/experiments/README.md)，原生或设备探针位于 [`tool/probes/`](../tool/probes/README.md)，各入口和执行条件由对应目录文档说明。
 
+`services/diagnostics/diagnostics_test.dart` 另检查 Windows 512 块检查点的独立脱敏预算、缓存去重及跳号后的检查点恢复；`redact_test.dart` 覆盖长普通文本与带前缀 token 键。VirtualQuery 与视频资源生命周期回归见平台探针，不能由 Dart 模拟通道测试替代。
 
 旧 Canvas 屏幕的绘制、轨道、静音与 DPI 回归统一放在 `tool/experiments/danmaku/baseline/`，按需运行；`pages/danmaku/frame_rate_ticker_test.dart` 和 `text_renderer_test.dart` 保留当前窗口内核共用的调度及文字栅格回归。
 

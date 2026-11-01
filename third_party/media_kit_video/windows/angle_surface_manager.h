@@ -22,6 +22,7 @@
 #include <wrl.h>
 
 #include "utils.h"
+#include "native_memory_stats.h"
 
 #include <cstdint>
 #include <functional>
@@ -75,6 +76,10 @@ class ANGLESurfaceManager {
 
   // Sync |Draw| & |Read| calls.
   HANDLE mutex_ = nullptr;
+  media_kit_memory::ResourceRecord device_memory_{media_kit_memory::Resource::device};
+  media_kit_memory::ResourceRecord context_memory_{media_kit_memory::Resource::egl_context};
+  media_kit_memory::ResourceRecord surface_memory_{media_kit_memory::Resource::egl_surface};
+  media_kit_memory::ResourceRecord texture_memory_{media_kit_memory::Resource::texture};
   // D3D 11
   ID3D11Device* d3d_11_device_ = nullptr;
   ID3D11DeviceContext* d3d_11_device_context_ = nullptr;

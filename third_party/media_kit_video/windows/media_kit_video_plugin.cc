@@ -6,6 +6,7 @@
 // Use of this source code is governed by MIT license that can be found in the
 // LICENSE file.
 #include "media_kit_video_plugin.h"
+#include "native_memory_stats.h"
 
 #include <Windows.h>
 
@@ -17,6 +18,43 @@
 
 namespace media_kit_video {
 namespace {
+const char* ResourceName(media_kit_memory::Resource resource) {
+  switch (resource) {
+    case media_kit_memory::Resource::output: return "videoOutput";
+    case media_kit_memory::Resource::render_context: return "renderContext";
+    case media_kit_memory::Resource::device: return "d3dDevice";
+    case media_kit_memory::Resource::egl_context: return "eglContext";
+    case media_kit_memory::Resource::egl_surface: return "eglSurface";
+    case media_kit_memory::Resource::texture: return "d3dTexture";
+    case media_kit_memory::Resource::software_buffer: return "softwareBuffer";
+    case media_kit_memory::Resource::count: break;
+  }
+  return "unknown";
+}
+
+flutter::EncodableMap EncodeMemoryStats() {
+  const auto snapshot = media_kit_memory::Registry::Instance().Read();
+  flutter::EncodableMap resources;
+  for (size_t i = 0; i < static_cast<size_t>(media_kit_memory::Resource::count); ++i) {
+    const auto resource = static_cast<media_kit_memory::Resource>(i);
+    const auto& value = snapshot.resources[i];
+    resources[flutter::EncodableValue(ResourceName(resource))] =
+        flutter::EncodableValue(flutter::EncodableMap{
+            {flutter::EncodableValue("count"), flutter::EncodableValue(value.count)},
+            {flutter::EncodableValue("created"), flutter::EncodableValue(value.created)},
+            {flutter::EncodableValue("released"), flutter::EncodableValue(value.released)},
+            {flutter::EncodableValue("estimatedBytes"), flutter::EncodableValue(value.estimated_bytes)},
+        });
+  }
+  return flutter::EncodableMap{
+      {flutter::EncodableValue("status"), flutter::EncodableValue("ok")},
+      {flutter::EncodableValue("tickMs"), flutter::EncodableValue(static_cast<int64_t>(GetTickCount64()))},
+      {flutter::EncodableValue("processId"), flutter::EncodableValue(static_cast<int64_t>(GetCurrentProcessId()))},
+      {flutter::EncodableValue("resources"), flutter::EncodableValue(resources)},
+      {flutter::EncodableValue("releasingOutputs"), flutter::EncodableValue(snapshot.releasing_outputs)},
+      {flutter::EncodableValue("pendingTextureUnregistrations"), flutter::EncodableValue(snapshot.pending_texture_unregistrations)},
+  };
+}
 
 struct FrameProgressBatch {
   std::mutex mutex;
@@ -87,7 +125,9 @@ MediaKitVideoPlugin::~MediaKitVideoPlugin() {
 void MediaKitVideoPlugin::HandleMethodCall(
     const flutter::MethodCall<flutter::EncodableValue>& method_call,
     std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>> result) {
-  if (method_call.method_name().compare("VideoOutputManager.Create") == 0) {
+  if (method_call.method_name() == "VideoOutputManager.MemoryStats") {
+    result->Success(flutter::EncodableValue(EncodeMemoryStats()));
+  } else if (method_call.method_name().compare("VideoOutputManager.Create") == 0) {
     auto arguments = std::get<flutter::EncodableMap>(*method_call.arguments());
     auto handle =
         std::get<std::string>(arguments[flutter::EncodableValue("handle")]);

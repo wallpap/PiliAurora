@@ -114,11 +114,13 @@ void ANGLESurfaceManager::CleanUp(bool release_context) {
   if (surface_ != EGL_NO_SURFACE) {
     eglDestroySurface(display_, surface_);
     surface_ = EGL_NO_SURFACE;
+    surface_memory_.Reset();
   }
   if (release_context) {
     if (display_ != EGL_NO_DISPLAY && context_ != EGL_NO_CONTEXT) {
       eglDestroyContext(display_, context_);
       context_ = EGL_NO_CONTEXT;
+      context_memory_.Reset();
     }
     {
       std::lock_guard<std::mutex> lock(display_mutex_);
@@ -134,6 +136,7 @@ void ANGLESurfaceManager::CleanUp(bool release_context) {
   // ComPtr 各持有一个引用，部分创建失败与正常释放使用同一路径。
   internal_d3d_11_texture_2D_.Reset();
   d3d_11_texture_2D_.Reset();
+  texture_memory_.Reset();
   internal_handle_ = nullptr;
   handle_ = nullptr;
   if (release_context) {
@@ -145,6 +148,7 @@ void ANGLESurfaceManager::CleanUp(bool release_context) {
     if (d3d_11_device_) {
       d3d_11_device_->Release();
       d3d_11_device_ = nullptr;
+      device_memory_.Reset();
     }
   }
 }
@@ -182,6 +186,7 @@ bool ANGLESurfaceManager::CreateD3DTexture() {
         static_cast<UINT>(feature_levels.size()), D3D11_SDK_VERSION,
         &d3d_11_device_, 0, &d3d_11_device_context_);
     CHECK_HRESULT("D3D11CreateDevice");
+    device_memory_.Set(1);
   }
 
   Microsoft::WRL::ComPtr<IDXGIDevice> dxgi_device = nullptr;
@@ -220,6 +225,9 @@ bool ANGLESurfaceManager::CreateD3DTexture() {
   auto hr = d3d_11_device_->CreateTexture2D(&d3d11_texture2D_desc, nullptr,
                                             &internal_d3d_11_texture_2D_);
   CHECK_HRESULT("ID3D11Device::CreateTexture2D");
+  // BGRA8 名义像素字节，不包含驱动对齐、解码器和 Flutter 导入侧分配。
+  const int64_t texture_bytes = static_cast<int64_t>(width_) * height_ * 4;
+  texture_memory_.Set(1, texture_bytes);
   auto resource = Microsoft::WRL::ComPtr<IDXGIResource>{};
   hr = internal_d3d_11_texture_2D_.As(&resource);
   CHECK_HRESULT("ID3D11Texture2D::As");
@@ -231,6 +239,7 @@ bool ANGLESurfaceManager::CreateD3DTexture() {
   hr = d3d_11_device_->CreateTexture2D(&d3d11_texture2D_desc, nullptr,
                                        &d3d_11_texture_2D_);
   CHECK_HRESULT("ID3D11Device::CreateTexture2D");
+  texture_memory_.Set(2, texture_bytes * 2);
   hr = d3d_11_texture_2D_.As(&resource);
   CHECK_HRESULT("ID3D11Texture2D::As");
   // Retrieve the shared |HANDLE| for interop.
@@ -283,6 +292,7 @@ bool ANGLESurfaceManager::CreateAndBindEGLSurface() {
     if (context_ == EGL_NO_CONTEXT) {
       FAIL("eglCreateContext");
     }
+    context_memory_.Set(1);
   }
   EGLint buffer_attributes[] = {
       EGL_WIDTH,          width_,         EGL_HEIGHT,         height_,
@@ -295,6 +305,7 @@ bool ANGLESurfaceManager::CreateAndBindEGLSurface() {
   if (surface_ == EGL_NO_SURFACE) {
     FAIL("eglCreatePbufferFromClientBuffer");
   }
+  surface_memory_.Set(1);
   // Surface 的 D3D 纹理由默认 framebuffer 绘制，再通过 Read 复制给 Flutter。
   // 创建或扩容时不额外绑定 GL 纹理，避免改变 mpv 渲染上下文的纹理状态。
   return true;
