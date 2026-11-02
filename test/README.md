@@ -100,3 +100,5 @@ Windows 保活页面内存回归：先执行 `pwsh -File lib/scripts/patch.ps1 w
 测试归约后，`image_lifecycle_test.dart` 用同一批 12 张图片检查 codec 创建上限、并发取帧和全部交付。`inactive_sliver_cache_test.dart` 直接使用生产 `InactiveFeedSliver`，保留滚动范围、资源收缩和恢复像素回归。`retained_layer_release_test.dart` 保留生产清理与实际 TabActivity、Texture、EngineLayer、viewport clip 的回归及共用场景中的策略对照；独立的 detached scene 和 bounded hidden ancestors 原型实验已移除。
 
 直播聊天的 10 万条压力集中在 `pages/live_room/chat_buffer_test.dart`；页面与控件使用超过 500 条容量的积压检查淘汰提示、阅读位置和退出释放。`window_screen_test.dart` 的帧率矩阵使用 6 组代表组合，每个目标帧率均覆盖 120/165 Hz 和两种采样密度，不再覆盖全部交叉。私信卡片布局保留窄屏浅色、宽屏深色两组。
+
+`common/widgets/feed_pagination_test.dart` 另检查来源替换后旧请求不阻塞新列表。`pages/search/controller_test.dart` 覆盖联想乱序、清空后重复输入及关闭后的迟到结果；`utils/account_profile_lifecycle_test.dart` 覆盖资料/余额的发起账号绑定、切号、页面释放和同账号查询乱序。`services/messaging/settings_test.dart` 检查同键串行、最后确认值回滚、不同键并发、刷新及失效。下载服务测试覆盖准备期间暂停、删除、切换、地址快照和文件提交排空；直播连接测试使用本地主机 HTTP/WebSocket 检查挂起握手取消、超时后备及认证。
