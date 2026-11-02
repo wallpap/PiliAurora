@@ -136,7 +136,7 @@ class PgcIntroController extends CommonIntroController {
     bool isCurrentEpisode(EpisodeItem item) => (item.epId ?? item.id) == epId;
 
     String videoUrl =
-        '${HttpString.baseUrl}/bangumi/play/ep$epId${videoDetailCtr.playedTimePos}';
+        '${HttpString.baseUrl}/bangumi/play/ep$epId${videoDetailCtr.playedTimePos(false)}';
     showDialog(
       context: context,
       builder: (_) => SimpleDialog(

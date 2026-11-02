@@ -1,3 +1,4 @@
+import 'package:flutter/services.dart';
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get/get.dart';
@@ -35,6 +36,9 @@ class _SettingsBox implements Box<dynamic> {
 }
 
 class _VideoController extends GetxController implements VideoDetailController {
+  @override
+  String playedTimePos(bool hasParams) => '?t=12.0';
+
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
@@ -88,6 +92,44 @@ void main() {
     Accounts.accountMode[AccountType.main.index] = previousAccount;
     Messaging.onAccountChanged();
     Get.reset();
+  });
+
+  testWidgets('复制番剧链接包含播放进度', (tester) async {
+    String? copied;
+    final messenger =
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          ..setMockMethodCallHandler(SystemChannels.platform, (call) async {
+            if (call.method == 'Clipboard.setData') {
+              copied = call.arguments['text'] as String?;
+            }
+            return null;
+          });
+    addTearDown(
+      () => messenger.setMockMethodCallHandler(SystemChannels.platform, null),
+    );
+    final controller = _ShareController()
+      ..pgcItem = PgcInfoModel.fromJson({'title': '测试', 'type': 1})
+      ..epId = 123;
+    await tester.pumpWidget(
+      GetMaterialApp(
+        navigatorObservers: [FlutterSmartDialog.observer],
+        builder: FlutterSmartDialog.init(),
+        home: Scaffold(
+          body: Builder(
+            builder: (context) => TextButton(
+              onPressed: () => controller.actionShareVideo(context),
+              child: const Text('打开分享'),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.tap(find.text('打开分享'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('复制链接'));
+    await tester.pumpAndSettle();
+    expect(copied, 'https://www.bilibili.com/bangumi/play/ep123?t=12.0');
+    await tester.pump(const Duration(seconds: 3));
   });
 
   for (final fromSection in [false, true]) {
