@@ -6,7 +6,7 @@
 
 - 引擎提交：`af7e796e161ae0bb1ff0758c71a7105418bd9ded`。
 - Flutter 3.47.5 框架提交：`6a19cca56475dbfba1478ee68d7bd0c2ef891da1`。
-- `engine.patch`：FrameTimeline、帧身份传递、纹理重绘合并和 EGL 输出。
+- [android-frame-plan.patch](../../../doc/development/engine-patches/android-frame-plan.patch)：FrameTimeline、帧身份传递、纹理重绘合并和 EGL 输出。
 - `frame_presentation_plan.h`：计划选择与跨线程预算反馈。
 
 ## 输出流程

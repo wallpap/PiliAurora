@@ -15,6 +15,7 @@
 | 任务 | 文档 |
 | --- | --- |
 | 配置环境、构建或选择测试 | [构建与测试](development/build-and-test.md) |
+| 恢复或比较自建引擎源码差异 | [引擎与框架差异](development/engine-patches/README.md) |
 | 查找功能入口和代码位置 | [功能领域地图](development/features.md) |
 | 理解模块职责和状态所有权 | [架构概览](development/architecture.md)、[架构图](diagrams/README.md) |
 | 追踪启动、播放、下载和消息调用 | [运行流程](development/runtime-flows.md) |

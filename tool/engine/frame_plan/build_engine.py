@@ -37,7 +37,7 @@ def main() -> None:
     source = Path(__file__).resolve().parent
     if not engine_identity.patch_matches(
             apply.git(checkout, "diff", "--binary").stdout,
-            (source / "engine.patch").read_text(encoding="utf-8")):
+            engine_identity.PATCHES["androidFramePlan"].read_text(encoding="utf-8")):
         raise ValueError("Engine checkout contains changes outside the registered patch")
     for name, destination in {
         "frame_presentation_plan.h": "flow/frame_presentation_plan.h",

@@ -16,9 +16,10 @@ import urllib.request
 
 ENGINE = 'af7e796e161ae0bb1ff0758c71a7105418bd9ded'
 DEPOT_TOOLS = 'b1c2e86792a7f2b6576c181b7327ddd53b1a42a8'
-PATCH = Path(__file__).with_name('engine.patch')
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import engine_identity
+
+PATCH = engine_identity.PATCHES['windowsDwmPaced']
 
 
 def run(command, *, cwd, env, capture=False, check=True):

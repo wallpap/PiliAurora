@@ -16,6 +16,11 @@ FRAMEWORK_COMMIT = "6a19cca56475dbfba1478ee68d7bd0c2ef891da1"
 ENGINE_COMMIT = "af7e796e161ae0bb1ff0758c71a7105418bd9ded"
 SCHEMA_VERSION = 1
 ROOT = Path(__file__).resolve().parent
+PATCH_ROOT = ROOT.parents[1] / "doc/development/engine-patches"
+PATCHES = {
+    "androidFramePlan": PATCH_ROOT / "android-frame-plan.patch",
+    "windowsDwmPaced": PATCH_ROOT / "windows-frame-pacing.patch",
+}
 PROFILES = {
     "androidFramePlan": ("arm64", ROOT / "frame_plan", (
         "frame_presentation_plan.h", "frame_presentation_plan_unittests.cc")),
@@ -52,7 +57,7 @@ def identity_digest(identity: dict) -> str:
 
 def materials(profile: str) -> dict:
     _, directory, overlays = PROFILES[profile]
-    return {"patchSha256": sha256(directory / "engine.patch"),
+    return {"patchSha256": sha256(PATCHES[profile]),
             "overlaySha256": digest_json({name: sha256(directory / name) for name in overlays})}
 
 

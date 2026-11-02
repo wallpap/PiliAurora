@@ -32,7 +32,7 @@ Git 长路径配置与 VS 工具链选择均限于本次进程树。
 Windows SDK 默认读取安装登记；非默认位置也可传 `--windows-sdk E:/WindowsKits/10`。
 `--windows-sdk-version 10.0.26100.0` 可指定已安装版本，默认选择安装目录中的最高版本。
 
-脚本检查固定提交，调用 gclient 同步及 hooks，应用 `engine.patch`，通过 GN/Ninja
+脚本检查固定提交，调用 gclient 同步及 hooks，应用 [windows-frame-pacing.patch](../../../doc/development/engine-patches/windows-frame-pacing.patch)，通过 GN/Ninja
 构建。已有检出提交不匹配或补丁冲突时保留原文件并终止。SDK 在编译完成前须保留，
 隔离检出使用本机 SDK 的 Git 对象库。
 

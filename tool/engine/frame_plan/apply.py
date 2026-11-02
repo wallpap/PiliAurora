@@ -1,7 +1,11 @@
 """Apply pinned frame-plan patches to isolated Flutter checkouts."""
 import argparse
 import subprocess
+import sys
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+import engine_identity
 
 REVISION = "af7e796e161ae0bb1ff0758c71a7105418bd9ded"
 
@@ -26,7 +30,7 @@ def main():
         pinned = (framework / "bin/internal/engine.version").read_text().strip()
         if pinned != REVISION:
             raise ValueError("Framework SDK engine revision differs")
-    patches = [(root, source / "engine.patch")]
+    patches = [(root, engine_identity.PATCHES["androidFramePlan"])]
     pending = []
     for target, patch in patches:
         if git(target, "apply", "--reverse", "--check", patch).returncode == 0:

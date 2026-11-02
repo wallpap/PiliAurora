@@ -13,6 +13,7 @@ import subprocess
 
 ENGINE = 'af7e796e161ae0bb1ff0758c71a7105418bd9ded'
 HERE = Path(__file__).resolve().parent
+PATCH_DIR = HERE.parents[2] / 'doc/development/engine-patches'
 
 
 def sha(path: Path) -> str:
@@ -90,8 +91,8 @@ def main():
         source = output / name
         if source.exists() and not (backup / name).exists():
             shutil.copy2(source, backup / name)
-    patch = HERE / 'engine.patch'
-    idle_patch = HERE / 'idle-trim.patch'
+    patch = PATCH_DIR / 'windows-memory.patch'
+    idle_patch = PATCH_DIR / 'windows-idle-trim.patch'
     idle_enabled = args.idle_trim or args.idle_only
     if args.idle_only:
         if not git(checkout, 'apply', '--reverse', '--check', str(patch), check=False).returncode:

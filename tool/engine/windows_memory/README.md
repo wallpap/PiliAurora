@@ -80,7 +80,7 @@ DirectContext cache 汇总行；解释旧日志时须使用资源列表和这个
 应结合调用前后同进程的 VirtualQuery/Private 采样判断结果，不能把它当作资源泄漏证明。
 设备恢复渲染可能重建内部缓冲，因此仅用于独立实验；普通 sample 绝不触发 Trim。
 
-`engine.patch` 的 Windows 段相对于已应用 `windows_frame_pacing/engine.patch` 的源码
+[windows-memory.patch](../../../doc/development/engine-patches/windows-memory.patch) 的 Windows 段相对于已应用 [windows-frame-pacing.patch](../../../doc/development/engine-patches/windows-frame-pacing.patch) 的源码
 生成，只新增内存实验通道；不会重复应用或覆盖平台补丁。构建前原源码快照位于本地
 `build/memory-engine/windows-engine-platform-pre-memory.cc`。
 
@@ -92,7 +92,7 @@ issued，便于区分手动与自动实验。未编译自动策略或设备不�
 
 ## 自动空闲回收实验
 
-在诊断引擎上追加独立 `idle-trim.patch`：
+在诊断引擎上追加独立的 [windows-idle-trim.patch](../../../doc/development/engine-patches/windows-idle-trim.patch)：
 
 ```powershell
 python tool/engine/windows_memory/build_memory_engine.py --root build/windows-engine --mode release --idle-trim
