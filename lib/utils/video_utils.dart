@@ -44,6 +44,7 @@ abstract final class VideoUtils {
 
     String? mcdnTf;
     String? mcdnUpgcxcode;
+    String? rewrittenMirror;
 
     String last = '';
     for (final url in urls) {
@@ -58,7 +59,11 @@ abstract final class VideoUtils {
               (isAudio && disableAudioCDN)) {
             return url;
           }
-          return uri.replace(host: defaultCDNService.host).toString();
+          if (uri.host == defaultCDNService.host) return url;
+          rewrittenMirror ??= uri
+              .replace(host: defaultCDNService.host)
+              .toString();
+          continue;
         }
       }
 
@@ -86,6 +91,7 @@ abstract final class VideoUtils {
       if (reportUnknown) logger.w('unknown cdn type: $url');
     }
 
+    if (rewrittenMirror != null) return rewrittenMirror;
     return mcdnUpgcxcode == null
         ? mcdnTf == null
               ? last

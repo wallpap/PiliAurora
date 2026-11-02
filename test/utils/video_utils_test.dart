@@ -30,6 +30,40 @@ void main() {
     VideoUtils.disableAudioCDN = false;
   });
 
+  test('Akamai 首选使用接口原始签名地址', () {
+    const original =
+        'https://upos-sz-mirrorcos.bilivideo.com/upgcxcode/video?sign=cos';
+    const akamai =
+        'https://upos-hz-mirrorakam.akamaized.net/upgcxcode/video?hdnts=akamai%2Bsignature';
+    expect(
+      VideoUtils.getCdnUrl(
+        [original, akamai],
+        defaultCDNService: CDNService.akamai,
+      ),
+      akamai,
+    );
+  });
+
+  test('多 CDN 回退使用接口提供的 Akamai 签名地址', () async {
+    await GStorage.setting.put(SettingBoxKey.enableMultiCdn, true);
+    const original =
+        'https://upos-sz-mirrorcos.bilivideo.com/upgcxcode/video?sign=cos';
+    const akamai =
+        'https://upos-hz-mirrorakam.akamaized.net/upgcxcode/video?hdnts=akamai%2Bsignature';
+    final urls = VideoUtils.getCdnUrls(
+      [original, akamai],
+      defaultCDNService: CDNService.cos,
+    );
+    expect(urls.first, original);
+    expect(urls, contains(akamai));
+    expect(
+      urls,
+      isNot(
+        contains(akamai.replaceFirst('hdnts=akamai%2Bsignature', 'sign=cos')),
+      ),
+    );
+  });
+
   test('直播备用源保留当前选择，按当前编码提供原始备用 host', () async {
     final codec = CodecItem(
       currentQn: 10000,
