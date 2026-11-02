@@ -30,6 +30,6 @@
 
 ## 版本与维护记录
 
-发布附件见 [GitHub Releases](https://github.com/wallpap/PiliAurora/releases)。当前正式版为 [v1.6.4](releases/v1.6.4.md)，上一正式版为 [v1.6.2](https://github.com/wallpap/PiliAurora/releases/tag/v1.6.2)；v1.6.3 为预发布版本，改动已合并到本版。v1.4.3 与 v1.4.3-rc.1 的改动及说明已合并到 [v1.4.4](releases/v1.4.4.md)，未单独发布。历史记录包括 [v1.6.0](releases/v1.6.0.md)、[v1.5.0](releases/v1.5.0.md)、[v1.4.5](releases/v1.4.5.md)、[v1.4.4](releases/v1.4.4.md)、[v1.4.2](releases/v1.4.2.md)、[v1.4.0](releases/v1.4.0.md)、[v1.2.0](releases/v1.2.0.md)、[v1.0.13](releases/v1.0.13.md) 和 [v1.0.7](releases/v1.0.7.md)，其中的测试结果和行为描述对应当时版本。
+发布附件见 [GitHub Releases](https://github.com/wallpap/PiliAurora/releases)。当前正式版为 [v1.6.2](https://github.com/wallpap/PiliAurora/releases/tag/v1.6.2)，另见 [v1.6.5 预发布说明](releases/v1.6.5.md)。[v1.6.4 说明](releases/v1.6.4.md)是未发布版本的准备记录。v1.4.3 与 v1.4.3-rc.1 的改动及说明已合并到 [v1.4.4](releases/v1.4.4.md)，未单独发布。历史记录包括 [v1.6.0](releases/v1.6.0.md)、[v1.5.0](releases/v1.5.0.md)、[v1.4.5](releases/v1.4.5.md)、[v1.4.4](releases/v1.4.4.md)、[v1.4.2](releases/v1.4.2.md)、[v1.4.0](releases/v1.4.0.md)、[v1.2.0](releases/v1.2.0.md)、[v1.0.13](releases/v1.0.13.md) 和 [v1.0.7](releases/v1.0.7.md)，其中的测试结果和行为描述对应当时版本。
 
 依赖迁移和精简记录见 [首次迁移验收](../third_party/VALIDATION.md) 与 [依赖精简记录](../third_party/SIMPLIFICATION.md)。Windows mpv 的源码、预编译包和构建流程见 [mpv 构建入口](../third_party/mpv/README.md)。

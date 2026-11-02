@@ -13,6 +13,11 @@ on:
         required: false
         default: false
         type: boolean
+      prerelease:
+        description: "Mark the release as a prerelease"
+        required: false
+        default: false
+        type: boolean
   workflow_dispatch:
     inputs:
       tag:
@@ -22,6 +27,11 @@ on:
         type: string
       draft_release:
         description: "Keep uploaded release assets in a draft until final verification"
+        required: false
+        default: false
+        type: boolean
+      prerelease:
+        description: "Mark the release as a prerelease"
         required: false
         default: false
         type: boolean
@@ -160,6 +170,7 @@ jobs:
           tag_name: ${{ github.event.inputs.tag }}
           name: ${{ github.event.inputs.tag }}
           draft: ${{ inputs.draft_release }}
+          prerelease: ${{ inputs.prerelease }}
           files: |
             PiliAurora_windows_*_x64_portable.zip
             PiliAurora-Win-Setup/PiliAurora_windows_*_x64_setup.exe
