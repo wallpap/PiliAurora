@@ -70,3 +70,10 @@ Windows 帧节奏引擎补丁维护在 [`tool/engine/windows_frame_pacing/`](../
 记录中的包数、版本和测试结果对应各阶段基线；当前版本以登记、包清单与锁文件为准。
 
 正式发布使用的 Flutter 定制引擎按 Android 三种 ABI 和 Windows x64 保存为 [Release 预编译包](flutter_engine/README.md)，由 Git 跟踪二进制压缩包、身份文件与许可证，CI 校验后装配。引擎源码编译与原生回归在更新预编译包时执行。
+
+## 数据加密依赖
+
+- `flutter_secure_storage` 11.2.0：[上游](https://github.com/juliansteenbakker/flutter_secure_storage)，BSD-3-Clause；系统安全存储保管 Hive 随机密钥。平台实现及来源摘要固定于 `pubspec.lock`，由 Flutter 插件注册与许可证收集流程随应用打包。
+- `pointycastle` 3.9.1：[上游](https://github.com/bcgit/pc-dart)，MIT；原有传递依赖提升为直接依赖，用于备份的 PBKDF2-HMAC-SHA256。AES-GCM 继续通过现有 `encrypt` 5.0.3 使用。
+
+数据范围、旧版迁移与备份兼容见[本地数据与备份加密](../doc/data-security.md)。

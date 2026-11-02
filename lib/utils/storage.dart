@@ -5,6 +5,7 @@ import 'package:pili_aurora/models/model_owner.dart';
 import 'package:pili_aurora/models/user/danmaku_rule_adapter.dart';
 import 'package:pili_aurora/models/user/info.dart';
 import 'package:pili_aurora/utils/accounts.dart';
+import 'package:pili_aurora/utils/encrypted_hive.dart';
 import 'package:pili_aurora/utils/accounts/account_adapter.dart';
 import 'package:pili_aurora/utils/accounts/account_type_adapter.dart';
 import 'package:pili_aurora/utils/accounts/cookie_jar_adapter.dart';
@@ -21,13 +22,22 @@ abstract final class GStorage {
   static late final Box<dynamic> historyWord;
   static late final Box<dynamic> localCache;
   static late final Box<dynamic> setting;
+  static late final Box<dynamic> credentials;
   static late final Box<dynamic> video;
   static late final Box<int> watchProgress;
   static late final Box<Uint8List>? reply;
 
-  static Future<void> init({Map<String, Uint8List>? memorySnapshot}) async {
+  /// encryptionKey 供无平台安全存储的测试注入；应用启动使用系统密钥。
+  static Future<void> init({
+    Map<String, Uint8List>? memorySnapshot,
+    List<int>? encryptionKey,
+  }) async {
     Hive.init(path.join(appSupportDirPath, 'hive'));
     regAdapter();
+    final root = path.join(appSupportDirPath, 'hive');
+    final secure = encryptionKey == null
+        ? await EncryptedHive.initialize(root)
+        : EncryptedHive(root, encryptionKey);
     Uint8List? bytes(String name) => memorySnapshot == null
         ? null
         : memorySnapshot[name.toLowerCase()] ?? Uint8List(0);
@@ -64,7 +74,10 @@ abstract final class GStorage {
       ).then((res) => historyWord = res),
       // 视频设置
       Hive.openBox('video', bytes: bytes('video')).then((res) => video = res),
-      Accounts.init(bytes: bytes('account')),
+      Accounts.init(secure, bytes: bytes('account')),
+      secure
+          .openBox<dynamic>('credentials', bytes: bytes('credentials'))
+          .then((res) => credentials = res),
       Hive.openBox<int>(
         'watchProgress',
         bytes: bytes('watchProgress'),
@@ -74,6 +87,17 @@ abstract final class GStorage {
         },
       ).then((res) => watchProgress = res),
     ]);
+
+    if (setting.containsKey(SettingBoxKey.webdavPassword)) {
+      await credentials.put(
+        SettingBoxKey.webdavPassword,
+        setting.get(SettingBoxKey.webdavPassword),
+      );
+      await credentials.flush();
+      await setting.delete(SettingBoxKey.webdavPassword);
+      // 删除 Hive 日志中的旧密码，而不只追加删除记录。
+      await setting.compact();
+    }
 
     if (setting.containsKey(
       LegacySettingBoxKey.androidFullscreenCalibration,
@@ -103,6 +127,7 @@ abstract final class GStorage {
       setting,
       video,
       Accounts.account,
+      credentials,
       watchProgress,
     ];
     await Future.wait(boxes.map((box) => box.flush()));
@@ -112,7 +137,7 @@ abstract final class GStorage {
   }
 
   static SettingsBackup get settingsBackup =>
-      SettingsBackup(setting: setting, video: video);
+      SettingsBackup(setting: setting, video: video, credentials: credentials);
 
   static void regAdapter() {
     Hive
@@ -132,6 +157,7 @@ abstract final class GStorage {
       historyWord.compact(),
       localCache.compact(),
       setting.compact(),
+      credentials.compact(),
       video.compact(),
       Accounts.account.compact(),
       watchProgress.compact(),
@@ -145,6 +171,7 @@ abstract final class GStorage {
       historyWord.close(),
       localCache.close(),
       setting.close(),
+      credentials.close(),
       video.close(),
       Accounts.account.close(),
       watchProgress.close(),
@@ -158,6 +185,7 @@ abstract final class GStorage {
       historyWord.clear(),
       localCache.clear(),
       setting.clear(),
+      credentials.clear(),
       video.clear(),
       Accounts.clear(),
       watchProgress.clear(),

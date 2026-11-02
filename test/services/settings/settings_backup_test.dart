@@ -20,6 +20,13 @@ class _RecordingBox implements Box<dynamic> {
   Map<dynamic, dynamic> toMap() => Map<dynamic, dynamic>.of(data);
 
   @override
+  bool containsKey(dynamic key) => data.containsKey(key);
+
+  @override
+  dynamic get(dynamic key, {dynamic defaultValue}) =>
+      data.containsKey(key) ? data[key] : defaultValue;
+
+  @override
   Future<void> putAll(Map<dynamic, dynamic> entries) async {
     events.add('$name:write');
     if (failWrite) throw StateError('fixture write failure');
@@ -154,6 +161,110 @@ void main() {
         'video': {},
       });
       expect(setting.data, {1: 'value'});
+    });
+  });
+
+  group('only password fields are encrypted', () {
+    late _RecordingBox setting;
+    late _RecordingBox video;
+    late _RecordingBox credentials;
+    late SettingsBackup backup;
+    setUp(() {
+      final events = <String>[];
+      setting = _RecordingBox('setting', events, {'theme': 'dark'});
+      video = _RecordingBox('video', events, {'quality': 80});
+      credentials = _RecordingBox('credentials', events, {});
+      backup = SettingsBackup(
+        setting: setting,
+        video: video,
+        credentials: credentials,
+      );
+    });
+
+    test(
+      'ordinary settings remain plain JSON without requesting a password',
+      () async {
+        final json = await backup.exportBackup(
+          requestPassword: (_) async => throw StateError('must not prompt'),
+        );
+        expect(jsonDecode(json!), {
+          'setting': {'theme': 'dark'},
+          'video': {'quality': 80},
+        });
+        expect(
+          await backup.restoreBackup(
+            jsonDecode(json),
+            requestPassword: (_) async => throw StateError('must not prompt'),
+          ),
+          isTrue,
+        );
+      },
+    );
+
+    test('only WebDAV password is protected; wrong password preserves current data', () async {
+      credentials.data['webdavPassword'] = 'fixture-webdav-secret';
+      final json = await backup.exportBackup(
+        requestPassword: (_) async => 'fixture-backup-password',
+      );
+      final document = jsonDecode(json!) as Map;
+      expect(document['setting']['theme'], 'dark');
+      expect(document['video'], {'quality': 80});
+      expect(
+        document['setting']['webdavPassword']['format'],
+        'piliaurora-encrypted-backup',
+      );
+      expect(json, isNot(contains('fixture-webdav-secret')));
+      credentials.data['webdavPassword'] = 'current-secret';
+      await expectLater(
+        backup.restoreBackup(
+          document,
+          requestPassword: (_) async => 'wrong-password',
+        ),
+        throwsFormatException,
+      );
+      expect(credentials.data['webdavPassword'], 'current-secret');
+      expect(setting.data, {'theme': 'dark'});
+      expect(
+        await backup.restoreBackup(
+          document,
+          requestPassword: (_) async => 'fixture-backup-password',
+        ),
+        isTrue,
+      );
+      expect(credentials.data['webdavPassword'], 'fixture-webdav-secret');
+      expect(setting.data.containsKey('webdavPassword'), isFalse);
+    });
+
+    test(
+      'legacy plaintext password imports into credentials without prompting',
+      () async {
+        await backup.restoreBackup({
+          'setting': {'theme': 'light', 'webdavPassword': 'legacy-secret'},
+          'video': {},
+        }, requestPassword: (_) async => throw StateError('must not prompt'));
+        expect(setting.data, {'theme': 'light'});
+        expect(credentials.data, {'webdavPassword': 'legacy-secret'});
+      },
+    );
+
+    test('cancelling secret export produces no backup; cancelling import preserves data', () async {
+      credentials.data['webdavPassword'] = 'fixture-webdav-secret';
+      expect(
+        await backup.exportBackup(requestPassword: (_) async => null),
+        isNull,
+      );
+      final json = await backup.exportBackup(
+        requestPassword: (_) async => 'fixture-password',
+      );
+      expect(
+        await backup.restoreBackup(
+          jsonDecode(json!),
+          requestPassword: (_) async => null,
+        ),
+        isFalse,
+      );
+      expect(setting.data, {'theme': 'dark'});
+      expect(credentials.data['webdavPassword'], 'fixture-webdav-secret');
     });
   });
 
