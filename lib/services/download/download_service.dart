@@ -3,7 +3,6 @@ import 'dart:io' show File;
 
 import 'package:pili_aurora/grpc/dm.dart';
 import 'package:pili_aurora/http/download.dart';
-import 'package:pili_aurora/http/init.dart';
 import 'package:pili_aurora/models/common/video/audio_quality.dart';
 import 'package:pili_aurora/models/common/video/video_quality.dart';
 import 'package:pili_aurora/models/remote/download/bili_download_entry_info.dart';
@@ -37,13 +36,26 @@ import 'package:synchronized/synchronized.dart';
 /// 目录与 JSON 由 [DownloadRepository] 管理，单路媒体传输由
 /// [DownloadManager] 管理。服务只维护一个当前下载项及其可选的音频任务。
 class DownloadService extends GetxService {
-  DownloadService({required this._repository, required this._downloadClient});
+  DownloadService({
+    required this._repository,
+    required this._downloadClient,
+    @visibleForTesting
+    Future<List<int>> Function(BiliDownloadEntryInfo)? prepareDanmaku,
+    @visibleForTesting
+    Future<BiliDownloadMediaInfo> Function(BiliDownloadEntryInfo)? prepareMedia,
+  }) : _prepareDanmakuOverride = prepareDanmaku,
+       _prepareMediaOverride = prepareMedia;
 
   final DownloadRepository _repository;
   final Dio _downloadClient;
+  final Future<List<int>> Function(BiliDownloadEntryInfo)?
+  _prepareDanmakuOverride;
+  final Future<BiliDownloadMediaInfo> Function(BiliDownloadEntryInfo)?
+  _prepareMediaOverride;
   static const _maxDanmakuConcurrency = 4;
 
   final _lock = Lock();
+  Object? _operation;
 
   final flagNotifier = SetNotifier();
   final waitDownloadQueue = RxList<BiliDownloadEntryInfo>();
@@ -65,10 +77,12 @@ class DownloadService extends GetxService {
   final _completing = <BiliDownloadEntryInfo>{};
 
   void _saveProgress(BiliDownloadEntryInfo entry) {
-    unawaited(_repository.save(entry).catchError((Object error, StackTrace stack) {
-      logger.e('下载进度保存失败', error: error, stackTrace: stack);
-      SmartDialog.showToast('下载进度保存失败，请检查磁盘空间和目录权限');
-    }));
+    unawaited(
+      _repository.save(entry).catchError((Object error, StackTrace stack) {
+        logger.e('下载进度保存失败', error: error, stackTrace: stack);
+        SmartDialog.showToast('下载进度保存失败，请检查磁盘空间和目录权限');
+      }),
+    );
   }
 
   late Future<void> waitForInitialization;
@@ -248,9 +262,10 @@ class DownloadService extends GetxService {
     }
   }
 
-  Future<void> startDownload(BiliDownloadEntryInfo entry) {
-    return _lock.synchronized(() async {
-      if (entry.isCompleted || !waitDownloadQueue.contains(entry)) return;
+  Future<void> startDownload(BiliDownloadEntryInfo entry) async {
+    final operation = await _lock.synchronized(() async {
+      if (entry.isCompleted || !waitDownloadQueue.contains(entry)) return null;
+      _operation = null;
       // 切换当前项前等待旧音视频流退出，避免两个任务同时写入同一状态。
       await _downloadManager?.cancel(isDelete: false);
       await _audioDownloadManager?.cancel(isDelete: false);
@@ -266,8 +281,41 @@ class DownloadService extends GetxService {
       _curCid = entry.cid;
       curDownload.value = entry;
       waitDownloadQueue.refresh();
-      await _startDownload(entry);
+      final operation = Object();
+      _operation = operation;
+      return operation;
     });
+    if (operation != null) await _startDownload(entry, operation);
+  }
+
+  bool _owns(Object operation) => identical(_operation, operation);
+
+  Future<List<int>> _fetchDanmaku(
+    BiliDownloadEntryInfo entry,
+    bool Function() isActive,
+  ) async {
+    if (_prepareDanmakuOverride case final prepare?) return prepare(entry);
+    final seg = (entry.totalTimeMilli / DmUtils.segLength).ceil();
+    if (seg <= 0) throw StateError('Invalid danmaku segment count: $seg');
+    final danmaku = (await DmGrpc.dmSegMobile(
+      cid: entry.cid,
+      segmentIndex: 1,
+    )).data;
+    for (
+      var start = 2;
+      start <= seg && isActive();
+      start += _maxDanmakuConcurrency
+    ) {
+      final end = start + _maxDanmakuConcurrency - 1;
+      final responses = await Future.wait([
+        for (var index = start; index <= seg && index <= end; index++)
+          DmGrpc.dmSegMobile(cid: entry.cid, segmentIndex: index),
+      ]);
+      for (final response in responses) {
+        danmaku.elems.addAll(response.data.elems);
+      }
+    }
+    return danmaku.writeToBuffer();
   }
 
   Future<bool> downloadDanmaku({
@@ -286,28 +334,8 @@ class DownloadService extends GetxService {
         if (!isUpdate) {
           _updateCurStatus(DownloadStatus.getDanmaku);
         }
-        final seg = (entry.totalTimeMilli / DmUtils.segLength).ceil();
-        if (seg <= 0) {
-          throw StateError('Invalid danmaku segment count: $seg');
-        }
-
-        // 先取首段，再以固定批次并发补齐，限制单个任务的请求峰值。
-        final danmaku = (await DmGrpc.dmSegMobile(
-          cid: cid,
-          segmentIndex: 1,
-        )).data;
-        for (var start = 2; start <= seg; start += _maxDanmakuConcurrency) {
-          final end = start + _maxDanmakuConcurrency - 1;
-          final responses = await Future.wait([
-            for (var index = start; index <= seg && index <= end; index++)
-              DmGrpc.dmSegMobile(cid: cid, segmentIndex: index),
-          ]);
-          for (final response in responses) {
-            danmaku.elems.addAll(response.data.elems);
-          }
-          responses.clear();
-        }
-        await danmakuFile.writeAsBytes(danmaku.writeToBuffer());
+        final bytes = await _fetchDanmaku(entry, () => true);
+        await danmakuFile.writeAsBytes(bytes);
 
         return true;
       } catch (e) {
@@ -321,99 +349,140 @@ class DownloadService extends GetxService {
     return true;
   }
 
-  Future<bool> _downloadCover({
-    required BiliDownloadEntryInfo entry,
-  }) async {
+  Future<File?> _fetchCover(BiliDownloadEntryInfo entry) async {
     try {
       final filePath = path.join(entry.entryDirPath, PathUtils.coverName);
       if (File(filePath).existsSync()) {
-        return true;
+        return null;
       }
-      final file = (await CacheManager.manager.getFileFromCache(
-        entry.cover,
-      ))?.file;
-      if (file != null) {
-        await file.copy(filePath);
-      } else {
-        await Request.dio.download(entry.cover, filePath);
-      }
-      return true;
+      return await CacheManager.manager.getSingleFile(entry.cover);
     } catch (_) {
-      return false;
+      return null;
     }
   }
 
-  Future<void> _startDownload(BiliDownloadEntryInfo entry) async {
+  Future<void> _startDownload(
+    BiliDownloadEntryInfo entry,
+    Object operation,
+  ) async {
+    if (!_owns(operation)) return;
     try {
-      if (!await downloadDanmaku(entry: entry)) {
-        return;
-      }
-
-      _updateCurStatus(DownloadStatus.getPlayUrl);
-
-      final mediaFileInfo = await DownloadHttp.getVideoUrl(
-        entry: entry,
-        preferredAudioQuality: entry.preferredAudioQuality,
-        ep: entry.ep,
-        source: entry.source,
-        pageData: entry.pageData,
+      final danmakuFile = File(
+        path.join(entry.entryDirPath, PathUtils.danmakuName),
       );
-
-      final mediaDirectory = _repository.saveMediaInfo(entry, mediaFileInfo);
-      await Future.wait([mediaDirectory, _downloadCover(entry: entry)]);
-      final videoDir = await mediaDirectory;
-      if (curDownload.value?.cid != entry.cid) {
-        return;
-      }
-
-      if (mediaFileInfo is Type2) {
-        final first = mediaFileInfo.video.first;
-        entry.pageData
-          ?..width = first.width
-          ..height = first.height;
-        entry.ep
-          ?..width = first.width
-          ..height = first.height;
-      }
-      await _repository.save(entry);
-
-      switch (mediaFileInfo) {
-        case Type1 mediaFileInfo:
-          final first = mediaFileInfo.segmentList.first;
-          _downloadManager = DownloadManager(
-            client: _downloadClient,
-            url: first.url,
-            path: path.join(videoDir, PathUtils.videoNameType1),
-            onReceiveProgress: _onReceive,
-            onDone: _onDone,
-          );
-          break;
-        case Type2 mediaFileInfo:
-          // DASH 音视频使用独立文件与传输器，构造后会各自开始流式下载。
-          _downloadManager = DownloadManager(
-            client: _downloadClient,
-            url: mediaFileInfo.video.first.baseUrl,
-            path: path.join(videoDir, PathUtils.videoNameType2),
-            onReceiveProgress: _onReceive,
-            onDone: _onDone,
-          );
-          final audio = mediaFileInfo.audio;
-          if (audio != null && audio.isNotEmpty) {
-            _audioDownloadManager = DownloadManager(
-              client: _downloadClient,
-              url: audio.first.baseUrl,
-              path: path.join(videoDir, PathUtils.audioNameType2),
-              onReceiveProgress: null,
-              onDone: _onAudioDone,
-            );
+      if (!danmakuFile.existsSync()) {
+        _updateCurStatus(DownloadStatus.getDanmaku);
+        try {
+          final bytes = await _fetchDanmaku(entry, () => _owns(operation));
+          await _lock.synchronized(() async {
+            if (_owns(operation)) await danmakuFile.writeAsBytes(bytes);
+          });
+        } catch (error) {
+          if (_owns(operation)) {
+            _updateCurStatus(DownloadStatus.failDanmaku);
+            if (kDebugMode) SmartDialog.showToast(error.toString());
           }
-          break;
-        default:
-          break;
+          return;
+        }
       }
+      if (!_owns(operation)) return;
+      _updateCurStatus(DownloadStatus.getPlayUrl);
+      // 地址解析会修改画质字段；旧请求只能修改自己的快照。
+      final snapshot = BiliDownloadEntryInfo.fromJson(entry.toJson())
+        ..pageDirPath = entry.pageDirPath
+        ..entryDirPath = entry.entryDirPath;
+      final mediaFileInfo =
+          await (_prepareMediaOverride?.call(snapshot) ??
+              DownloadHttp.getVideoUrl(
+                entry: snapshot,
+                preferredAudioQuality: snapshot.preferredAudioQuality,
+                ep: snapshot.ep,
+                source: snapshot.source,
+                pageData: snapshot.pageData,
+              ));
+      if (!_owns(operation)) return;
+      final cover = await _fetchCover(snapshot);
+      await _lock.synchronized(() async {
+        if (!_owns(operation)) return;
+        entry
+          ..mediaType = snapshot.mediaType
+          ..hasDashAudio = snapshot.hasDashAudio
+          ..typeTag = snapshot.typeTag
+          ..videoQuality = snapshot.videoQuality
+          ..preferedVideoQuality = snapshot.preferedVideoQuality
+          ..qualityPithyDescription = snapshot.qualityPithyDescription;
+        final videoDir = await _repository.saveMediaInfo(entry, mediaFileInfo);
+        if (cover != null) {
+          try {
+            await cover.copy(
+              path.join(entry.entryDirPath, PathUtils.coverName),
+            );
+          } catch (_) {
+            // 封面失败不阻止媒体下载。
+          }
+        }
+
+        if (mediaFileInfo is Type2) {
+          final first = mediaFileInfo.video.first;
+          entry.pageData
+            ?..width = first.width
+            ..height = first.height;
+          entry.ep
+            ?..width = first.width
+            ..height = first.height;
+        }
+        await _repository.save(entry);
+
+        switch (mediaFileInfo) {
+          case Type1 mediaFileInfo:
+            final first = mediaFileInfo.segmentList.first;
+            _downloadManager = DownloadManager(
+              client: _downloadClient,
+              url: first.url,
+              path: path.join(videoDir, PathUtils.videoNameType1),
+              onReceiveProgress: (progress, total) {
+                if (_owns(operation)) _onReceive(progress, total);
+              },
+              onDone: ([error]) {
+                if (_owns(operation)) _onDone(operation, error);
+              },
+            );
+            break;
+          case Type2 mediaFileInfo:
+            // DASH 音视频使用独立文件与传输器，构造后会各自开始流式下载。
+            _downloadManager = DownloadManager(
+              client: _downloadClient,
+              url: mediaFileInfo.video.first.baseUrl,
+              path: path.join(videoDir, PathUtils.videoNameType2),
+              onReceiveProgress: (progress, total) {
+                if (_owns(operation)) _onReceive(progress, total);
+              },
+              onDone: ([error]) {
+                if (_owns(operation)) _onDone(operation, error);
+              },
+            );
+            final audio = mediaFileInfo.audio;
+            if (audio != null && audio.isNotEmpty) {
+              _audioDownloadManager = DownloadManager(
+                client: _downloadClient,
+                url: audio.first.baseUrl,
+                path: path.join(videoDir, PathUtils.audioNameType2),
+                onReceiveProgress: null,
+                onDone: ([error]) {
+                  if (_owns(operation)) _onAudioDone(operation, error);
+                },
+              );
+            }
+            break;
+          default:
+            break;
+        }
+      });
     } catch (e) {
-      _updateCurStatus(DownloadStatus.failPlayUrl);
-      logger.w('get download url error', error: e);
+      if (_owns(operation)) {
+        _updateCurStatus(DownloadStatus.failPlayUrl);
+        logger.w('get download url error', error: e);
+      }
     }
   }
 
@@ -430,7 +499,7 @@ class DownloadService extends GetxService {
     }
   }
 
-  void _onDone([Object? error]) {
+  void _onDone(Object operation, [Object? error]) {
     if (error != null) {
       _updateCurStatus(_downloadManager?.status ?? DownloadStatus.pause);
       if (curDownload.value case final entry?) _saveProgress(entry);
@@ -449,17 +518,17 @@ class DownloadService extends GetxService {
     if (curDownload.value case final curEntryInfo?) {
       curEntryInfo.downloadedBytes = curEntryInfo.totalBytes;
       if (status == DownloadStatus.completed) {
-        _completeDownload();
+        _completeDownload(operation);
       } else {
         _saveProgress(curEntryInfo);
       }
     }
   }
 
-  void _onAudioDone([Object? error]) {
+  void _onAudioDone(Object operation, [Object? error]) {
     if (_downloadManager?.status == DownloadStatus.completed) {
       if (error == null) {
-        _completeDownload();
+        _completeDownload(operation);
       } else {
         final status = _audioDownloadManager?.status ?? DownloadStatus.pause;
         _updateCurStatus(
@@ -472,13 +541,13 @@ class DownloadService extends GetxService {
     }
   }
 
-  Future<void> _completeDownload() async {
+  Future<void> _completeDownload(Object operation) async {
     final entry = curDownload.value;
     if (entry == null || !_completing.add(entry)) {
       return;
     }
     await _lock.synchronized(() async {
-      if (!waitDownloadQueue.contains(entry)) {
+      if (!_owns(operation) || !waitDownloadQueue.contains(entry)) {
         _completing.remove(entry);
         return;
       }
@@ -489,10 +558,13 @@ class DownloadService extends GetxService {
       try {
         await _repository.save(entry);
         final queued = waitDownloadQueue.remove(entry);
-        if (queued && !downloadList.contains(entry)) downloadList.insert(0, entry);
+        if (queued && !downloadList.contains(entry)) {
+          downloadList.insert(0, entry);
+        }
         flagNotifier.refresh();
         // 保存期间可能已切换任务，旧完成回调不能清空新任务。
         if (identical(curDownload.value, entry)) {
+          _operation = null;
           _curCid = null;
           curDownload.value = null;
           _downloadManager = null;
@@ -562,6 +634,7 @@ class DownloadService extends GetxService {
     required bool isDelete,
     bool downloadNext = true,
   }) => _lock.synchronized(() async {
+    _operation = null;
     await _downloadManager?.cancel(isDelete: isDelete);
     await _audioDownloadManager?.cancel(isDelete: isDelete);
     _downloadManager = null;
