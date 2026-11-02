@@ -46,7 +46,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
     return EXIT_FAILURE;
   }
 
-  // 主窗口和播放子进程共用应用标识，让 Windows 将其归入同一应用组。
+  // 主窗口和播放子进程共用任务栏应用标识；任务管理器分组由系统决定。
   if (FAILED(::SetCurrentProcessExplicitAppUserModelID(L"PiliAurora.Desktop"))) {
     return EXIT_FAILURE;
   }

@@ -238,7 +238,9 @@ sequenceDiagram
     end
 ```
 
-准备阶段的弹幕、播放地址和封面网络请求不持有调度锁。每次启动分配独立任务标识，地址解析只修改本次快照，弹幕、索引和封面等目标文件在锁内确认归属后提交。暂停、删除或切换会撤销旧标识；已发出的准备请求可以返回，但旧结果不能修改当前状态或重建已删除目录。删除等待已开始的文件提交及媒体传输退出。
+弹幕、播放地址和封面的准备请求在调度锁外执行。每次启动都有独立任务标识，地址解析修改本次快照；提交弹幕、索引和封面等目标文件时，服务在锁内检查任务归属。
+
+暂停、删除或切换会撤销旧标识。已发出的准备请求不会被强制取消，但返回后不能修改当前状态或重建已删除目录。删除前，服务等待已开始的文件提交和媒体传输退出。
 
 ### 任务状态
 
@@ -374,4 +376,8 @@ sequenceDiagram
     WS->>Socket: 取消订阅并关闭连接
 ```
 
-每条连接复用一个解析 worker，重复初始化共用同一次握手。单个节点握手最多等待 10 秒，超时释放在途 HTTP 连接并尝试下一节点；页面关闭立即终止握手等待和后续拨号，迟到连接也会关闭。`startLiveMsg` 同一时刻共用一次 token/history/连接建立；暂停、切房或离开页面会撤销连接意图并推进代次，使旧 HTTP 结果、连接回调和图片结果失效。直播页返回时先重绑状态监听与弹幕控制器，再释放路由 inhibitor；若当前实际播放，监听会接续消息与弹幕。关闭或 worker 异常会结束在途任务，损坏的数据包会被跳过。实现见 [`live_room/controller.dart`](../lib/pages/live_room/controller.dart)、[`live.dart`](../lib/services/live_stream/live.dart)、[`live_packet_decoder.dart`](../lib/services/live_stream/live_packet_decoder.dart) 和 [`live_packet.dart`](../lib/services/live_stream/live_packet.dart)，回归位于 `test/pages/live_room/controller_test.dart` 与 `test/services/live_stream/`。
+每条连接复用一个解析 worker，重复初始化共用同一次握手。单个节点默认等待 10 秒；超时后释放在途 HTTP 连接并尝试下一节点。页面关闭时，服务立即结束握手等待，停止尝试后续节点，并关闭迟到的连接。
+
+`startLiveMsg` 同一时刻共用一次 token/history/连接建立。暂停、切房或离开页面会撤销连接意图并推进代次，使旧 HTTP 结果、连接回调和图片结果失效。直播页返回时先重绑状态监听与弹幕控制器，再释放路由 inhibitor；若当前实际播放，监听会接续消息与弹幕。关闭或 worker 异常会结束在途任务，损坏的数据包会被跳过。
+
+实现见 [`live_room/controller.dart`](../lib/pages/live_room/controller.dart)、[`live.dart`](../lib/services/live_stream/live.dart)、[`live_packet_decoder.dart`](../lib/services/live_stream/live_packet_decoder.dart) 和 [`live_packet.dart`](../lib/services/live_stream/live_packet.dart)，回归位于 `test/pages/live_room/controller_test.dart` 与 `test/services/live_stream/`。

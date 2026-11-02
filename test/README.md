@@ -57,7 +57,7 @@ CI 显式选择弹幕生产链路与帧计划的核心回归，完整弹幕测�
 
 `controller_test.dart` 另以 1.75 万条合法弹幕经过生产 gRPC 解码、共享租约、过滤合并和缓存提交，检查高密度分段可以完整加载；`grpc/decode_policy_test.dart` 核对已知字段与未知字段的存储估算，同时保留单条超限、字段数超限及有界 gzip 解压回归。
 
-消息测试按业务状态、分享和协议分为 `messaging_test.dart`、`sharing_test.dart`、`protocol_test.dart`。运行入口与实际服务验证范围见[消息模块](../lib/services/messaging/README.md#验证)。
+消息业务状态、分享和协议分别由 `messaging_test.dart`、`sharing_test.dart`、`protocol_test.dart` 覆盖，设置和本地偏好另有测试。运行入口与实际服务验证范围见[消息模块](../lib/services/messaging/README.md#验证)。
 
 `pages/danmaku/native_video_frame_sync_test.dart` 使用独立的纹理刷新请求批次，覆盖引擎不提供零 Build timing 时的 60 FPS 相位学习、30 FPS 视频配 60 FPS 弹幕在 120 Hz 上的相位变化、匹配到失配再匹配时的退化与恢复、mpv 显示同步状态切换与订阅释放、批次限界、请求时间抖动、29.97 FPS 漂移与来源释放。相位变化测试同时断言弹幕更新频率和视频、弹幕合计刷新的次数。屏幕槽位与呈现的结论来自设备检查。
 
@@ -101,4 +101,8 @@ Windows 保活页面内存回归：先执行 `pwsh -File lib/scripts/patch.ps1 w
 
 直播聊天的 10 万条压力集中在 `pages/live_room/chat_buffer_test.dart`；页面与控件使用超过 500 条容量的积压检查淘汰提示、阅读位置和退出释放。`window_screen_test.dart` 的帧率矩阵使用 6 组代表组合，每个目标帧率均覆盖 120/165 Hz 和两种采样密度，不再覆盖全部交叉。私信卡片布局保留窄屏浅色、宽屏深色两组。
 
-`common/widgets/feed_pagination_test.dart` 另检查来源替换后旧请求不阻塞新列表。`pages/search/controller_test.dart` 覆盖联想乱序、清空后重复输入及关闭后的迟到结果；`utils/account_profile_lifecycle_test.dart` 覆盖资料/余额的发起账号绑定、切号、页面释放和同账号查询乱序。`services/messaging/settings_test.dart` 检查同键串行、最后确认值回滚、不同键并发、刷新及失效。下载服务测试覆盖准备期间暂停、删除、切换、地址快照和文件提交排空；直播连接测试使用本地主机 HTTP/WebSocket 检查挂起握手取消、超时后备及认证。
+`common/widgets/feed_pagination_test.dart` 检查控制器替换后旧请求不会阻塞新列表，也检查 GetX stream 包装重建时同一列表仍保持请求串行。
+
+`pages/search/controller_test.dart` 覆盖联想乱序、清空后重复输入、禁用联想及关闭后的迟到结果。`utils/account_profile_lifecycle_test.dart` 覆盖资料/余额的发起账号绑定、切号、页面释放和同账号查询乱序。
+
+`services/messaging/settings_test.dart` 检查同键串行、最后确认值回滚、不同键并发、刷新及失效。下载服务测试覆盖准备期间暂停、删除、切换、地址快照和文件提交排空；直播连接测试使用本地主机 HTTP/WebSocket 检查挂起握手取消、超时后备及认证。
