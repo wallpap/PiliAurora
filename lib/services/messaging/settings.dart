@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:fixnum/fixnum.dart';
 import 'package:pili_aurora/grpc/bilibili/app/im/v1.pb.dart';
@@ -24,6 +26,14 @@ class WhisperSettingsSnapshot {
   final String title;
 }
 
+class _SettingWrites {
+  _SettingWrites(this.confirmed);
+
+  Setting? confirmed;
+  Future<void>? tail;
+  int version = 0;
+}
+
 /// 全局接收设置。设置写入前复制 protobuf，乐观回滚只覆盖本次操作。
 class WhisperSettingsHandle {
   WhisperSettingsHandle({
@@ -39,11 +49,16 @@ class WhisperSettingsHandle {
   final IMSettingType type;
   final ValueNotifier<WhisperSettingsSnapshot> state;
   int _generation = 0;
-  final Map<int, int> _writeVersions = {};
+  final Map<int, _SettingWrites> _writes = {};
   bool _disposed = false;
 
   Future<void> refresh() async {
     if (_disposed || !session.isActive) return;
+    if (_writes.isNotEmpty) {
+      await Future.wait(_writes.values.map((writes) => writes.tail!));
+      if (_isActive) await refresh();
+      return;
+    }
     final generation = ++_generation;
     state.value = WhisperSettingsSnapshot(
       loadingState: LoadingState<PbMap<int, Setting>>.loading(),
@@ -72,38 +87,48 @@ class WhisperSettingsHandle {
     if (_disposed || !session.isActive || current == null) {
       return const Error('当前操作不可用');
     }
-    final previous = current[key]?.deepCopy();
-    final version = (_writeVersions[key] ?? 0) + 1;
-    _writeVersions[key] = version;
+    final writes = _writes.putIfAbsent(
+      key,
+      () => _SettingWrites(current[key]?.deepCopy()),
+    );
+    final version = ++writes.version;
     final desired = setting.deepCopy();
+    final previous = writes.tail;
+    final completion = Completer<void>();
+    writes.tail = completion.future;
     // 写入开始后废弃此前读取，避免覆盖本次设置。
     _generation++;
     _replaceSetting(key, desired);
-    final result = await session.run(
-      (account) async => _asVoid(
-        await ImGrpc.setImSettings(
-          settings: {key: setting.deepCopy()},
-          account: account,
+    try {
+      if (previous != null) await previous;
+      if (!_isActive) return const Error('账号已切换');
+      final result = await session.run(
+        (account) async => _asVoid(
+          await ImGrpc.setImSettings(
+            settings: {key: desired.deepCopy()},
+            account: account,
+          ),
         ),
-      ),
-    );
-    if (!_isActive) return const Error('账号已切换');
-    if (result case Success<void>()) {
-      if (_writeVersions[key] == version) {
-        // 写入期间开始的读取也可能包含旧值，需要一并废弃。
-        _generation++;
-        _replaceSetting(key, desired);
+      );
+      if (!_isActive) return const Error('账号已切换');
+      if (result case Success<void>()) {
+        writes.confirmed = desired;
         session.notifyChanged(MessagingChangeKind.settings);
       }
-    } else if (_writeVersions[key] == version) {
-      _generation++;
-      if (previous != null) {
-        _replaceSetting(key, previous);
-      } else {
-        _removeSetting(key);
+      if (writes.version == version) {
+        _generation++;
+        final confirmed = writes.confirmed;
+        if (confirmed != null) {
+          _replaceSetting(key, confirmed);
+        } else {
+          _removeSetting(key);
+        }
+        _writes.remove(key);
       }
+      return result;
+    } finally {
+      completion.complete();
     }
-    return result;
   }
 
   void mergeSubSettings(int parentKey, Map<int, Setting> values) {
@@ -154,6 +179,7 @@ class WhisperSettingsHandle {
     if (_disposed) return;
     _disposed = true;
     _generation++;
+    _writes.clear();
     state.dispose();
   }
 }
