@@ -1,6 +1,6 @@
 # 登录凭证与密码加密
 
-本地账号 Box 中的 Cookie、accessKey、refresh 使用 Hive 自带的 AES-256 加密。WebDAV 密码独立存放在同样加密的 `credentials` Box 中；普通设置、用户资料和缓存维持原存储方式。随机密钥通过 `flutter_secure_storage` 交给系统安全存储保管，不写入配置、日志或导出文件。Android 禁用安全存储出错时自动重置。
+本地账号 Box 中的 Cookie、accessKey、refresh 使用 Hive 自带的 AES-256 加密。WebDAV 密码独立存放在同样加密的 `credentials` Box 中；普通设置、用户资料和缓存维持原存储方式。随机密钥通过 `flutter_secure_storage` 交给系统安全存储保管，不写入配置、日志或导出文件。Android 安全存储出错时不会自动重置。
 
 首次升级读取旧账号 Box，写入临时加密副本并重新打开校验，成功后才删除旧明文文件。旧设置中的 WebDAV 密码先写入加密存储并刷盘，再从设置删除并压缩 Hive 日志。密钥不可用或解密失败时不自动清空或覆盖数据。Windows 播放子窗口通过内存快照读取账号及密码，不另写磁盘副本。
 

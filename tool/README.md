@@ -15,7 +15,7 @@
 | [`engine/frame_plan/`](engine/frame_plan/README.md) | Android 帧计划的固定引擎补丁、隔离构建与设备验证。 |
 | [`engine/windows_frame_pacing/`](engine/windows_frame_pacing/README.md) | Windows 帧节奏的固定引擎补丁、隔离构建与呈现对照。 |
 
-默认自动化测试位于 [`test/`](../test/README.md)，测试选择方式见[构建与测试说明](../doc/build-and-test.md)。
+默认自动化测试位于 [`test/`](../test/README.md)，测试选择方式见[构建与测试说明](../doc/development/build-and-test.md)。
 
 ## 本地 CI 测试
 
@@ -39,7 +39,7 @@ pwsh -NoProfile -File tool/run-native-probes.ps1
 
 ## 平台构建
 
-Windows 构建使用[仓库内的 mpv 预编译包](../third_party/mpv/README.md)，构建脚本自动校验和解压。工具链要求见[构建与测试](../doc/build-and-test.md)。
+Windows 构建使用[仓库内的 mpv 预编译包](../third_party/mpv/README.md)，构建脚本自动校验和解压。工具链要求见[构建与测试](../doc/development/build-and-test.md)。
 
 项目使用 `.fvmrc` 指定的 Flutter 版本。安装 Android SDK 或 Visual Studio 后，在仓库根目录运行：
 

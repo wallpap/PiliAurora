@@ -76,4 +76,4 @@ Windows 帧节奏引擎补丁维护在 [`tool/engine/windows_frame_pacing/`](../
 - `flutter_secure_storage` 11.2.0：[上游](https://github.com/juliansteenbakker/flutter_secure_storage)，BSD-3-Clause；系统安全存储保管 Hive 随机密钥。平台实现及来源摘要固定于 `pubspec.lock`，由 Flutter 插件注册与许可证收集流程随应用打包。
 - `pointycastle` 3.9.1：[上游](https://github.com/bcgit/pc-dart)，MIT；原有传递依赖提升为直接依赖，用于备份的 PBKDF2-HMAC-SHA256。AES-GCM 继续通过现有 `encrypt` 5.0.3 使用。
 
-数据范围、旧版迁移与备份兼容见[本地数据与备份加密](../doc/data-security.md)。
+数据范围、旧版迁移与备份兼容见[本地数据与备份加密](../doc/guides/data-security.md)。

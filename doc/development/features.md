@@ -58,7 +58,7 @@ flowchart TD
 - 首页控制器连续下载所需批次，下载与黑名单同步、合作作者检查重叠，发布前完成黑名单准备。App 推荐按 `idx/pull` 顺序请求；Web 首包按容量请求 20–50 项，首包之后最多同时下载两页，按索引合并并去重。刷新保留历史内容和位置提示，后续分页追加在历史之后。
 - 公共滚动分页以控制器标识列表归属。替换控制器后，新列表立即检查容量，旧请求完成时不会改变新列表的加载标记。GetX 每次读取 stream 可能创建新包装，重建时更换包装只会重新订阅。
 - 首页滚动分页及其他发现列表使用 `lib/common/widgets/feed_pagination.dart` 按实际滚动范围与预取距离加载，避免构建末项触发请求。首页首屏补足由控制器负责；连续五页无有效增长时停止，分页失败保留内容并提供点击重试，刷新、切账号和退出会使旧查询失效。相关测试位于 `test/pages/rcmd/` 与 `test/common/widgets/feed_pagination_test.dart`。
-- “账号与隐私 → 增强黑名单屏蔽”默认开启。发现类列表按作者 UID 过滤并沿原来源补位；子开关“检查合作视频作者”默认开启，对列表明确标识的合作视频补查 `staff`，任一作者命中即屏蔽。补查共用缓存和并发限额，收藏、历史、稍后再看和详情访问沿用原行为。适用范围、请求开销和回归入口见[信息流黑名单屏蔽](content-filtering.md)。
+- “账号与隐私 → 增强黑名单屏蔽”默认开启。发现类列表按作者 UID 过滤并沿原来源补位；子开关“检查合作视频作者”默认开启，对列表明确标识的合作视频补查 `staff`，任一作者命中即屏蔽。补查共用缓存和并发限额，收藏、历史、稍后再看和详情访问沿用原行为。适用范围、请求开销和回归入口见[信息流黑名单屏蔽](../guides/content-filtering.md)。
 - 主导航、首页与排行通过 `TabActivity` / `TickerMode` 标记活动标签。`CachedImage` 在隐藏时卸载图片，页面数据和滚动位置继续保留；解码器创建与首帧交付共用两个并发名额，原生请求完成后归还名额。内存 LRU 为 64 MiB，最多 256 项；该账面值不包含全部原生纹理占用，实际 RSS 与帧耗时需实机测量。
 - `NetworkImgLayer` 按卡片物理尺寸与 1 Mi 像素预算为 B 站 CDN 的质量型缩略请求补充宽高，让动图源文件同步缩小；已有尺寸或裁剪参数的请求继续沿用原构图，原图查看与下载沿用原地址。
 
@@ -86,19 +86,19 @@ flowchart TD
 - 点播与直播在 Android、Windows 上共用 `lib/pages/danmaku/window_renderer.dart` 的测量、几何、额度、命中与资源管理。点播通过 `window_coordinator.dart` 准备媒体时间窗口，直播通过 `live_queue.dart` 处理有界候选和表情；两个生产挂载分别为 `view.dart` 和 `live_layer.dart`。字体/DPI 属于显示实例，设置分批准备并在帧边界切换。旧 Windows renderer/screen 及其专属回归已移至 `tool/experiments/danmaku/baseline/`，用于像素与性能对照。
 - Windows 视频输出尺寸按启动时所在显示器限制；Android 可选实验性地按设备物理分辨率缩小输出 Surface，默认关闭。尺寸变化会合并并串行提交，Android 还等待纹理帧交接，避免快速旋转或切换时重复调整旧 Surface。输出限幅减少渲染表面和纹理开销；源视频仍按其原始分辨率解码。
 - 点播与直播共享播放器时，播放会话按页面归属和请求代次管理；快速切源复用原生播放器、控制器和纹理资源。Android 对 MediaCodec、Surface 和图像输出错误采用有界恢复与回退；网络读取中断可按当前媒体和缓冲状态尝试恢复。
-- Windows 独立播放窗口由 `lib/services/desktop_playback_windows.dart` 管理，每个子进程使用自己的播放器。渲染资源生命周期与超分切换见[Windows 视频输出](windows-video-output.md)。
+- Windows 独立播放窗口由 `lib/services/desktop_playback_windows.dart` 管理，每个子进程使用自己的播放器。渲染资源生命周期与超分切换见[Windows 视频输出](../maintenance/windows-video-output.md)。
 - 直播消息连接复用有序解析 worker；弹幕数据按分段与条目数限界缓存，降低长时间播放时的对象和任务堆积。
-- 实际帧率和内存占用取决于设备、编码与弹幕密度，测量口径见[维护与排障](maintenance.md#复现和测量)。
+- 实际帧率和内存占用取决于设备、编码与弹幕密度，测量口径见[维护与排障](../maintenance/troubleshooting.md#复现和测量)。
 
 ## 弹幕与评论
 
-- 使用说明见[评论与表情包](comments-and-emotes.md)。评论长按菜单由 `lib/pages/video/reply/widgets/reply_item_grpc.dart` 的 `morePanel` 共用，覆盖主评论和楼中楼；拉黑调用 `VideoHttp.relationMod`，绑定确认前的账号。
+- 使用说明见[评论与表情包](../guides/comments-and-emotes.md)。评论长按菜单由 `lib/pages/video/reply/widgets/reply_item_grpc.dart` 的 `morePanel` 共用，覆盖主评论和楼中楼；拉黑调用 `VideoHttp.relationMod`，绑定确认前的账号。
 - 表情包入口为输入面板的设置按钮。管理与预览位于 `lib/pages/emote/manage.dart`、`preview.dart`；请求集中在 `ReplyHttp`。详情接口返回 `emotes`，模型同时兼容列表接口的 `emote` 字段。分类筛选位于未添加页签，预览页面通过 Navigator 压入页面栈。
 - 页面：`lib/pages/danmaku/`、`danmaku_block/`、`main_reply/`、`my_reply/`。
 - API/模型：`lib/http/danmaku.dart`、`reply.dart`，`lib/models/remote/danmaku/`、`reply/`。
 - 渲染：通用组件和播放器插件；直播弹幕另走直播间链路。
 - 视频弹幕和直播消息的生命周期不同。修改渲染或消息队列时分别检查两条链路和对应测试。
-- 视频弹幕支持相似内容合并和重复字号放大；Android 提供帧率档位，Windows 自动跟随屏幕。设置入口和规则见[弹幕合并与帧率设置](danmaku-merge.md)。合并实现位于 `lib/pages/danmaku/merge.dart`，过滤与后台结果接入位于 `controller.dart`；相关测试见 `test/pages/danmaku/`。
+- 视频弹幕支持相似内容合并和重复字号放大；Android 提供帧率档位，Windows 自动跟随屏幕。设置入口和规则见[弹幕合并与帧率设置](../guides/danmaku-merge.md)。合并实现位于 `lib/pages/danmaku/merge.dart`，过滤与后台结果接入位于 `controller.dart`；相关测试见 `test/pages/danmaku/`。
 - 点播窗口在来源失效或就绪时裁剪半开时间区间，并保留未受影响的区间。就绪事件仍须通过修订版本检查，才会更新显示范围。
 
 ## 直播
@@ -115,7 +115,7 @@ flowchart TD
 - API：`lib/http/login.dart`、`member.dart`、`user.dart`、`fan.dart`、`follow.dart`。
 - 服务/本地状态：`lib/services/account_service.dart`、`lib/utils/accounts/`、`lib/utils/storage*`。
 - `UserHttp` 的资料、统计和余额查询绑定发起时的账号，并返回查询结果。登录流程确认账号仍为当前主账号后更新头像、缓存和余额；个人页还检查请求版本和页面是否存活。`Request.setCoin` 确认账号后更新共享余额。
-- 安全：严禁把 Cookie、Token、二维码登录信息或完整账号数据写入文档、日志和 issue。本地账号加密、旧数据迁移和备份兼容见[数据安全](data-security.md)。
+- 安全：严禁把 Cookie、Token、二维码登录信息或完整账号数据写入文档、日志和 issue。本地账号加密、旧数据迁移和备份兼容见[数据安全](../guides/data-security.md)。
 
 ## 动态、关注与粉丝
 
@@ -137,7 +137,7 @@ flowchart TD
 
 页面路径相对于 `lib/pages/`，业务文件位于 `lib/services/messaging/`。HTTP 和 gRPC 协议入口分别为 `lib/http/msg.dart`、`lib/grpc/im.dart`；适配器把响应转换成业务模型，页面订阅 Riverpod 状态。
 
-修改时先核对主账号 Session 和资源所有者，再检查分页、写入结果及已读同步。发送结果待确认时应核对聊天记录，重复发送可能产生重复消息。详细约定见[消息模块](../lib/services/messaging/README.md)，回归测试位于 `test/services/messaging/`。
+修改时先核对主账号 Session 和资源所有者，再检查分页、写入结果及已读同步。发送结果待确认时应核对聊天记录，重复发送可能产生重复消息。详细约定见[消息模块](../../lib/services/messaging/README.md)，回归测试位于 `test/services/messaging/`。
 
 ## 收藏、历史、稍后再看与订阅
 

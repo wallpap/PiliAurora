@@ -29,6 +29,12 @@ Pop out videos or live streams into separate windows while continuing to browse 
   <em>Windows live-stream player</em>
 </p>
 
+<p align="center">
+  <img src="assets/display/windows-bangumi.png" alt="Windows series page" width="800">
+  <br>
+  <em>Windows series page</em>
+</p>
+
 ### Android
 
 <p align="center">
@@ -54,7 +60,7 @@ The in-app update check skips prereleases. Download prerelease builds manually f
 
 ### Multiple playback windows on Windows
 
-Open videos and live streams in separate windows while continuing to browse in the main window. Playback windows support always-on-top mode, moving and resizing, grid and cascade arrangements, and saved positions and sizes. Adjust each window's volume independently or switch the audio source. See [Windows playback windows](doc/windows-playback-windows.md).
+Open videos and live streams in separate windows while continuing to browse in the main window. Playback windows support always-on-top mode, moving and resizing, grid and cascade arrangements, and saved positions and sizes. Adjust each window's volume independently or switch the audio source. See [Windows playback windows](doc/guides/windows-playback-windows.md).
 
 ### Lower playback and danmaku overhead
 
@@ -64,7 +70,7 @@ On Android and Windows, video and live-stream danmaku share a display implementa
 
 ### Danmaku merging and frame-rate controls
 
-Video danmaku can merge identical or similar comments within 20 seconds and enlarge text based on the number of duplicates. Windows danmaku automatically follow the display refresh rate. On Android, danmaku can follow the display or target 30, 60, 90, or 120 FPS; changes take effect immediately. Track spacing accounts for actual text height, and the comment-density progress bar supports custom colors. See [Danmaku merging and frame-rate settings](doc/danmaku-merge.md).
+Video danmaku can merge identical or similar comments within 20 seconds and enlarge text based on the number of duplicates. Windows danmaku automatically follow the display refresh rate. On Android, danmaku can follow the display or target 30, 60, 90, or 120 FPS; changes take effect immediately. Track spacing accounts for actual text height, and the comment-density progress bar supports custom colors. See [Danmaku merging and frame-rate settings](doc/guides/danmaku-merge.md).
 
 ### Playback stability fixes
 
@@ -80,7 +86,13 @@ Direct messages support text, images, and share cards. Cards and accompanying te
 
 ### Blacklist filtering
 
-Enhanced blacklist filtering is enabled by default under Settings → Account and privacy. It filters blocked authors from recommendations, popular content, search, feeds, and live-stream lists. Cooperative-author checks are also enabled by default: videos marked as collaborations are hidden if any author is blocked. These checks add requests and loading time and can be disabled separately. See [Blacklist filtering](doc/content-filtering.md) for coverage.
+Enhanced blacklist filtering is enabled by default under Settings → Account and privacy. It filters blocked authors from recommendations, popular content, search, feeds, and live-stream lists. Cooperative-author checks are also enabled by default: videos marked as collaborations are hidden if any author is blocked. These checks add requests and loading time and can be disabled separately. See [Blacklist filtering](doc/guides/content-filtering.md) for coverage.
+
+The recommendation feed loads enough items for the viewport and can show ordinary cards while cooperative-author checks finish. If pagination fails, existing items remain visible and loading can be retried.
+
+### Accounts and backups
+
+The current source encrypts local account credentials and the WebDAV password. Exporting login information requires a backup password. A settings backup with a WebDAV password encrypts that field; other settings remain readable JSON. Older plaintext backups can still be imported. See [Account credentials and backups](doc/guides/data-security.md) for migration and password requirements.
 
 ### Everyday additions
 
@@ -98,7 +110,7 @@ PiliAurora has been maintained independently since PiliPlus 2.1.5 and currently 
 - Browsing: recommendations, trending content, rankings, videos, series, articles, audio, live streams, and search.
 - Playback: video and audio quality, playback speed, hardware-decoding settings, danmaku, subtitles, episode switching, and playback history. Subtitle preferences carry between episodes, and the comment-density progress bar supports custom colors.
 - Social features: comments, activity feeds, following, followers, notifications, direct messages, and live chat with emotes.
-- Comment and sticker tools: block users from the comment long-press menu and add, remove, or preview sticker packs by category. See [Comments and stickers](doc/comments-and-emotes.md).
+- Comment and sticker tools: block users from the comment long-press menu and add, remove, or preview sticker packs by category. See [Comments and stickers](doc/guides/comments-and-emotes.md).
 - Account and content management: multiple accounts, favorites, watch history, watch later, series subscriptions, and offline downloads, including unavailable-subscription cleanup and download audio-quality selection.
 - Extras: DLNA casting, WebDAV settings backup, SponsorBlock, and WebView.
 
@@ -106,7 +118,7 @@ Feature availability depends on Bilibili APIs, account permissions, the platform
 
 ## Build from source
 
-The Flutter version is pinned in [.fvmrc](.fvmrc). Android builds require the Android SDK and JDK 25. Windows builds require Visual Studio with the **Desktop development with C++** workload. Windows uses the repository's [prebuilt mpv packages](third_party/mpv/README.md), which are verified and extracted by local builds and Windows CI. Native libraries can be rebuilt from pinned sources when updated. See [Build and test](doc/build-and-test.md) for environment requirements and validation commands.
+The Flutter version is pinned in [.fvmrc](.fvmrc). Android builds require the Android SDK and JDK 25. Windows builds require Visual Studio with the **Desktop development with C++** workload. Windows uses the repository's [prebuilt mpv packages](third_party/mpv/README.md), which are verified and extracted by local builds and Windows CI. Native libraries can be rebuilt from pinned sources when updated. See [Build and test](doc/development/build-and-test.md) for environment requirements and validation commands.
 
 ```powershell
 git clone https://github.com/wallpap/PiliAurora.git
@@ -120,17 +132,19 @@ pwsh -File tool/build.ps1 -Platform android -Mode debug
 
 User guides, developer guides, and release notes are listed in the [documentation index](doc/README.md). The linked guides are currently in Chinese.
 
-- Usage: [Danmaku settings](doc/danmaku-merge.md), [Windows playback windows](doc/windows-playback-windows.md).
-- Development: [Build and test](doc/build-and-test.md), [Feature map](doc/features.md), [Architecture](doc/architecture.md).
-- Troubleshooting: [Maintenance guide](doc/maintenance.md), [Windows video output](doc/windows-video-output.md).
+- Usage: [Danmaku settings](doc/guides/danmaku-merge.md), [Windows playback windows](doc/guides/windows-playback-windows.md), [Account credentials and backups](doc/guides/data-security.md).
+- Development: [Build and test](doc/development/build-and-test.md), [Feature map](doc/development/features.md), [Architecture](doc/development/architecture.md).
+- Troubleshooting: [Maintenance guide](doc/maintenance/troubleshooting.md), [Windows video output](doc/maintenance/windows-video-output.md), [Past investigations](doc/diagnostic-notes/README.md).
 
 ## Contributing
 
-Bug reports through GitHub Issues and pull requests are welcome. Before changing playback, danmaku, or platform code, read [Maintenance and troubleshooting](doc/maintenance.md) and [Build and test](doc/build-and-test.md). When changing third-party dependencies, record their sources and licenses following the [dependency maintenance guide](third_party/README.md).
+Bug reports through GitHub Issues and pull requests are welcome. Before changing playback, danmaku, or platform code, read [Maintenance and troubleshooting](doc/maintenance/troubleshooting.md) and [Build and test](doc/development/build-and-test.md). When changing third-party dependencies, record their sources and licenses following the [dependency maintenance guide](third_party/README.md).
 
 ## Reporting issues
 
 Open a [GitHub issue](https://github.com/wallpap/PiliAurora/issues) with your operating system, device, app version, reproduction steps, and affected page. For playback issues, also include the video codec, quality, danmaku settings, and hardware-decoding state. Remove cookies, tokens, QR-code login information, and other account data before sharing logs.
+
+For performance issues, enable performance recording under Settings → Logs and diagnostics, reproduce the issue, and export a diagnostic archive. Turn recording off afterwards; sampling and stored logs add overhead.
 
 ## Disclaimer
 

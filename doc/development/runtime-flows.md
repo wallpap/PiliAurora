@@ -39,9 +39,9 @@ sequenceDiagram
     App->>App: 创建主题、GetMaterialApp 与路由表
 ```
 
-`GStorage` 初始化失败时，应用记录错误后退出。下载路径、临时目录、缓存和字体并行准备，`AccountService` 与 `DownloadService` 通过 `lazyPut` 延迟创建。实现见 [`bootstrap.dart`](../lib/app/bootstrap.dart)、[`platform_setup.dart`](../lib/app/platform_setup.dart) 和 [`app.dart`](../lib/app/app.dart)。
+`GStorage` 初始化失败时，应用记录错误后退出。下载路径、临时目录、缓存和字体并行准备，`AccountService` 与 `DownloadService` 通过 `lazyPut` 延迟创建。实现见 [`bootstrap.dart`](../../lib/app/bootstrap.dart)、[`platform_setup.dart`](../../lib/app/platform_setup.dart) 和 [`app.dart`](../../lib/app/app.dart)。
 
-Windows 独立播放窗口使用同一可执行文件的子进程入口，先连接主窗口获取播放请求和存储快照，再以 `GStorage.init(memorySnapshot: ...)` 初始化。它跳过主窗口的平台服务、WebView Cookie 同步和历史同步，使用独立缓存目录。生命周期见 [`desktop_playback_windows.dart`](../lib/services/desktop_playback_windows.dart) 与[播放窗口说明](windows-playback-windows.md)。
+Windows 独立播放窗口使用同一可执行文件的子进程入口，先连接主窗口获取播放请求和存储快照，再以 `GStorage.init(memorySnapshot: ...)` 初始化。它跳过主窗口的平台服务、WebView Cookie 同步和历史同步，使用独立缓存目录。生命周期见 [`desktop_playback_windows.dart`](../../lib/services/desktop_playback_windows.dart) 与[播放窗口说明](../guides/windows-playback-windows.md)。
 
 ## HTTP 请求
 
@@ -68,7 +68,7 @@ sequenceDiagram
     Api-->>Caller: Success / Failure 或下载结果
 ```
 
-`Request.get()` 和 `Request.post()` 会把 `DioException` 转成含错误消息的 `Response`，调用层仍需检查业务响应。重试条件见 [`retry_interceptor.dart`](../lib/http/retry_interceptor.dart)。
+`Request.get()` 和 `Request.post()` 会把 `DioException` 转成含错误消息的 `Response`，调用层仍需检查业务响应。重试条件见 [`retry_interceptor.dart`](../../lib/http/retry_interceptor.dart)。
 
 `_CustomHttpOverrides` 默认验证 TLS 证书；仅当 `Pref.badCertificateCallback` 显式开启时接受无效证书。HTTP/1.1、HTTP/2 与回退适配器共用该设置，Debug 构建沿用相同规则。
 
@@ -129,7 +129,7 @@ sequenceDiagram
 
 加载阶段、输出证据和释放耗时可从播放器诊断的 `runtime.initialize.*`、`media.output.preloaded`、`media.startup.failed` 与 `runtime.shutdown.*` 区分。首帧出现、纹理像素、MediaCodec/GPU 和音频输出仍需目标设备验证。
 
-实现见 [`playback_session.dart`](../lib/plugin/pl_player/playback/playback_session.dart)、[`native_playback_runtime.dart`](../lib/plugin/pl_player/playback/native_playback_runtime.dart) 和 [`playback_source.dart`](../lib/pages/video/playback_source.dart)。
+实现见 [`playback_session.dart`](../../lib/plugin/pl_player/playback/playback_session.dart)、[`native_playback_runtime.dart`](../../lib/plugin/pl_player/playback/native_playback_runtime.dart) 和 [`playback_source.dart`](../../lib/pages/video/playback_source.dart)。
 
 ### 媒体时钟与跳转确认
 
@@ -137,7 +137,7 @@ sequenceDiagram
 
 seek 命令携带 `seekSequence`，经运行时传给 media_kit 的 `observationId`。提交后暂停发布普通媒体锚点，等待与当前 Player、加载绑定和跳转序号匹配的原生完成通知，再更新连续性并恢复采样。下一次 seek 的就绪等待在会话命令执行器之外进行，使暂停、切源和关闭仍可推进；新请求或所有者失效会取消旧等待。
 
-实现见 [`media_clock.dart`](../lib/plugin/pl_player/playback/media_clock.dart)、[`native_media_clock_sampling.dart`](../lib/plugin/pl_player/playback/native_media_clock_sampling.dart) 和 media_kit 的 [`seek_observation.dart`](../third_party/media_kit/lib/src/player/native/player/seek_observation.dart)。对应回归位于 `test/plugin/pl_player/playback/` 的 `media_clock_test.dart`、`native_media_clock_test.dart`、`native_media_clock_sampling_test.dart`、`native_seek_observation_test.dart` 和 `playback_session_test.dart`。
+实现见 [`media_clock.dart`](../../lib/plugin/pl_player/playback/media_clock.dart)、[`native_media_clock_sampling.dart`](../../lib/plugin/pl_player/playback/native_media_clock_sampling.dart) 和 media_kit 的 [`seek_observation.dart`](../../third_party/media_kit/lib/src/player/native/player/seek_observation.dart)。对应回归位于 `test/plugin/pl_player/playback/` 的 `media_clock_test.dart`、`native_media_clock_test.dart`、`native_media_clock_sampling_test.dart`、`native_seek_observation_test.dart` 和 `playback_session_test.dart`。
 
 ### 网络错误恢复
 
@@ -171,9 +171,9 @@ flowchart TD
     Defer -->|否| Stop
 ```
 
-连接中断和媒体读取截断进入该链；HTTP 403 不按 CDN 故障重试。`utils/playback_network_recovery.dart` 识别网络读取错误，[`playback/network_recovery.dart`](../lib/plugin/pl_player/playback/network_recovery.dart) 管理当前媒体的计时器、限频与缓冲等待。切源会释放恢复状态，当前媒体的错误风暴合并为一个计时器，终止读取可升级已有的缓冲等待。分离音视频的读取错误先保留主视频剩余缓存，耗尽后再重载；主媒体的播放与缓存同时恢复推进时，可以取消本轮网络重载。加载队列繁忙时继续等待，保留本轮恢复机会。
+连接中断和媒体读取截断进入该链；HTTP 403 不按 CDN 故障重试。`utils/playback_network_recovery.dart` 识别网络读取错误，[`playback/network_recovery.dart`](../../lib/plugin/pl_player/playback/network_recovery.dart) 管理当前媒体的计时器、限频与缓冲等待。切源会释放恢复状态，当前媒体的错误风暴合并为一个计时器，终止读取可升级已有的缓冲等待。分离音视频的读取错误先保留主视频剩余缓存，耗尽后再重载；主媒体的播放与缓存同时恢复推进时，可以取消本轮网络重载。加载队列繁忙时继续等待，保留本轮恢复机会。
 
-网络源的音频读取或解码错误同时交给 [`playback/audio_recovery.dart`](../lib/plugin/pl_player/playback/audio_recovery.dart)。它先观察 2 秒，音频时间戳继续推进且与播放位置同步时保持播放；缓存中的音频仍有效时也不提前重载。确认音频停滞后，先异步重载当前外部音轨，mpv 将其同步到视频位置；确认仍未恢复时，再通过加载队列执行一次保留位置与播放意图的整段重载，按多 CDN 设置选择后备地址。听视频或没有外部音轨的来源直接使用整段重载兜底。
+网络源的音频读取或解码错误同时交给 [`playback/audio_recovery.dart`](../../lib/plugin/pl_player/playback/audio_recovery.dart)。它先观察 2 秒，音频时间戳继续推进且与播放位置同步时保持播放；缓存中的音频仍有效时也不提前重载。确认音频停滞后，先异步重载当前外部音轨，mpv 将其同步到视频位置；确认仍未恢复时，再通过加载队列执行一次保留位置与播放意图的整段重载，按多 CDN 设置选择后备地址。听视频或没有外部音轨的来源直接使用整段重载兜底。
 
 每轮最多尝试一次音轨重连和一次整段重载；命令回执后留出 8 秒有效播放观察期，依据音频时钟推进与同步确认恢复，重复错误不延长等待。确认失声时显示“正在恢复声音”，预算耗尽后显示点击重试。原生音频健康信号也可启动观察，因此后续没有新错误日志时仍能接管。音频连续健康 30 秒后重新开放预算；终止读取后保留观察直到显式重连，残余缓存超过 30 秒仍会继续监视。
 
@@ -193,7 +193,7 @@ flowchart TD
 
 Windows 在确定硬件或软件后端后注册纹理，硬件初始化失败时先释放 GL 资源再进入软件路径。Android 保留既有 MediaCodec、Surface 与解码恢复实现，GPU、MediaCodec、Surface 行为和帧率在目标设备验证。
 
-Windows 超分切换通过 owner 的 shader 配置命令进入会话调度；运行时在需要时暂停视频输出、重建渲染器、提交 shader 并恢复输出。释放顺序和首帧条件见[Windows 视频输出](windows-video-output.md#超分切换)。
+Windows 超分切换通过 owner 的 shader 配置命令进入会话调度；运行时在需要时暂停视频输出、重建渲染器、提交 shader 并恢复输出。释放顺序和首帧条件见[Windows 视频输出](../maintenance/windows-video-output.md#超分切换)。
 
 ## 下载
 
@@ -286,11 +286,11 @@ flowchart TD
     Cancel -->|删除| Remove
 ```
 
-实现与测试：[`download_service.dart`](../lib/services/download/download_service.dart)、[`download_repository.dart`](../lib/services/download/download_repository.dart)、[`download_manager.dart`](../lib/services/download/download_manager.dart)；`test/services/download/`。
+实现与测试：[`download_service.dart`](../../lib/services/download/download_service.dart)、[`download_repository.dart`](../../lib/services/download/download_repository.dart)、[`download_manager.dart`](../../lib/services/download/download_manager.dart)；`test/services/download/`。
 
 ## 账号消息与私信
 
-消息页面沿用 GetX 路由，通过 Riverpod 获取当前主账号的 `MessagingSession` 和业务快照。未读概览、会话列表及聊天缓存由 Session 共享；分类消息句柄随页面订阅释放。状态所有权与协议入口见[消息模块](../lib/services/messaging/README.md)。
+消息页面沿用 GetX 路由，通过 Riverpod 获取当前主账号的 `MessagingSession` 和业务快照。未读概览、会话列表及聊天缓存由 Session 共享；分类消息句柄随页面订阅释放。状态所有权与协议入口见[消息模块](../../lib/services/messaging/README.md)。
 
 ```mermaid
 sequenceDiagram
@@ -380,4 +380,4 @@ sequenceDiagram
 
 `startLiveMsg` 同一时刻共用一次 token/history/连接建立。暂停、切房或离开页面会撤销连接意图并推进代次，使旧 HTTP 结果、连接回调和图片结果失效。直播页返回时先重绑状态监听与弹幕控制器，再释放路由 inhibitor；若当前实际播放，监听会接续消息与弹幕。关闭或 worker 异常会结束在途任务，损坏的数据包会被跳过。
 
-实现见 [`live_room/controller.dart`](../lib/pages/live_room/controller.dart)、[`live.dart`](../lib/services/live_stream/live.dart)、[`live_packet_decoder.dart`](../lib/services/live_stream/live_packet_decoder.dart) 和 [`live_packet.dart`](../lib/services/live_stream/live_packet.dart)，回归位于 `test/pages/live_room/controller_test.dart` 与 `test/services/live_stream/`。
+实现见 [`live_room/controller.dart`](../../lib/pages/live_room/controller.dart)、[`live.dart`](../../lib/services/live_stream/live.dart)、[`live_packet_decoder.dart`](../../lib/services/live_stream/live_packet_decoder.dart) 和 [`live_packet.dart`](../../lib/services/live_stream/live_packet.dart)，回归位于 `test/pages/live_room/controller_test.dart` 与 `test/services/live_stream/`。

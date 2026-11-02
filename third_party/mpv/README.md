@@ -42,7 +42,7 @@ bash third_party/mpv/build.sh
 
 运行时携带 mpv 许可、依赖包提供的许可文本、包版本、上游地址与 DLL 归属；Flutter 打包将这些文件安装到 `mpv-licenses/`。MSYS2 包的对应源码与打包配方入口为 [MSYS2 MINGW-packages](https://github.com/msys2/MINGW-packages)。发布者需按各组件许可提供对应版本源码。
 
-完成后回到 PowerShell，按[构建与测试](../../doc/build-and-test.md)构建 Flutter 应用。CMake 读取预编译归档，检查构建输入与文件摘要；构建材料变化后需更新归档。源码归档变更时需使用新的 `build/mpv/` 编译目录，已有目录可改名保留。
+完成后回到 PowerShell，按[构建与测试](../../doc/development/build-and-test.md)构建 Flutter 应用。CMake 读取预编译归档，检查构建输入与文件摘要；构建材料变化后需更新归档。源码归档变更时需使用新的 `build/mpv/` 编译目录，已有目录可改名保留。
 
 ## GitHub CI
 

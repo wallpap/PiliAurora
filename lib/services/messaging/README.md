@@ -2,7 +2,7 @@
 
 `lib/services/messaging/` 管理回复、@、点赞、系统通知、私信会话、聊天和私信分享。页面沿用 GetX 路由，通过 Riverpod 订阅业务快照；HTTP 与 gRPC 适配器负责协议转换。
 
-页面入口见[功能领域地图](../../../doc/features.md#消息私信与分享)，请求与账号切换的时序见[运行流程](../../../doc/runtime-flows.md#账号消息与私信)。直播聊天使用独立的 `services/live_stream/` 连接和生命周期。
+页面入口见[功能领域地图](../../../doc/development/features.md#消息私信与分享)，请求与账号切换的时序见[运行流程](../../../doc/development/runtime-flows.md#账号消息与私信)。直播聊天使用独立的 `services/live_stream/` 连接和生命周期。
 
 ## 状态所有权
 
@@ -80,4 +80,4 @@ fvm flutter test --no-pub test/services/messaging/
 - 从分享入口发送卡片和附言，核对收件人、聊天同步及失败提示。
 - 修改接收设置、关键词屏蔽和联系设置，返回后重新读取确认。
 
-报告问题时记录操作顺序、账号是否切换及结果状态，去掉消息正文、收件人标识和账号凭据。排障入口见[维护与排障](../../../doc/maintenance.md#消息与私信分享)。
+报告问题时记录操作顺序、账号是否切换及结果状态，去掉消息正文、收件人标识和账号凭据。排障入口见[维护与排障](../../../doc/maintenance/troubleshooting.md#消息与私信分享)。

@@ -9,7 +9,7 @@
 | `playback/` | 媒体加载烟测、跳转命令、会话验收与 Windows 超分切换。 |
 | `event_loop/` | 事件循环生命周期、ABI 检查与配套 C++ mock。 |
 
-运行前查看脚本参数和源码，确认目标平台、输入文件及输出目录。工具结果只覆盖它实际检查的内容；应用行为还要按[构建与测试说明](../../doc/build-and-test.md)在目标平台验证。
+运行前查看脚本参数和源码，确认目标平台、输入文件及输出目录。工具结果只覆盖它实际检查的内容；应用行为还要按[构建与测试说明](../../doc/development/build-and-test.md)在目标平台验证。
 
 Python 探针使用 uv 环境，首次运行前请按[工具入口中的 Python 环境说明](../README.md#python-工具环境)初始化；以下命令均从仓库根目录运行。
 
@@ -192,7 +192,7 @@ Windows 隐藏启动和窗口完全遮挡会影响帧交付，须结合报告里
 `continuity-stage-*.json` 保存完整局部窗口、跨帧跨度及差分，
 `summary.json`、`summary.csv`、`summary.md` 汇总各场景、三个窗口半径及实际 `PresentMode`。
 点播使用持续有效的合成媒体时钟；可选视频检查合成负载，不覆盖真实媒体时钟校准或超分。
-完成后按[构建与测试](../../doc/build-and-test.md#构建)重新构建普通应用入口。
+完成后按[构建与测试](../../doc/development/build-and-test.md#构建)重新构建普通应用入口。
 
 关联、覆盖率与连续性判定的回归可独立运行：
 
@@ -259,7 +259,7 @@ fvm flutter build windows --debug --no-pub --target tool/probes/playback/windows
 
 报告记录各媒体首次播放与刷新的像素范围、渲染错误数、实际解码器和音频时间推进结果，
 不记录媒体地址。像素断言会将纯黑或纯色内容判为失败，使用可见且有颜色变化的样片。
-结束后按[构建与测试](../../doc/build-and-test.md#构建)重新构建应用默认入口。
+结束后按[构建与测试](../../doc/development/build-and-test.md#构建)重新构建应用默认入口。
 
 ## 暂停加载输出挂接探针
 
@@ -394,7 +394,7 @@ AV1 重建回归需使用关键帧间隔较长的片段，例如 90 秒、30 fps
 ffmpeg -f lavfi -i "testsrc2=size=640x360:rate=30" -f lavfi -i "sine=frequency=440:sample_rate=48000" -t 90 -c:v libsvtav1 -preset 10 -crf 38 -g 300 -svtav1-params "lp=4" -c:a aac -b:a 64k build/av1-shader-fixture.mp4
 ```
 
-探针使用 `ao=null`，音频时间线断言不验证扬声器声音。历史本机结果与暂停回退现象见[本地 libmpv 记录](../../third_party/media_kit_libs_windows_video/LOCAL_LIBMPV.md#应用超分切换记录)。完成后按[构建与测试](../../doc/build-and-test.md#构建)重新构建应用默认入口。
+探针使用 `ao=null`，音频时间线断言不验证扬声器声音。历史本机结果与暂停回退现象见[本地 libmpv 记录](../../third_party/media_kit_libs_windows_video/LOCAL_LIBMPV.md#应用超分切换记录)。完成后按[构建与测试](../../doc/development/build-and-test.md#构建)重新构建应用默认入口。
 
 Windows 采样门控的主机回归可运行 `python tool/probes/windows/windows_frame_sampling_probe.py`（C++17 编译器，默认 `g++`）。该入口抽取生产 render 队列方法，覆盖原始帧身份、开关回执、旧消费通知、准入恢复与同 token 序号连续性。
 
