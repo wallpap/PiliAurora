@@ -95,6 +95,20 @@ void main() {
     );
   });
 
+  test('其它 CDN 保持首个镜像地址的改写优先级', () {
+    const original =
+        'https://upos-sz-mirrorcos.bilivideo.com/upgcxcode/video?sign=cos';
+    const other =
+        'https://foo.szbdyd.com/video?xy_usource=upos-sz-mirrorali.bilivideo.com';
+    expect(
+      VideoUtils.getCdnUrl(
+        [original, other],
+        defaultCDNService: CDNService.hw,
+      ),
+      original.replaceFirst('mirrorcos', 'mirrorhw'),
+    );
+  });
+
   test('直播备用源保留当前选择，按当前编码提供原始备用 host', () async {
     final codec = CodecItem(
       currentQn: 10000,

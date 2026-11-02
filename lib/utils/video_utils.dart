@@ -37,31 +37,32 @@ abstract final class VideoUtils {
     bool reportUnknown = true,
   }) {
     defaultCDNService ??= cdnService;
+    final sourceUrls = urls.toList();
 
     if (defaultCDNService == CDNService.baseUrl) {
-      return urls.first;
+      return sourceUrls.first;
     }
 
-    if (defaultCDNService == CDNService.akamai) {
-      String? original;
-      for (final url in urls) {
-        original ??= url;
-        if (!isAudio || !disableAudioCDN) {
-          if (_mirrorRegex.hasMatch(url) &&
-              Uri.parse(url).host == CDNService.akamai.host) {
+    if (!isAudio || !disableAudioCDN) {
+      for (final url in sourceUrls) {
+        if (_mirrorRegex.hasMatch(url)) {
+          final uri = Uri.parse(url);
+          if (uri.host == defaultCDNService.host &&
+              uri.queryParameters['os'] != 'mcdn') {
             return url;
           }
         }
       }
-      return original ?? '';
+    }
+    if (defaultCDNService == CDNService.akamai) {
+      return sourceUrls.firstOrNull ?? '';
     }
 
     String? mcdnTf;
     String? mcdnUpgcxcode;
-    String? rewrittenMirror;
 
     String last = '';
-    for (final url in urls) {
+    for (final url in sourceUrls) {
       last = url;
       if (_mirrorRegex.hasMatch(url)) {
         final uri = Uri.parse(url);
@@ -73,11 +74,7 @@ abstract final class VideoUtils {
               (isAudio && disableAudioCDN)) {
             return url;
           }
-          if (uri.host == defaultCDNService.host) return url;
-          rewrittenMirror ??= uri
-              .replace(host: defaultCDNService.host)
-              .toString();
-          continue;
+          return uri.replace(host: defaultCDNService.host).toString();
         }
       }
 
@@ -105,7 +102,6 @@ abstract final class VideoUtils {
       if (reportUnknown) logger.w('unknown cdn type: $url');
     }
 
-    if (rewrittenMirror != null) return rewrittenMirror;
     return mcdnUpgcxcode == null
         ? mcdnTf == null
               ? last
