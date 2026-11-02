@@ -34,6 +34,15 @@ enum DiagnosticLogLevel {
       values.where((level) => level.name == value).firstOrNull ?? warning;
 }
 
+bool shouldWarnAboutDiagnosticRecording({
+  required bool tracing,
+  required DiagnosticLogLevel level,
+  required DiagnosticLogLevel playerLevel,
+}) =>
+    tracing ||
+    level.index < DiagnosticLogLevel.warning.index ||
+    playerLevel.index < DiagnosticLogLevel.info.index;
+
 class DiagnosticLogResult {
   const DiagnosticLogResult({
     required this.record,

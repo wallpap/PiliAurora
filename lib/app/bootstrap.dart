@@ -29,6 +29,7 @@ import 'package:pili_aurora/utils/storage_pref.dart';
 import 'package:pili_aurora/utils/theme_utils.dart';
 import 'package:pili_aurora/utils/utils.dart';
 import 'package:catcher_2/catcher_2.dart';
+import 'package:flutter/widgets.dart';
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:get/get.dart';
 import 'package:media_kit/media_kit.dart';
@@ -202,6 +203,21 @@ Future<void> _bootstrapApplication(List<String> arguments) async {
     },
     customParameters: customParameters,
   );
+  if (!playerWindow) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final diagnostics = Diagnostics.instance;
+      if (shouldWarnAboutDiagnosticRecording(
+        tracing: diagnostics.tracing,
+        level: diagnostics.level,
+        playerLevel: diagnostics.playerLevel,
+      )) {
+        SmartDialog.showToast(
+          '性能记录或详细日志已启用，如不需要，请关闭并清理',
+          displayTime: const Duration(seconds: 5),
+        );
+      }
+    });
+  }
 }
 
 class _CustomHttpOverrides extends HttpOverrides {
