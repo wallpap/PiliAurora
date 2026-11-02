@@ -42,6 +42,20 @@ abstract final class VideoUtils {
       return urls.first;
     }
 
+    if (defaultCDNService == CDNService.akamai) {
+      String? original;
+      for (final url in urls) {
+        original ??= url;
+        if (!isAudio || !disableAudioCDN) {
+          if (_mirrorRegex.hasMatch(url) &&
+              Uri.parse(url).host == CDNService.akamai.host) {
+            return url;
+          }
+        }
+      }
+      return original ?? '';
+    }
+
     String? mcdnTf;
     String? mcdnUpgcxcode;
     String? rewrittenMirror;

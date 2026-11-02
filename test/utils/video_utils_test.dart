@@ -64,6 +64,37 @@ void main() {
     );
   });
 
+  test('接口没有 Akamai 地址时不使用其它 CDN 的签名构造地址', () async {
+    const original =
+        'https://upos-sz-mirrorcos.bilivideo.com/upgcxcode/video?sign=cos';
+    const backup =
+        'https://upos-sz-mirrorali.bilivideo.com/upgcxcode/video?sign=ali';
+    expect(
+      VideoUtils.getCdnUrl(
+        [original, backup],
+        defaultCDNService: CDNService.akamai,
+      ),
+      original,
+    );
+
+    await GStorage.setting.put(SettingBoxKey.enableMultiCdn, true);
+    final urls = VideoUtils.getCdnUrls(
+      [original, backup],
+      defaultCDNService: CDNService.cos,
+    );
+    expect(
+      urls,
+      isNot(
+        contains(
+          original.replaceFirst(
+            'upos-sz-mirrorcos.bilivideo.com',
+            'upos-hz-mirrorakam.akamaized.net',
+          ),
+        ),
+      ),
+    );
+  });
+
   test('直播备用源保留当前选择，按当前编码提供原始备用 host', () async {
     final codec = CodecItem(
       currentQn: 10000,
