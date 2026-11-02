@@ -75,37 +75,12 @@ class DanmakuWindowCoordinator<T> {
       return;
     }
     if (change.kind == DanmakuSourceChangeKind.invalidated) {
-      final retained = <({int start, int? end, int revision})>[];
-      for (final range in _invalidations) {
-        if ((change.endUs != null && range.start >= change.endUs!) ||
-            (range.end != null && range.end! <= change.startUs)) {
-          retained.add(range);
-        } else {
-          if (range.start < change.startUs) {
-            retained.add((
-              start: range.start,
-              end: change.startUs,
-              revision: range.revision,
-            ));
-          }
-          if (change.endUs != null &&
-              (range.end == null || range.end! > change.endUs!)) {
-            retained.add((
-              start: change.endUs!,
-              end: range.end,
-              revision: range.revision,
-            ));
-          }
-        }
-      }
-      _invalidations
-        ..clear()
-        ..addAll(retained)
-        ..add((
-          start: change.startUs,
-          end: change.endUs,
-          revision: change.ruleRevision,
-        ));
+      _subtractInvalidations(change);
+      _invalidations.add((
+        start: change.startUs,
+        end: change.endUs,
+        revision: change.ruleRevision,
+      ));
       renderer.invalidateRange(change.startUs, endUs: change.endUs);
     } else {
       if (_invalidations.any(
@@ -116,32 +91,7 @@ class DanmakuWindowCoordinator<T> {
       )) {
         return;
       }
-      final remaining = <({int start, int? end, int revision})>[];
-      for (final range in _invalidations) {
-        if ((change.endUs != null && range.start >= change.endUs!) ||
-            (range.end != null && range.end! <= change.startUs)) {
-          remaining.add(range);
-          continue;
-        }
-        if (range.start < change.startUs) {
-          remaining.add((
-            start: range.start,
-            end: change.startUs,
-            revision: range.revision,
-          ));
-        }
-        if (change.endUs != null &&
-            (range.end == null || range.end! > change.endUs!)) {
-          remaining.add((
-            start: change.endUs!,
-            end: range.end,
-            revision: range.revision,
-          ));
-        }
-      }
-      _invalidations
-        ..clear()
-        ..addAll(remaining);
+      _subtractInvalidations(change);
       final start = math.max(change.startUs, renderer.validFromUs);
       if (start < _nextBucketUs &&
           (change.endUs == null || change.endUs! > renderer.validFromUs)) {
@@ -151,6 +101,36 @@ class DanmakuWindowCoordinator<T> {
     }
     _pending = null;
     _updates.add(null);
+  }
+
+  // ready 消除失效区间，invalidated 替换重叠区间；两者保留相同的左右残段。
+  void _subtractInvalidations(DanmakuSourceChange change) {
+    final remaining = <({int start, int? end, int revision})>[];
+    for (final range in _invalidations) {
+      if ((change.endUs != null && range.start >= change.endUs!) ||
+          (range.end != null && range.end! <= change.startUs)) {
+        remaining.add(range);
+        continue;
+      }
+      if (range.start < change.startUs) {
+        remaining.add((
+          start: range.start,
+          end: change.startUs,
+          revision: range.revision,
+        ));
+      }
+      if (change.endUs != null &&
+          (range.end == null || range.end! > change.endUs!)) {
+        remaining.add((
+          start: change.endUs!,
+          end: range.end,
+          revision: range.revision,
+        ));
+      }
+    }
+    _invalidations
+      ..clear()
+      ..addAll(remaining);
   }
 
   Future<void> _request(int fromUs, int untilUs) async {
