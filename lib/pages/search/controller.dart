@@ -65,6 +65,7 @@ class SSearchController extends GetxController
   // suggestion
   bool get searchSuggestion => _baseCtr.searchSuggestion;
   late final RxList<SearchSuggestItem> searchSuggestList;
+  int _suggestionVersion = 0;
 
   // trending
   bool get enableTrending => _baseCtr.enableTrending;
@@ -104,6 +105,7 @@ class SSearchController extends GetxController
   }
 
   void onChange(String value) {
+    _suggestionVersion++;
     validateUid();
     if (searchSuggestion) {
       if (value.isEmpty) {
@@ -115,6 +117,7 @@ class SSearchController extends GetxController
   }
 
   void onClear() {
+    _suggestionVersion++;
     if (controller.value.text != '') {
       controller.clear();
       if (searchSuggestion) searchSuggestList.clear();
@@ -175,11 +178,20 @@ class SSearchController extends GetxController
 
   @override
   Future<void> onValueChanged(String value) async {
+    if (isClosed ||
+        !searchSuggestion ||
+        value.isEmpty ||
+        controller.text != value) {
+      return;
+    }
+    final version = ++_suggestionVersion;
     final res = await SearchHttp.searchSuggest(term: value);
+    // 防抖只限制发起频率，输入变化后仍须使此前在途的结果失效。
+    if (isClosed || version != _suggestionVersion || controller.text != value) {
+      return;
+    }
     if (res case Success(:final response)) {
-      if (response.tag?.isNotEmpty == true) {
-        searchSuggestList.value = response.tag!;
-      }
+      searchSuggestList.value = response.tag ?? const [];
     }
   }
 
