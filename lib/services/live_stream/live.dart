@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:collection';
 import 'dart:developer' show Timeline;
 import 'dart:convert';
+import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:pili_aurora/services/logger.dart';
@@ -10,6 +11,7 @@ import 'package:pili_aurora/services/live_stream/live_packet_decoder.dart';
 import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
+import 'package:web_socket_channel/io.dart';
 
 export 'package:pili_aurora/services/live_stream/live_packet.dart'
     show PackageHeader, PackageHeaderRes;
@@ -111,17 +113,68 @@ class LiveMessageStream {
     required this.uid,
     required this.servers,
     this.heartbeatInterval = const Duration(seconds: 30),
+    this.connectionTimeout = const Duration(seconds: 10),
   });
   final Duration heartbeatInterval;
+  final Duration connectionTimeout;
   final _decoder = LivePacketDecoder();
 
   bool _active = true;
+  final _closed = Completer<void>();
+  Future<void>? _initializing;
+  HttpClient? _connectingClient;
   WebSocketChannel? _channel;
   StreamSubscription? _socketSubscription;
   Timer? _timer;
   static const String logTag = "LiveStreamService";
 
-  Future<void> init() async {
+  // 重入调用共用握手任务，页面只持有一条连接。
+  Future<void> init() => _initializing ??= _init();
+
+  Future<WebSocketChannel?> _connect() async {
+    for (final server in servers) {
+      if (!_active) return null;
+      final client = HttpClient();
+      _connectingClient = client;
+      try {
+        final connecting = WebSocket.connect(server, customClient: client).then(
+          (socket) {
+            // timeout/close 不会取消 Future，迟到的握手也必须释放。
+            if (!_active || !identical(_connectingClient, client)) {
+              unawaited(socket.close());
+              return null;
+            }
+            return socket;
+          },
+        );
+        final socket = await Future.any<WebSocket?>([
+          connecting,
+          _closed.future.then((_) => null),
+        ]).timeout(connectionTimeout);
+        if (socket == null) return null;
+        return IOWebSocketChannel(socket);
+      } catch (error, stackTrace) {
+        if (!_active) return null;
+        final uri = Uri.tryParse(server);
+        final endpoint = uri == null || uri.host.isEmpty
+            ? '<invalid endpoint>'
+            : '${uri.host}:${uri.port == 0 ? 'default' : uri.port}';
+        logger.w(
+          '$logTag websocket connection failed: $endpoint',
+          error: error,
+          stackTrace: stackTrace,
+        );
+      } finally {
+        _connectingClient = null;
+        // 升级完成的 WebSocket 已脱离 HttpClient；这里只终止未完成的 HTTP 握手。
+        client.close(force: true);
+      }
+    }
+    throw Exception('all servers connect failed');
+  }
+
+  Future<void> _init() async {
+    if (!_active) return;
     final authPackage = AuthPackage(
       header: const PackageHeader(
         protocolVer: 1,
@@ -138,32 +191,9 @@ class LiveMessageStream {
       ),
     );
 
-    // final marshaledData = authPackage.marshal();
-    // logger.d(marshaledData);
     try {
-      // 按服务端提供的顺序尝试地址；认证包只在握手成功后发送。
-      Future<WebSocketChannel> getSocket() async {
-        for (final server in servers) {
-          try {
-            final channel = WebSocketChannel.connect(Uri.parse(server));
-            await channel.ready;
-            return channel;
-          } catch (error, stackTrace) {
-            final uri = Uri.tryParse(server);
-            final endpoint = uri == null || uri.host.isEmpty
-                ? '<invalid endpoint>'
-                : '${uri.host}:${uri.port == 0 ? 'default' : uri.port}';
-            logger.w(
-              '$logTag websocket connection failed: $endpoint',
-              error: error,
-              stackTrace: stackTrace,
-            );
-          }
-        }
-        throw Exception("all servers connect failed");
-      }
-
-      final channel = await getSocket();
+      final channel = await _connect();
+      if (channel == null) return;
       if (!_active) {
         if (kDebugMode) logger.i("$logTag init inactive $hashCode");
         await channel.sink.close();
@@ -266,6 +296,8 @@ class LiveMessageStream {
     if (!_active) return;
     // 先标记失活；随后到达的异步解析结果会因此被丢弃。
     _active = false;
+    _closed.complete();
+    _connectingClient?.close(force: true);
     _decoder.close();
     if (kDebugMode) logger.i("$logTag close $hashCode");
     _timer?.cancel();

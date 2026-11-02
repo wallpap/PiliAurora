@@ -101,30 +101,85 @@ void main() {
     }
   });
 
-  test(
-    'closing before connection setup finishes closes the late connection',
-    () async {
-      final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
-      final disconnected = Completer<void>();
-      server.listen((request) async {
-        final socket = await WebSocketTransformer.upgrade(request);
-        socket.listen((_) {}, onDone: disconnected.complete);
+  test('握手未返回时退出立即结束初始化，不再尝试后备节点', () async {
+    final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+    final requested = Completer<void>();
+    var requests = 0;
+    server.listen((request) {
+      requests++;
+      if (!requested.isCompleted) requested.complete();
+      // 刻意不返回 HTTP 升级响应。
+    });
+    final live = LiveMessageStream(
+      streamToken: 'synthetic-test-token',
+      roomId: 1,
+      uid: 0,
+      servers: List.filled(2, 'ws://127.0.0.1:${server.port}'),
+    );
+    try {
+      final initializing = live.init();
+      expect(identical(live.init(), initializing), isTrue);
+      await requested.future.timeout(const Duration(seconds: 5));
+      live.close();
+      await initializing.timeout(const Duration(seconds: 1));
+      await live.init();
+      expect(requests, 1);
+    } finally {
+      live.close();
+      await server.close(force: true);
+    }
+  });
+
+  test('握手超时释放请求并尝试下一节点，认证只发给成功连接', () async {
+    final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+    final authenticated = Completer<void>();
+    WebSocket? socket;
+    final paths = <String>[];
+    server.listen((request) async {
+      paths.add(request.uri.path);
+      if (request.uri.path == '/stalled') return;
+      socket = await WebSocketTransformer.upgrade(request);
+      socket!.listen((_) {
+        if (!authenticated.isCompleted) authenticated.complete();
       });
-      final live = LiveMessageStream(
-        streamToken: 'synthetic-test-token',
-        roomId: 1,
-        uid: 0,
-        servers: ['ws://127.0.0.1:${server.port}'],
-      );
-      try {
-        final initializing = live.init();
-        live.close();
-        await initializing;
-        await disconnected.future.timeout(const Duration(seconds: 5));
-      } finally {
-        live.close();
-        await server.close(force: true);
-      }
-    },
-  );
+    });
+    final live = LiveMessageStream(
+      streamToken: 'synthetic-test-token',
+      roomId: 1,
+      uid: 0,
+      servers: [
+        'ws://127.0.0.1:${server.port}/stalled',
+        'ws://127.0.0.1:${server.port}/ready',
+      ],
+      connectionTimeout: const Duration(milliseconds: 200),
+    );
+    try {
+      await live.init();
+      await authenticated.future.timeout(const Duration(seconds: 5));
+      expect(paths, ['/stalled', '/ready']);
+    } finally {
+      live.close();
+      await socket?.close();
+      await server.close(force: true);
+    }
+  });
+
+  test('关闭后初始化不再建立连接', () async {
+    final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+    var requests = 0;
+    server.listen((_) => requests++);
+    final live = LiveMessageStream(
+      streamToken: 'synthetic-test-token',
+      roomId: 1,
+      uid: 0,
+      servers: ['ws://127.0.0.1:${server.port}'],
+    );
+    try {
+      live.close();
+      await live.init();
+      expect(requests, 0);
+    } finally {
+      await server.close(force: true);
+    }
+  });
 }
