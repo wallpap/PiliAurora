@@ -36,7 +36,7 @@
     <div class="diagram-scroll">
       <svg viewBox="0 0 1280 720" role="img" aria-labelledby="scheduler-title scheduler-desc">
         <title id="scheduler-title">呈现调度引擎架构</title>
-        <desc id="scheduler-desc">展示构建身份选择呈现配置，播放器视频帧采样经代次门控后进入弹幕调度器，再由 FrameRateTicker 和 Flutter 平台呈现路径对齐。</desc>
+        <desc id="scheduler-desc">展示构建身份选择呈现配置，视频帧采样经代次门控，Android 请求采样用于弹幕相位，Windows 弹幕跟随屏幕刷新。</desc>
         <defs>
           <marker id="sched-arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0,8 3,0 6" fill="#4f5d75"/></marker>
         </defs>
@@ -53,6 +53,7 @@
         <path class="edge" d="M376 268 V356 H616 V404"/>
         <path class="edge" d="M236 456 H280"/>
         <path class="edge" d="M472 456 H520"/>
+        <text class="sub" x="496" y="442" text-anchor="middle">ANDROID</text>
         <path class="edge" d="M712 456 H960"/>
         <path class="edge" d="M1060 316 V404"/>
         <path class="edge-return" d="M1088 404 V316"/>
@@ -123,7 +124,7 @@
         <rect x="972" y="666" width="20" height="18" rx="4" fill="rgba(45,49,66,.05)" stroke="#4f5d75"/><text class="legend-text" x="1004" y="680">状态 / 诊断</text>
       </svg>
     </div>
-    <figcaption>自编配置仅在引擎身份匹配时启用。Android 在 FrameTimeline 支持且配置允许时保留视频相位；窗口、输出或采样代次变化会清空旧样本。暂停、缓冲、seek 与输出重配关闭相位准入，恢复后等待新输出确认。Windows DWM 路径和 Android 最终呈现仍需目标设备探针验证。</figcaption>
+    <figcaption>Android 使用通过门控的刷新请求采样学习视频相位；纹理消费用于出画证据。Windows 弹幕跟随屏幕，消费采样用于诊断。自编配置须匹配引擎身份；暂停、缓冲、seek 和输出重配会关闭相位准入。</figcaption>
   </figure>
 </main>
 </body>

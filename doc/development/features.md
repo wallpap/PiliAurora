@@ -9,7 +9,7 @@
 
 ```mermaid
 flowchart TD
-    Main[MainApp / 根路由]
+    Main[应用入口 / 根路由]
     Discover[内容发现<br/>首页、热门、排行、搜索]
     Video[视频与番剧<br/>详情、播放、分集]
     Social[动态与社交<br/>动态、关注、粉丝]
@@ -25,6 +25,9 @@ flowchart TD
     Main --> Discover
     Main --> Account
     Main --> Messaging
+    Main --> Live
+    Main --> Manage
+    Main --> Download
     Discover --> Video
     Discover --> Social
     Video --> Player

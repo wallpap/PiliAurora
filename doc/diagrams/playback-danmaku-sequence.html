@@ -41,7 +41,7 @@
     <div class="diagram-scroll">
       <svg viewBox="0 0 1280 720" role="img" aria-labelledby="sequence-title sequence-desc">
         <title id="sequence-title">播放器与弹幕交互时序</title>
-        <desc id="sequence-desc">展示页面通过播放会话和原生运行时加载媒体，帧呈现引擎与视频采样共同驱动弹幕调度，并在暂停、跳转或输出变化时关闭旧代次准入。</desc>
+        <desc id="sequence-desc">展示页面通过播放会话和原生运行时加载媒体，Android 视频请求采样参与弹幕相位调度，并在暂停、跳转或输出变化时关闭旧代次准入。</desc>
         <defs>
           <marker id="seq-arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0,8 3,0 6" fill="#4f5d75"/></marker>
           <marker id="seq-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0,8 3,0 6" fill="#bf4520"/></marker>
@@ -69,7 +69,7 @@
         <line class="return" x1="872" y1="328" x2="624" y2="328"/>
         <rect class="message-mask" x="700" y="308" width="96" height="12"/><text class="message-label" x="748" y="317" text-anchor="middle">RECEIPT / FRAME</text>
         <line class="return" x1="624" y1="364" x2="376" y2="364"/>
-        <rect class="message-mask" x="442" y="344" width="116" height="12"/><text class="message-label" x="500" y="353" text-anchor="middle">SNAPSHOT + ANCHOR</text>
+        <rect class="message-mask" x="442" y="344" width="116" height="12"/><text class="message-label" x="500" y="353" text-anchor="middle">LOAD RESULT</text>
         <line class="call" x1="128" y1="400" x2="1120" y2="400"/>
         <rect class="message-mask" x="536" y="380" width="176" height="12"/><text class="message-label" x="624" y="389" text-anchor="middle">CONFIGURE VIEW / CLOCK / SOURCE</text>
 
@@ -80,7 +80,7 @@
         <line class="async" x1="872" y1="472" x2="1120" y2="472"/>
         <rect class="message-mask" x="924" y="452" width="144" height="12"/><text class="message-label" x="996" y="461" text-anchor="middle">FRAME TARGET / CALLBACK</text>
         <line class="async" x1="624" y1="496" x2="1120" y2="496"/>
-        <rect class="message-mask" x="800" y="476" width="144" height="12"/><text class="message-label" x="872" y="485" text-anchor="middle">SAMPLE BATCH / EPOCH</text>
+        <rect class="message-mask" x="800" y="476" width="144" height="12"/><text class="message-label" x="872" y="485" text-anchor="middle">ANDROID REQUEST BATCH</text>
         <path class="headline" d="M1120 520 H1144 V532 H1120" fill="none"/>
         <rect class="message-mask" x="1148" y="500" width="84" height="12"/><text class="message-label" x="1190" y="509" text-anchor="middle">ALIGN / DRAW</text>
         <line class="divider" x1="100" y1="548" x2="1228" y2="548"/>
@@ -109,7 +109,7 @@
         <line x1="648" y1="676" x2="696" y2="676" stroke="#bf4520" stroke-width="1.4" marker-end="url(#seq-accent)"/><text class="legend-text" x="708" y="680">有效帧对齐 / 呈现</text>
       </svg>
     </div>
-    <figcaption>点播位置取 PlaybackMediaClock 的锚点并按帧目标时间外推；直播位置由房间消息携带的单调收到时间与显示运行时段计算。两者共用显示渲染器和帧调度入口。图中的暂停/跳转分支会撤销旧采样代次，恢复后需重新获得与当前输出匹配的视频帧。</figcaption>
+    <figcaption>点播从 PlaybackMediaClock 独立读取锚点并按帧目标时间外推；直播按消息接收时间与显示运行时段计算位置。Android 的视频请求采样参与相位调度，Windows 跟随屏幕刷新。暂停、跳转和输出重配会撤销旧采样代次。</figcaption>
   </figure>
 </main>
 </body>

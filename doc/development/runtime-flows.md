@@ -14,8 +14,9 @@ sequenceDiagram
     participant App as Catcher2 / PiliAuroraApp
 
     OS->>Boot: main() → bootstrapApplication()
-    Boot->>Boot: 初始化 Flutter binding 与 MediaKit
+    Boot->>Boot: 初始化呈现配置与 Flutter binding
     Boot->>Local: 初始化应用支持目录
+    Boot->>Boot: 准备诊断存储与 MediaKit
     Boot->>Local: 初始化 GStorage
     alt GStorage 初始化失败
         Local-->>Boot: 抛出错误
@@ -143,32 +144,28 @@ seek 命令携带 `seekSequence`，经运行时传给 media_kit 的 `observation
 
 ```mermaid
 flowchart TD
-    Error[收到播放器网络错误]
-    Local{本地文件源?}
-    Live{直播源?}
-    Throttle[按当前媒体、CDN 候选和错误类型限频]
-    Wait[等待 3 秒]
-    Current{播放器仍存活且媒体源未变化?}
-    NeedBuffer{是否要求等缓冲耗尽?}
-    Exhausted{可播放缓冲已耗尽?}
-    Defer{仍在消耗缓冲且仍处于 buffering?}
+    Error[网络读取错误或视频持续停滞]
+    Eligible{当前网络媒体允许恢复?}
+    Schedule[合并错误并按需限频]
+    Wait[延迟 3 秒检查]
+    Current{媒体仍有效且未遇到权限错误?}
+    Ready{加载队列可执行恢复?}
+    Recovered{故障已自行恢复?}
+    Buffer{需要保留可播放缓存?}
     Retry[重载媒体，按设置尝试下一个 CDN]
     Stop[结束本轮恢复]
 
-    Error --> Local
-    Local -->|是| Stop
-    Local -->|否| Live
-    Live -->|是：跳过缓冲耗尽检查| Wait
-    Live -->|否| Throttle --> Wait
-    Wait --> Current
+    Error --> Eligible
+    Eligible -->|否| Stop
+    Eligible -->|是| Schedule --> Wait --> Current
     Current -->|否| Stop
-    Current -->|是| NeedBuffer
-    NeedBuffer -->|否| Retry
-    NeedBuffer -->|是| Exhausted
-    Exhausted -->|是| Retry
-    Exhausted -->|否| Defer
-    Defer -->|是：重新安排检查| Wait
-    Defer -->|否| Stop
+    Current -->|是| Ready
+    Ready -->|否| Wait
+    Ready -->|是| Recovered
+    Recovered -->|是| Stop
+    Recovered -->|否| Buffer
+    Buffer -->|是| Wait
+    Buffer -->|否| Retry
 ```
 
 连接中断和媒体读取截断进入该链；HTTP 403 不按 CDN 故障重试。`utils/playback_network_recovery.dart` 识别网络读取错误，[`playback/network_recovery.dart`](../../lib/plugin/pl_player/playback/network_recovery.dart) 管理当前媒体的计时器、限频与缓冲等待。切源会释放恢复状态，当前媒体的错误风暴合并为一个计时器，终止读取可升级已有的缓冲等待。分离音视频的读取错误先保留主视频剩余缓存，耗尽后再重载；主媒体的播放与缓存同时恢复推进时，可以取消本轮网络重载。加载队列繁忙时继续等待，保留本轮恢复机会。

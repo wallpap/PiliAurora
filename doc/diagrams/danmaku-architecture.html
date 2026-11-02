@@ -37,7 +37,7 @@
     <div class="diagram-scroll">
       <svg viewBox="0 0 1280 720" role="img" aria-labelledby="danmaku-title danmaku-desc">
         <title id="danmaku-title">弹幕显示架构</title>
-        <desc id="danmaku-desc">弹幕由远端、直播和本地来源进入有界解码与缓存处理，再按时间范围准备工作集，由媒体时钟和帧调度驱动渲染与交互。</desc>
+        <desc id="danmaku-desc">点播和本地弹幕经过有界处理与时间窗口，直播消息经过独立候选队列；两条路径共同使用显示渲染器与帧调度。</desc>
         <defs>
           <marker id="dm-arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0,8 3,0 6" fill="#4f5d75"/></marker>
           <marker id="dm-arrow-link" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0,8 3,0 6" fill="#2e5aa8"/></marker>
@@ -56,6 +56,9 @@
         <path class="edge" d="M944 224 H988"/>
         <path class="edge" d="M848 396 V276"/>
         <path class="edge" d="M1118 396 V328"/>
+        <path class="edge" d="M140 276 V440 Q140 448 148 448 H280"/>
+        <path class="edge" d="M424 396 V360 H840 a8 8 0 0 1 16 0 H1020 V328"/>
+        <path class="edge" d="M960 420 H972 V368 a8 8 0 0 1 0 -16 V344 H1060 V328"/>
 
         <g class="node input">
           <rect class="bounds" x="44" y="172" width="192" height="104"/>
@@ -69,19 +72,19 @@
           <rect class="tag" x="292" y="180" width="62" height="16"/><text class="tag-text" x="323" y="191" text-anchor="middle">SOURCE</text>
           <text class="name" x="376" y="224" text-anchor="middle">来源适配与生命周期</text>
           <text class="sub" x="376" y="246" text-anchor="middle">PlDanmakuController</text>
-          <text class="sub" x="376" y="261" text-anchor="middle">LiveDanmakuQueue · file store</text>
+          <text class="sub" x="376" y="261" text-anchor="middle">VOD · local file</text>
         </g>
         <g class="node store">
           <rect class="bounds" x="516" y="172" width="192" height="104"/>
           <rect class="tag" x="528" y="180" width="68" height="16"/><text class="tag-text" x="562" y="191" text-anchor="middle">BOUNDED</text>
-          <text class="name" x="612" y="224" text-anchor="middle">解码与处理配额</text>
+          <text class="name" x="612" y="224" text-anchor="middle">点播解码与处理配额</text>
           <text class="sub" x="612" y="246" text-anchor="middle">DanmakuWorkQuota</text>
           <text class="sub" x="612" y="261" text-anchor="middle">decode · filter · merge</text>
         </g>
         <g class="node backend">
           <rect class="bounds" x="752" y="172" width="192" height="104"/>
           <rect class="tag" x="764" y="180" width="68" height="16"/><text class="tag-text" x="798" y="191" text-anchor="middle">TIMELINE</text>
-          <text class="name" x="848" y="224" text-anchor="middle">范围与窗口协调</text>
+          <text class="name" x="848" y="224" text-anchor="middle">点播范围与窗口</text>
           <text class="sub" x="848" y="246" text-anchor="middle">coverage · rules · cursor</text>
           <text class="sub" x="848" y="261" text-anchor="middle">100ms buckets · prepareFrame</text>
         </g>
@@ -102,6 +105,13 @@
           <text class="sub" x="1118" y="485" text-anchor="middle">LIVE: received monotonic time</text>
         </g>
         <g class="node backend">
+          <rect class="bounds" x="280" y="396" width="192" height="104"/>
+          <rect class="tag" x="292" y="404" width="54" height="16"/><text class="tag-text" x="319" y="415" text-anchor="middle">LIVE</text>
+          <text class="name" x="376" y="448" text-anchor="middle">直播候选队列</text>
+          <text class="sub" x="376" y="470" text-anchor="middle">LiveDanmakuQueue</text>
+          <text class="sub" x="376" y="485" text-anchor="middle">bounded · monotonic age</text>
+        </g>
+        <g class="node backend">
           <rect class="bounds" x="736" y="396" width="224" height="104"/>
           <rect class="tag" x="748" y="404" width="68" height="16"/><text class="tag-text" x="782" y="415" text-anchor="middle">SCHEDULER</text>
           <text class="name" x="848" y="448" text-anchor="middle">弹幕帧调度</text>
@@ -118,7 +128,7 @@
         <rect x="928" y="666" width="20" height="18" rx="4" fill="rgba(191,69,32,.08)" stroke="#bf4520"/><text class="legend-text" x="960" y="680">显示工作集</text>
       </svg>
     </div>
-    <figcaption>点播以不可变媒体锚点按帧目标时间投影弹幕位置；直播以单调收到时间维护消息年龄，并累计可见运行时段作为运动时间。隐藏、暂停、seek、来源替换和配置重建会分别收敛订阅、时间窗口或显示代次。</figcaption>
+    <figcaption>点播来源经过进程配额和范围窗口；直播消息通过独立候选队列进入共享渲染器。点播按媒体锚点投影位置，直播按消息接收时间和可见运行时段推进。</figcaption>
   </figure>
 </main>
 </body>

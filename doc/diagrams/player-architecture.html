@@ -58,7 +58,7 @@
         <rect class="zone-label-mask" x="764" y="88" width="150" height="18"/>
         <text class="zone-label" x="772" y="102">原生媒体与平台输出</text>
 
-        <path class="edge-api" d="M240 224 H284"/>
+        <path class="edge-api" d="M240 224 H296"/>
         <path class="edge" d="M488 224 H520"/>
         <path class="edge" d="M712 224 H768"/>
         <path class="edge" d="M960 224 H1000"/>
@@ -132,7 +132,7 @@
         <text class="legend-text" x="752" y="680">会话规范状态</text>
       </svg>
     </div>
-    <figcaption>页面负责业务查询和播放计划；Owner 表达页面控制权；Session 是规范状态与命令序列的所有者；Runtime 独占原生播放器和输出生命周期。界面命令结果表示原生写入是否接受，实际播放状态仍以匹配当前代次的原生事件为准。</figcaption>
+    <figcaption>页面装配播放计划，Owner 管理页面控制权，Session 串行协调命令并发布快照，Runtime 管理原生播放器和输出。资源槽等待 Player.released 后才可供下一实例使用；媒体时钟与视频采样使用独立通道。</figcaption>
   </figure>
 </main>
 </body>
