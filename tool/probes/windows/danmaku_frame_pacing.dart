@@ -28,7 +28,7 @@ Future<void> main(List<String> arguments) async {
   if (!Platform.isWindows) throw UnsupportedError('Windows probe');
   final report = File(
     arguments.isEmpty
-        ? 'build/windows-danmaku-validation/production.json'
+        ? 'doc/dev/diagnostics/windows-danmaku-validation/production.json'
         : arguments.first,
   );
   await report.parent.create(recursive: true);

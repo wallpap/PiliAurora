@@ -16,7 +16,7 @@ $presentMon = (Resolve-Path -LiteralPath $PresentMonPath).Path
 $mediaPath = if ($Media) { (Resolve-Path -LiteralPath $Media).Path } else { $null }
 $enginePath = if ($EngineLibrary) { (Resolve-Path -LiteralPath $EngineLibrary).Path } else { $null }
 if (-not $OutputDirectory) {
-    $OutputDirectory = Join-Path $workspace ('build/windows-danmaku-validation/' + (Get-Date -Format 'yyyyMMdd-HHmmss'))
+    $OutputDirectory = Join-Path $workspace ('doc/dev/diagnostics/windows-danmaku-validation/' + (Get-Date -Format 'yyyyMMdd-HHmmss'))
 }
 $outputPath = [IO.Path]::GetFullPath($OutputDirectory)
 if (Test-Path -LiteralPath $outputPath) {

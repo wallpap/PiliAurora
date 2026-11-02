@@ -118,7 +118,7 @@ uv run --locked python tool/probes/android/frame_timing_capture.py --adb <adb路
 
 省略 `--layer` 时优先选择包名对应的唯一 SurfaceView BLAST 缓冲图层，其余情况选择唯一 SurfaceView；自动选择排除带 `!handle` 的已销毁图层，多个活动缓冲图层需显式指定。Android 16 的 `RequestedLayerState{...}` 列表先提取实际 `name#id`，`--layer` 接受该名称或列表中的原始行。Release 包名为 `io.github.wallpap.piliaurora`，应与被测构建一致。采集命令为 `dumpsys SurfaceFlinger --list`、`--latency <layer>` 及 `dumpsys gfxinfo <package> framestats`；不安装 APK、不重置统计、不清理日志、不修改设备配置。
 
-输出默认位于 `build/android-frame-timing/<UTC时间>.json`，可传 `--output` 指定不存在的文件。工具排除初始缓冲区中的已完成帧、重复行、零值和未完成 fence，保存数值行与图层摘要，不保存设备序列号、原始图层名或 dumpsys 文本。SurfaceFlinger 三列依次为期望呈现、实际呈现和帧就绪的纳秒时间，定义见 [AOSP FrameTracker](https://android.googlesource.com/platform/frameworks/native/+/878911f7df21c700ddbe9e9c9d28cd0a1776946f/services/surfaceflinger/FrameTracker.cpp#240)。gfxinfo 按输出表头提取 `Flags`、`IntendedVsync`、`Vsync`、`FrameCompleted`。
+输出默认位于 `doc/dev/diagnostics/android-frame-timing/<UTC时间>.json`，可传 `--output` 指定不存在的文件。工具排除初始缓冲区中的已完成帧、重复行、零值和未完成 fence，保存数值行与图层摘要，不保存设备序列号、原始图层名或 dumpsys 文本。SurfaceFlinger 三列依次为期望呈现、实际呈现和帧就绪的纳秒时间，定义见 [AOSP FrameTracker](https://android.googlesource.com/platform/frameworks/native/+/878911f7df21c700ddbe9e9c9d28cd0a1776946f/services/surfaceflinger/FrameTracker.cpp#240)。gfxinfo 按输出表头提取 `Flags`、`IntendedVsync`、`Vsync`、`FrameCompleted`。
 
 窗口范围 1–60 秒，每 500ms 读取一次，每来源最多保存 16384 条新记录。无新记录或达到上限时返回非零退出码；某个来源为空时结合输出中的行数判断系统支持。主机耗时用于控制采集窗口，设备时间保持原始时钟域。图层帧时间与 Android View 帧时间分别记录；Flutter Surface、纹理刷新、UI 帧和 Scene 使用不同口径。工具不会据这些数值自动判定“稳定 60”。读取开销、Android 版本兼容性和实际帧率需要目标设备验证。
 
@@ -169,7 +169,7 @@ python tool/probes/windows/danmaku_frame_pacing_analysis.py build/my-run/probe.j
 
 采集入口默认构建 Profile 探针，使用独立 ETW session 按进程 ID 采集 PresentMon
 v1 QPC CSV，等待数据写入后自动执行同帧关联与汇总。默认目录为
-`build/windows-danmaku-validation/时间戳/`；`-OutputDirectory` 可指定尚未存在的目录。
+`doc/dev/diagnostics/windows-danmaku-validation/时间戳/`；`-OutputDirectory` 可指定尚未存在的目录。
 `-SkipBuild` 要求 Profile 目录当前就是此探针。PresentMon 使用官方独立命令行工具
 （已验证 2.5.1），无需安装服务；采集失败时查看目录内的 stdout/stderr。
 `-EngineLibrary <flutter_windows.dll>` 可对照[固定自编引擎](../engine/windows_frame_pacing/README.md)，
@@ -209,7 +209,7 @@ uv run --locked python -m unittest discover -s tool/experiments/danmaku -p prese
 uv run --locked python tool/probes/windows/windows_source_size_channel_probe.py
 ```
 
-需要 Python 和支持 C++17 的 `g++`，可用 `--compiler` 指定编译器。输出保存在 `build/windows-playback-diagnosis/`。探针使用模拟播放器，验证命令与时序；GPU 和实际视频播放在应用内检查。
+需要 Python 和支持 C++17 的 `g++`，可用 `--compiler` 指定编译器。输出保存在 `doc/dev/diagnostics/windows-playback-diagnosis/`。探针使用模拟播放器，验证命令与时序；GPU 和实际视频播放在应用内检查。
 
 ## Windows 开播纹理回归探针
 
@@ -220,7 +220,7 @@ uv run --locked python tool/probes/windows/windows_playback_startup_probe.py
 uv run --locked python tool/probes/windows/windows_texture_frame_probe.py --compiler <g++路径>
 ```
 
-前者通过 FVM 运行 Flutter 测试；后者编译生产纹理方法，检查初始纹理、有效首帧和同尺寸提交。生成文件位于 `build/windows-playback-diagnosis/`，GPU 和播放器通道由模拟对象替代。
+前者通过 FVM 运行 Flutter 测试；后者编译生产纹理方法，检查初始纹理、有效首帧和同尺寸提交。生成文件位于 `doc/dev/diagnostics/windows-playback-diagnosis/`，GPU 和播放器通道由模拟对象替代。
 
 ## Windows 硬解画面采样探针
 

@@ -51,7 +51,7 @@ def main():
     end=opening+1;depth=1
     while depth:
         depth+=(source[end]=='{')-(source[end]=='}');end+=1
-    build=root/'build/windows-playback-diagnosis'
+    build=root/'doc/dev/diagnostics/windows-playback-diagnosis'
     build.mkdir(parents=True, exist_ok=True)
     fixture=build/'resize_ack_probe.dart'
     fixture.write_text(HEADER+source[start:end]+MAIN,encoding='utf-8')

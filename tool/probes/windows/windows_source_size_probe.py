@@ -71,7 +71,7 @@ def main():
     attach = method(source, 'if (Platform.isWindows) {')
     update = method(source, 'void _updateSourceSize(')
     dispose = method(source, 'Future<void> _dispose(')
-    output = root / 'build/windows-playback-diagnosis/source_size_probe.dart'
+    output = root / 'doc/dev/diagnostics/windows-playback-diagnosis/source_size_probe.dart'
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(HEADER.replace('ATTACH', attach) + update + dispose + MAIN,
                       encoding='utf-8')

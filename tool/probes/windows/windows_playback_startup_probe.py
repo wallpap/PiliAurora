@@ -139,7 +139,7 @@ def main():
     root = Path(__file__).resolve().parents[3]
     source = (root / 'lib/plugin/pl_player/view/view.dart').read_text(encoding='utf-8')
     caller = method(source, 'Future<bool> _applyVideoOutputSize(')
-    fixture = root / 'build/windows-playback-diagnosis/playback_startup_probe_test.dart'
+    fixture = root / 'doc/dev/diagnostics/windows-playback-diagnosis/playback_startup_probe_test.dart'
     fixture.parent.mkdir(parents=True, exist_ok=True)
     fixture.write_text(HEADER.replace('CALLER', caller) + MAIN, encoding='utf-8')
     raise SystemExit(subprocess.run([

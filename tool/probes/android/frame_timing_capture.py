@@ -169,7 +169,7 @@ def main():
     if not 1 <= args.seconds <= 60:
         parser.error("--seconds 范围为 1–60")
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
-    output = args.output or Path("build/android-frame-timing") / f"{stamp}.json"
+    output = args.output or Path("doc/dev/diagnostics/android-frame-timing") / f"{stamp}.json"
     try:
         device = Device(args.adb, args.serial)
         layer = choose_layer(

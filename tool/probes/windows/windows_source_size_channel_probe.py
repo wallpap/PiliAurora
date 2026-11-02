@@ -79,7 +79,7 @@ def main():
     source = (root / 'third_party/media_kit_video/windows/media_kit_video_plugin.cc').read_text(encoding='utf-8')
     branch = method(source, '} else if (method_call.method_name().compare("VideoOutputManager.SetSourceSize")')
     branch = branch[branch.index('{'):]
-    build = root / 'build/windows-playback-diagnosis'
+    build = root / 'doc/dev/diagnostics/windows-playback-diagnosis'
     build.mkdir(parents=True, exist_ok=True)
     fixture = build / 'source_size_channel_probe.cc'
     fixture.write_text(HEADER.replace('BRANCH', branch) + MAIN, encoding='utf-8')

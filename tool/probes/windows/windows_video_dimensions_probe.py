@@ -6,6 +6,7 @@ import subprocess
 
 HEADER = r"""
 #include <client.h>
+#include <cmath>
 #include <cstdint>
 #include <iostream>
 #include <optional>
@@ -57,7 +58,7 @@ def main():
     headers = args.headers or next((p for p in candidates if (p/'client.h').exists()), None)
     if headers is None or not (headers/'client.h').exists():
         parser.error('Pass --headers with the pinned libmpv client.h directory')
-    output = root/'build/windows-playback-diagnosis'
+    output = root/'doc/dev/diagnostics/windows-playback-diagnosis'
     output.mkdir(parents=True, exist_ok=True)
     source = (root/'third_party/media_kit_video/windows/video_output.cc').read_text(encoding='utf-8')
     methods = source[source.index('int64_t VideoOutput::GetVideoWidth()'):]

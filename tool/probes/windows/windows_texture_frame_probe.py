@@ -264,7 +264,7 @@ def main():
     geometry=method(source,'VideoOutput::GetVideoWidth()')+'\n'+method(source,'VideoOutput::GetVideoHeight()')
     source_size=method(source,'VideoOutput::SetSourceSize(')
     render_type=re.search(r'(void|bool) VideoOutput::Render',render)[1]
-    build=root/'build/windows-playback-diagnosis'
+    build=root/'doc/dev/diagnostics/windows-playback-diagnosis'
     build.mkdir(parents=True,exist_ok=True)
     fixture=build/'texture_frame_probe.cc'
     fixture.write_text(HEADER.replace('RENDER_DECL',f'{render_type} Render();')+resize+'\n'+render+'\n'+set_size+'\n'+check_size+'\n'+set_callback+'\n'+notify+'\n'+geometry+'\n'+source_size+MAIN,encoding='utf-8')
