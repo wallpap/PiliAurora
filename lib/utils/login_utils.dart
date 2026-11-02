@@ -6,6 +6,7 @@ import 'package:pili_aurora/http/user.dart';
 import 'package:pili_aurora/services/webview_environment.dart';
 import 'package:pili_aurora/services/account_service.dart';
 import 'package:pili_aurora/utils/accounts.dart';
+import 'package:pili_aurora/utils/global_data.dart';
 import 'package:pili_aurora/utils/accounts/account.dart';
 import 'package:pili_aurora/utils/request_utils.dart';
 import 'package:pili_aurora/utils/storage.dart';
@@ -42,8 +43,10 @@ abstract final class LoginUtils {
 
   static Future<void> onLoginMain() async {
     final account = Accounts.main;
-    final res = await UserHttp.userInfo();
+    final res = await UserHttp.userInfo(account: account);
+    if (!identical(account, Accounts.main)) return;
     if (res case Success(:final response)) {
+      GlobalData().coins = response.money;
       setWebCookie(account);
       RequestUtils.syncHistoryStatus();
       if (response.isLogin == true) {

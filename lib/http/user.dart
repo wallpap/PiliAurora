@@ -17,7 +17,6 @@ import 'package:pili_aurora/models/remote/video/video_tag/data.dart';
 import 'package:pili_aurora/utils/accounts.dart';
 import 'package:pili_aurora/utils/accounts/account.dart';
 import 'package:pili_aurora/utils/app_sign.dart';
-import 'package:pili_aurora/utils/global_data.dart';
 import 'package:pili_aurora/utils/wbi_sign.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
@@ -35,19 +34,25 @@ abstract final class UserHttp {
   //   }
   // }
 
-  static Future<LoadingState<UserInfoData>> userInfo() async {
-    final res = await Request().get(Api.userInfo);
+  static Future<LoadingState<UserInfoData>> userInfo({Account? account}) async {
+    final res = await Request().get(
+      Api.userInfo,
+      options: Options(extra: {'account': account ?? Accounts.main}),
+    );
     if (res.data['code'] == 0) {
-      UserInfoData data = UserInfoData.fromJson(res.data['data']);
-      GlobalData().coins = data.money;
-      return Success(data);
+      return Success(UserInfoData.fromJson(res.data['data']));
     } else {
       return Error(res.data['message']);
     }
   }
 
-  static Future<LoadingState<UserStat>> userStatOwner() async {
-    final res = await Request().get(Api.userStatOwner);
+  static Future<LoadingState<UserStat>> userStatOwner({
+    Account? account,
+  }) async {
+    final res = await Request().get(
+      Api.userStatOwner,
+      options: Options(extra: {'account': account ?? Accounts.main}),
+    );
     if (res.data['code'] == 0) {
       return Success(UserStat.fromJson(res.data['data']));
     } else {
@@ -382,8 +387,11 @@ abstract final class UserHttp {
     }
   }
 
-  static Future<LoadingState<num?>> getCoin() async {
-    final res = await Request().get(Api.getCoin);
+  static Future<LoadingState<num?>> getCoin({Account? account}) async {
+    final res = await Request().get(
+      Api.getCoin,
+      options: Options(extra: {'account': account ?? Accounts.main}),
+    );
     if (res.data['code'] == 0) {
       return Success(res.data['data']?['money']);
     } else {

@@ -10,6 +10,7 @@ import 'package:pili_aurora/models/remote/fav/fav_folder/data.dart';
 import 'package:pili_aurora/pages/common/common_data_controller.dart';
 import 'package:pili_aurora/services/account_service.dart';
 import 'package:pili_aurora/utils/accounts.dart';
+import 'package:pili_aurora/utils/global_data.dart';
 import 'package:pili_aurora/utils/accounts/account.dart';
 import 'package:pili_aurora/utils/extension/scroll_controller_ext.dart';
 import 'package:pili_aurora/utils/storage.dart';
@@ -95,9 +96,20 @@ class MineController extends CommonDataController<FavFolderData, FavFolderData>
     return true;
   }
 
+  int _userInfoVersion = 0;
+  int _userStatVersion = 0;
+
   Future<void> queryUserInfo() async {
-    final res = await UserHttp.userInfo();
+    final version = ++_userInfoVersion;
+    final account = Accounts.main;
+    final res = await UserHttp.userInfo(account: account);
+    if (isClosed ||
+        version != _userInfoVersion ||
+        !identical(account, Accounts.main)) {
+      return;
+    }
     if (res case Success(:final response)) {
+      GlobalData().coins = response.money;
       if (response.isLogin == true) {
         userInfo.value = response;
         if (response != Pref.userInfoCache) {
@@ -124,7 +136,14 @@ class MineController extends CommonDataController<FavFolderData, FavFolderData>
   void _onLogoutMain() => Accounts.deleteAll({Accounts.main});
 
   Future<void> queryUserStatOwner() async {
-    final res = await UserHttp.userStatOwner();
+    final version = ++_userStatVersion;
+    final account = Accounts.main;
+    final res = await UserHttp.userStatOwner(account: account);
+    if (isClosed ||
+        version != _userStatVersion ||
+        !identical(account, Accounts.main)) {
+      return;
+    }
     if (res case Success(:final response)) {
       userStat.value = response;
     }
@@ -299,6 +318,8 @@ class MineController extends CommonDataController<FavFolderData, FavFolderData>
 
   @override
   void onChangeAccount(bool isLogin) {
+    _userInfoVersion++;
+    _userStatVersion++;
     if (isLogin) {
       onRefresh();
     } else {

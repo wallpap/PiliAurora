@@ -53,7 +53,9 @@ class Request {
   }
 
   static Future<void> setCoin() async {
-    final res = await UserHttp.getCoin();
+    final account = Accounts.main;
+    final res = await UserHttp.getCoin(account: account);
+    if (!identical(account, Accounts.main)) return;
     if (res case Success(:final response)) {
       GlobalData().coins = response;
     }
@@ -132,7 +134,8 @@ class Request {
       createHttpClient: () {
         final client = HttpClient()
           ..idleTimeout = const Duration(seconds: 15)
-          ..autoUncompress = false // 与 HTTP/2 的解压行为保持一致。
+          ..autoUncompress =
+              false // 与 HTTP/2 的解压行为保持一致。
           ..badCertificateCallback = Pref.badCertificateCallback
               ? (cert, host, port) => true
               : null;
