@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/rendering.dart' show ScrollCacheExtent;
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:get/get.dart';
 import 'package:pili_aurora/common/widgets/feed_pagination.dart';
 import 'package:pili_aurora/utils/grid.dart' as grid;
 import 'package:waterfall_flow/waterfall_flow.dart';
@@ -200,6 +201,85 @@ void main() {
       expect(feed.requests, 1);
     },
   );
+
+  testWidgets('同一列表重建时 Rx.stream 新包装不解除在途请求的串行约束', (tester) async {
+    final controller = ScrollController();
+    final data = 0.obs;
+    final pending = Completer<void>();
+    var requests = 0;
+    addTearDown(controller.dispose);
+    addTearDown(data.close);
+    Widget feed() => Directionality(
+      textDirection: TextDirection.ltr,
+      child: FeedPagination(
+        controller: controller,
+        dataChanges: data.stream,
+        canLoadMore: () => true,
+        onLoadMore: () {
+          requests++;
+          return pending.future;
+        },
+        child: ListView(controller: controller),
+      ),
+    );
+    await tester.pumpWidget(feed());
+    await tester.pumpAndSettle();
+    expect(requests, 1);
+    await tester.pumpWidget(feed());
+    data.value++;
+    await tester.pumpAndSettle();
+    expect(requests, 1);
+    pending.complete();
+    await tester.pumpAndSettle();
+    expect(requests, 1);
+    await tester.pumpWidget(const SizedBox());
+  });
+
+  testWidgets('替换来源立即检查新列表，旧请求完成不释放新来源的加载标记', (tester) async {
+    final oldController = ScrollController();
+    final newController = ScrollController();
+    final oldChanges = StreamController<Object?>.broadcast(sync: true);
+    final newChanges = StreamController<Object?>.broadcast(sync: true);
+    final oldRequest = Completer<void>();
+    final newRequest = Completer<void>();
+    addTearDown(oldController.dispose);
+    addTearDown(newController.dispose);
+    addTearDown(oldChanges.close);
+    addTearDown(newChanges.close);
+    var oldCalls = 0, newCalls = 0;
+    Widget feed(bool current) => Directionality(
+      textDirection: TextDirection.ltr,
+      child: FeedPagination(
+        controller: current ? newController : oldController,
+        dataChanges: current ? newChanges.stream : oldChanges.stream,
+        canLoadMore: () => true,
+        onLoadMore: () {
+          if (current) {
+            newCalls++;
+            return newRequest.future;
+          }
+          oldCalls++;
+          return oldRequest.future;
+        },
+        child: ListView(controller: current ? newController : oldController),
+      ),
+    );
+    await tester.pumpWidget(feed(false));
+    await tester.pumpAndSettle();
+    expect(oldCalls, 1);
+    await tester.pumpWidget(feed(true));
+    await tester.pumpAndSettle();
+    expect(newCalls, 1);
+    oldRequest.complete();
+    await tester.pump();
+    newChanges.add(null);
+    await tester.pump();
+    expect(newCalls, 1);
+    newRequest.complete();
+    await tester.pumpAndSettle();
+    expect(newCalls, 1);
+    await tester.pumpWidget(const SizedBox());
+  });
 
   testWidgets(
     'pending pagination is cancelled by unmount and disabled ticker',

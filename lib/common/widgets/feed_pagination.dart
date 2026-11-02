@@ -29,7 +29,8 @@ class FeedPagination extends StatefulWidget {
 
 class _FeedPaginationState extends State<FeedPagination> {
   bool _scheduled = false;
-  bool _loading = false;
+  int _generation = 0;
+  int? _loadingGeneration;
   late StreamSubscription<Object?> _subscription;
 
   @override
@@ -48,6 +49,7 @@ class _FeedPaginationState extends State<FeedPagination> {
   @override
   void didUpdateWidget(FeedPagination oldWidget) {
     super.didUpdateWidget(oldWidget);
+    final changed = widget.controller != oldWidget.controller;
     if (widget.controller != oldWidget.controller) {
       oldWidget.controller.removeListener(_schedule);
       widget.controller.addListener(_schedule);
@@ -55,6 +57,12 @@ class _FeedPaginationState extends State<FeedPagination> {
     if (widget.dataChanges != oldWidget.dataChanges) {
       _subscription.cancel();
       _subscription = widget.dataChanges.listen((_) => _schedule());
+    }
+    if (changed) {
+      // 控制器标识列表归属；Rx.stream 可能每次 build 都生成新包装，不能作为代次。
+      // 新列表不继承旧请求；旧完成也不能释放新列表的加载标记。
+      _generation++;
+      _schedule();
     }
   }
 
@@ -68,7 +76,7 @@ class _FeedPaginationState extends State<FeedPagination> {
   }
 
   Future<void> _check() async {
-    if (_loading ||
+    if (_loadingGeneration == _generation ||
         !TickerMode.valuesOf(context).enabled ||
         widget.controller.positions.length != 1 ||
         !widget.canLoadMore()) {
@@ -84,14 +92,18 @@ class _FeedPaginationState extends State<FeedPagination> {
         : 0.0;
     if (position.extentAfter > threshold) return;
     final extent = position.maxScrollExtent;
-    _loading = true;
+    final generation = _generation;
+    _loadingGeneration = generation;
     try {
       await widget.onLoadMore();
     } finally {
-      _loading = false;
+      if (_loadingGeneration == generation) _loadingGeneration = null;
     }
     // 无增长（错误或终点）不自行重试，增长后的布局由 metrics 通知检查。
-    if (mounted && position.hasPixels && position.maxScrollExtent != extent) {
+    if (mounted &&
+        generation == _generation &&
+        position.hasPixels &&
+        position.maxScrollExtent != extent) {
       _schedule();
     }
   }
