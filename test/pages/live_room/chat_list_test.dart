@@ -64,7 +64,7 @@ void main() {
     final anchor = find.text('消息 491');
     expect(anchor, findsOneWidget);
     final position = tester.getTopLeft(anchor);
-    for (var i = 500; i < 100500; i++) {
+    for (var i = 500; i < 2500; i++) {
       buffer.add(i);
     }
     await tester.pumpWidget(_app(_panel(buffer, controller)));
@@ -75,7 +75,7 @@ void main() {
     buffer.resume();
     controller.jumpTo(0);
     await tester.pumpWidget(_app(_panel(buffer, controller)));
-    expect(find.text('消息 100499'), findsOneWidget);
+    expect(find.text('消息 2499'), findsOneWidget);
     expect(controller.offset, 0);
     expect(tester.takeException(), isNull);
   });

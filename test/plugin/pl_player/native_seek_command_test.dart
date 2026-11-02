@@ -43,11 +43,11 @@ void main() {
       );
       expect(
         nativeSeekCommand(
-          const Duration(milliseconds: 2400),
+          const Duration(seconds: 20, milliseconds: 500),
           keyframe: true,
           mediaExtras: media.extras,
         ),
-        ['seek', '2.400', 'absolute+keyframes'],
+        ['seek', '20.500', 'absolute+keyframes'],
       );
     },
   );
@@ -60,16 +60,6 @@ void main() {
         externalAudio: true,
       ),
       ['seek', '96.873', 'absolute+exact'],
-    );
-  });
-
-  test('Android progress seeks use keyframes instead of exact decode', () {
-    expect(
-      nativeSeekCommand(
-        const Duration(seconds: 20, milliseconds: 500),
-        keyframe: true,
-      ),
-      ['seek', '20.500', 'absolute+keyframes'],
     );
   });
 

@@ -106,6 +106,7 @@ void main() {
     final missing = cache.readRange(359999999, 360000001);
     expect(missing.isLoaded, isFalse);
     cache.addSegmentBuckets(0, {});
+    expect(cache.containsSegment(0), isTrue);
     final partial = cache.readRange(359999999, 360000001);
     expect(partial.entries, isEmpty);
     expect(partial.coverage.map((range) => range.state), [
@@ -122,6 +123,14 @@ void main() {
     ]);
     expect(evicted.revision, greaterThan(partial.revision));
     expect(partial.coverage.first.state, DanmakuCoverageState.loaded);
+    expect(cache.containsSegment(0), isFalse);
+    expect(cache.containsSegment(1), isTrue);
+    cache.addSegmentBuckets(2, {
+      7200: [_element(720000, 2)],
+    });
+    expect(cache.containsSegment(0), isFalse);
+    expect(cache.containsSegment(1), isFalse);
+    expect(cache.containsSegment(2), isTrue);
     cache.clear();
     expect(cache.readRange(360000000, 360000001).isLoaded, isFalse);
   });
@@ -207,28 +216,6 @@ void main() {
     expect(cache.elementCount, 2);
     expect(cache.getAt(0), isNull);
     expect(cache.getAt(360000), hasLength(1));
-  });
-
-  test('empty segment is marked loaded until eviction', () {
-    final cache = DanmakuCache(
-      maxBuckets: 1,
-      maxElements: 1,
-      maxSegments: 1,
-    );
-    // ignore: cascade_invocations
-    cache.addSegmentBuckets(0, {});
-    expect(cache.containsSegment(0), isTrue);
-    cache
-      ..addSegmentBuckets(1, {
-        3600: [_element(360000, 1)],
-      })
-      ..addSegmentBuckets(2, {
-        7200: [_element(720000, 2)],
-      });
-
-    expect(cache.containsSegment(0), isFalse);
-    expect(cache.containsSegment(1), isFalse);
-    expect(cache.containsSegment(2), isTrue);
   });
 
   test('local file elements are retained without network limits', () {

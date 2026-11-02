@@ -151,28 +151,23 @@ void main() {
     },
   );
 
-  for (final path in ['../settings.json']) {
-    test(
-      'rejects escaping or ambiguous path $path before making a request',
-      () async {
-        await expectLater(client.read(path), throwsArgumentError);
-        expect(adapter.requests, isEmpty);
-      },
-    );
-  }
+  test(
+    'rejects escaping or ambiguous path ../settings.json before making a request',
+    () async {
+      await expectLater(client.read('../settings.json'), throwsArgumentError);
+      expect(adapter.requests, isEmpty);
+    },
+  );
 
-  for (final status in [200]) {
-    test('PUT accepts HTTP $status and sends exact raw JSON bytes', () async {
-      adapter.status = (_) => status;
-      final bytes = utf8.encode('{"标题":"设置","enabled":true}');
-      await client.write('backup/settings.json', bytes);
-      final request = adapter.requests.single;
-      expect(request.method, 'PUT');
-      expect(request.headers[Headers.contentLengthHeader], bytes.length);
-      expect(request.contentType, 'application/json; charset=utf-8');
-      expect(adapter.bodies.single, bytes);
-    });
-  }
+  test('PUT accepts HTTP 200 and sends exact raw JSON bytes', () async {
+    final bytes = utf8.encode('{"标题":"设置","enabled":true}');
+    await client.write('backup/settings.json', bytes);
+    final request = adapter.requests.single;
+    expect(request.method, 'PUT');
+    expect(request.headers[Headers.contentLengthHeader], bytes.length);
+    expect(request.contentType, 'application/json; charset=utf-8');
+    expect(adapter.bodies.single, bytes);
+  });
 
   test('a failed upload never requests DELETE of the old backup', () async {
     adapter

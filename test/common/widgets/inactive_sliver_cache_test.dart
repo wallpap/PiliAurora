@@ -8,81 +8,6 @@ import 'package:material_ui/material_ui.dart' show TabBarView, TabController;
 import 'package:pili_aurora/common/widgets/inactive_feed_sliver.dart';
 import 'package:pili_aurora/common/widgets/tab_activity.dart';
 
-// 仅用于方案验证：不改 childManager，以标准 layout/collectGarbage 收缩保活卡片。
-class _InactiveSliver extends StatelessWidget {
-  const _InactiveSliver({
-    super.key,
-    required this.sliver,
-    this.preserveExtent = true,
-  });
-
-  final Widget sliver;
-  final bool preserveExtent;
-
-  @override
-  Widget build(BuildContext context) => preserveExtent
-      ? InactiveFeedSliver(sliver: sliver)
-      : _LayoutBudget(
-          active: TickerMode.valuesOf(context).enabled,
-          child: sliver,
-        );
-}
-
-class _LayoutBudget extends SingleChildRenderObjectWidget {
-  const _LayoutBudget({
-    required this.active,
-    required super.child,
-  });
-
-  final bool active;
-
-  @override
-  _RenderLayoutBudget createRenderObject(BuildContext context) =>
-      _RenderLayoutBudget(active);
-
-  @override
-  void updateRenderObject(
-    BuildContext context,
-    _RenderLayoutBudget renderObject,
-  ) {
-    renderObject.active = active;
-  }
-}
-
-class _RenderLayoutBudget extends RenderProxySliver {
-  _RenderLayoutBudget(this._active);
-
-  bool _active;
-
-  set active(bool value) {
-    if (_active == value) return;
-    _active = value;
-    markNeedsLayout();
-  }
-
-  @override
-  void performLayout() {
-    child!.layout(
-      _active
-          ? constraints
-          : constraints.copyWith(
-              remainingPaintExtent: 0,
-              // 整行边界处严格 0 会令 Grid firstIndex > targetLastIndex。
-              remainingCacheExtent:
-                  constraints.scrollOffset == 0 &&
-                      constraints.remainingCacheExtent == 0
-                  ? 0
-                  : 1,
-              cacheOrigin: 0,
-            ),
-      parentUsesSize: true,
-    );
-    final childGeometry = child!.geometry!;
-    // 反例：不冻结旧 scrollExtent，检验近底部 offset 的实际回退。
-    geometry = childGeometry;
-  }
-}
-
 class _Card extends StatefulWidget {
   const _Card({
     required this.index,
@@ -140,13 +65,11 @@ class _Page extends StatefulWidget {
     super.key,
     required this.grid,
     this.itemKeepAlive = false,
-    this.preserveExtent = true,
     this.headerExtent = 0,
   });
 
   final bool grid;
   final bool itemKeepAlive;
-  final bool preserveExtent;
   final double headerExtent;
 
   @override
@@ -177,9 +100,8 @@ class _PageState extends State<_Page> with AutomaticKeepAliveClientMixin {
       live: live,
       keepAlive: widget.itemKeepAlive,
     );
-    final body = _InactiveSliver(
+    final body = InactiveFeedSliver(
       key: budgetKey,
-      preserveExtent: widget.preserveExtent,
       sliver: widget.grid
           ? SliverGrid.builder(
               gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
@@ -296,7 +218,7 @@ void main() {
               child: CustomScrollView(
                 controller: controller,
                 slivers: [
-                  _InactiveSliver(
+                  InactiveFeedSliver(
                     sliver: _CorrectionSliver(key: correctionKey),
                   ),
                 ],
@@ -324,22 +246,21 @@ void main() {
     variant: TargetPlatformVariant.only(TargetPlatform.windows),
   );
 
-  for (final (grid, offset, keepAlive, preserveExtent, headerExtent) in [
-    (true, 0.0, false, true, 0.0),
-    (true, 300.0, false, true, 0.0),
-    (true, 335.0, false, true, 0.0),
-    (false, 500.0, false, true, 0.0),
-    (false, 109125.0, false, true, 0.0),
-    (false, 500.0, true, true, 0.0),
-    (false, 109125.0, false, false, 0.0),
-    (true, 500.0, false, true, 100.0),
-    (true, 12200.0, false, true, 100.0),
-    (false, 109245.0, false, true, 100.0),
-    (true, 0.0, false, true, 1000.0),
-    (false, 0.0, false, true, 1000.0),
+  for (final (grid, offset, keepAlive, headerExtent) in [
+    (true, 0.0, false, 0.0),
+    (true, 300.0, false, 0.0),
+    (true, 335.0, false, 0.0),
+    (false, 500.0, false, 0.0),
+    (false, 109125.0, false, 0.0),
+    (false, 500.0, true, 0.0),
+    (true, 500.0, false, 100.0),
+    (true, 12200.0, false, 100.0),
+    (false, 109245.0, false, 100.0),
+    (true, 0.0, false, 1000.0),
+    (false, 0.0, false, 1000.0),
   ]) {
     testWidgets(
-      '${grid ? 'grid' : 'variable list'} offset=$offset keepAlive=$keepAlive preserveExtent=$preserveExtent header=$headerExtent',
+      '${grid ? 'grid' : 'variable list'} offset=$offset keepAlive=$keepAlive header=$headerExtent',
       (tester) async {
         final semantics = tester.ensureSemantics();
         try {
@@ -369,7 +290,6 @@ void main() {
                           key: pageKey,
                           grid: grid,
                           itemKeepAlive: keepAlive,
-                          preserveExtent: preserveExtent,
                           headerExtent: headerExtent,
                         ),
                       ),
@@ -410,7 +330,7 @@ void main() {
             lessThanOrEqualTo(budget.constraints.remainingCacheExtent),
           );
           debugPrint(
-            'inactive sliver: grid=$grid keepAlive=$keepAlive extent=$preserveExtent '
+            'inactive sliver: grid=$grid keepAlive=$keepAlive '
             'offset=$initialOffset -> ${position.pixels}; '
             'max=$initialMax -> ${position.maxScrollExtent}; '
             'incomingCache=${budget.constraints.remainingCacheExtent}; '
@@ -420,12 +340,8 @@ void main() {
           expect(pageKey.currentState, same(page));
           expect(page.loadedData, same(data));
           expect(page.controller.position, same(position));
-          if (preserveExtent) {
-            expect(position.pixels, initialOffset);
-            expect(position.maxScrollExtent, initialMax);
-          } else {
-            expect(position.pixels, lessThan(initialOffset));
-          }
+          expect(position.pixels, initialOffset);
+          expect(position.maxScrollExtent, initialMax);
           if (keepAlive) {
             expect(hiddenCards, greaterThanOrEqualTo(activeCards));
           } else {
@@ -438,11 +354,9 @@ void main() {
           await tester.pumpAndSettle();
           expect(pageKey.currentState, same(page));
           expect(page.controller.position, same(position));
-          if (preserveExtent) {
-            expect(position.pixels, initialOffset);
-            final restored = await tester.runAsync(() => _capture(boundary));
-            expect(restored, orderedEquals(before!));
-          }
+          expect(position.pixels, initialOffset);
+          final restored = await tester.runAsync(() => _capture(boundary));
+          expect(restored, orderedEquals(before!));
           await tester.pumpWidget(const SizedBox());
           await tester.pump();
         } finally {

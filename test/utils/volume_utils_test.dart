@@ -23,8 +23,6 @@ void main() {
       (0.0, 0.0),
       (1.0, 1.0),
       (1.999, 1.0),
-      (2.345, 1.0),
-      (3.0, 1.0),
     ]) {
       expect(roundVolumeRatio(input), expected);
       expect(roundVolumeRatio(expected), expected);

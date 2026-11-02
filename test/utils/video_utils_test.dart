@@ -54,13 +54,16 @@ void main() {
     VideoUtils.liveCdnUrl = null;
   });
 
-  test('single CDN is the default and preserves the original selection', () {
+  test('默认单 CDN，开启后提供备用源，关闭后恢复首选源', () async {
     const urls = [
       'https://upos-sz-mirrorcos.bilivideo.com/upgcxcode/video?deadline=1',
       'https://upos-sz-mirrorali.bilivideo.com/upgcxcode/video?deadline=1',
     ];
 
     expect(Pref.enableMultiCdn, isFalse);
+    await GStorage.setting.put(SettingBoxKey.enableMultiCdn, true);
+    expect(VideoUtils.getCdnUrls(urls).length, greaterThan(1));
+    await GStorage.setting.put(SettingBoxKey.enableMultiCdn, false);
     expect(VideoUtils.getCdnUrls(urls, defaultCDNService: CDNService.hw), [
       VideoUtils.getCdnUrl(urls, defaultCDNService: CDNService.hw),
     ]);
@@ -180,18 +183,6 @@ void main() {
       expect(urls, contains(backup));
     },
   );
-
-  test('disabling multi CDN restores single-source generation', () async {
-    const urls = [
-      'https://upos-sz-mirrorcos.bilivideo.com/upgcxcode/video?deadline=1',
-      'https://upos-sz-mirrorali.bilivideo.com/upgcxcode/video?deadline=1',
-    ];
-    await GStorage.setting.put(SettingBoxKey.enableMultiCdn, true);
-    expect(VideoUtils.getCdnUrls(urls).length, greaterThan(1));
-
-    await GStorage.setting.put(SettingBoxKey.enableMultiCdn, false);
-    expect(VideoUtils.getCdnUrls(urls), [VideoUtils.getCdnUrl(urls)]);
-  });
 
   test('empty URL lists have no candidates', () {
     expect(VideoUtils.getCdnUrls(const []), isEmpty);

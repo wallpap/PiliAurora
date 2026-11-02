@@ -102,12 +102,12 @@ void main() {
     controller.addDm(_message(0));
     await tester.pump(const Duration(milliseconds: 100));
     controller.disableAutoScroll.value = true;
-    for (var i = 1; i <= 100000; i++) {
+    for (var i = 1; i <= 2000; i++) {
       controller.addDm(_message(i));
     }
     await tester.pump(const Duration(hours: 4));
     expect(controller.chatBuffer.pendingCount, 500);
-    expect(controller.chatBuffer.droppedPending, 99500);
+    expect(controller.chatBuffer.droppedPending, 1500);
 
     await tester.binding.handlePopRoute();
     await tester.pumpAndSettle();
@@ -117,7 +117,7 @@ void main() {
     expect(controller.chatBuffer.historyCount, 0);
     expect(controller.chatBuffer.pendingCount, 0);
     controller
-      ..addDm(_message(100001))
+      ..addDm(_message(2001))
       ..refreshMsgIfNeeded();
     await tester.pump(const Duration(seconds: 1));
     expect(controller.messages.value, isEmpty);

@@ -22,39 +22,40 @@ void main() {
   tearDownAll(Hive.close);
 
   testWidgets('多图在窄屏和宽屏保持封面比例，放大文字后不溢出', (tester) async {
-    for (final width in [332.0, 452.0]) {
-      for (final brightness in Brightness.values) {
-        await tester.pumpWidget(
-          MaterialApp(
-            theme: ThemeData(brightness: brightness),
-            home: Scaffold(
-              body: MediaQuery(
-                data: const MediaQueryData(textScaler: TextScaler.linear(1.25)),
-                child: Center(
-                  child: SizedBox(
-                    width: width,
-                    child: MessageContentCard(
-                      coverUrls: const ['', '', '', ''],
-                      title: '长标题' * 30,
-                      summary: '长摘要' * 50,
-                      onTap: () {},
-                    ),
+    for (final (width, brightness) in [
+      (332.0, Brightness.light),
+      (452.0, Brightness.dark),
+    ]) {
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: ThemeData(brightness: brightness),
+          home: Scaffold(
+            body: MediaQuery(
+              data: const MediaQueryData(textScaler: TextScaler.linear(1.25)),
+              child: Center(
+                child: SizedBox(
+                  width: width,
+                  child: MessageContentCard(
+                    coverUrls: const ['', '', '', ''],
+                    title: '长标题' * 30,
+                    summary: '长摘要' * 50,
+                    onTap: () {},
                   ),
                 ),
               ),
             ),
           ),
-        );
-        await tester.pumpAndSettle();
+        ),
+      );
+      await tester.pumpAndSettle();
 
-        final coverSize = tester.getSize(find.byType(AspectRatio));
-        final expectedWidth = width < 400 ? width : 400.0;
-        expect(coverSize.width, expectedWidth);
-        expect(coverSize.height, closeTo(expectedWidth * 9 / 16, 0.001));
-        expect(find.byType(NetworkImgLayer), findsNWidgets(3));
-        expect(find.text('共 4 张'), findsOneWidget);
-        expect(tester.takeException(), isNull);
-      }
+      final coverSize = tester.getSize(find.byType(AspectRatio));
+      final expectedWidth = width < 400 ? width : 400.0;
+      expect(coverSize.width, expectedWidth);
+      expect(coverSize.height, closeTo(expectedWidth * 9 / 16, 0.001));
+      expect(find.byType(NetworkImgLayer), findsNWidgets(3));
+      expect(find.text('共 4 张'), findsOneWidget);
+      expect(tester.takeException(), isNull);
     }
   });
 

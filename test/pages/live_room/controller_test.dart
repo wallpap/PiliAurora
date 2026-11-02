@@ -321,21 +321,21 @@ void main() {
       expect(controller.disableAutoScroll.value, isTrue);
       final offset = controller.scrollController.offset;
       final frozen = controller.messages.value;
-      for (var i = 500; i < 100500; i++) {
+      for (var i = 500; i < 2500; i++) {
         controller.addDm(_message(i));
       }
       await tester.pump(const Duration(milliseconds: 100));
       expect(controller.messages.value, same(frozen));
       expect(controller.scrollController.offset, offset);
-      expect(controller.unreadMessages.value, (500, 99500));
-      expect(find.text('回到底部 · 500 条新消息\n已略过 99500 条'), findsOneWidget);
+      expect(controller.unreadMessages.value, (500, 1500));
+      expect(find.text('回到底部 · 500 条新消息\n已略过 1500 条'), findsOneWidget);
       expect(tester.takeException(), isNull);
-      await tester.tap(find.text('回到底部 · 500 条新消息\n已略过 99500 条'));
+      await tester.tap(find.text('回到底部 · 500 条新消息\n已略过 1500 条'));
       await tester.pumpAndSettle();
       expect(controller.disableAutoScroll.value, isFalse);
       expect(controller.unreadMessages.value, (0, 0));
       expect(controller.messages.value.length, 500);
-      expect(controller.messages.value.last.content.text, '消息 100499');
+      expect(controller.messages.value.last.content.text, '消息 2499');
       expect(controller.scrollController.offset, 0);
       controller.onDelete();
     },

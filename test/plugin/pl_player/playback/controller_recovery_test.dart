@@ -95,16 +95,7 @@ void main() {
   });
 
   _recoveryTest('连续故障跨加载限频，手动重试可立即执行', (f) async {
-    await f.load();
-    f.runtime
-      ..recoverOnLoad = false
-      ..videoHealthy = false;
-    await f.advance(3);
-    expect(f.runtime.loads, hasLength(2));
-    await f.advance(9);
-    expect(f.runtime.loads, hasLength(2));
-    await f.advance(1);
-    expect(f.runtime.loads, hasLength(3));
+    await f.reachSecondThrottledRecovery();
     await f.controller.refreshPlayer();
     expect(f.runtime.loads, hasLength(4));
   });
@@ -445,16 +436,7 @@ void main() {
   });
 
   _recoveryTest('持续画面故障跨重载最多自动恢复三次，不无限加载', (f) async {
-    await f.load();
-    f.runtime
-      ..recoverOnLoad = false
-      ..videoHealthy = false;
-    await f.advance(3);
-    expect(f.runtime.loads, hasLength(2));
-    await f.advance(9);
-    expect(f.runtime.loads, hasLength(2));
-    await f.advance(1);
-    expect(f.runtime.loads, hasLength(3));
+    await f.reachSecondThrottledRecovery();
     await f.advance(14);
     expect(f.runtime.loads, hasLength(3));
     await f.advance(1);
@@ -649,6 +631,20 @@ class _Fixture {
       text: 'Error decoding audio.',
     ),
   );
+
+  // 两个终态共用前半段限频轨迹：3 秒首次恢复，再等待满 10 秒。
+  Future<void> reachSecondThrottledRecovery() async {
+    await load();
+    runtime
+      ..recoverOnLoad = false
+      ..videoHealthy = false;
+    await advance(3);
+    expect(runtime.loads, hasLength(2));
+    await advance(9);
+    expect(runtime.loads, hasLength(2));
+    await advance(1);
+    expect(runtime.loads, hasLength(3));
+  }
 
   Future<void> advance(
     int seconds, {

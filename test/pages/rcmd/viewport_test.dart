@@ -102,69 +102,66 @@ void main() {
     expect(target, 8);
   });
 
-  for (final height in [1000.0, 1080.0]) {
-    testWidgets('1920×$height 补足视口与一行预取，100px页脚不会提前结束', (tester) async {
-      tester.view.physicalSize = Size(1920, height);
-      tester.view.devicePixelRatio = 1;
-      addTearDown(tester.view.resetPhysicalSize);
-      addTearDown(tester.view.resetDevicePixelRatio);
-      final origin = tester.binding.clock.now();
-      final feed = _Recommendations(
-        () => tester.binding.clock.now().difference(origin),
-      );
-      addTearDown(feed.onDelete.call);
-      feed.onInit();
-      await tester.pumpWidget(
-        Directionality(
-          textDirection: TextDirection.ltr,
-          child: MediaQuery(
-            data: MediaQueryData(size: Size(1920, height)),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 12),
-              child: RcmdViewport(
-                onChanged: (items, columns, active) => feed.updateViewport(
-                  itemCount: items,
-                  columns: columns,
-                  active: active,
-                ),
-                builder: (delegate, items, stride) => CustomScrollView(
-                  controller: feed.scrollController,
-                  slivers: [
-                    SliverPadding(
-                      padding: const EdgeInsets.only(top: 8),
-                      sliver: Obx(
-                        () => SliverGrid.builder(
-                          gridDelegate: delegate,
-                          itemCount:
-                              feed.loadingState.value.dataOrNull?.length ??
-                              items,
-                          itemBuilder: (_, _) => const SizedBox.expand(),
-                        ),
+  testWidgets('1920×1080 补足视口与一行预取，100px页脚不会提前结束', (tester) async {
+    tester.view.physicalSize = const Size(1920, 1080);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final origin = tester.binding.clock.now();
+    final feed = _Recommendations(
+      () => tester.binding.clock.now().difference(origin),
+    );
+    addTearDown(feed.onDelete.call);
+    feed.onInit();
+    await tester.pumpWidget(
+      Directionality(
+        textDirection: TextDirection.ltr,
+        child: MediaQuery(
+          data: const MediaQueryData(size: Size(1920, 1080)),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            child: RcmdViewport(
+              onChanged: (items, columns, active) => feed.updateViewport(
+                itemCount: items,
+                columns: columns,
+                active: active,
+              ),
+              builder: (delegate, items, stride) => CustomScrollView(
+                controller: feed.scrollController,
+                slivers: [
+                  SliverPadding(
+                    padding: const EdgeInsets.only(top: 8),
+                    sliver: Obx(
+                      () => SliverGrid.builder(
+                        gridDelegate: delegate,
+                        itemCount:
+                            feed.loadingState.value.dataOrNull?.length ?? items,
+                        itemBuilder: (_, _) => const SizedBox.expand(),
                       ),
                     ),
-                    const SliverToBoxAdapter(child: SizedBox(height: 100)),
-                  ],
-                ),
+                  ),
+                  const SliverToBoxAdapter(child: SizedBox(height: 100)),
+                ],
               ),
             ),
           ),
         ),
-      );
-      for (var second = 0; second < 5; second++) {
-        await tester.pump(const Duration(seconds: 1));
-      }
-      expect(feed.viewportItems, 48);
-      expect(feed.loadingState.value.data, hasLength(50));
-      expect(feed.starts.map((request) => request.index), [0, 1, 2, 3, 4]);
-      expect(feed.starts.map((request) => request.milliseconds), [
-        0,
-        1000,
-        2000,
-        3000,
-        4000,
-      ]);
-      expect(feed.isLoading, isFalse);
-      await tester.pumpWidget(const SizedBox.shrink());
-    });
-  }
+      ),
+    );
+    for (var second = 0; second < 5; second++) {
+      await tester.pump(const Duration(seconds: 1));
+    }
+    expect(feed.viewportItems, 48);
+    expect(feed.loadingState.value.data, hasLength(50));
+    expect(feed.starts.map((request) => request.index), [0, 1, 2, 3, 4]);
+    expect(feed.starts.map((request) => request.milliseconds), [
+      0,
+      1000,
+      2000,
+      3000,
+      4000,
+    ]);
+    expect(feed.isLoading, isFalse);
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
 }

@@ -53,6 +53,8 @@ void main() {
   testWidgets('面板打开时画面滚轮和播放器快捷键保持可用', (tester) async {
     final volume = 0.8.obs;
     final muted = false.obs;
+    var opened = 0;
+    var closed = 0;
     void changeVolume(double value) {
       volume.value = value;
       muted.value = false;
@@ -95,6 +97,8 @@ void main() {
                   volume: volume,
                   muted: muted,
                   maxVolume: 1,
+                  onOpened: () => opened++,
+                  onClosed: () => closed++,
                   onChanged: changeVolume,
                   onMuteChanged: (value) => muted.value = value,
                 ),
@@ -123,51 +127,13 @@ void main() {
     );
     await tester.pump();
     expect(volume.value, closeTo(1.0, 0.001));
+    expect(tester.widget<Slider>(find.byType(Slider)).value, volume.value);
+    expect(opened, 1);
     await tester.sendKeyEvent(LogicalKeyboardKey.keyM);
     await tester.pump();
     expect(muted.value, isTrue);
     expect(find.byTooltip('取消静音'), findsOneWidget);
     await tester.tap(find.byTooltip('音量：静音'));
-    await tester.pump();
-    expect(find.byType(Slider), findsNothing);
-  });
-
-  testWidgets('打开音量面板后滚轮仍调节音量并同步滑块', (tester) async {
-    final volume = 0.8.obs;
-    final muted = false.obs;
-    var opened = 0;
-    var closed = 0;
-    await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(
-          body: DesktopVolumeControl(
-            volume: volume,
-            muted: muted,
-            maxVolume: 1,
-            onChanged: (value) {
-              volume.value = value;
-              muted.value = false;
-            },
-            onMuteChanged: (value) => muted.value = value,
-            onOpened: () => opened++,
-            onClosed: () => closed++,
-          ),
-        ),
-      ),
-    );
-    await tester.tap(find.byIcon(Icons.volume_up));
-    await tester.pumpAndSettle();
-    await tester.sendEventToBinding(
-      PointerScrollEvent(
-        position: tester.getCenter(find.byType(Slider)),
-        scrollDelta: const Offset(0, -100),
-      ),
-    );
-    await tester.pump();
-    expect(volume.value, 0.83);
-    expect(tester.widget<Slider>(find.byType(Slider)).value, volume.value);
-    expect(opened, 1);
-    await tester.tapAt(const Offset(700, 500));
     await tester.pump();
     expect(find.byType(Slider), findsNothing);
     expect(closed, 1);

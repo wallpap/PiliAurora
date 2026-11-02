@@ -186,17 +186,15 @@ void main() {
     expect(fixture.check(), isEmpty);
   });
 
-  for (final suffix in ['piliaurora.01']) {
-    test('rejects invalid local revision $suffix', () {
-      final revision = '1.2.3+$suffix';
-      fixture.root['dependencies'] = {'local_package': revision};
-      fixture.local['version'] = revision;
-      fixture.record['version'] = revision;
-      fixture.locked['version'] = revision;
-      fixture.save();
-      expectIssue('登记版本必须为 upstream_version 加 +piliaurora.N');
-    });
-  }
+  test('rejects invalid local revision piliaurora.01', () {
+    const revision = '1.2.3+piliaurora.01';
+    fixture.root['dependencies'] = {'local_package': revision};
+    fixture.local['version'] = revision;
+    fixture.record['version'] = revision;
+    fixture.locked['version'] = revision;
+    fixture.save();
+    expectIssue('登记版本必须为 upstream_version 加 +piliaurora.N');
+  });
 
   test(
     'rejects caret and range constraints even when local versions match',
@@ -219,32 +217,28 @@ void main() {
     },
   );
 
-  for (final section in ['dependencies']) {
-    test('rejects root Git in $section including commit-pinned sources', () {
-      fixture.root[section] = {
-        if (section == 'dependency_overrides')
-          'local_package': {'path': 'third_party/local_package'},
-        'git_package': {
-          'git': {
-            'url': 'https://example.com/package.git',
-            'ref': '0123456789abcdef0123456789abcdef01234567',
-          },
+  test('rejects root Git in dependencies including commit-pinned sources', () {
+    fixture.root['dependencies'] = {
+      'git_package': {
+        'git': {
+          'url': 'https://example.com/package.git',
+          'ref': '0123456789abcdef0123456789abcdef01234567',
         },
-      };
-      fixture.save();
-      expectIssue('pubspec.yaml $section.git_package：禁止 Git');
-    });
+      },
+    };
+    fixture.save();
+    expectIssue('pubspec.yaml dependencies.git_package：禁止 Git');
+  });
 
-    test('rejects vendored transitive Git in $section', () {
-      fixture.local[section] = {
-        'git_package': {'git': 'https://example.com/package.git'},
-      };
-      fixture.save();
-      expectIssue(
-        'third_party/local_package/pubspec.yaml $section.git_package：禁止 Git',
-      );
-    });
-  }
+  test('rejects vendored transitive Git in dependencies', () {
+    fixture.local['dependencies'] = {
+      'git_package': {'git': 'https://example.com/package.git'},
+    };
+    fixture.save();
+    expectIssue(
+      'third_party/local_package/pubspec.yaml dependencies.git_package：禁止 Git',
+    );
+  });
 
   test('scans unregistered nested pubspecs for Git sources', () {
     fixture.write(

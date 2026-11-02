@@ -18,76 +18,14 @@ void main() {
     );
     final diagnostics = Diagnostics.instance;
     await diagnostics.initialize(directory: directory);
-    final detachApp = diagnostics.register(
-      'app',
-      () => {'version': 'fixture', 'commit': 'fixture'},
-    );
-    final detachHome = diagnostics.register(
-      'homePage',
-      () => {
-        'tab': 'hot',
-        'transitioning': false,
-        'requestPending': false,
-        'state': 'success',
-        'items': 20,
-      },
-    );
-    final viewport = {
-      'player': 'player.fixture',
-      'outputLimitActive': true,
-      'resizePolicy': 'fixed-device-output-limit',
-      'handoffActive': false,
-      'state': 'fixed-output',
-      'deviceOutputLimit': {'width': 2510, 'height': 1156},
-      'fullScreen': true,
-      'playing': true,
-      'positionMs': 109000,
-      'fit': 'contain',
-      'viewport': {'width': 836.6, 'height': 385.3},
-      'devicePixelRatio': 3.0,
-      'surfaceGeneration': 0,
-      'textureId': 3,
-      'sourceRect': {'left': 0, 'top': 0, 'width': 3840, 'height': 2160},
-      'target': null,
-      'applied': null,
-      'transform': List<double>.filled(16, 0),
-    };
     final player = _SnapshotPlayer();
-    final detachViewport = diagnostics.register(
-      'videoViewport.${player.hashCode}.fixture',
-      () => viewport,
-    );
-    final playerDiagnostics = PlayerDiagnostics(
-      player,
-      extra: () => {
-        'previewCacheBytes': 0,
-        'previewCacheLimitBytes': 25165824,
-        'attachedPages': 1,
-        'live': false,
-      },
-    );
+    final playerDiagnostics = PlayerDiagnostics(player);
     final detachDanmaku = diagnostics.register(
       'danmaku.fixture',
-      () => {
-        'elements': 6755,
-        'buckets': 3631,
-        'pendingSegments': 0,
-        'localFile': false,
-        'frameRate': 60,
-        'enabled': true,
-      },
+      () => {'elements': 6755},
     );
     try {
       await diagnostics.configure(tracing: true);
-      for (final operation in [
-        'imageFile',
-        'imageDecode',
-        'imageFrame',
-        'http',
-        'grpcDecode',
-      ]) {
-        diagnostics.begin(operation, 'fixture')!.finish();
-      }
       await Future<void>.delayed(Duration.zero);
       TestWidgetsFlutterBinding.instance.platformDispatcher.onReportTimings!(
         List.generate(
@@ -116,9 +54,6 @@ void main() {
       expect(playerDiagnostics.snapshot(), contains('track-list'));
     } finally {
       detachDanmaku();
-      detachViewport();
-      detachApp();
-      detachHome();
       playerDiagnostics.dispose();
       diagnostics.dispose();
       await diagnostics.flush();

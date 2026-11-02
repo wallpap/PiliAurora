@@ -96,3 +96,7 @@ fvm flutter test test/services/diagnostics/ test/pages/about/diagnostics_page_te
 
 
 Windows 保活页面内存回归：先执行 `pwsh -File lib/scripts/patch.ps1 windows -SkipPubGet`，再运行 `fvm flutter test --no-pub test/common/widgets/inactive_sliver_cache_test.dart test/common/widgets/inactive_sliver_semantics_test.dart test/common/widgets/image/retained_layer_release_test.dart`。语义回归用弱引用核对已销毁卡片确实可回收，同时检查 State、数据、ScrollPosition、偏移、Focus 与语义恢复。绘制回归覆盖真实 Picture/source 释放、像素恢复与外部 Texture 保护；真实进程 Private/RSS 阈值由独立 Release 探针验证。
+
+测试归约后，`image_lifecycle_test.dart` 用同一批 12 张图片检查 codec 创建上限、并发取帧和全部交付。`inactive_sliver_cache_test.dart` 直接使用生产 `InactiveFeedSliver`，保留滚动范围、资源收缩和恢复像素回归。`retained_layer_release_test.dart` 保留生产清理与实际 TabActivity、Texture、EngineLayer、viewport clip 的回归及共用场景中的策略对照；独立的 detached scene 和 bounded hidden ancestors 原型实验已移除。
+
+直播聊天的 10 万条压力集中在 `pages/live_room/chat_buffer_test.dart`；页面与控件使用超过 500 条容量的积压检查淘汰提示、阅读位置和退出释放。`window_screen_test.dart` 的帧率矩阵使用 6 组代表组合，每个目标帧率均覆盖 120/165 Hz 和两种采样密度，不再覆盖全部交叉。私信卡片布局保留窄屏浅色、宽屏深色两组。

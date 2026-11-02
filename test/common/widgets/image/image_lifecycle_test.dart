@@ -599,28 +599,8 @@ void main() {
     await tester.pumpWidget(const SizedBox.shrink());
   });
 
-  testWidgets('image decoding limits concurrent native frame requests', (
-    tester,
-  ) async {
-    final batch = await _prepareBatch(tester, manager, source, count: 5);
-    try {
-      await _flushDecoding(tester);
-      expect(
-        batch.codecs.fold<int>(0, (sum, codec) => sum + codec.decodedFrames),
-        2,
-      );
-      batch.release();
-      await _flushDecoding(tester);
-      expect(batch.delivered, 5);
-      expect(batch.errors, isEmpty);
-    } finally {
-      batch.dispose();
-      await tester.pumpAndSettle();
-    }
-  });
-
   testWidgets(
-    'a burst bounds codec creation until first frames are delivered',
+    '突发图片限制 codec 创建与并发取帧，释放后全部交付',
     (
       tester,
     ) async {
@@ -628,10 +608,19 @@ void main() {
       try {
         await _flushDecoding(tester);
         expect(batch.codecs.where((codec) => codec.created), hasLength(2));
+        expect(
+          batch.codecs.fold<int>(0, (sum, codec) => sum + codec.decodedFrames),
+          2,
+        );
+        batch.release();
+        await _flushDecoding(tester);
+        expect(batch.delivered, 12);
+        expect(batch.errors, isEmpty);
       } finally {
-        batch
-          ..dispose()
-          ..release();
+        batch.dispose();
+        for (final gate in batch.gates) {
+          if (!gate.isCompleted) gate.complete();
+        }
         await _flushDecoding(tester);
         await tester.pumpAndSettle();
       }

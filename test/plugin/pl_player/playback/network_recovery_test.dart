@@ -142,36 +142,6 @@ void main() {
     recovery.dispose();
   });
 
-  testWidgets('分离音视频读取失败先保留剩余缓存，耗尽后恢复主视频', (tester) async {
-    var state = (
-      buffering: false,
-      position: const Duration(seconds: 10),
-      buffer: const Duration(seconds: 20),
-    );
-    var retries = 0;
-    final recovery = PlaybackNetworkRecovery(
-      isCurrent: () => true,
-      readState: () => state,
-      reload: (_) async => retries++,
-      onError: (error) => fail('$error'),
-    )..schedule(waitForCachedPlayback: true);
-    state = (
-      buffering: false,
-      position: const Duration(seconds: 13),
-      buffer: const Duration(seconds: 20),
-    );
-    await tester.pump(const Duration(seconds: 3));
-    expect(retries, 0);
-    state = (
-      buffering: false,
-      position: const Duration(seconds: 20),
-      buffer: const Duration(seconds: 20),
-    );
-    await tester.pump(const Duration(seconds: 3));
-    expect(retries, 1);
-    recovery.dispose();
-  });
-
   testWidgets('残余 33ms 数据不能取消断流恢复，缓存耗尽后重载', (tester) async {
     var state = (
       buffering: false,

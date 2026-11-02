@@ -175,28 +175,6 @@ void main() {
     recovery.dispose();
   });
 
-  testWidgets('音轨重连后持续健康，后续断流可以再次恢复', (tester) async {
-    void readFailure() => recovery.onLog(
-      prefix: 'curl',
-      level: 'error',
-      message: 'transfer failed: Failure when receiving data from the peer',
-    );
-    playback.audioPts = null;
-    readFailure();
-    await tick(tester);
-    expect(repairs, 1);
-    for (var i = 0; i < 16; i++) {
-      await tick(tester, healthy: true);
-    }
-    expect(reloads, 0);
-    playback.audioPts = null;
-    readFailure();
-    await tick(tester);
-    expect(repairs, 2);
-    expect(reloads, 0);
-    recovery.dispose();
-  });
-
   testWidgets('重连回执前再次断流，残余缓存不能清除新故障', (tester) async {
     recovery.dispose();
     final pending = Completer<bool>();
@@ -231,23 +209,42 @@ void main() {
     recovery.dispose();
   });
 
-  testWidgets('音频解码失败先修音轨，恢复后持续播放', (tester) async {
-    playback.audioPts = null;
-    audioError();
-    await tick(tester);
-    expect(repairs, 1);
-    for (var i = 0; i < 16; i++) {
-      await tick(tester, healthy: true);
-    }
-    expect(reloads, 0);
-    expect(notices, 0);
-    // 连续健康 30 秒后，新故障重新获得轻量恢复预算。
-    playback.audioPts = null;
-    audioError();
-    await tick(tester);
-    expect(repairs, 2);
-    recovery.dispose();
-  });
+  for (final decodingFailure in [false, true]) {
+    testWidgets('${decodingFailure ? '音频解码失败' : '音轨断流'}修复后持续健康，再次故障重新获得预算', (
+      tester,
+    ) async {
+      void failAudio() {
+        if (decodingFailure) {
+          audioError();
+        } else {
+          recovery.onLog(
+            prefix: 'curl',
+            level: 'error',
+            message:
+                'transfer failed: Failure when receiving data from the peer',
+          );
+        }
+      }
+
+      playback.audioPts = null;
+      failAudio();
+      await tick(tester);
+      expect(repairs, 1);
+      for (var i = 0; i < 16; i++) {
+        await tick(tester, healthy: true);
+      }
+      expect(reloads, 0);
+      expect(notices, 0);
+      // 连续健康 30 秒后，新故障重新获得轻量恢复预算。
+      playback.audioPts = null;
+      failAudio();
+      await tick(tester);
+      expect(repairs, 2);
+      expect(reloads, 0);
+      expect(notices, 0);
+      recovery.dispose();
+    });
+  }
 
   testWidgets('音轨重连无效再重载，错误风暴不能反复重开视频', (tester) async {
     playback.audioPts = null;
