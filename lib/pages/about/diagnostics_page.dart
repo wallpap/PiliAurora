@@ -297,7 +297,9 @@ class _DiagnosticsPageState extends State<DiagnosticsPage> {
                         contentPadding: EdgeInsets.zero,
                         title: const Text('记录性能'),
                         subtitle: Text(
-                          service.tracing ? '正在记录，可返回其他页面复现问题' : '关闭时不进行定时采样',
+                          service.tracing
+                              ? '正在记录性能和内存，可返回其他页面复现问题'
+                              : '关闭时不进行性能和内存定时采样',
                         ),
                         value: service.tracing,
                         onChanged: (value) => _configure(tracing: value),
