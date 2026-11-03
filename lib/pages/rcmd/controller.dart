@@ -337,11 +337,14 @@ class RcmdController extends DiscoveryListController<List<dynamic>, dynamic> {
     if (!isRefresh) return onLoadMore();
     final previous = _query;
     final sameContext = previous == null || _current(previous);
-    final visible = sameContext
-        ? loadingState.value.dataOrNull
-              ?.where((item) => !isPending(item))
-              .toList()
-        : null;
+    final previousItems = sameContext ? loadingState.value.dataOrNull : null;
+    final visible = previousItems?.where((item) => !isPending(item)).toList();
+    final visibleHistoryStart = lastRefreshAt == null
+        ? null
+        : previousItems
+              ?.take(lastRefreshAt!)
+              .where((item) => !isPending(item))
+              .length;
     final old = enableSaveLastData && visible != null ? visible : <dynamic>[];
     if (previous != null) _invalidate(previous);
     final query = _RecommendationQuery(
@@ -351,11 +354,12 @@ class RcmdController extends DiscoveryListController<List<dynamic>, dynamic> {
     );
     _query = query;
     page = 0;
-    lastRefreshAt = null;
+    // 保留提示卡与旧内容的相对位置，直到首包发布时一并替换。
+    lastRefreshAt = visibleHistoryStart;
     if (!sameContext) {
       loadingState.value = LoadingState.loading();
     } else if (visible != null) {
-      // 旧查询的占位卡片随刷新撤下，避免新查询失去其检查状态后提前揭示。
+      // 未完成作者检查的骨架随刷新撤下，避免切换查询后提前揭示。
       loadingState.value = Success(visible);
     }
     query
@@ -438,11 +442,17 @@ class RcmdController extends DiscoveryListController<List<dynamic>, dynamic> {
     final query = _query;
     if (query == null || !_current(query)) return;
     if (query.nextPage == 0) {
+      final visible = List<dynamic>.of(loadingState.value.dataOrNull ?? []);
+      final index = visible.indexOf(item);
       query.saved.remove(item);
       final key = MediaAuthorFilter.contentKey(item);
       if (key != null) query.seen.add(key);
-      final visible = List<dynamic>.of(loadingState.value.dataOrNull ?? [])
-        ..remove(item);
+      if (index >= 0) {
+        visible.removeAt(index);
+        if (lastRefreshAt case final start? when index < start) {
+          lastRefreshAt = start - 1;
+        }
+      }
       loadingState.value = Success(visible);
       return;
     }

@@ -393,6 +393,76 @@ void main() {
     expect(feed.lastRefreshAt, 1);
   });
 
+  testWidgets('刷新提示卡保留到新卡片就绪，后续卡片不会提前前移', (tester) async {
+    feed
+      ..enableSaveLastData = true
+      ..savedRcmdTip = true
+      ..loadingState.value = Success(List.generate(30, (i) => _Video(i + 1)));
+    var query = feed.onRefresh();
+    feed.requests.single.complete(Success([_Video(100)]));
+    await tester.idle();
+    await query;
+    Get.testMode = true;
+    Get.put<RcmdController>(feed);
+    addTearDown(Get.reset);
+    await tester.pumpWidget(
+      const MaterialApp(home: Scaffold(body: RcmdPage())),
+    );
+    await tester.pump();
+    final tip = find.text('上次看到这里\n点击刷新');
+    final following = find.widgetWithText(VideoCardV, '视频 1');
+    expect(tip, findsOneWidget);
+    final originalPosition = tester.getTopLeft(following);
+    final oldItems = List.of(feed.loadingState.value.data!);
+    feed.preparation = Completer<void>();
+    query = feed.onRefresh();
+    await tester.pump();
+    expect(tip, findsOneWidget);
+    expect(feed.lastRefreshAt, 1);
+    expect(tester.getTopLeft(following), originalPosition);
+    expect(feed.loadingState.value.data, oldItems);
+    feed.requests.last.complete(Success([_Video(101), _Video(102)]));
+    await tester.pump();
+    expect(tip, findsOneWidget);
+    expect(tester.getTopLeft(following), originalPosition);
+    feed.preparation!.complete();
+    await tester.pump();
+    await query;
+    await tester.pump();
+    expect(feed.lastRefreshAt, 2);
+    expect(find.text('视频 101'), findsOneWidget);
+    expect(find.text('视频 102'), findsOneWidget);
+    expect(tip, findsOneWidget);
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
+
+  testWidgets('刷新失败保留提示卡和内容，重试成功后一起更新', (tester) async {
+    final saved = [_Video(1), _Video(2)];
+    feed
+      ..enableSaveLastData = true
+      ..savedRcmdTip = true
+      ..loadingState.value = Success(saved)
+      ..lastRefreshAt = 1;
+    var query = feed.onRefresh();
+    feed.requests.single.complete(const Error('网络断开'));
+    await tester.idle();
+    await query;
+    expect(feed.loadingState.value.data, saved);
+    expect(feed.lastRefreshAt, 1);
+    query = feed.retryLoadMore();
+    expect(feed.lastRefreshAt, 1);
+    feed.requests.last.complete(Success([_Video(3), _Video(4)]));
+    await tester.idle();
+    await query;
+    expect(feed.lastRefreshAt, 2);
+    expect(feed.loadingState.value.data!.map((v) => (v as _Video).aid), [
+      3,
+      4,
+      1,
+      2,
+    ]);
+  });
+
   testWidgets('分页失败保留内容并停止自动重试，用户可重试原页', (tester) async {
     var query = feed.onRefresh();
     feed.requests.single.complete(Success([_Video(1)]));
@@ -422,10 +492,12 @@ void main() {
     final kept = _Video(2);
     feed
       ..enableSaveLastData = true
-      ..loadingState.value = Success([removed, kept]);
+      ..loadingState.value = Success([removed, kept])
+      ..lastRefreshAt = 1;
     final query = feed.onRefresh();
     feed.removeRecommendation(removed);
     expect(feed.loadingState.value.data, [kept]);
+    expect(feed.lastRefreshAt, 0);
     feed.requests.single.complete(Success([_Video(1), _Video(3)]));
     await tester.idle();
     await query;
