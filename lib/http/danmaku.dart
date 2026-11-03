@@ -3,9 +3,34 @@ import 'package:pili_aurora/http/init.dart';
 import 'package:pili_aurora/http/loading_state.dart';
 import 'package:pili_aurora/models/remote/danmaku/post.dart';
 import 'package:pili_aurora/utils/accounts.dart';
+import 'package:pili_aurora/utils/accounts/account.dart';
 import 'package:dio/dio.dart';
 
 abstract final class DanmakuHttp {
+  static Future<LoadingState<({int likes, bool isLike})>> likeStats({
+    required int cid,
+    required int id,
+    required Account account,
+  }) async {
+    final res = await Request().get(
+      Api.danmakuLikeStats,
+      queryParameters: {'oid': cid, 'ids': '$id'},
+      options: Options(extra: {'account': account}),
+    );
+    final data = res.data;
+    if (data['code'] != 0) {
+      return Error(data['message'], code: data['code']);
+    }
+    final stat = (data['data'] as Map?)?['$id'];
+    if (stat is! Map || stat['likes'] is! num || stat['user_like'] is! num) {
+      return const Error('未能获取弹幕点赞状态，请重试');
+    }
+    return Success((
+      likes: (stat['likes'] as num).toInt(),
+      isLike: stat['user_like'] != 0,
+    ));
+  }
+
   static Future<LoadingState<DanmakuPost>> shootDanmaku({
     int type = 1, //弹幕类选择(1：视频弹幕 2：漫画弹幕)
     required int oid, // 视频cid

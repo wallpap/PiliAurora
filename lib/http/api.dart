@@ -968,6 +968,7 @@ abstract final class Api {
       '${HttpString.liveBaseUrl}/xlive/web-ucenter/v1/dMReport/Report';
 
   static const String danmakuLike = '/x/v2/dm/thumbup/add';
+  static const String danmakuLikeStats = '/x/v2/dm/thumbup/stats';
 
   static const String danmakuReport = '/x/dm/report/add';
 

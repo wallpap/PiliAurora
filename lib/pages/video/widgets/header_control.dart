@@ -27,6 +27,7 @@ import 'package:pili_aurora/pages/video/introduction/pgc/controller.dart';
 import 'package:pili_aurora/pages/video/introduction/ugc/controller.dart';
 import 'package:pili_aurora/pages/video/introduction/ugc/widgets/action_item.dart';
 import 'package:pili_aurora/pages/video/widgets/header_mixin.dart';
+import 'package:pili_aurora/pages/video/widgets/danmaku_like_control.dart';
 import 'package:pili_aurora/pages/video/widgets/more_settings_sheet.dart';
 import 'package:pili_aurora/plugin/pl_player/controller.dart';
 import 'package:pili_aurora/plugin/pl_player/widgets/player_info_dialog.dart';
@@ -204,7 +205,6 @@ class HeaderControl extends StatefulWidget {
       SmartDialog.showToast('${isLike ? '' : '取消'}点赞成功');
       return true;
     } else {
-      res.toast();
       if (res case Error(:final code)) {
         if (code == 65006) {
           extra.isLike = true;
@@ -215,6 +215,7 @@ class HeaderControl extends StatefulWidget {
           return true;
         }
       }
+      res.toast();
       return false;
     }
   }
@@ -980,20 +981,20 @@ class HeaderControlState extends State<HeaderControl>
           trailing: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Builder(
-                builder: (context) => Stack(
+              DanmakuLikeControl(
+                extra: extra,
+                cid: plPlayerController.cid!,
+                onLike: () async {
+                  await HeaderControl.likeDanmaku(
+                    extra,
+                    plPlayerController.cid!,
+                  );
+                },
+                builder: (context, onLike) => Stack(
                   clipBehavior: Clip.none,
                   children: [
                     iconButton(
-                      onPressed: () async {
-                        if (await HeaderControl.likeDanmaku(
-                              extra,
-                              plPlayerController.cid!,
-                            ) &&
-                            context.mounted) {
-                          (context as Element).markNeedsBuild();
-                        }
-                      },
+                      onPressed: onLike,
                       icon: extra.isLike
                           ? const Icon(CustomIcons.player_dm_tip_like_solid)
                           : const Icon(CustomIcons.player_dm_tip_like),

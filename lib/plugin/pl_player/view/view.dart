@@ -38,6 +38,7 @@ import 'package:pili_aurora/pages/video/introduction/pgc/controller.dart';
 import 'package:pili_aurora/pages/video/post_panel/popup_menu_text.dart';
 import 'package:pili_aurora/pages/video/post_panel/view.dart';
 import 'package:pili_aurora/pages/video/widgets/header_control.dart';
+import 'package:pili_aurora/pages/video/widgets/danmaku_like_control.dart';
 import 'package:pili_aurora/plugin/pl_player/controller.dart';
 import 'package:pili_aurora/plugin/pl_player/playback/audio_recovery.dart';
 import 'package:pili_aurora/plugin/pl_player/playback/super_resolution_policy.dart';
@@ -2680,39 +2681,46 @@ class _PLVideoPlayerState extends State<PLVideoPlayer>
           mainAxisAlignment: MainAxisAlignment.spaceEvenly,
           children: switch (extra) {
             VideoDanmaku() => [
-              Stack(
-                clipBehavior: Clip.none,
-                children: [
-                  _dmActionItem(
-                    extra.isLike
-                        ? const Icon(
-                            size: 20,
-                            CustomIcons.player_dm_tip_like_solid,
-                            color: Colors.white,
-                          )
-                        : const Icon(
-                            size: 20,
-                            CustomIcons.player_dm_tip_like,
+              DanmakuLikeControl(
+                extra: extra,
+                cid: plPlayerController.cid!,
+                onLike: () async {
+                  await HeaderControl.likeDanmaku(
+                    extra,
+                    plPlayerController.cid!,
+                  );
+                },
+                builder: (context, onLike) => Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    _dmActionItem(
+                      extra.isLike
+                          ? const Icon(
+                              size: 20,
+                              CustomIcons.player_dm_tip_like_solid,
+                              color: Colors.white,
+                            )
+                          : const Icon(
+                              size: 20,
+                              CustomIcons.player_dm_tip_like,
+                              color: Colors.white,
+                            ),
+                      onTap: onLike,
+                    ),
+                    if (extra.like > 0)
+                      Positioned(
+                        left: _actionItemWidth - 10.5,
+                        top: 0,
+                        child: Text(
+                          extra.like.toString(),
+                          style: const TextStyle(
+                            fontSize: 10.5,
                             color: Colors.white,
                           ),
-                    onTap: () => HeaderControl.likeDanmaku(
-                      extra,
-                      plPlayerController.cid!,
-                    ),
-                  ),
-                  if (extra.like > 0)
-                    Positioned(
-                      left: _actionItemWidth - 10.5,
-                      top: 0,
-                      child: Text(
-                        extra.like.toString(),
-                        style: const TextStyle(
-                          fontSize: 10.5,
-                          color: Colors.white,
                         ),
                       ),
-                    ),
-                ],
+                  ],
+                ),
               ),
 
               _dmActionItem(
