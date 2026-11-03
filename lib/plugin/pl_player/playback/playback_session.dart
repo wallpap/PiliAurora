@@ -765,6 +765,9 @@ class PlaybackSession implements PlaybackMediaClock {
     if (changed(PlaybackConfigurationKey.volume)) {
       result = result.copyWith(volume: desired.volume);
     }
+    if (changed(PlaybackConfigurationKey.muted)) {
+      result = result.copyWith(muted: desired.muted);
+    }
     if (changed(PlaybackConfigurationKey.decoder)) {
       result = result.copyWith(hwdec: desired.hwdec);
     }
@@ -1261,6 +1264,10 @@ class PlaybackSession implements PlaybackMediaClock {
       target! as double,
       context,
     ),
+    PlaybackConfigurationKey.muted => _runtime.setMuted(
+      target! as bool,
+      context,
+    ),
     PlaybackConfigurationKey.decoder => _runtime.setDecoder(
       PlaybackDecoder(target! as String, kind: PlaybackDecoderKind.custom),
       context,
@@ -1375,6 +1382,7 @@ class PlaybackSession implements PlaybackMediaClock {
     PlaybackConfigurationKey.audioOnly => config.audioOnly,
     PlaybackConfigurationKey.playbackSpeed => config.playbackSpeed,
     PlaybackConfigurationKey.volume => config.volume,
+    PlaybackConfigurationKey.muted => config.muted,
     PlaybackConfigurationKey.decoder => config.hwdec,
     PlaybackConfigurationKey.audioTrack => config.audioTrackId,
     PlaybackConfigurationKey.videoTrack => config.videoTrackId,
@@ -2283,6 +2291,7 @@ class PlaybackSession implements PlaybackMediaClock {
       left.audioOnly == right.audioOnly &&
       left.playbackSpeed == right.playbackSpeed &&
       left.volume == right.volume &&
+      left.muted == right.muted &&
       left.hwdec == right.hwdec &&
       left.audioTrackId == right.audioTrackId &&
       left.videoTrackId == right.videoTrackId &&
@@ -2320,6 +2329,7 @@ class PlaybackSession implements PlaybackMediaClock {
       playbackSpeed: source.playbackSpeed,
     ),
     PlaybackConfigurationKey.volume => target.copyWith(volume: source.volume),
+    PlaybackConfigurationKey.muted => target.copyWith(muted: source.muted),
     PlaybackConfigurationKey.decoder => target.copyWith(hwdec: source.hwdec),
     PlaybackConfigurationKey.audioTrack => target.copyWith(
       audioTrackId: source.audioTrackId,
@@ -2442,6 +2452,13 @@ class PlaybackOwner {
       (current) => current.copyWith(volume: value),
     );
   }
+
+  Future<CommandResult> setMuted(bool value) => _session._setConfiguration(
+    this,
+    PlaybackConfigurationKey.muted,
+    PlaybackOperationSlot.muted,
+    (current) => current.copyWith(muted: value),
+  );
 
   Future<CommandResult> setAudioOnly(bool value) => _session._setConfiguration(
     this,

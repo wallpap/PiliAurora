@@ -1294,6 +1294,78 @@ void main() {
     await runtime.released;
   });
 
+  test('静音与音量独立，新媒体恢复默认非静音', () async {
+    final runtime = _FakeRuntime();
+    final session = PlaybackSession(runtime: runtime);
+    final owner = session.attach();
+    await owner.load(_plan('first'));
+    expect((await owner.setMuted(true)).outcome, CommandOutcome.applied);
+    expect((await owner.setVolume(37)).outcome, CommandOutcome.applied);
+    expect(session.currentSnapshot.configuration.applied.muted, isTrue);
+    expect(session.currentSnapshot.configuration.applied.volume, 37);
+    expect((await owner.setMuted(false)).outcome, CommandOutcome.applied);
+    expect(runtime.mutedCalls, [true, false]);
+    expect(runtime.volumeCalls, [37]);
+    expect(session.currentSnapshot.configuration.applied.volume, 37);
+    await owner.setMuted(true);
+    await owner.load(_plan('second'));
+    expect(runtime.loadedPlans.last.configuration.muted, isFalse);
+    expect(session.currentSnapshot.configuration.applied.muted, isFalse);
+    owner.close();
+    await session.shutdown();
+  });
+
+  test('加载期间的静音变更合并入最终计划', () async {
+    final runtime = _FakeRuntime();
+    final session = PlaybackSession(runtime: runtime);
+    final owner = session.attach();
+    final started = Completer<void>();
+    final finish = Completer<void>();
+    runtime.onLoad = (plan, context, index) async {
+      if (index == 0) {
+        started.complete();
+        await finish.future;
+      }
+      return _loaded(context, plan);
+    };
+    final loading = owner.load(_plan('first'));
+    await started.future;
+    expect((await owner.setMuted(true)).outcome, CommandOutcome.accepted);
+    finish.complete();
+    expect((await loading).outcome, LoadOutcome.ready);
+    expect(runtime.loadedPlans.last.configuration.muted, isTrue);
+    expect(session.currentSnapshot.configuration.applied.muted, isTrue);
+    owner.close();
+    await session.shutdown();
+  });
+
+  test('迟到静音命令与旧 owner 不能覆盖新媒体状态', () async {
+    final runtime = _FakeRuntime();
+    final session = PlaybackSession(runtime: runtime);
+    final owner = session.attach();
+    await owner.load(_plan('first'));
+    final pending = Completer<PlaybackRuntimeCommandResult>();
+    late PlaybackExecutionContext context;
+    runtime.onSetMuted = (_, c) {
+      context = c;
+      return pending.future;
+    };
+    final oldCommand = owner.setMuted(true);
+    await _until(() => runtime.mutedCalls.isNotEmpty);
+    final newOwner = session.attach();
+    final next = newOwner.load(_plan('second'));
+    expect(context.isCurrent(), isFalse);
+    pending.complete(const PlaybackRuntimeCommandResult());
+    await oldCommand;
+    expect((await next).outcome, LoadOutcome.ready);
+    expect(session.currentSnapshot.configuration.applied.muted, isFalse);
+    expect((await owner.setMuted(true)).outcome, CommandOutcome.inactive);
+    expect(runtime.loadedPlans.last.configuration.muted, isFalse);
+    owner.close();
+    newOwner.close();
+    await session.shutdown();
+  });
+
   test('音轨重连经过会话命令，保留视频代次、暂停意图和音量', () async {
     final runtime = _FakeRuntime();
     final session = PlaybackSession(runtime: runtime);
@@ -1972,6 +2044,10 @@ class _FakeRuntime implements PlaybackRuntimePort {
   final shaderCalls = <List<String>>[];
   final decoderCalls = <String>[];
   final audioOnlyCalls = <bool>[];
+  final mutedCalls = <bool>[];
+  final volumeCalls = <double>[];
+  Future<PlaybackRuntimeCommandResult> Function(bool, PlaybackExecutionContext)?
+  onSetMuted;
   final speedCalls = <({double speed, Map<String, String> mediaOptions})>[];
   int _loadIndex = 0;
   int _playIndex = 0;
@@ -2065,7 +2141,20 @@ class _FakeRuntime implements PlaybackRuntimePort {
   Future<PlaybackRuntimeCommandResult> setVolume(
     double value,
     PlaybackExecutionContext context,
-  ) async => const PlaybackRuntimeCommandResult();
+  ) async {
+    volumeCalls.add(value);
+    return const PlaybackRuntimeCommandResult();
+  }
+
+  @override
+  Future<PlaybackRuntimeCommandResult> setMuted(
+    bool value,
+    PlaybackExecutionContext context,
+  ) async {
+    mutedCalls.add(value);
+    return onSetMuted?.call(value, context) ??
+        const PlaybackRuntimeCommandResult();
+  }
 
   @override
   Future<PlaybackRuntimeCommandResult> setAudioOnly(

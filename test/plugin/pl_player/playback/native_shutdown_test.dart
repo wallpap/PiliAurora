@@ -118,6 +118,30 @@ void main() {
     });
   }
 
+  test('原生静音命令独立写入，下一次加载清除旧静音', () async {
+    final fixture = _Fixture();
+    addTearDown(fixture.close);
+    expect((await fixture.load()).loaded, isTrue);
+    final context = PlaybackExecutionContext(
+      requestId: 1,
+      runtimeId: fixture.runtime.runtimeId,
+      loadId: 1,
+      isCurrent: () => true,
+      deadline: const Duration(seconds: 10),
+      monotonicNow: () => fixture.now,
+      cancelled: Completer<void>().future,
+      registerCancellation: (_) {},
+    );
+    expect((await fixture.runtime.setMuted(true, context)).applied, isTrue);
+    await fixture.player.unload();
+    fixture.player.endFile();
+    await _turn();
+    fixture.player.started = false;
+    fixture.player.entryId++;
+    expect((await fixture.load(loadId: 2)).loaded, isTrue);
+    expect(fixture.player.muteCalls, ['no', 'yes', 'no']);
+  });
+
   test('连续自然结束后加载新媒体不积累旧文件绑定', () async {
     final fixture = _Fixture();
     addTearDown(fixture.close);
@@ -508,6 +532,7 @@ class _Fixture {
 class _Player implements NativePlayer {
   _Player(this.calls, {this.hasVideo = false});
   final List<String> calls;
+  final muteCalls = <String>[];
   final bool hasVideo;
   double? videoFps = 30;
   bool autoStop = false;
@@ -674,7 +699,10 @@ class _Player implements NativePlayer {
     Map<String, String>? headers,
   }) {}
   @override
-  void setProperty(String property, String value) {}
+  void setProperty(String property, String value) {
+    if (property == 'mute') muteCalls.add(value);
+  }
+
   @override
   Future<void> setRate(double rate, {bool synchronized = true}) async {}
   @override

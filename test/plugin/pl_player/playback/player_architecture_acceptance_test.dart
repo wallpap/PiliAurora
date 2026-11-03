@@ -379,6 +379,12 @@ class _AcceptanceRuntime implements PlaybackRuntimePort {
   ) async => const PlaybackRuntimeCommandResult();
 
   @override
+  Future<PlaybackRuntimeCommandResult> setMuted(
+    bool value,
+    PlaybackExecutionContext context,
+  ) async => const PlaybackRuntimeCommandResult();
+
+  @override
   Future<PlaybackRuntimeCommandResult> setAudioOnly(
     bool value,
     PlaybackExecutionContext context,

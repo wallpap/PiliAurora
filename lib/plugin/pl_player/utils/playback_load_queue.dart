@@ -94,6 +94,7 @@ enum PlaybackOperationSlot {
   seek,
   playbackSpeed,
   volume,
+  muted,
 }
 
 enum PlaybackOperationOutcome {

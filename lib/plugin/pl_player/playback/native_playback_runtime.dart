@@ -287,6 +287,23 @@ class NativePlaybackRuntime
   });
 
   @override
+  Future<PlaybackRuntimeCommandResult> setMuted(
+    bool value,
+    PlaybackExecutionContext context,
+  ) => _serialize(() async {
+    final player = _usablePlayer(context);
+    if (player == null) {
+      return const PlaybackRuntimeCommandResult(applied: false);
+    }
+    player.setProperty('mute', value ? 'yes' : 'no');
+    if (!context.isCurrent()) {
+      return const PlaybackRuntimeCommandResult(applied: false);
+    }
+    _configRevision++;
+    return const PlaybackRuntimeCommandResult();
+  });
+
+  @override
   Future<PlaybackRuntimeCommandResult> setAudioOnly(
     bool value,
     PlaybackExecutionContext context,
@@ -549,6 +566,8 @@ class NativePlaybackRuntime
         await output.invalidateOutputGeneration(token);
         return _supersededLoad();
       }
+
+      player.setProperty('mute', plan.configuration.muted ? 'yes' : 'no');
 
       final source = nativeMediaSourceFromSnapshot(
         source: plan.source,

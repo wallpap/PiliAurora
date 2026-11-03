@@ -69,6 +69,7 @@ enum PlaybackConfigurationKey {
   audioOnly,
   playbackSpeed,
   volume,
+  muted,
   decoder,
   audioTrack,
   videoTrack,
@@ -196,6 +197,7 @@ class PlaybackConfiguration {
     this.audioOnly = false,
     this.playbackSpeed = 1,
     this.volume = 100,
+    this.muted = false,
     this.hwdec = 'auto',
     this.audioTrackId,
     this.videoTrackId,
@@ -208,6 +210,7 @@ class PlaybackConfiguration {
   final bool audioOnly;
   final double playbackSpeed;
   final double volume;
+  final bool muted;
   final String hwdec;
   final int? audioTrackId;
   final int? videoTrackId;
@@ -219,6 +222,7 @@ class PlaybackConfiguration {
     bool? audioOnly,
     double? playbackSpeed,
     double? volume,
+    bool? muted,
     String? hwdec,
     int? audioTrackId,
     bool clearAudioTrack = false,
@@ -232,6 +236,7 @@ class PlaybackConfiguration {
     audioOnly: audioOnly ?? this.audioOnly,
     playbackSpeed: playbackSpeed ?? this.playbackSpeed,
     volume: volume ?? this.volume,
+    muted: muted ?? this.muted,
     hwdec: hwdec ?? this.hwdec,
     audioTrackId: clearAudioTrack ? null : audioTrackId ?? this.audioTrackId,
     videoTrackId: clearVideoTrack ? null : videoTrackId ?? this.videoTrackId,
@@ -730,6 +735,10 @@ abstract interface class PlaybackRuntimePort {
   );
   Future<PlaybackRuntimeCommandResult> setVolume(
     double value,
+    PlaybackExecutionContext context,
+  );
+  Future<PlaybackRuntimeCommandResult> setMuted(
+    bool value,
     PlaybackExecutionContext context,
   );
   Future<PlaybackRuntimeCommandResult> setAudioOnly(
