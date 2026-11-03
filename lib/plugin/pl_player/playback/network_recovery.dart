@@ -49,6 +49,16 @@ class PlaybackNetworkRecovery {
   bool _disposed = false;
   bool get isActive => !_disposed && isCurrent();
 
+  /// 隐藏期间撤销画面侧触发，保留独立的断流恢复与已提交的原生操作。
+  void cancelVideoRecovery() {
+    _videoFailurePending = false;
+    if (_networkFailurePending || _inFlight) return;
+    _timer?.cancel();
+    _timer = null;
+    if (_scheduledAttempt case final key?) _attempted.remove(key);
+    _scheduledAttempt = null;
+  }
+
   /// 强制恢复可关闭进度判断；读取失败可先保留剩余缓存。
   void schedule({
     bool requireEmptyBuffer = false,

@@ -112,7 +112,6 @@ class NativePlaybackRuntime
   Duration? _lastVideoPositionAdvance;
   Duration? _lastVideoFrameConsumed;
   double? _lastVideoPosition;
-  double? _selectedVideoFps;
   bool? _selectedVideoTrack;
   PlaybackActual? _lastPublishedActual;
   PlaybackCapabilities? _lastPublishedCapabilities;
@@ -309,11 +308,9 @@ class NativePlaybackRuntime
     if (value) {
       _hasVideo = false;
       _selectedVideoTrack = false;
-      _selectedVideoFps = null;
     } else {
       _hasVideo = null;
       _selectedVideoTrack = null;
-      _selectedVideoFps = null;
     }
     _emitCapabilities(context.loadId);
     _configRevision++;
@@ -1841,11 +1838,9 @@ class NativePlaybackRuntime
     if (videoTracks == null) {
       _hasVideo = null;
       _selectedVideoTrack = null;
-      _selectedVideoFps = null;
     } else if (videoTracks.isEmpty) {
       _hasVideo = false;
       _selectedVideoTrack = false;
-      _selectedVideoFps = null;
     } else {
       _hasVideo = true;
       final selected = videoTracks
@@ -1853,10 +1848,8 @@ class NativePlaybackRuntime
           .toList(growable: false);
       if (selected.length == 1) {
         _selectedVideoTrack = true;
-        _selectedVideoFps = selected.single.demuxFps;
       } else {
         _selectedVideoTrack = null;
-        _selectedVideoFps = null;
       }
     }
     _emitCapabilities(loadId);
@@ -1874,13 +1867,8 @@ class NativePlaybackRuntime
   bool? _videoProgressing(Duration now) {
     if (_hasVideo == false) return false;
     if (_hasVideo != true) return null;
-    final frameRate = _selectedVideoFps;
-    if (_selectedVideoTrack != true ||
-        frameRate == null ||
-        !frameRate.isFinite ||
-        frameRate <= 0) {
-      return null;
-    }
+    if (_selectedVideoTrack != true) return null;
+    // 帧率元数据可以缺失；健康判定只依赖当前轨道的时钟与实际消费帧。
     // estimated-frame-number 不持续发布属性变更；用 time-pos 的推进
     // 配合当前输出令牌的实际消费帧，确认画面仍在播放。
     return _fresh(_lastVideoPositionAdvance, now) &&
@@ -1948,7 +1936,6 @@ class NativePlaybackRuntime
       _hasVideo = null;
       _hasAudio = null;
       _selectedVideoTrack = null;
-      _selectedVideoFps = null;
     }
     _lastPublishedActual = null;
   }

@@ -1,5 +1,10 @@
 import 'dart:async';
 
+import 'package:flutter/services.dart';
+import 'package:hive_ce/hive.dart';
+import 'package:pili_aurora/utils/storage.dart';
+import 'package:pili_aurora/plugin/pl_player/controller.dart';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
@@ -12,6 +17,106 @@ import 'package:pili_aurora/services/diagnostics/diagnostics.dart';
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   tearDownAll(Diagnostics.instance.dispose);
+
+  setUpAll(() async {
+    GStorage.setting = await Hive.openBox('setting', bytes: Uint8List(0));
+    GStorage.video = await Hive.openBox('video', bytes: Uint8List(0));
+    GStorage.localCache = await Hive.openBox('cache', bytes: Uint8List(0));
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(
+          const MethodChannel('dev.fluttercommunity.plus/wakelock'),
+          (_) async => null,
+        );
+  });
+  tearDownAll(Hive.close);
+
+  for (final fps in <double?>[30, null]) {
+    test('EOF 回看后帧率${fps == null ? "未知" : "已知"}，音频继续而视频停帧仍重载', () async {
+      final fixture = _Fixture(subscribeToPlaybackEvents: true);
+      fixture.player
+        ..videoFps = fps
+        ..autoStop = true;
+      // 只使用生产控制器中的恢复策略，替身仅承担原生 I/O。
+      fixture.recovery.dispose();
+      final controller = PlPlayerController.withRuntime(
+        fixture.runtime,
+        monotonicNow: () => fixture.now,
+      )..enableHeart = false;
+      final owner = controller.attachPlaybackOwner();
+      final plan = PlaybackPlan(
+        contentKey: 'eof-stall',
+        source: PlaybackSourceSnapshot.fromDataSource(
+          NetworkSource(
+            videoSource: 'https://example.test/movie',
+            audioSource: null,
+          ),
+        ),
+        timeline: const PlaybackTimeline(
+          kind: PlaybackTimelineKind.onDemand,
+          seekPolicy: PlaybackSeekPolicy.allowed,
+          duration: Duration(minutes: 5),
+        ),
+        configuration: PlaybackConfiguration(),
+      );
+      try {
+        expect(
+          (await controller.loadPlaybackPlan(
+            owner: owner,
+            plan: plan,
+            start: PlaybackStartPolicy.play,
+            live: false,
+          )).outcome,
+          LoadOutcome.ready,
+        );
+        fixture.player.state
+          ..position = fixture.player.state.duration
+          ..completed = true;
+        fixture.player.setPlaying(false);
+        fixture.player.events.add(
+          NativePlaybackEof(
+            playlistEntryId: fixture.player.entryId,
+            reached: true,
+            position: fixture.player.state.position,
+            duration: fixture.player.state.duration,
+          ),
+        );
+        await _turn();
+        expect(controller.currentPlaybackSnapshot.phase, PlaybackPhase.ended);
+        controller.pauseOnMinimize.value = true;
+        controller.onWindowMinimize();
+        fixture.now += const Duration(minutes: 30);
+        controller.onWindowMaximize();
+        await controller.seekTo(const Duration(seconds: 42));
+        await controller.play();
+        expect(fixture.player.state.position, const Duration(seconds: 42));
+        for (var i = 0; i < 8; i++) {
+          await fixture.advance();
+          await Future<void>.delayed(const Duration(milliseconds: 250));
+        }
+        expect(fixture.player.opens, 2);
+        expect(
+          controller.currentPlaybackSnapshot.actual.videoProgressing,
+          isTrue,
+        );
+        // 保留音频和主时钟输入，单独停止实际消费帧。
+        for (var i = 0; i < 32; i++) {
+          await fixture.advance(consumeFrame: false);
+          await Future<void>.delayed(const Duration(milliseconds: 250));
+        }
+        expect(
+          controller.currentPlaybackSnapshot.actual.audioProgressing,
+          isTrue,
+        );
+        expect(fixture.player.opens, 3);
+      } finally {
+        fixture.output.releaseReceipt.complete();
+        await fixture.player.unload();
+        fixture.player.endFile();
+        await controller.shutdownPlaybackFacade();
+        await fixture.close();
+      }
+    });
+  }
 
   test('连续自然结束后加载新媒体不积累旧文件绑定', () async {
     final fixture = _Fixture();
@@ -76,32 +181,35 @@ void main() {
     expect(ended, hasLength(2));
   });
 
-  test('播放位置和实际出帧持续推进时不误触发画面停滞重载', () async {
-    final fixture = _Fixture(subscribeToPlaybackEvents: true);
-    addTearDown(fixture.close);
-    final loaded = await fixture.load();
-    expect(
-      loaded.loaded,
-      isTrue,
-      reason: '${loaded.failure?.cause}: ${loaded.output.evidence}',
-    );
-    await fixture.advance();
-    await fixture.advance();
-    fixture.player.startPlaying();
-
-    for (var i = 0; i < 24; i++) {
+  for (final fps in <double?>[30, null]) {
+    test('帧率${fps == null ? "未知" : "已知"}时按真实出帧检测停滞', () async {
+      final fixture = _Fixture(subscribeToPlaybackEvents: true);
+      fixture.player.videoFps = fps;
+      addTearDown(fixture.close);
+      final loaded = await fixture.load();
+      expect(
+        loaded.loaded,
+        isTrue,
+        reason: '${loaded.failure?.cause}: ${loaded.output.evidence}',
+      );
       await fixture.advance();
-    }
-    expect(fixture.reloads, 0);
-    expect(fixture.actual.videoProgressing, isTrue);
+      await fixture.advance();
+      fixture.player.startPlaying();
 
-    // 主时钟仍推进，实际出帧停止后仍须触发恢复。
-    for (var i = 0; i < 24; i++) {
-      await fixture.advance(consumeFrame: false);
-    }
-    expect(fixture.actual.videoProgressing, isFalse);
-    expect(fixture.reloads, 1);
-  });
+      for (var i = 0; i < 24; i++) {
+        await fixture.advance();
+      }
+      expect(fixture.reloads, 0);
+      expect(fixture.actual.videoProgressing, isTrue);
+
+      // 主时钟仍推进，实际出帧停止后仍须触发恢复。
+      for (var i = 0; i < 24; i++) {
+        await fixture.advance(consumeFrame: false);
+      }
+      expect(fixture.actual.videoProgressing, isFalse);
+      expect(fixture.reloads, 1);
+    });
+  }
 
   test('实际出帧继续但播放位置停止推进时仍判定停滞', () async {
     final fixture = _Fixture(subscribeToPlaybackEvents: true);
@@ -338,7 +446,10 @@ class _Fixture {
       'time-pos',
       '${player.state.position.inMilliseconds / 1000}',
     );
-    player.emitProperty('audio-pts', '${now.inMilliseconds / 1000}');
+    player.emitProperty(
+      'audio-pts',
+      '${player.state.position.inMilliseconds / 1000}',
+    );
     if (consumeFrame) {
       output.progress.add(
         VideoOutputProgress(
@@ -398,6 +509,15 @@ class _Player implements NativePlayer {
   _Player(this.calls, {this.hasVideo = false});
   final List<String> calls;
   final bool hasVideo;
+  double? videoFps = 30;
+  bool autoStop = false;
+  int opens = 0;
+  @override
+  final current = <Media>[];
+  @override
+  Future<void> play({bool synchronized = true}) async => setPlaying(true);
+  @override
+  Future<void> pause({bool synchronized = true}) async => setPlaying(false);
   final playback = _PlayerStreams();
   final properties = <String, StreamController<String?>>{};
   @override
@@ -453,6 +573,13 @@ class _Player implements NativePlayer {
     if (openFailsBeforeSubmission) throw TimeoutException('open stop reply');
     onLoadSubmitted?.call();
     if (openTimesOut) throw TimeoutException('open reply');
+    opens++;
+    state.duration = const Duration(minutes: 5);
+    state.completed = false;
+    if (playable is Media) state.position = playable.start ?? Duration.zero;
+    current
+      ..clear()
+      ..add(const Media('https://example.test/movie'));
     startFile();
     events.add(
       NativeFileLoaded(
@@ -468,13 +595,13 @@ class _Player implements NativePlayer {
               )
             : null,
         videoTracks: hasVideo
-            ? const [
+            ? [
                 NativeVideoTrackMetadata(
                   id: '1',
                   type: 'video',
                   demuxWidth: 640,
                   demuxHeight: 360,
-                  demuxFps: 30,
+                  demuxFps: videoFps,
                   demuxPar: 1,
                   demuxRotate: 0,
                   demuxCropKnownNone: true,
@@ -483,6 +610,8 @@ class _Player implements NativePlayer {
               ]
             : const [],
         hasAudio: true,
+        seekable: true,
+        partiallySeekable: false,
       ),
     );
     emitProperty('estimated-frame-number', '0');
@@ -522,6 +651,12 @@ class _Player implements NativePlayer {
   @override
   Future<void> stop({bool open = false, bool synchronized = true}) async {
     calls.add('stop');
+    if (autoStop) {
+      await unload();
+      endFile();
+      started = false;
+      entryId++;
+    }
     if (stopTimesOut) throw TimeoutException('stop reply');
   }
 
@@ -632,6 +767,14 @@ class _PlayerStreams implements PlayerStream {
   Stream<bool> get completed => const Stream.empty();
   @override
   Stream<bool> get buffering => const Stream.empty();
+  @override
+  Stream<VideoParams> get videoParams => const Stream.empty();
+  @override
+  Stream<PlayerLog> get log => const Stream.empty();
+  @override
+  Stream<String> get error => const Stream.empty();
+  @override
+  Stream<Duration> get buffer => const Stream.empty();
   @override
   dynamic noSuchMethod(Invocation invocation) =>
       throw StateError('Unexpected player stream: ${invocation.memberName}');

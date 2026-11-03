@@ -40,6 +40,23 @@ void main() {
     recovery.dispose();
   });
 
+  testWidgets('撤销画面触发不撤销已合并的断流恢复', (tester) async {
+    var retries = 0;
+    final recovery = PlaybackNetworkRecovery(
+      isCurrent: () => true,
+      readState: () => empty,
+      videoProgressing: () => true,
+      reload: (_) async => retries++,
+      onError: (error) => fail('$error'),
+    )..schedule(requireVideoProgress: true);
+    addTearDown(recovery.dispose);
+    recovery
+      ..schedule(waitForCachedPlayback: true)
+      ..cancelVideoRecovery();
+    await tester.pump(const Duration(seconds: 3));
+    expect(retries, 1);
+  });
+
   testWidgets('重载仍在途时合并错误，避免重复提交媒体加载', (tester) async {
     final pending = Completer<void>();
     var retries = 0;

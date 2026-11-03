@@ -123,7 +123,7 @@ void main() {
     expect(tester.takeException(), isNull);
   }, skip: !Platform.isWindows);
 
-  for (final restoredEvent in ['restore', 'maximize']) {
+  for (final restoredEvent in ['restore', 'maximize', 'unmaximize']) {
     testWidgets('最小化后通过 $restoredEvent 恢复，返回动画完成并释放页面', (tester) async {
       const channel = MethodChannel('window_manager');
       final messenger = tester.binding.defaultBinaryMessenger

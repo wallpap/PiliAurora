@@ -5,6 +5,7 @@ import 'package:flutter/scheduler.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:pili_aurora/common/assets.dart';
 import 'package:pili_aurora/services/logger.dart';
+import 'package:pili_aurora/utils/desktop_window_visibility.dart';
 import 'package:window_manager/window_manager.dart';
 
 /// 根节点同步窗口外观，主窗口和独立播放窗口共用。
@@ -18,18 +19,22 @@ class DesktopWindowTheme extends StatefulWidget {
 }
 
 class _DesktopWindowThemeState extends State<DesktopWindowTheme>
-    with WidgetsBindingObserver, WindowListener {
+    with
+        WidgetsBindingObserver,
+        WindowListener,
+        DesktopWindowVisibilityListener {
   Brightness? _brightness;
-  bool _minimized = false;
+  bool _windowVisible = true;
   int _windowEvent = 0;
-  AppLifecycleState? _lifecycle;
 
   @override
   void initState() {
     super.initState();
     Assets.iconStyle.addListener(_syncIcon);
     if (!Platform.isWindows) return;
-    _lifecycle = WidgetsBinding.instance.lifecycleState;
+    didChangeAppLifecycleState(
+      WidgetsBinding.instance.lifecycleState ?? AppLifecycleState.resumed,
+    );
     WidgetsBinding.instance.addObserver(this);
     windowManager.addListener(this);
     final event = _windowEvent;
@@ -38,7 +43,11 @@ class _DesktopWindowThemeState extends State<DesktopWindowTheme>
           .isMinimized()
           .then((value) {
             if (mounted && event == _windowEvent) {
-              setState(() => _minimized = value);
+              if (value) {
+                onWindowMinimize();
+              } else {
+                onWindowRestore();
+              }
             }
           })
           .catchError((Object error, StackTrace stack) {
@@ -48,25 +57,15 @@ class _DesktopWindowThemeState extends State<DesktopWindowTheme>
   }
 
   @override
-  void onWindowMinimize() {
+  void onWindowVisibilityChanged(bool visible) {
     _windowEvent++;
-    if (mounted) setState(() => _minimized = true);
+    if (mounted) setState(() => _windowVisible = visible);
   }
-
-  @override
-  void onWindowRestore() {
-    _windowEvent++;
-    if (mounted) setState(() => _minimized = false);
-  }
-
-  // 从最小化恢复到最大化时，插件发送 maximize，也需要恢复视觉更新。
-  @override
-  void onWindowMaximize() => onWindowRestore();
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (!mounted) return;
-    setState(() => _lifecycle = state);
+    super.didChangeAppLifecycleState(state);
     if (state == AppLifecycleState.hidden ||
         state == AppLifecycleState.paused) {
       // SchedulerBinding 会在这些状态下禁止普通 frame；强制提交一次
@@ -96,12 +95,7 @@ class _DesktopWindowThemeState extends State<DesktopWindowTheme>
   @override
   Widget build(BuildContext context) => TickerMode(
     // inactive 只表示失焦，其他播放窗口仍可能可见，不能停止其视觉更新。
-    enabled:
-        !Platform.isWindows ||
-        (!_minimized &&
-            _lifecycle != AppLifecycleState.hidden &&
-            _lifecycle != AppLifecycleState.paused &&
-            _lifecycle != AppLifecycleState.detached),
+    enabled: !Platform.isWindows || _windowVisible,
     child: widget.child,
   );
 

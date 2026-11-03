@@ -1,6 +1,8 @@
 import 'dart:async';
 
 import 'package:flutter/services.dart';
+import 'package:flutter/widgets.dart';
+import 'package:window_manager/window_manager.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hive_ce/hive.dart';
 import 'package:media_kit/media_kit.dart';
@@ -29,6 +31,118 @@ void main() {
         );
   });
   tearDownAll(Hive.close);
+
+  final restoreWindow = <String, void Function(PlPlayerController)>{
+    '普通恢复': (controller) => controller.onWindowRestore(),
+    '最大化恢复': (controller) => controller.onWindowMaximize(),
+    '退出最大化': (controller) => controller.onWindowUnmaximize(),
+  };
+  for (final entry in restoreWindow.entries) {
+    _recoveryTest('最小化暂停后${entry.key}释放抑制并保留播放意图', (f) async {
+      await f.load();
+      f.controller.pauseOnMinimize.value = true;
+      f.controller.onWindowMinimize();
+      await f.tester.pump();
+      expect(f.runtime.player.state.playing, isFalse);
+      await f.tester.pump(const Duration(minutes: 30));
+      entry.value(f.controller);
+      await f.tester.pump();
+      expect(f.controller.currentPlaybackSnapshot.inhibitors, isEmpty);
+      expect(f.controller.wantsToPlay, isTrue);
+      expect(f.runtime.player.state.playing, isTrue);
+    });
+  }
+
+  _recoveryTest('最小化期间不将缺少显示回执当成视频故障，恢复可见后重新确认', (f) async {
+    await f.load();
+    f.controller.pauseOnMinimize.value = false;
+    f.controller.onWindowMinimize();
+    f.runtime.videoHealthy = false;
+    await f.advance(12, refill: true);
+    expect(f.runtime.loads, hasLength(1));
+    expect(f.controller.isVideoStalled.value, isFalse);
+    f.controller.onWindowMaximize();
+    await f.advance(3);
+    expect(f.runtime.loads, hasLength(2));
+  });
+
+  _recoveryTest('已排队的画面恢复在最小化后停止，重新可见后保留恢复机会', (f) async {
+    await f.load();
+    f.controller.pauseOnMinimize.value = false;
+    f.runtime.videoHealthy = false;
+    f.runtime.emitActual();
+    f.controller.onWindowMinimize();
+    await f.advance(6);
+    expect(f.runtime.loads, hasLength(1));
+    f.controller.onWindowRestore();
+    await f.advance(3);
+    expect(f.runtime.loads, hasLength(2));
+  });
+
+  _recoveryTest('短暂隐藏后恢复，重新等待完整的画面确认窗口', (f) async {
+    await f.load();
+    f.controller.pauseOnMinimize.value = false;
+    f.runtime.videoHealthy = false;
+    await f.advance(2);
+    f.controller.onWindowMinimize();
+    f.controller.onWindowRestore();
+    await f.advance(2);
+    expect(f.runtime.loads, hasLength(1));
+    await f.advance(1);
+    expect(f.runtime.loads, hasLength(2));
+  });
+
+  _recoveryTest('主窗口通过插件事件最小化再最大化仍恢复播放，关闭后注销监听', (f) async {
+    await f.load();
+    f.controller.pauseOnMinimize.value = true;
+    Future<void> windowEvent(String name) async {
+      const codec = StandardMethodCodec();
+      final done = Completer<void>();
+      f.tester.binding.defaultBinaryMessenger.handlePlatformMessage(
+        'window_manager',
+        codec.encodeMethodCall(MethodCall('onEvent', {'eventName': name})),
+        (_) => done.complete(),
+      );
+      await f.tester.pump();
+      await done.future;
+    }
+
+    expect(windowManager.hasListeners, isTrue);
+    await windowEvent('minimize');
+    expect(f.runtime.player.state.playing, isFalse);
+    await windowEvent('maximize');
+    expect(f.runtime.player.state.playing, isTrue);
+    await f.controller.shutdownPlaybackFacade();
+    await f.tester.pump();
+    expect(windowManager.hasListeners, isFalse);
+  });
+
+  _recoveryTest('隐藏和窗口恢复事件交错时，重新可见才开始视频恢复', (f) async {
+    await f.load();
+    f.controller.pauseOnMinimize.value = false;
+    f.controller.didChangeAppLifecycleState(AppLifecycleState.hidden);
+    f.controller.onWindowMinimize();
+    f.runtime.videoHealthy = false;
+    await f.advance(6);
+    f.controller.onWindowMaximize();
+    await f.advance(6);
+    expect(f.runtime.loads, hasLength(1));
+    f.controller.didChangeAppLifecycleState(AppLifecycleState.inactive);
+    await f.advance(3);
+    expect(f.runtime.loads, hasLength(2));
+  });
+
+  _recoveryTest('最小化期间手动暂停，恢复窗口不覆盖新的暂停意图', (f) async {
+    await f.load();
+    f.controller.pauseOnMinimize.value = true;
+    f.controller.onWindowMinimize();
+    await f.controller.pause();
+    f.controller.onWindowMaximize();
+    await f.tester.pump();
+    expect(f.controller.currentPlaybackSnapshot.inhibitors, isEmpty);
+    expect(f.controller.wantsToPlay, isFalse);
+    expect(f.runtime.player.state.playing, isFalse);
+  });
 
   _recoveryTest('片尾跳转后控制器进度同步到新位置', (f) async {
     await f.load(local: true);

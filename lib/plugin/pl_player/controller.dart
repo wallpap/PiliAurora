@@ -59,6 +59,7 @@ import 'package:pili_aurora/utils/android/android_helper.dart';
 import 'package:pili_aurora/utils/android/bindings.g.dart';
 import 'package:pili_aurora/utils/asset_utils.dart';
 import 'package:pili_aurora/utils/device_utils.dart';
+import 'package:pili_aurora/utils/desktop_window_visibility.dart';
 import 'package:pili_aurora/utils/duration_utils.dart';
 import 'package:pili_aurora/utils/extension/box_ext.dart';
 import 'package:pili_aurora/utils/feed_back.dart';
@@ -89,7 +90,12 @@ import 'package:window_manager/window_manager.dart';
 typedef PlayCallback = Future<void>? Function();
 
 class PlPlayerController
-    with BlockConfigMixin, AudioNormalizationMixin, WindowListener {
+    with
+        BlockConfigMixin,
+        AudioNormalizationMixin,
+        WidgetsBindingObserver,
+        WindowListener,
+        DesktopWindowVisibilityListener {
   final NativePlaybackRuntime? _providedRuntime;
   final Duration Function()? _monotonicNow;
   late final NativePlaybackRuntime _runtime =
@@ -287,6 +293,7 @@ class PlPlayerController
   PlaybackOwner? _minimizedWindowOwner;
   PlaybackInhibitorToken? _minimizedWindowToken;
   bool _listensToWindowEvents = false;
+  bool _windowVisible = true;
 
   void setAutoPiP(bool value) {
     if (!Platform.isAndroid) return;
@@ -298,18 +305,31 @@ class PlPlayerController
   }
 
   @override
-  void onWindowMinimize() {
+  void onWindowVisibilityChanged(bool visible) {
+    _windowVisible = visible;
+    if (visible) {
+      _releaseMinimizedWindow();
+    } else {
+      _networkRecovery?.cancelVideoRecovery();
+      _pauseForMinimizedWindow();
+    }
+    _observeVideoRecovery(_session.currentSnapshot);
+  }
+
+  void _pauseForMinimizedWindow() {
     if (!pauseOnMinimize.value || !playerStatus.isPlaying) return;
     final owner = activePlaybackOwner;
     if (owner == null) return;
+    if (!identical(_minimizedWindowOwner, owner)) {
+      _releaseMinimizedWindow();
+    }
     _minimizedWindowOwner = owner;
     _minimizedWindowToken ??= owner.acquireInhibitor(
       PlaybackInhibitorSource.system,
     );
   }
 
-  @override
-  void onWindowRestore() {
+  void _releaseMinimizedWindow() {
     final owner = _minimizedWindowOwner;
     final token = _minimizedWindowToken;
     _minimizedWindowOwner = null;
@@ -706,9 +726,13 @@ class PlPlayerController
     NativePlaybackRuntime? runtime,
     this._monotonicNow,
   }) : _providedRuntime = runtime {
-    if (isDesktopPip) {
+    if (PlatformUtils.isDesktop) {
       windowManager.addListener(this);
+      WidgetsBinding.instance.addObserver(this);
       _listensToWindowEvents = true;
+      didChangeAppLifecycleState(
+        WidgetsBinding.instance.lifecycleState ?? AppLifecycleState.resumed,
+      );
     }
     if (PlatformUtils.isMobile) {
       _backgroundPolicy = PlaybackBackgroundPolicy(
@@ -842,8 +866,9 @@ class PlPlayerController
     _facadeDisposed = true;
     if (_listensToWindowEvents) {
       windowManager.removeListener(this);
+      WidgetsBinding.instance.removeObserver(this);
       _listensToWindowEvents = false;
-      onWindowRestore();
+      _releaseMinimizedWindow();
     }
     _backgroundPolicy?.dispose();
     _backgroundPolicy = null;
@@ -971,22 +996,7 @@ class PlPlayerController
         snapshot.actual.audioProgressing == false) {
       _ensureAudioRecovery()?.observe();
     }
-    isVideoStalled.value =
-        snapshot.phase == PlaybackPhase.ready &&
-        snapshot.intent.playing &&
-        snapshot.actual.playing == true &&
-        snapshot.actual.buffering != true &&
-        snapshot.actual.seeking != true &&
-        !desired.audioOnly &&
-        snapshot.capabilities.hasVideo == true &&
-        snapshot.actual.videoProgressing == false;
-    if (isVideoStalled.value) {
-      _recoverPlaybackNetwork(
-        requireEmptyBuffer: false,
-        allowNativeRecovery: false,
-        requireVideoProgress: true,
-      );
-    }
+    _observeVideoRecovery(snapshot);
     final loadId = snapshot.loadId;
     if (snapshot.phase == PlaybackPhase.ready &&
         loadId != null &&
@@ -1433,6 +1443,29 @@ class PlPlayerController
     }();
   }
 
+  // 隐藏窗口不会持续消费纹理；可见后再给出画检查一个完整恢复窗口。
+  bool _needsVideoRecovery(PlaybackSnapshot snapshot) =>
+      _windowVisible &&
+      snapshot.phase == PlaybackPhase.ready &&
+      snapshot.intent.playing &&
+      snapshot.actual.playing == true &&
+      snapshot.actual.buffering != true &&
+      snapshot.actual.seeking != true &&
+      !snapshot.configuration.desired.audioOnly &&
+      snapshot.capabilities.hasVideo == true &&
+      snapshot.actual.videoProgressing == false;
+
+  void _observeVideoRecovery(PlaybackSnapshot snapshot) {
+    isVideoStalled.value = _needsVideoRecovery(snapshot);
+    if (isVideoStalled.value) {
+      _recoverPlaybackNetwork(
+        requireEmptyBuffer: false,
+        allowNativeRecovery: false,
+        requireVideoProgress: true,
+      );
+    }
+  }
+
   void _recoverPlaybackNetwork({
     bool requireEmptyBuffer = true,
     bool allowNativeRecovery = true,
@@ -1476,16 +1509,7 @@ class PlPlayerController
           !_audioSeekInProgress &&
           !isSeeking.value &&
           _session.currentSnapshot.actual.seeking != true,
-      videoProgressing: () {
-        final snapshot = _session.currentSnapshot;
-        return snapshot.configuration.desired.audioOnly ||
-            snapshot.capabilities.hasVideo != true ||
-            !snapshot.intent.playing ||
-            snapshot.actual.playing != true ||
-            snapshot.actual.buffering == true ||
-            snapshot.actual.seeking == true ||
-            snapshot.actual.videoProgressing != false;
-      },
+      videoProgressing: () => !_needsVideoRecovery(_session.currentSnapshot),
       onRetry: () => SmartDialog.showToast(
         '连接中断，正在恢复播放',
         displayTime: const Duration(seconds: 2),
