@@ -50,7 +50,8 @@ typedef UnreadQuery = Future<UnreadQueryResult> Function();
 class UnreadOverview {
   UnreadOverview(this.session, {this.query}) {
     _subscription = session.changes.listen((change) {
-      if (change.kind == MessagingChangeKind.unread) {
+      if (change.kind == MessagingChangeKind.unread ||
+          change.kind == MessagingChangeKind.conversationRead) {
         if (change.readType case final type?) {
           // 阅读成功就是本地确认；立即重查可能拿到远端尚未收敛的旧数值。
           _generation++;

@@ -435,7 +435,7 @@ final class Conversation {
             _error = null;
             _emit();
             session.notifyChanged(
-              MessagingChangeKind.unread,
+              MessagingChangeKind.conversationRead,
               talkerId: target.talkerId,
             );
           }

@@ -44,6 +44,7 @@ class FakeConversationAdapter implements ConversationAdapter {
   final acknowledgements = <int>[];
   Future<LoadingState<void>> Function()? sendRequest;
   LoadingState<void> ackResult = const Success(null);
+  Future<LoadingState<void>> Function()? acknowledgeRequest;
   @override
   Future<LoadingState<ConversationPage>> latest(
     Account account,
@@ -82,7 +83,7 @@ class FakeConversationAdapter implements ConversationAdapter {
     int sequence,
   ) async {
     acknowledgements.add(sequence);
-    return ackResult;
+    return await acknowledgeRequest?.call() ?? ackResult;
   }
 
   @override

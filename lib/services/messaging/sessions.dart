@@ -303,6 +303,15 @@ class Sessions {
     final changedKey = change.talkerId == null
         ? null
         : SessionKey(kind: SessionKeyKind.private, primary: change.talkerId!);
+    if (change.kind == MessagingChangeKind.conversationRead) {
+      final entry = _entries[changedKey];
+      if (entry != null) {
+        // ACK 已确认成功；本地立即同步，避免重查到尚未收敛的远端旧值。
+        _invalidateListsFor(entry.key);
+        _replaceEntry(entry.clearUnread());
+      }
+      return;
+    }
     for (final handle in _lists.values) {
       if (!handle._started ||
           (changedKey != null &&

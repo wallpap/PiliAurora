@@ -9,7 +9,13 @@ import 'package:pili_aurora/utils/accounts/account.dart';
 
 typedef AccountSessionKey = ({int mid, int generation});
 
-enum MessagingChangeKind { sessions, conversation, unread, settings }
+enum MessagingChangeKind {
+  sessions,
+  conversation,
+  conversationRead,
+  unread,
+  settings,
+}
 
 class MessagingChange {
   const MessagingChange(this.kind, {this.talkerId, this.readType});

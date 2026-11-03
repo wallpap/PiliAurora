@@ -120,6 +120,69 @@ void main() {
     expect(secondary.state.value.entries.single.unread.isUnread, isFalse);
   });
 
+  for (final confirmed in [true, false]) {
+    test('关注 UP 私信返回后气泡跟随已读确认，旧查询不覆盖（成功：$confirmed）', () async {
+      final adapter = FakeSessionAdapter();
+      final sessions = Sessions(session, adapter: adapter);
+      addTearDown(sessions.dispose);
+      final home = sessions.list(SessionFolder.home);
+      var overviewQueries = 0;
+      final overview = UnreadOverview(
+        session,
+        query: () async => UnreadQueryResult({
+          MsgUnReadType.pm: ++overviewQueries == 1 ? 6 : 3,
+          MsgUnReadType.reply: 2,
+        }),
+      );
+      addTearDown(overview.dispose);
+      await overview.refresh();
+      final first = home.loadIfNeeded();
+      adapter.requests[0].complete(sessionPage([456, 789]));
+      await first;
+      final ack = Completer<LoadingState<void>>();
+      final chatAdapter = FakeConversationAdapter()
+        ..acknowledgeRequest = () => ack.future;
+      final chat = Conversation(
+        session: session,
+        target: const ConversationTarget(talkerId: 456),
+        adapter: chatAdapter,
+      );
+      addTearDown(chat.dispose);
+      final open = chat.open();
+      chatAdapter.latestRequests.single.complete(Success(page([10])));
+      await open;
+      final stale = home.refresh();
+      chat.markRendered(message(10));
+      await settle();
+      expect(home.state.value.entries.first.unread.isUnread, isTrue);
+      ack.complete(confirmed ? const Success(null) : const Error('ACK 失败'));
+      await settle();
+      expect(home.state.value.entries.first.unread.isUnread, !confirmed);
+      expect(home.state.value.entries.last.unread.isUnread, isTrue);
+      expect(overview.state.value.counts[MsgUnReadType.pm], confirmed ? 3 : 6);
+      expect(overview.state.value.counts[MsgUnReadType.reply], 2);
+      expect(adapter.requests, hasLength(2));
+      adapter.requests[1].complete(sessionPage([456, 789]));
+      await stale;
+      expect(home.state.value.entries.first.unread.isUnread, !confirmed);
+      final latest = home.refresh();
+      adapter.requests[2].complete(
+        Success(
+          SessionPageResult(
+            entries: [
+              sessionEntry(456).copyWith(sequenceNumber: 11, summary: '新消息'),
+              sessionEntry(789),
+            ],
+            cursor: null,
+            hasMore: false,
+          ),
+        ),
+      );
+      await latest;
+      expect(home.state.value.entries.first.unread.isUnread, isTrue);
+    });
+  }
+
   test('删除会话后在途列表结果不能恢复已删除项', () async {
     final adapter = FakeSessionAdapter();
     final sessions = Sessions(session, adapter: adapter);
