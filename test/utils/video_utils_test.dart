@@ -109,6 +109,79 @@ void main() {
     );
   });
 
+  test('各镜像主机优先使用接口原文，签名和来源顺序均保留', () {
+    const legacy = 'https://foo.szbdyd.com/video?xy_usource=legacy.example.com';
+    for (final service in CDNService.values.where(
+      (service) => service.host?.startsWith('upos-') == true,
+    )) {
+      final signed =
+          'https://${service.host}/upgcxcode/video?sign=A%2bb%2F&key=1&key=2';
+      expect(
+        VideoUtils.getCdnUrl([
+          legacy,
+          signed,
+          signed.replaceFirst('sign=A', 'sign=other'),
+        ], defaultCDNService: service),
+        signed,
+        reason: service.name,
+      );
+    }
+    expect(
+      VideoUtils.getCdnUrl([
+        legacy,
+        'https://upos-sz-mirrorcos.bilivideo.com/upgcxcode/video?sign=cos',
+      ], defaultCDNService: CDNService.hw),
+      'https://legacy.example.com/video?xy_usource=legacy.example.com',
+    );
+  });
+
+  test('mcdn 回退优先使用最后一个 upgcxcode 来源，否则包装资源地址', () {
+    const resource = 'https://a.mcdn.bilivideo.cn:4483/v1/resource?token=x';
+    const upgcxcode =
+        'https://cn-bcache.bilivideo.com/upgcxcode/video?sign=original';
+    expect(
+      VideoUtils.getCdnUrl([
+        resource,
+        '$upgcxcode&old=1',
+        upgcxcode,
+      ], defaultCDNService: CDNService.hw),
+      'https://upos-sz-mirrorhw.bilivideo.com/upgcxcode/video?sign=original',
+    );
+    final proxy = Uri.parse(
+      VideoUtils.getCdnUrl([resource], defaultCDNService: CDNService.backupUrl),
+    );
+    expect(proxy.host, 'proxy-tf-all-ws.bilivideo.com');
+    expect(proxy.queryParameters['url'], resource);
+  });
+
+  test('多源解析对所有首选保持单源结果并保留原始候选', () async {
+    await GStorage.setting.put(SettingBoxKey.enableMultiCdn, true);
+    const originals = [
+      'https://upos-sz-mirrorcos.bilivideo.com/upgcxcode/video?sign=cos',
+      'https://upos-hz-mirrorakam.akamaized.net/upgcxcode/video?hdnts=A%2Bb',
+      'https://upos-sz-mirrorali.bilivideo.com/upgcxcode/video?sign=ali',
+    ];
+    for (final preferred in CDNService.values) {
+      final candidates = VideoUtils.getCdnUrls(
+        originals,
+        defaultCDNService: preferred,
+      );
+      expect(
+        candidates.first,
+        VideoUtils.getCdnUrl(originals, defaultCDNService: preferred),
+        reason: preferred.name,
+      );
+      expect(candidates.toSet(), hasLength(candidates.length));
+      expect(candidates, containsAll(originals));
+      expect(
+        candidates.where(
+          (url) => Uri.parse(url).host == CDNService.akamai.host,
+        ),
+        [originals[1]],
+      );
+    }
+  });
+
   test('直播备用源保留当前选择，按当前编码提供原始备用 host', () async {
     final codec = CodecItem(
       currentQn: 10000,

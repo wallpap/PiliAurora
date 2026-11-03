@@ -10,110 +10,14 @@ abstract final class VideoUtils {
   static String? liveCdnUrl = Pref.liveCdnUrl;
   static bool disableAudioCDN = Pref.disableAudioCDN;
 
-  static const _proxyTf = 'proxy-tf-all-ws.bilivideo.com';
-
-  static final _mirrorRegex = RegExp(
-    r'^https?://(?:upos-\w+-(?!302)\w+|(?:upos|proxy)-tf-[^/]+)\.(?:bilivideo|akamaized)\.(?:com|net)/upgcxcode',
-  );
-
-  static final _mCdnTfRegex = RegExp(
-    r'^https?://(?:(?:(?:\d{1,3}\.){3}\d{1,3}|[^/]+\.mcdn\.bilivideo\.(?:com|cn|net))(?:\:\d{1,5})?/v\d/resource)',
-  );
-
   static String getCdnUrl(
     Iterable<String> urls, {
     CDNService? defaultCDNService,
     bool isAudio = false,
-  }) => _getCdnUrl(
-    urls,
-    defaultCDNService: defaultCDNService,
-    isAudio: isAudio,
+  }) => _CdnSources(urls).select(
+    defaultCDNService ?? cdnService,
+    rewriteHosts: !isAudio || !disableAudioCDN,
   );
-
-  static String _getCdnUrl(
-    Iterable<String> urls, {
-    CDNService? defaultCDNService,
-    bool isAudio = false,
-    bool reportUnknown = true,
-  }) {
-    defaultCDNService ??= cdnService;
-    final sourceUrls = urls.toList();
-
-    if (defaultCDNService == CDNService.baseUrl) {
-      return sourceUrls.first;
-    }
-
-    if (!isAudio || !disableAudioCDN) {
-      for (final url in sourceUrls) {
-        if (_mirrorRegex.hasMatch(url)) {
-          final uri = Uri.parse(url);
-          if (uri.host == defaultCDNService.host &&
-              uri.queryParameters['os'] != 'mcdn') {
-            return url;
-          }
-        }
-      }
-    }
-    if (defaultCDNService == CDNService.akamai) {
-      return sourceUrls.firstOrNull ?? '';
-    }
-
-    String? mcdnTf;
-    String? mcdnUpgcxcode;
-
-    String last = '';
-    for (final url in sourceUrls) {
-      last = url;
-      if (_mirrorRegex.hasMatch(url)) {
-        final uri = Uri.parse(url);
-        if (uri.queryParameters['os'] == 'mcdn') {
-          // upos-sz-mirrorcoso1.bilivideo.com os=mcdn
-          mcdnUpgcxcode = url;
-        } else {
-          if (defaultCDNService == CDNService.backupUrl ||
-              (isAudio && disableAudioCDN)) {
-            return url;
-          }
-          return uri.replace(host: defaultCDNService.host).toString();
-        }
-      }
-
-      if (_mCdnTfRegex.hasMatch(url)) {
-        mcdnTf = url;
-        continue;
-      }
-
-      // upos-\w*-302.* & bcache & mcdn host but upgcxcode path
-      if (url.contains('/upgcxcode/')) {
-        mcdnUpgcxcode = url;
-        continue;
-      }
-
-      // may be deprecated
-      if (url.contains('szbdyd.com')) {
-        final uri = Uri.parse(url);
-        final hostname =
-            uri.queryParameters['xy_usource'] ?? defaultCDNService.host;
-        return uri
-            .replace(scheme: 'https', host: hostname, port: 443)
-            .toString();
-      }
-
-      if (reportUnknown) logger.w('unknown cdn type: $url');
-    }
-
-    return mcdnUpgcxcode == null
-        ? mcdnTf == null
-              ? last
-              : Uri(
-                  scheme: 'https',
-                  host: _proxyTf,
-                  queryParameters: {'url': mcdnTf},
-                ).toString()
-        : Uri.parse(mcdnUpgcxcode)
-              .replace(host: defaultCDNService.host ?? CDNService.ali.host)
-              .toString();
-  }
 
   /// 首选 CDN 优先，启用回退时按偏好尝试其它 CDN，再保留接口原始备用地址。
   static List<String> getCdnUrls(
@@ -121,33 +25,24 @@ abstract final class VideoUtils {
     CDNService? defaultCDNService,
     bool isAudio = false,
   }) {
-    final sourceUrls = urls.where((url) => url.isNotEmpty).toList();
-    if (sourceUrls.isEmpty) return const [];
-
-    final result = <String>[
-      getCdnUrl(
-        sourceUrls,
-        defaultCDNService: defaultCDNService,
-        isAudio: isAudio,
+    final sources = _CdnSources(urls.where((url) => url.isNotEmpty));
+    if (sources.originals.isEmpty) return const [];
+    final rewriteHosts = !isAudio || !disableAudioCDN;
+    final result = <String>{
+      sources.select(
+        defaultCDNService ?? cdnService,
+        rewriteHosts: rewriteHosts,
       ),
-    ];
-    if (!Pref.enableMultiCdn) return result;
-    if (!isAudio || !disableAudioCDN) {
+    };
+    if (!Pref.enableMultiCdn) return result.toList();
+    if (rewriteHosts) {
       final order = Pref.cdnFallbackOrder;
       for (final service in order.isEmpty ? CDNService.values : order) {
-        // 首选地址解析已报告未知来源，生成回退候选时避免逐个 CDN 重复报告。
-        final url = _getCdnUrl(
-          sourceUrls,
-          defaultCDNService: service,
-          reportUnknown: false,
-        );
-        if (!result.contains(url)) result.add(url);
+        result.add(sources.select(service, reportUnknown: false));
       }
     }
-    for (final url in sourceUrls) {
-      if (!result.contains(url)) result.add(url);
-    }
-    return result;
+    result.addAll(sources.originals);
+    return result.toList();
   }
 
   static String getLiveCdnUrl(CodecItem e, {int index = 0}) {
@@ -190,5 +85,99 @@ abstract final class VideoUtils {
       }
     }
     return VideoDecodeFormatType.fromString(codecs.first);
+  }
+}
+
+/// 一次解析整组来源；签名地址索引与回退优先级共用同一份快照。
+class _CdnSources {
+  _CdnSources(Iterable<String> urls) : originals = urls.toList() {
+    for (final url in originals) {
+      if (_mirrorRegex.hasMatch(url)) {
+        final uri = Uri.parse(url);
+        if (uri.queryParameters['os'] != 'mcdn') {
+          // 精确匹配使用接口原文，避免重新编码或借用其它主机的签名。
+          _signedMirrors.putIfAbsent(uri.host, () => url);
+          if (_primary == null) {
+            _primary = url;
+            _primaryUri = uri;
+          }
+          continue;
+        }
+      }
+      // 首个可直接使用的来源确定后，只需继续收集后续主机的签名地址。
+      if (_primary != null) continue;
+      if (_mCdnTfRegex.hasMatch(url)) {
+        _mcdnTf = url;
+      } else if (url.contains('/upgcxcode/')) {
+        _mcdnUpgcxcode = url;
+      } else if (url.contains('szbdyd.com')) {
+        _primary = url;
+        _primaryUri = Uri.parse(url);
+        _legacy = true;
+      } else {
+        _unknown.add(url);
+      }
+    }
+  }
+
+  static const _proxyTf = 'proxy-tf-all-ws.bilivideo.com';
+  static final _mirrorRegex = RegExp(
+    r'^https?://(?:upos-\w+-(?!302)\w+|(?:upos|proxy)-tf-[^/]+)\.(?:bilivideo|akamaized)\.(?:com|net)/upgcxcode',
+  );
+  static final _mCdnTfRegex = RegExp(
+    r'^https?://(?:(?:(?:\d{1,3}\.){3}\d{1,3}|[^/]+\.mcdn\.bilivideo\.(?:com|cn|net))(?:\:\d{1,5})?/v\d/resource)',
+  );
+
+  final List<String> originals;
+  final _signedMirrors = <String, String>{};
+  final _unknown = <String>[];
+  String? _primary;
+  Uri? _primaryUri;
+  bool _legacy = false;
+  String? _mcdnTf;
+  String? _mcdnUpgcxcode;
+
+  String select(
+    CDNService service, {
+    bool rewriteHosts = true,
+    bool reportUnknown = true,
+  }) {
+    if (service == CDNService.baseUrl) return originals.first;
+    if (_signedMirrors[service.host] case final signed? when rewriteHosts) {
+      return signed;
+    }
+    // Akamai 不能从其它来源改写主机，缺少原始签名时保留接口首选。
+    if (service == CDNService.akamai) return originals.firstOrNull ?? '';
+    if (reportUnknown) {
+      for (final url in _unknown) {
+        logger.w('unknown cdn type: $url');
+      }
+    }
+    if (_primaryUri case final uri?) {
+      if (_legacy) {
+        return uri
+            .replace(
+              scheme: 'https',
+              host: uri.queryParameters['xy_usource'] ?? service.host,
+              port: 443,
+            )
+            .toString();
+      }
+      if (service == CDNService.backupUrl || !rewriteHosts) return _primary!;
+      return uri.replace(host: service.host).toString();
+    }
+    if (_mcdnUpgcxcode case final url?) {
+      return Uri.parse(url)
+          .replace(host: service.host ?? CDNService.ali.host)
+          .toString();
+    }
+    if (_mcdnTf case final url?) {
+      return Uri(
+        scheme: 'https',
+        host: _proxyTf,
+        queryParameters: {'url': url},
+      ).toString();
+    }
+    return originals.lastOrNull ?? '';
   }
 }
