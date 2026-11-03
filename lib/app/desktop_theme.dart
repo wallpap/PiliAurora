@@ -27,18 +27,24 @@ class _DesktopWindowThemeState extends State<DesktopWindowTheme>
   @override
   void initState() {
     super.initState();
+    Assets.iconStyle.addListener(_syncIcon);
     if (!Platform.isWindows) return;
     _lifecycle = WidgetsBinding.instance.lifecycleState;
     WidgetsBinding.instance.addObserver(this);
     windowManager.addListener(this);
     final event = _windowEvent;
-    unawaited(windowManager.isMinimized().then((value) {
-      if (mounted && event == _windowEvent) {
-        setState(() => _minimized = value);
-      }
-    }).catchError((Object error, StackTrace stack) {
-      logger.w('读取窗口最小化状态失败', error: error, stackTrace: stack);
-    }));
+    unawaited(
+      windowManager
+          .isMinimized()
+          .then((value) {
+            if (mounted && event == _windowEvent) {
+              setState(() => _minimized = value);
+            }
+          })
+          .catchError((Object error, StackTrace stack) {
+            logger.w('读取窗口最小化状态失败', error: error, stackTrace: stack);
+          }),
+    );
   }
 
   @override
@@ -76,9 +82,13 @@ class _DesktopWindowThemeState extends State<DesktopWindowTheme>
     if (_brightness == brightness) return;
     _brightness = brightness;
     unawaited(windowManager.setBrightness(brightness));
-    if (Platform.isWindows) {
+    _syncIcon();
+  }
+
+  void _syncIcon() {
+    if (Platform.isWindows && _brightness != null) {
       unawaited(
-        windowManager.setIcon(Assets.themed(Assets.logoIco, brightness)),
+        windowManager.setIcon(Assets.themed(Assets.logoIco, _brightness!)),
       );
     }
   }
@@ -86,7 +96,8 @@ class _DesktopWindowThemeState extends State<DesktopWindowTheme>
   @override
   Widget build(BuildContext context) => TickerMode(
     // inactive 只表示失焦，其他播放窗口仍可能可见，不能停止其视觉更新。
-    enabled: !Platform.isWindows ||
+    enabled:
+        !Platform.isWindows ||
         (!_minimized &&
             _lifecycle != AppLifecycleState.hidden &&
             _lifecycle != AppLifecycleState.paused &&
@@ -96,6 +107,7 @@ class _DesktopWindowThemeState extends State<DesktopWindowTheme>
 
   @override
   void dispose() {
+    Assets.iconStyle.removeListener(_syncIcon);
     if (Platform.isWindows) {
       windowManager.removeListener(this);
       WidgetsBinding.instance.removeObserver(this);

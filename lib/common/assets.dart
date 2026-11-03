@@ -1,6 +1,23 @@
-import 'dart:ui' show Brightness;
+import 'package:flutter/foundation.dart';
+import 'package:pili_aurora/models/common/theme/app_icon_style.dart';
 
 abstract final class Assets {
+  static final iconStyle = ValueNotifier(AppIconStyle.chibi);
+  static const logoChibi = 'assets/images/logo/logo_chibi.png';
+  static const logoChibiIco = 'assets/images/logo/ico/app_icon_chibi.ico';
+  static const logoUpright = 'assets/images/logo/logo_upright.png';
+  static const logoUprightIco = 'assets/images/logo/ico/app_icon_upright.ico';
+  static const logoTilted = 'assets/images/logo/logo_tilted.png';
+  static const logoTiltedIco = 'assets/images/logo/ico/app_icon_tilted.ico';
+  static const logoChibiDark = 'assets/images/logo/logo_chibi_dark.png';
+  static const logoChibiIcoDark =
+      'assets/images/logo/ico/app_icon_chibi_dark.ico';
+  static const logoUprightDark = 'assets/images/logo/logo_upright_dark.png';
+  static const logoUprightIcoDark =
+      'assets/images/logo/ico/app_icon_upright_dark.ico';
+  static const logoTiltedDark = 'assets/images/logo/logo_tilted_dark.png';
+  static const logoTiltedIcoDark =
+      'assets/images/logo/ico/app_icon_tilted_dark.ico';
   static const digitalNum = 'digital_id_num';
 
   static const logo = 'assets/images/logo/logo.png';
@@ -26,8 +43,6 @@ abstract final class Assets {
   static const topicHeaderDark = 'assets/images/topic-header-bg_dark.png';
 
   static const _darkVariants = {
-    logo: logoDark,
-    logoIco: logoIcoDark,
     loading: loadingDark,
     avatarPlaceHolder: avatarPlaceHolderDark,
     ai: aiDark,
@@ -36,8 +51,37 @@ abstract final class Assets {
     topicHeader: topicHeaderDark,
   };
 
-  static String themed(String asset, Brightness brightness) =>
-      brightness == Brightness.dark ? _darkVariants[asset] ?? asset : asset;
+  static String iconImage(AppIconStyle style, Brightness brightness) =>
+      switch (style) {
+        AppIconStyle.chibi =>
+          brightness == Brightness.dark ? logoChibiDark : logoChibi,
+        AppIconStyle.upright =>
+          brightness == Brightness.dark ? logoUprightDark : logoUpright,
+        AppIconStyle.tilted =>
+          brightness == Brightness.dark ? logoTiltedDark : logoTilted,
+        AppIconStyle.portrait =>
+          brightness == Brightness.dark ? logoDark : logo,
+      };
+
+  static String iconIco(AppIconStyle style, Brightness brightness) =>
+      switch (style) {
+        AppIconStyle.chibi =>
+          brightness == Brightness.dark ? logoChibiIcoDark : logoChibiIco,
+        AppIconStyle.upright =>
+          brightness == Brightness.dark ? logoUprightIcoDark : logoUprightIco,
+        AppIconStyle.tilted =>
+          brightness == Brightness.dark ? logoTiltedIcoDark : logoTiltedIco,
+        AppIconStyle.portrait =>
+          brightness == Brightness.dark ? logoIcoDark : logoIco,
+      };
+
+  static String themed(String asset, Brightness brightness) {
+    if (asset == logo) return iconImage(iconStyle.value, brightness);
+    if (asset == logoIco) return iconIco(iconStyle.value, brightness);
+    return brightness == Brightness.dark
+        ? _darkVariants[asset] ?? asset
+        : asset;
+  }
 
   static const livingChart = 'assets/images/live.gif';
   static const livingStatic = 'assets/images/live.png';

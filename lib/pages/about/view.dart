@@ -87,12 +87,15 @@ class _AboutPageState extends State<AboutPage> {
               }
             },
             onSecondaryTap: PlatformUtils.isDesktop ? _showDialog : null,
-            child: Image.asset(
-              width: 150,
-              height: 150,
-              excludeFromSemantics: true,
-              cacheWidth: 150.cacheSize(context),
-              Assets.themed(Assets.logo, theme.brightness),
+            child: ValueListenableBuilder(
+              valueListenable: Assets.iconStyle,
+              builder: (context, _, child) => Image.asset(
+                width: 150,
+                height: 150,
+                excludeFromSemantics: true,
+                cacheWidth: 150.cacheSize(context),
+                Assets.themed(Assets.logo, theme.brightness),
+              ),
             ),
           ),
           ListTile(

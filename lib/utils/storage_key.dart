@@ -1,6 +1,7 @@
 // ignore_for_file: constant_identifier_names
 
 abstract final class SettingBoxKey {
+  static const appIconStyle = 'appIconStyle';
   static const filterBlockedAuthors = 'filterBlockedAuthors';
   static const checkCooperativeAuthors = 'checkCooperativeAuthors';
   static const hideInvalidSubscriptionVideos = 'hideInvalidSubscriptionVideos';

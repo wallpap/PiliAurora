@@ -65,6 +65,7 @@ class _MainAppState extends PopScopeState<MainApp>
   @override
   void initState() {
     super.initState();
+    Assets.iconStyle.addListener(_onIconStyleChanged);
     addObserverMobile(this);
     if (PlatformUtils.isDesktop) {
       if (Platform.isWindows) WindowsUpdateExit.setHandler(_onClose);
@@ -125,6 +126,7 @@ class _MainAppState extends PopScopeState<MainApp>
 
   @override
   void dispose() {
+    Assets.iconStyle.removeListener(_onIconStyleChanged);
     if (Platform.isWindows) WindowsUpdateExit.setHandler(null);
     if (PlatformUtils.isDesktop) {
       _disposeTray();
@@ -373,6 +375,11 @@ class _MainAppState extends PopScopeState<MainApp>
     _trayImage = image;
     previous?.dispose();
   }
+
+  void _onIconStyleChanged() => _updateTrayImage(
+    _brightness ??
+        WidgetsBinding.instance.platformDispatcher.platformBrightness,
+  );
 
   @pragma('vm:prefer-inline')
   static void _onBack() {

@@ -6,6 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:pili_aurora/app/desktop_theme.dart';
 import 'package:pili_aurora/common/assets.dart';
+import 'package:pili_aurora/models/common/theme/app_icon_style.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -26,6 +27,7 @@ void main() {
     );
     final brightness = ValueNotifier(Brightness.light);
     addTearDown(brightness.dispose);
+    addTearDown(() => Assets.iconStyle.value = AppIconStyle.chibi);
     await tester.pumpWidget(
       ValueListenableBuilder(
         valueListenable: brightness,
@@ -49,6 +51,32 @@ void main() {
     final count = calls.length;
     await tester.pump();
     expect(calls.length, count);
+    for (final style in [
+      AppIconStyle.portrait,
+      AppIconStyle.upright,
+      AppIconStyle.tilted,
+      AppIconStyle.chibi,
+    ]) {
+      Assets.iconStyle.value = style;
+      await tester.pumpAndSettle();
+      final changed = calls.lastWhere((call) => call.method == 'setIcon');
+      expect(
+        (changed.arguments as Map)['iconPath'].toString().replaceAll('\\', '/'),
+        endsWith(Assets.iconIco(style, brightness.value)),
+      );
+      for (final value in [Brightness.dark, Brightness.light]) {
+        brightness.value = value;
+        await tester.pumpAndSettle();
+        final themed = calls.lastWhere((call) => call.method == 'setIcon');
+        expect(
+          (themed.arguments as Map)['iconPath'].toString().replaceAll(
+            '\\',
+            '/',
+          ),
+          endsWith(Assets.iconIco(style, value)),
+        );
+      }
+    }
     expect(tester.takeException(), isNull);
   }, skip: !Platform.isWindows);
 
@@ -60,15 +88,24 @@ void main() {
     );
     addTearDown(() {
       tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
-      tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(channel, null);
+      tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        channel,
+        null,
+      );
     });
     bool? enabled;
-    await tester.pumpWidget(MaterialApp(
-      home: DesktopWindowTheme(child: Builder(builder: (context) {
-        enabled = TickerMode.valuesOf(context).enabled;
-        return const SizedBox();
-      })),
-    ));
+    await tester.pumpWidget(
+      MaterialApp(
+        home: DesktopWindowTheme(
+          child: Builder(
+            builder: (context) {
+              enabled = TickerMode.valuesOf(context).enabled;
+              return const SizedBox();
+            },
+          ),
+        ),
+      ),
+    );
     for (final state in [
       AppLifecycleState.resumed,
       AppLifecycleState.inactive,

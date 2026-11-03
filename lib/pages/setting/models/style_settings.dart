@@ -7,6 +7,7 @@ import 'package:get/get.dart';
 import 'package:material_design_icons_flutter/material_design_icons_flutter.dart';
 import 'package:material_ui/material_ui.dart'
     hide StatefulBuilder, RefreshIndicator;
+import 'package:pili_aurora/common/assets.dart';
 import 'package:pili_aurora/common/widgets/color_palette.dart';
 import 'package:pili_aurora/common/widgets/custom_icon.dart';
 import 'package:pili_aurora/common/widgets/custom_toast.dart';
@@ -31,6 +32,7 @@ import 'package:pili_aurora/models/common/home_tab_type.dart';
 import 'package:pili_aurora/models/common/msg/msg_unread_type.dart';
 import 'package:pili_aurora/models/common/nav_bar_config.dart';
 import 'package:pili_aurora/models/common/theme/theme_color_type.dart';
+import 'package:pili_aurora/models/common/theme/app_icon_style.dart';
 import 'package:pili_aurora/models/common/theme/theme_type.dart';
 import 'package:pili_aurora/pages/common/slide/common_slide_page.dart';
 import 'package:pili_aurora/pages/main/controller.dart';
@@ -42,6 +44,7 @@ import 'package:pili_aurora/pages/setting/widgets/multi_select_dialog.dart';
 import 'package:pili_aurora/pages/setting/widgets/select_dialog.dart';
 import 'package:pili_aurora/pages/setting/widgets/slider_dialog.dart';
 import 'package:pili_aurora/plugin/pl_player/utils/fullscreen.dart';
+import 'package:pili_aurora/services/app_icon.dart';
 import 'package:pili_aurora/utils/extension/get_ext.dart';
 import 'package:pili_aurora/utils/extension/num_ext.dart';
 import 'package:pili_aurora/utils/extension/theme_ext.dart';
@@ -61,6 +64,12 @@ List<SettingsModel> get styleSettings => [
     subtitle: '主题颜色、字体与界面缩放',
     leading: const Icon(Icons.palette_outlined),
     children: [
+      NormalModel(
+        title: '应用图标',
+        getSubtitle: () => Assets.iconStyle.value.label,
+        leading: const Icon(Icons.face_outlined),
+        onTap: _showAppIconDialog,
+      ),
       NormalModel(
         title: 'App字体设置',
         subtitle: '点击设置',
@@ -435,6 +444,47 @@ List<SettingsModel> get styleSettings => [
     ],
   ),
 ];
+
+Future<void> _showAppIconDialog(
+  BuildContext context,
+  VoidCallback refresh,
+) async {
+  final selected = await showDialog<AppIconStyle>(
+    context: context,
+    builder: (context) => SimpleDialog(
+      title: const Text('应用图标'),
+      children: [
+        for (final style in AppIconStyle.values)
+          SimpleDialogOption(
+            onPressed: () => Navigator.pop(context, style),
+            child: Row(
+              children: [
+                Image.asset(
+                  Assets.iconImage(style, Theme.of(context).brightness),
+                  width: 56,
+                  height: 56,
+                ),
+                const SizedBox(width: 16),
+                Expanded(child: Text(style.label)),
+                if (Assets.iconStyle.value == style) const Icon(Icons.check),
+              ],
+            ),
+          ),
+        const Padding(
+          padding: EdgeInsets.fromLTRB(24, 8, 24, 16),
+          child: Text('Android 桌面图标可能稍后刷新。Windows 安装文件与静态快捷方式使用默认图标。'),
+        ),
+      ],
+    ),
+  );
+  if (selected == null || selected == Assets.iconStyle.value) return;
+  try {
+    await AppIcon.select(selected);
+    if (context.mounted) refresh();
+  } catch (_) {
+    SmartDialog.showToast('图标切换失败，请重试');
+  }
+}
 
 void _showQualityDialog({
   required BuildContext context,

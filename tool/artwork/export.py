@@ -10,6 +10,23 @@ from PIL import Image, ImageDraw, ImageFont, ImageOps
 
 from coin_motion import export_coin_motion
 
+ICON_ARTWORK = (
+    ('chibi', 'app-icon-chibi', 'logo_chibi'),
+    ('upright', 'app-icon-upright', 'logo_upright'),
+    ('tilted', 'app-icon-tilted', 'logo_tilted'),
+    ('portrait', 'app-icon', 'logo'),
+)
+
+ICON_DARK_OVERLAY_OPACITY = 0.18
+
+
+def darken_icon(source):
+    # 黑色遮罩只降低 RGB 亮度，保留色相、原有构图和透明度。
+    rgba = source.convert('RGBA')
+    lookup = [round(value * (1 - ICON_DARK_OVERLAY_OPACITY)) for value in range(256)]
+    red, green, blue, alpha = rgba.split()
+    return Image.merge('RGBA', (red.point(lookup), green.point(lookup), blue.point(lookup), alpha))
+
 
 def save_image(image, path, **options):
     # 先完整编码到同目录临时文件，再替换目标，避免预览读取期间截断资源。
@@ -28,51 +45,64 @@ def export_brand_artwork(root, assets):
     # Windows 与应用内使用圆角；Android 自适应图标交由系统裁切。
     mask = Image.new('L', (1024, 1024))
     ImageDraw.Draw(mask).rounded_rectangle((0, 0, 1023, 1023), radius=220, fill=255)
+    resource = root / 'android/app/src/main/res'
     # 108dp 前景中，中心 72dp 放入完整方形原稿，保留系统遮罩与视差余量。
-    for source_name, suffix, directory in [
-        ('app-icon', '', 'drawable-nodpi'),
-        ('app-icon-dark', '_dark', 'drawable-night-nodpi'),
-    ]:
+    for variant, source_name, logo_name in ICON_ARTWORK:
         with Image.open(root / f'tool/artwork/raster/{source_name}.png') as source:
-            square = source.convert('RGBA').resize((512, 512), Image.Resampling.LANCZOS)
-        logo = square.copy()
-        logo.putalpha(mask.resize((512, 512), Image.Resampling.LANCZOS))
-        save_image(logo, assets / f'logo/logo{suffix}.png', optimize=True)
-        foreground = Image.new('RGBA', (768, 768), square.getpixel((0, 0)))
-        foreground.alpha_composite(square, (128, 128))
-        drawable = root / f'android/app/src/main/res/{directory}'
-        drawable.mkdir(exist_ok=True)
-        save_image(foreground, drawable / 'app_icon_artwork.png', optimize=True)
-    (root / 'android/app/src/main/res/drawable/ic_launcher_foreground.xml').write_text(
-        '<?xml version="1.0" encoding="utf-8"?>\n'
-        '<bitmap xmlns:android="http://schemas.android.com/apk/res/android"\n'
-        '    android:src="@drawable/app_icon_artwork"\n'
-        '    android:gravity="fill"\n'
-        '    android:filter="true" />\n', encoding='utf-8')
+            light_square = source.convert('RGBA').resize((512, 512), Image.Resampling.LANCZOS)
+        launcher = 'ic_launcher' if variant == 'chibi' else f'ic_launcher_{variant}'
+        artwork = 'app_icon_artwork' if variant == 'chibi' else f'app_icon_{variant}_artwork'
+        for dark in [False, True]:
+            suffix = '_dark' if dark else ''
+            square = darken_icon(light_square) if dark else light_square
+            logo = square.copy()
+            logo.putalpha(mask.resize((512, 512), Image.Resampling.LANCZOS))
+            save_image(logo, assets / f'logo/{logo_name}{suffix}.png', optimize=True)
+            foreground = Image.new('RGBA', (768, 768), square.getpixel((0, 0)))
+            foreground.alpha_composite(square, (128, 128))
+            drawable = resource / ('drawable-night-nodpi' if dark else 'drawable-nodpi')
+            drawable.mkdir(exist_ok=True)
+            save_image(foreground, drawable / f'{artwork}.png', optimize=True)
+        (resource / f'drawable/{launcher}_foreground.xml').write_text(
+            '<?xml version="1.0" encoding="utf-8"?>\n'
+            '<bitmap xmlns:android="http://schemas.android.com/apk/res/android"\n'
+            f'    android:src="@drawable/{artwork}"\n'
+            '    android:gravity="fill"\n'
+            '    android:filter="true" />\n', encoding='utf-8')
+        for directory in resource.glob('mipmap-anydpi*'):
+            (directory / f'{launcher}.xml').write_text(
+                '<?xml version="1.0" encoding="utf-8"?>\n'
+                '<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">\n'
+                '    <background android:drawable="@color/ic_launcher_background"/>\n'
+                f'    <foreground android:drawable="@drawable/{launcher}_foreground"/>\n'
+                '    <monochrome android:drawable="@drawable/ic_launcher_monochrome" />\n'
+                '</adaptive-icon>\n', encoding='utf-8')
 
 
 def export_platform_icons(root, assets):
-    with Image.open(assets / 'logo/logo.png') as logo:
-        for path in [
-            assets / 'logo/ico/app_icon.ico',
-            root / 'windows/runner/resources/app_icon.ico',
-        ]:
-            save_image(logo, path, sizes=[(size, size) for size in [16, 24, 32, 48, 64, 128, 256]])
-    with Image.open(assets / 'logo/logo_dark.png') as dark_logo:
-        save_image(dark_logo, assets / 'logo/ico/app_icon_dark.ico',
-                   sizes=[(size, size) for size in [16, 24, 32, 48, 64, 128, 256]])
-    with Image.open(assets / 'logo/logo.png') as mark, Image.open(assets / 'logo/logo_dark.png') as dark_mark:
-        resource = root / 'android/app/src/main/res'
-        for path in resource.glob('mipmap-*/ic_launcher.png'):
-            if '-night-' in path.parent.name:
-                continue
-            with Image.open(path) as previous:
-                size = previous.size
-            icon = mark.resize(size, Image.Resampling.LANCZOS)
-            save_image(icon, path, optimize=True)
-            dark_path = resource / path.parent.name.replace('mipmap-', 'mipmap-night-', 1) / path.name
-            dark_path.parent.mkdir(exist_ok=True)
-            save_image(dark_mark.resize(size, Image.Resampling.LANCZOS), dark_path, optimize=True)
+    sizes = [(size, size) for size in [16, 24, 32, 48, 64, 128, 256]]
+    resource = root / 'android/app/src/main/res'
+    density_paths = [path for path in resource.glob('mipmap-*/ic_launcher.png')
+                     if '-night-' not in path.parent.name]
+    for variant, _, logo_name in ICON_ARTWORK:
+        suffix = '' if variant == 'portrait' else f'_{variant}'
+        launcher = 'ic_launcher' if variant == 'chibi' else f'ic_launcher_{variant}'
+        with Image.open(assets / f'logo/{logo_name}.png') as mark, \
+                Image.open(assets / f'logo/{logo_name}_dark.png') as dark_mark:
+            save_image(mark, assets / f'logo/ico/app_icon{suffix}.ico', sizes=sizes)
+            if variant == 'chibi':
+                save_image(mark, root / 'windows/runner/resources/app_icon.ico', sizes=sizes)
+            save_image(dark_mark, assets / f'logo/ico/app_icon{suffix}_dark.ico', sizes=sizes)
+            for path in density_paths:
+                with Image.open(path) as previous:
+                    size = previous.size
+                save_image(mark.resize(size, Image.Resampling.LANCZOS),
+                           path.with_name(f'{launcher}.png'), optimize=True)
+                dark_path = resource / path.parent.name.replace('mipmap-', 'mipmap-night-', 1) / f'{launcher}.png'
+                dark_path.parent.mkdir(exist_ok=True)
+                save_image(dark_mark.resize(size, Image.Resampling.LANCZOS), dark_path, optimize=True)
+    with Image.open(assets / 'logo/logo_chibi.png') as mark, \
+            Image.open(assets / 'logo/logo_chibi_dark.png') as dark_mark:
         for path in resource.glob('drawable-*/splash.png'):
             with Image.open(path) as previous:
                 size = previous.size
@@ -206,6 +236,7 @@ def export_animations(assets, font):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--icons-only', action='store_true', help='仅导出应用图标和启动图')
     parser.add_argument("--live", type=Path, help="imagegen 直播背景原稿")
     parser.add_argument("--trending", type=Path, help="imagegen 热搜背景原稿")
     parser.add_argument(
@@ -219,6 +250,8 @@ def main():
     assets = root / "assets/images"
     export_brand_artwork(root, assets)
     export_platform_icons(root, assets)
+    if args.icons_only:
+        return
     export_animations(assets, args.font)
     export_coin_artwork(root, assets, args.font)
     export_coin_motion(root, assets, gif_frame, save_image)

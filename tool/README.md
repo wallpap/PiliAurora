@@ -118,4 +118,4 @@ fvm flutter test --no-pub tool/generate_play_icon.dart
 
 ## 应用插画与背景
 
-可编辑 SVG 与导出脚本位于 `tool/artwork/`；角色应用图标、硬币和投币盒的 imagegen 原稿位于 `tool/artwork/raster/`。使用 `fvm flutter test --no-pub tool/generate_app_artwork.dart tool/generate_play_icon.dart` 导出，再运行 `python tool/artwork/export.py` 同步头像、动画和 Android / Windows 图标。投币 GIF 的运动轨迹定义在 `tool/artwork/coin_motion.py`；资源清单、背景导出参数和实际提示词见[资源说明](artwork/README.md)。
+可编辑 SVG 与导出脚本位于 `tool/artwork/`；角色应用图标、硬币和投币盒的 imagegen 原稿位于 `tool/artwork/raster/`。使用 `fvm flutter test --no-pub tool/generate_app_artwork.dart tool/generate_play_icon.dart` 导出，再运行 `python tool/artwork/export.py` 同步头像、动画和 Android / Windows 图标。仅更新应用图标时运行 `python tool/artwork/export.py --icons-only`，从四款浅色原稿同步明暗图标、启动图和 ICO。投币 GIF 的运动轨迹定义在 `tool/artwork/coin_motion.py`；资源清单、背景导出参数和实际提示词见[资源说明](artwork/README.md)。

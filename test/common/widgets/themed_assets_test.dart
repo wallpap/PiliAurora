@@ -10,6 +10,7 @@ import 'package:pili_aurora/common/assets.dart';
 import 'package:pili_aurora/common/widgets/image/network_img_layer.dart';
 import 'package:pili_aurora/common/widgets/loading_widget/http_error.dart';
 import 'package:pili_aurora/models/common/image_type.dart';
+import 'package:pili_aurora/models/common/theme/app_icon_style.dart';
 import 'package:pili_aurora/utils/storage.dart';
 
 String imageAsset(Image image) => switch (image.image) {
@@ -27,6 +28,33 @@ void main() {
     );
   });
   tearDownAll(Hive.close);
+
+  test('四款图标的明暗图片均能解码，Windows ICO 均已打包', () async {
+    for (final style in AppIconStyle.values) {
+      expect(
+        Assets.iconImage(style, Brightness.dark),
+        isNot(Assets.iconImage(style, Brightness.light)),
+      );
+      expect(
+        Assets.iconIco(style, Brightness.dark),
+        isNot(Assets.iconIco(style, Brightness.light)),
+      );
+      for (final brightness in Brightness.values) {
+        final asset = Assets.iconImage(style, brightness);
+        final data = await rootBundle.load(asset);
+        final codec = await ui.instantiateImageCodec(data.buffer.asUint8List());
+        final frame = await codec.getNextFrame();
+        expect(frame.image.width, 512, reason: asset);
+        expect(frame.image.height, 512, reason: asset);
+        frame.image.dispose();
+        codec.dispose();
+        if (Platform.isWindows) {
+          final ico = await rootBundle.load(Assets.iconIco(style, brightness));
+          expect(ico.lengthInBytes, greaterThan(0));
+        }
+      }
+    }
+  });
 
   test('明暗资源均能从应用 bundle 加载并解码', () async {
     for (final brightness in Brightness.values) {

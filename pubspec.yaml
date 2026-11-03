@@ -164,10 +164,10 @@ dev_dependencies:
 
 flutter_launcher_icons:
   android: true
-  image_path: assets/images/logo/logo_2.png
-  image_path_android: assets/images/logo/logo_2.png
+  image_path: assets/images/logo/logo_chibi.png
+  image_path_android: assets/images/logo/logo_chibi.png
   adaptive_icon_background: "#ffffff"
-  adaptive_icon_foreground: assets/images/logo/logo_2.png
+  adaptive_icon_foreground: android/app/src/main/res/drawable-nodpi/app_icon_artwork.png
   adaptive_icon_monochrome: assets/images/logo/logo_2.png
 
 flutter_native_splash:
@@ -176,8 +176,8 @@ flutter_native_splash:
     color_dark: "#212121"
   color: "#ffffff"
   color_dark: "#212121"
-  image: assets/images/logo/logo.png
-  image_dark: assets/images/logo/logo_dark.png
+  image: assets/images/logo/logo_chibi.png
+  image_dark: assets/images/logo/logo_chibi_dark.png
 
 flutter:
   uses-material-design: true

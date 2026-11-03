@@ -14,6 +14,7 @@ import 'package:pili_aurora/build_config.dart';
 import 'package:pili_aurora/common/widgets/scale_app.dart';
 import 'package:pili_aurora/http/init.dart';
 import 'package:pili_aurora/services/account_service.dart';
+import 'package:pili_aurora/services/app_icon.dart';
 import 'package:pili_aurora/services/download/download_repository.dart';
 import 'package:pili_aurora/services/download/download_service.dart';
 import 'package:pili_aurora/services/logger.dart';
@@ -73,6 +74,12 @@ Future<void> _bootstrapApplication(List<String> arguments) async {
   MediaKit.ensureInitialized();
   try {
     await GStorage.init(memorySnapshot: initialization?.storage);
+    AppIcon.load();
+    try {
+      await AppIcon.syncLauncher();
+    } catch (error, stack) {
+      logger.w('同步桌面图标失败', error: error, stackTrace: stack);
+    }
   } catch (e, stack) {
     logger.e('GStorage init error', error: e, stackTrace: stack);
     await Diagnostics.instance.flush();
