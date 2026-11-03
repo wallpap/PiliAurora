@@ -57,6 +57,70 @@ void main() {
     expect(retries, 1);
   });
 
+  for (final videoFirst in [true, false]) {
+    testWidgets('合并触发后撤销画面仍等待网络缓存（画面先触发：$videoFirst）', (tester) async {
+      var state = (
+        buffering: false,
+        position: const Duration(seconds: 10),
+        buffer: const Duration(seconds: 20),
+      );
+      var retries = 0;
+      var progressing = false;
+      final recovery = PlaybackNetworkRecovery(
+        isCurrent: () => true,
+        readState: () => state,
+        videoProgressing: () => progressing,
+        reload: (_) async => retries++,
+        onError: (error) => fail('$error'),
+      );
+      addTearDown(recovery.dispose);
+      void video() => recovery.schedule(requireVideoProgress: true);
+      void network() => recovery.schedule(
+        waitForCachedPlayback: true,
+        allowNativeRecovery: false,
+      );
+      if (videoFirst) {
+        video();
+        network();
+      } else {
+        network();
+        video();
+      }
+      recovery.cancelVideoRecovery();
+      progressing = true;
+      await tester.pump(const Duration(seconds: 3));
+      expect(retries, 0);
+      state = (
+        buffering: false,
+        position: Duration.zero,
+        buffer: Duration.zero,
+      );
+      await tester.pump(const Duration(seconds: 3));
+      expect(retries, 1);
+    });
+  }
+
+  testWidgets('同步撤销唯一画面触发且未提交重载时不再重试', (tester) async {
+    var retries = 0;
+    late final PlaybackNetworkRecovery recovery;
+    recovery = PlaybackNetworkRecovery(
+      isCurrent: () => true,
+      readState: () => empty,
+      videoProgressing: () => false,
+      reload: (_) {
+        retries++;
+        recovery.cancelVideoRecovery();
+        return null;
+      },
+      onError: (error) => fail('$error'),
+    )..schedule(requireVideoProgress: true);
+    addTearDown(recovery.dispose);
+    await tester.pump(const Duration(seconds: 3));
+    expect(retries, 1);
+    await tester.pump(const Duration(seconds: 9));
+    expect(retries, 1);
+  });
+
   testWidgets('重载仍在途时合并错误，避免重复提交媒体加载', (tester) async {
     final pending = Completer<void>();
     var retries = 0;
