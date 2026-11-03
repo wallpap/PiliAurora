@@ -1,4 +1,4 @@
-import 'dart:async' show StreamSubscription, Timer;
+import 'dart:async' show StreamSubscription, Timer, unawaited;
 import 'dart:math' as math;
 
 import 'package:pili_aurora/common/widgets/dialog/simple_dialog_option.dart';
@@ -7,6 +7,7 @@ import 'package:pili_aurora/common/widgets/progress_bar/segment_progress_bar.dar
 import 'package:pili_aurora/http/loading_state.dart';
 import 'package:pili_aurora/http/sponsor_block.dart';
 import 'package:pili_aurora/models/common/sponsor_block/segment_model.dart';
+import 'package:pili_aurora/models/common/sponsor_block/action_type.dart';
 import 'package:pili_aurora/models/common/sponsor_block/segment_type.dart';
 import 'package:pili_aurora/models/common/sponsor_block/skip_type.dart';
 import 'package:pili_aurora/models/remote/sponsor_block/segment_item.dart';
@@ -38,6 +39,50 @@ mixin BlockConfigMixin {
 
 mixin BlockMixin on GetxController {
   int? _lastBlockPos;
+  int _blockGeneration = 0;
+  bool _blockMuted = false;
+  final _activeMuteSegments = <SegmentModel>{};
+
+  Future<void> applyBlockMute(bool muted);
+
+  void _setBlockMuted(bool muted) {
+    if (_blockMuted == muted) return;
+    _blockMuted = muted;
+    unawaited(
+      Future<void>.sync(() => applyBlockMute(muted)).catchError(
+        (Object error, StackTrace stackTrace) {
+          logger.w(
+            'failed to apply segment mute',
+            error: error,
+            stackTrace: stackTrace,
+          );
+        },
+      ),
+    );
+  }
+
+  void _updateMute(int position) {
+    final active = <SegmentModel>{};
+    for (final item in _segmentList) {
+      if (item.actionType != ActionType.mute ||
+          !item.segment.contains(position)) {
+        continue;
+      }
+      if (item.skipType == SkipType.alwaysSkip ||
+          (item.skipType == SkipType.skipOnce &&
+              (!item.hasSkipped || _activeMuteSegments.contains(item)))) {
+        active.add(item);
+      }
+    }
+    for (final previous in _activeMuteSegments.difference(active)) {
+      if (previous.skipType == SkipType.skipOnce) previous.hasSkipped = true;
+    }
+    _activeMuteSegments
+      ..clear()
+      ..addAll(active);
+    _setBlockMuted(active.isNotEmpty);
+  }
+
   BlockConfigMixin get blockConfig;
   StreamSubscription<Duration>? _blockListener;
   StreamSubscription<Duration>? get blockListener => _blockListener;
@@ -66,9 +111,14 @@ mixin BlockMixin on GetxController {
   }) async {
     if (isClosed || !(isCurrent?.call() ?? true)) return;
     resetBlock();
+    final generation = _blockGeneration;
 
     final result = await SponsorBlock.getSkipSegments(bvid: bvid, cid: cid);
-    if (isClosed || !(isCurrent?.call() ?? true)) return;
+    if (isClosed ||
+        generation != _blockGeneration ||
+        !(isCurrent?.call() ?? true)) {
+      return;
+    }
     switch (result) {
       case Success<List<SegmentItemModel>>(:final response):
         handleSBData(response);
@@ -92,37 +142,36 @@ mixin BlockMixin on GetxController {
             currentPlayer.state.buffering) {
           return;
         }
-        int currentPos = position.inSeconds;
-        if (currentPos != _lastBlockPos) {
-          final firstPosition = _lastBlockPos == null;
-          _lastBlockPos = currentPos;
-          final msPos = currentPos * 1000;
-          for (SegmentModel item in _segmentList) {
-            // if (kDebugMode) {
-            //   debugPrint(
-            //       '${position.inSeconds},,${item.segment.first},,${item.segment.second},,${item.skipType.name},,${item.hasSkipped}');
-            // }
-            if ((firstPosition &&
-                    item.segment.contains(position.inMilliseconds)) ||
-                (msPos <= item.segment.$1 && item.segment.$1 <= msPos + 1000)) {
-              switch (item.skipType) {
-                case SkipType.alwaysSkip:
-                  onSkip(item, isSeek: false);
-                  break;
-                case SkipType.skipOnce:
-                  if (!item.hasSkipped) {
-                    item.hasSkipped = true;
-                    onSkip(item, isSeek: false);
-                  }
-                  break;
-                case SkipType.skipManually:
-                  onAddItem(item);
-                  break;
-                default:
-                  break;
+        if (isClosed || !identical(player, currentPlayer)) return;
+        final msPos = position.inMilliseconds;
+        _updateMute(msPos);
+        final currentPos = position.inSeconds;
+        if (currentPos == _lastBlockPos) return;
+        _lastBlockPos = currentPos;
+        for (final item in _segmentList) {
+          if (!item.segment.contains(msPos) ||
+              item.actionType == ActionType.full ||
+              item.actionType == ActionType.poi) {
+            continue;
+          }
+          if (item.skipType == SkipType.skipManually) {
+            onAddItem(item);
+            continue;
+          }
+          // 静音按整个当前位置集合处理，重叠片段不会互相提前解除。
+          if (item.actionType == ActionType.mute) continue;
+          switch (item.skipType) {
+            case SkipType.alwaysSkip:
+              onSkip(item, isSeek: false);
+              return;
+            case SkipType.skipOnce:
+              if (!item.hasSkipped) {
+                item.hasSkipped = true;
+                onSkip(item, isSeek: false);
+                return;
               }
+            default:
               break;
-            }
           }
         }
       }
@@ -137,13 +186,24 @@ mixin BlockMixin on GetxController {
   Future<void> handleSBData(List<SegmentItemModel> list) async {
     if (list.isNotEmpty) {
       try {
-        final duration = list.first.videoDuration ?? timeLength!;
+        final currentDuration = timeLength;
+        final duration = currentDuration != null && currentDuration > 0
+            ? currentDuration
+            : list
+                  .map((item) => item.videoDuration)
+                  .whereType<num>()
+                  .where((value) => value > 0)
+                  .firstOrNull;
+        if (duration == null) return;
         // segmentList
         _segmentList.addAll(
           list
               .where(
                 (item) =>
                     blockConfig.enableList.contains(item.category) &&
+                    item.effectiveActionType != null &&
+                    item.segment.length == 2 &&
+                    item.segment[0] >= 0 &&
                     item.segment[1] >= item.segment[0],
               )
               .map(
@@ -246,7 +306,7 @@ mixin BlockMixin on GetxController {
   }) async {
     try {
       await seekTo(
-        Duration(milliseconds: item.segment.$2),
+        Duration(milliseconds: isSkip ? item.segment.$2 : item.segment.$1),
         isSeek: isSeek,
       );
       if (isSkip) {
@@ -406,7 +466,7 @@ mixin BlockMixin on GetxController {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Text(
-                      item.skipType.label,
+                      item.behaviorLabel,
                       style: const TextStyle(fontSize: 13),
                     ),
                     if (item.segment.$2 != 0)
@@ -452,6 +512,8 @@ mixin BlockMixin on GetxController {
   }
 
   void cancelBlockListener() {
+    _activeMuteSegments.clear();
+    _setBlockMuted(false);
     if (_blockListener != null) {
       _blockListener!.cancel();
       _blockListener = null;
@@ -459,15 +521,27 @@ mixin BlockMixin on GetxController {
   }
 
   void resetBlock() {
+    _blockGeneration++;
     cancelBlockListener();
     _lastBlockPos = null;
     videoLabel?.value = '';
     _segmentList.clear();
     segmentProgressList.clear();
+    // 切换来源时撤下旧片段操作，保留独立的历史分P提示。
+    for (var index = listData.length - 1; index >= 0; index--) {
+      if (listData[index] is! SegmentModel) continue;
+      final item = listData.removeAt(index);
+      listKey.currentState?.removeItem(
+        index,
+        (context, animation) => buildItem(item, animation),
+      );
+    }
+    if (listData.isEmpty) _stopSkipTimer();
   }
 
   Duration? getFirstSegment([int pos = 0]) {
     for (var i in _segmentList..sort()) {
+      if (i.actionType != ActionType.skip) continue;
       final (start, end) = i.segment;
       if (start == end) {
         continue;
@@ -477,6 +551,7 @@ mixin BlockMixin on GetxController {
           .skipOnce => !i.hasSkipped,
           _ => false,
         }) {
+          if (i.skipType == SkipType.skipOnce) i.hasSkipped = true;
           _skipToast(i);
           pos = math.max(pos, i.segment.$2);
         }

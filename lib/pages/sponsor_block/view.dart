@@ -444,9 +444,14 @@ class _SponsorBlockPageState extends State<SponsorBlockPage> {
             _blockColor[index] = color ?? item.first.color;
             setting.put(
               SettingBoxKey.blockColor,
-              _blockColor
-                  .map((item) => item.toARGB32().toRadixString(16).substring(2))
-                  .toList(),
+              {
+                for (final category in SegmentType.values)
+                  category.name: _blockColor[category.index]
+                      .toARGB32()
+                      .toRadixString(16)
+                      .padLeft(8, '0')
+                      .substring(2),
+              },
             );
             (context as Element).markNeedsBuild();
           },
@@ -531,6 +536,11 @@ class _SponsorBlockPageState extends State<SponsorBlockPage> {
     int index,
     Pair<SegmentType, SkipType> item,
   ) {
+    String behaviorLabel(SkipType type) => switch (type) {
+      SkipType.alwaysSkip => '自动处理',
+      SkipType.skipOnce => '处理一次',
+      _ => type.label,
+    };
     return Builder(
       builder: (context) {
         Color color = _blockColor[index];
@@ -573,7 +583,10 @@ class _SponsorBlockPageState extends State<SponsorBlockPage> {
                       item.second = e;
                       setting.put(
                         SettingBoxKey.blockSettings,
-                        _blockSettings.map((e) => e.second.index).toList(),
+                        {
+                          for (final e in _blockSettings)
+                            e.first.name: e.second.index,
+                        },
                       );
                       if (updateItem) {
                         (context as Element).markNeedsBuild();
@@ -583,9 +596,9 @@ class _SponsorBlockPageState extends State<SponsorBlockPage> {
                     },
                     itemBuilder: (context) => SkipType.values
                         .map(
-                          (item) => PopupMenuItem<SkipType>(
-                            value: item,
-                            child: Text(item.label),
+                          (type) => PopupMenuItem<SkipType>(
+                            value: type,
+                            child: Text(behaviorLabel(type)),
                           ),
                         )
                         .toList(),
@@ -608,7 +621,7 @@ class _SponsorBlockPageState extends State<SponsorBlockPage> {
                         ),
                         TextSpan(
                           children: [
-                            TextSpan(text: item.second.label),
+                            TextSpan(text: behaviorLabel(item.second)),
                             WidgetSpan(
                               alignment: .middle,
                               child: Icon(

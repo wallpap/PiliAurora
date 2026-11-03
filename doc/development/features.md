@@ -165,6 +165,7 @@ flowchart TD
 ## WebView、分享、DLNA 与第三方能力
 
 - 页面：`webview/`、`share/`、`dlna/`、`sponsor_block/`、`bubble/`。
+- 空降助手的片段动作、惊吓分类、设置兼容和验证入口见[空降助手](../guides/sponsor-block.md)。静音通过播放所有者的独立配置提交，避免覆盖用户音量。
 - 相关依赖和代码：`flutter_inappwebview`、`dlna_dart`、`share_plus` 等，具体调用从页面 import 反查。
 - 这些功能存在平台差异，新增逻辑时检查 Android 和 Windows 的编译路径。
 

@@ -806,6 +806,11 @@ class AudioController extends GetxController
   BlockConfigMixin get blockConfig => this;
 
   @override
+  Future<void> applyBlockMute(bool muted) async {
+    player?.setProperty('mute', muted ? 'yes' : 'no');
+  }
+
+  @override
   int get currPosInMilliseconds => player?.state.position.inMilliseconds ?? 0;
 
   @override

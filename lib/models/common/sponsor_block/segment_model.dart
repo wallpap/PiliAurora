@@ -1,4 +1,5 @@
 import 'package:pili_aurora/models/common/sponsor_block/segment_type.dart';
+import 'package:pili_aurora/models/common/sponsor_block/action_type.dart';
 import 'package:pili_aurora/models/common/sponsor_block/skip_type.dart';
 import 'package:pili_aurora/models/remote/sponsor_block/segment_item.dart';
 import 'package:pili_aurora/pages/sponsor_block/block_mixin.dart';
@@ -10,12 +11,22 @@ class SegmentModel implements Comparable<SegmentModel> {
     required this.segmentType,
     required this.segment,
     required this.skipType,
+    this.actionType = ActionType.skip,
   });
   final String uuid;
   final SegmentType segmentType;
   final (int, int) segment;
   final SkipType skipType;
+  final ActionType actionType;
   bool hasSkipped = false;
+
+  String get behaviorLabel => actionType == ActionType.mute
+      ? switch (skipType) {
+          SkipType.alwaysSkip => '自动静音',
+          SkipType.skipOnce => '静音一次',
+          _ => skipType.label,
+        }
+      : skipType.label;
 
   factory SegmentModel.fromItemModel(
     SegmentItemModel model,
@@ -23,6 +34,7 @@ class SegmentModel implements Comparable<SegmentModel> {
   ) {
     final segmentType = SegmentType.values.byName(model.category);
     final segment = (model.segment[0], model.segment[1]);
+    final actionType = model.effectiveActionType!;
     SkipType skipType;
     if (config != null) {
       skipType = config.blockSettings[segmentType.index].second;
@@ -35,11 +47,15 @@ class SegmentModel implements Comparable<SegmentModel> {
       skipType = Pref.pgcSkipType;
     }
 
+    if (actionType == ActionType.full || actionType == ActionType.poi) {
+      skipType = SkipType.showOnly;
+    }
     return SegmentModel(
       uuid: model.uuid,
       segmentType: segmentType,
       segment: segment,
       skipType: skipType,
+      actionType: actionType,
     );
   }
 

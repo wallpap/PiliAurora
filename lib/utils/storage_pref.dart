@@ -155,32 +155,58 @@ abstract final class Pref {
     ),
   );
 
-  static List<Pair<SegmentType, SkipType>> get blockSettings {
-    final list = _setting.get(SettingBoxKey.blockSettings) as List?;
-    if (list == null || list.length != SegmentType.values.length) {
-      return SegmentType.values
-          .map((i) => Pair(first: i, second: SkipType.skipOnce))
-          .toList();
+  // 旧版本按位置保存；固定旧名称，新增分类不能改变已有用户的选择。
+  static const _legacyBlockCategories = [
+    'sponsor',
+    'selfpromo',
+    'exclusive_access',
+    'interaction',
+    'poi_highlight',
+    'intro',
+    'outro',
+    'preview',
+    'padding',
+    'filler',
+    'music_offtopic',
+  ];
+
+  static Object? _blockCategoryValue(Object? stored, SegmentType category) {
+    if (stored is Map) return stored[category.name];
+    if (stored is List) {
+      final index = stored.length == SegmentType.values.length
+          ? category.index
+          : _legacyBlockCategories.indexOf(category.name);
+      if (index >= 0 && index < stored.length) return stored[index];
     }
-    return SegmentType.values
-        .map(
-          (item) => Pair(
-            first: item,
-            second: SkipType.values[list[item.index]],
-          ),
-        )
-        .toList();
+    return null;
+  }
+
+  static List<Pair<SegmentType, SkipType>> get blockSettings {
+    final stored = _setting.get(SettingBoxKey.blockSettings);
+    return SegmentType.values.map((category) {
+      final value = _blockCategoryValue(stored, category);
+      final fallback = category == SegmentType.jumpscare
+          ? stored == null
+                ? SkipType.alwaysSkip
+                : SkipType.disable
+          : SkipType.skipOnce;
+      return Pair(
+        first: category,
+        second: value is int && value >= 0 && value < SkipType.values.length
+            ? SkipType.values[value]
+            : fallback,
+      );
+    }).toList();
   }
 
   static List<Color> get blockColor {
-    final list = _setting.get(SettingBoxKey.blockColor) as List?;
-    if (list == null || list.length != SegmentType.values.length) {
-      return SegmentType.values.map((i) => i.color).toList();
-    }
+    final stored = _setting.get(SettingBoxKey.blockColor);
     return SegmentType.values.map(
       (item) {
-        final String e = list[item.index];
-        final color = e.isNotEmpty ? int.tryParse('FF$e', radix: 16) : null;
+        final value = _blockCategoryValue(stored, item);
+        final color = value is String && value.length == 6
+            ? int.tryParse('FF$value', radix: 16)
+            : null;
         return color != null ? Color(color) : item.color;
       },
     ).toList();

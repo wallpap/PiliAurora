@@ -98,6 +98,13 @@ enum SegmentType {
       ActionType.mute,
     ],
   ),
+  jumpscare(
+    '惊吓片段',
+    '惊吓',
+    '可能造成惊吓的突然高音量或恐怖画面。支持自动静音，也可手动跳过。',
+    Color(0xFFe53935),
+    [ActionType.mute, ActionType.skip],
+  ),
   music_offtopic(
     '音乐:非音乐部分',
     '非音乐',

@@ -548,6 +548,11 @@ class VideoDetailController extends GetxController
   @override
   Player? get player => plPlayerController.videoPlayerController;
   @override
+  Future<void> applyBlockMute(bool muted) async {
+    if (playbackOwner.isActive) await playbackOwner.setMuted(muted);
+  }
+
+  @override
   bool get isFullScreen => plPlayerController.isFullScreen.value;
   @override
   bool get autoPlay => _autoPlay.value;

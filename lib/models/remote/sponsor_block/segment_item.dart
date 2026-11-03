@@ -1,4 +1,5 @@
 import 'package:pili_aurora/models/common/sponsor_block/segment_type.dart';
+import 'package:pili_aurora/models/common/sponsor_block/action_type.dart';
 
 class SegmentItemModel {
   String? cid;
@@ -8,6 +9,19 @@ class SegmentItemModel {
   String uuid;
   num? videoDuration;
   int? votes;
+
+  ActionType? get effectiveActionType {
+    if (actionType == null) {
+      if (category == SegmentType.poi_highlight.name) return ActionType.poi;
+      if (segment.length == 2 && segment[0] == 0 && segment[1] == 0) {
+        return ActionType.full;
+      }
+      return ActionType.skip;
+    }
+    return ActionType.values
+        .where((type) => type.name == actionType)
+        .firstOrNull;
+  }
 
   SegmentItemModel({
     this.cid,
