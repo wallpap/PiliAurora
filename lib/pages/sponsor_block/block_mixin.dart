@@ -42,6 +42,7 @@ mixin BlockMixin on GetxController {
   int _blockGeneration = 0;
   bool _blockMuted = false;
   final _activeMuteSegments = <SegmentModel>{};
+  final _manualVisits = <SegmentModel>{};
 
   Future<void> applyBlockMute(bool muted);
 
@@ -145,6 +146,7 @@ mixin BlockMixin on GetxController {
         if (isClosed || !identical(player, currentPlayer)) return;
         final msPos = position.inMilliseconds;
         _updateMute(msPos);
+        _manualVisits.removeWhere((item) => !item.segment.contains(msPos));
         final currentPos = position.inSeconds;
         if (currentPos == _lastBlockPos) return;
         _lastBlockPos = currentPos;
@@ -155,7 +157,7 @@ mixin BlockMixin on GetxController {
             continue;
           }
           if (item.skipType == SkipType.skipManually) {
-            onAddItem(item);
+            if (_manualVisits.add(item)) onAddItem(item);
             continue;
           }
           // 静音按整个当前位置集合处理，重叠片段不会互相提前解除。
@@ -524,6 +526,7 @@ mixin BlockMixin on GetxController {
     _blockGeneration++;
     cancelBlockListener();
     _lastBlockPos = null;
+    _manualVisits.clear();
     videoLabel?.value = '';
     _segmentList.clear();
     segmentProgressList.clear();

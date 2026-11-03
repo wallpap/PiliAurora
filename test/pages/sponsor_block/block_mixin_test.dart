@@ -203,6 +203,12 @@ void main() {
     expect(controller.mutes, isEmpty);
     expect(controller.seeks, isEmpty);
     expect(controller.listData, hasLength(1));
+    controller.listData.clear();
+    await position(8);
+    expect(controller.listData, isEmpty);
+    await position(15);
+    await position(5);
+    expect(controller.listData, hasLength(1));
     controller.resetBlock();
     expect(controller.listData, isEmpty);
   });
