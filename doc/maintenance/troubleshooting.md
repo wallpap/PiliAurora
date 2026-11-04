@@ -8,6 +8,34 @@
 4. 查看相关测试和诊断入口，确定本次修改范围。
 5. 修改后运行相关测试与静态分析。播放器、直播、窗口和解码器改动还要说明实测覆盖的平台。
 
+## Windows 启动与任务栏图标
+
+### 启动时数据文件拒绝访问
+
+Windows 构建完成后若没有可见窗口，并出现 Hive 文件或其他本地数据文件的 `PathAccessException`、`errno = 5`，可先检查完整性标签。在仓库根目录执行：
+
+```powershell
+icacls .
+icacls .\build\windows\x64\runner\Release\PiliAurora.exe
+```
+
+若仓库带有可继承的 `Low Mandatory Level`，构建产物也可能继承该标签。Windows 会让这些 EXE 以 Low 完整性运行，禁止它们写入普通 Medium 完整性的用户数据目录，即使普通文件权限允许写入。已在一台 Windows 设备上验证：同一 EXE 在 Low 标签下写入失败，复制到普通目录后以 Medium 运行并正常进入主界面。[Windows 完整性控制](https://learn.microsoft.com/en-us/windows/win32/secauthz/mandatory-integrity-control)
+
+确认需要将开发目录恢复为 Medium 后，以管理员身份打开 PowerShell，切换到同一个仓库根目录再执行：
+
+```powershell
+icacls . /setintegritylevel "(OI)(CI)M" /T /L /C /Q
+icacls .\build\windows\x64\runner\Release\PiliAurora.exe
+```
+
+此命令递归调整当前仓库的完整性标签，保留文件内容和普通读写权限；`/L` 对符号链接本身操作。检查汇总中的失败数量，以及 EXE 是否显示 `Medium Mandatory Level`，再退出旧进程并重新启动。已有进程需要重启才会使用新标签，无需重新编译。完整性标签属于本机 NTFS 属性，Git 不保存它。[icacls 参数](https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/icacls)
+
+### 新图标已打包，任务栏仍显示旧图标
+
+先核对正在运行的 EXE 路径，以及任务栏固定项和开始菜单快捷方式的目标。Windows 安装版与便携版共用 `PiliAurora.Desktop` 应用标识，系统可能沿用旧入口的任务栏分组图标。已在一台 Windows 设备上复现：窗口图标和 EXE 资源均为新款，临时换到新分组后任务栏才显示新款。
+
+可取消旧任务栏项的固定，退出所有 PiliAurora 进程，再从新 EXE 启动并重新固定。保留旧安装版时，还应核对其开始菜单入口；更新安装版可一并更新静态图标。应用标识还影响窗口分组和快捷方式关联，修改时需同时核对安装器中的配置。[任务栏图标与应用标识](https://learn.microsoft.com/en-us/windows/win32/properties/props-system-appusermodel-relaunchiconresource)
+
 ## 常见调用链
 
 ### 播放
