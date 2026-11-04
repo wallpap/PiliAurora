@@ -101,7 +101,6 @@ void main() {
     clients = [];
     configure = (_) {};
     sync = WebDavSettingsSync(
-      requestPassword: (_) async => throw StateError('普通设置不应要求密码'),
       connect: () {
         final client = _RecordingClient(events, files);
         clients.add(client);
@@ -159,7 +158,6 @@ void main() {
     final gate = Completer<void>();
     configure = (client) => client.mkdirGate = gate;
     final operation = sync.backup(settings);
-    await Future<void>.delayed(Duration.zero);
     expect(events, ['mkdir:backups/应用']);
     await setting.put('theme', 'changed after capture');
     gate.complete();
@@ -258,7 +256,6 @@ void main() {
 
   test('connection factory failures remain observable', () async {
     sync = WebDavSettingsSync(
-      requestPassword: (_) async => throw StateError('普通设置不应要求密码'),
       connect: () => throw StateError('fixture connection failure'),
       directory: 'backups/应用',
       fileName: 'settings_windows.json',
@@ -294,7 +291,6 @@ void main() {
       });
       try {
         sync = WebDavSettingsSync(
-          requestPassword: (_) async => throw StateError('普通设置不应要求密码'),
           connect: () => WebDavSettingsClient(
             endpoint: Uri.parse('http://127.0.0.1:${server.port}/root'),
             allowInsecureLoopback: true,

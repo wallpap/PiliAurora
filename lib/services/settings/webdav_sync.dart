@@ -10,40 +10,30 @@ class WebDavSettingsSync {
     required this._connect,
     required this._directory,
     required this._fileName,
-    required this._requestPassword,
   });
 
   final WebDavSettingsClient Function() _connect;
   final String _directory;
   final String _fileName;
-  final Future<String?> Function(bool creating) _requestPassword;
   String get _path => '$_directory/$_fileName';
 
   Future<void> prepare() => _withClient(
     (client) => client.ensureDirectory(_directory),
   );
 
-  Future<bool> backup(SettingsBackup settings) async {
+  Future<void> backup(SettingsBackup settings) async {
     // 网络等待前取得内容快照；连接建立期间的本地修改属于下一次备份。
-    final snapshot = await settings.exportBackup(
-      requestPassword: _requestPassword,
-    );
-    if (snapshot == null) return false;
-    final bytes = utf8.encode(snapshot);
+    final bytes = utf8.encode(settings.exportJson());
     await _withClient((client) async {
       await client.ensureDirectory(_directory);
       await client.write(_path, bytes);
     });
-    return true;
   }
 
-  Future<bool> restore(SettingsBackup settings) async {
+  Future<void> restore(SettingsBackup settings) async {
     final bytes = await _withClient((client) => client.read(_path));
     // 下载完成先释放连接，之后才校验/写入本地，不持有闲置网络资源。
-    return settings.restoreBackup(
-      jsonDecode(utf8.decode(bytes)),
-      requestPassword: _requestPassword,
-    );
+    await settings.restoreJson(utf8.decode(bytes));
   }
 
   Future<T> _withClient<T>(

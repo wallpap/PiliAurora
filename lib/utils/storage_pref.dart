@@ -717,7 +717,7 @@ abstract final class Pref {
       _setting.get(SettingBoxKey.webdavUsername, defaultValue: '');
 
   static String get webdavPassword =>
-      GStorage.credentials.get(SettingBoxKey.webdavPassword, defaultValue: '');
+      _setting.get(SettingBoxKey.webdavPassword, defaultValue: '');
 
   static String get webdavDirectory =>
       _setting.get(SettingBoxKey.webdavDirectory, defaultValue: '/');

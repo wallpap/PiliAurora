@@ -1,8 +1,6 @@
 import 'dart:async' show FutureOr;
 import 'dart:convert' show utf8, jsonDecode;
 
-import 'package:pili_aurora/common/widgets/dialog/backup_password.dart';
-import 'package:pili_aurora/services/settings/backup_cipher.dart';
 import 'package:pili_aurora/common/constants.dart';
 import 'package:pili_aurora/common/style.dart';
 import 'package:pili_aurora/common/widgets/dialog/simple_dialog_option.dart';
@@ -21,30 +19,17 @@ import 'package:re_highlight/re_highlight.dart';
 import 'package:re_highlight/styles/base16/github.dart';
 import 'package:re_highlight/styles/github-dark.dart';
 
-Future<void> exportToClipBoard({
-  required FutureOr<String?> Function() onExport,
-}) async {
-  try {
-    final text = await onExport();
-    if (text != null) await Utils.copyText(text);
-  } catch (_) {
-    SmartDialog.showToast('导出失败');
-  }
+void exportToClipBoard({
+  required ValueGetter<String> onExport,
+}) {
+  Utils.copyText(onExport());
 }
 
-Future<void> exportToLocalFile({
-  required FutureOr<String?> Function() onExport,
+void exportToLocalFile({
+  required ValueGetter<String> onExport,
   required ValueGetter<String> localFileName,
-}) async {
-  final String? text;
-  try {
-    text = await onExport();
-  } catch (_) {
-    SmartDialog.showToast('导出失败');
-    return;
-  }
-  if (text == null) return;
-  final res = utf8.encode(text);
+}) {
+  final res = utf8.encode(onExport());
   StorageUtils.saveBytes2File(
     name:
         '${Constants.dartPackageName}_${localFileName()}_'
@@ -57,7 +42,7 @@ Future<void> exportToLocalFile({
 Future<void> importFromClipBoard<T>(
   BuildContext context, {
   required String title,
-  required FutureOr<String?> Function() onExport,
+  required ValueGetter<String> onExport,
   required FutureOr<void> Function(T json) onImport,
   bool showConfirmDialog = true,
 }) async {
@@ -70,7 +55,7 @@ Future<void> importFromClipBoard<T>(
       json = jsonDecode(text);
       formatText = Utils.jsonEncoder.convert(json);
     } catch (e) {
-      SmartDialog.showToast('JSON 格式无效');
+      SmartDialog.showToast('解析json失败：$e');
       return;
     }
     bool? executeImport;
@@ -143,7 +128,7 @@ Future<void> importFromLocalFile<T>({
     try {
       json = jsonDecode(data);
     } catch (e) {
-      SmartDialog.showToast('JSON 格式无效');
+      SmartDialog.showToast('解析json失败：$e');
       return;
     }
     try {
@@ -184,7 +169,7 @@ void importFromInput<T>(
             json = jsonDecode(value!) as T;
             return null;
           } catch (e) {
-            return 'JSON 格式无效';
+            return '解析json失败：$e';
           }
         },
       ),
@@ -223,83 +208,62 @@ void importFromInput<T>(
 Future<void> showImportExportDialog<T>(
   BuildContext context, {
   required String title,
-  required FutureOr<String?> Function() onExport,
+  required ValueGetter<String> onExport,
   required FutureOr<void> Function(T json) onImport,
   required ValueGetter<String> localFileName,
-  bool encrypted = false,
-}) {
-  if (encrypted) {
-    final export = onExport;
-    final import = onImport;
-    onExport = () async {
-      final password = await requestBackupPassword(context, creating: true);
-      if (password == null) return null;
-      final json = await export();
-      if (json == null) return null;
-      return BackupCipher.encrypt(json, password, title);
-    };
-    onImport = (json) async {
-      final document = await decodeBackup(context, json, title);
-      await import(document as T);
-    };
-  }
-  return showDialog(
-    context: context,
-    builder: (dialogContext) {
-      const style = TextStyle(fontSize: 15);
-      return SimpleDialog(
-        clipBehavior: .hardEdge,
-        title: Text('导入/导出$title'),
-        children: [
-          DialogOption(
-            child: const Text('导出至剪贴板', style: style),
-            onPressed: () {
-              Get.back();
-              exportToClipBoard(onExport: onExport);
-            },
-          ),
-          DialogOption(
-            child: const Text('导出文件至本地', style: style),
-            onPressed: () {
-              Get.back();
-              exportToLocalFile(
-                onExport: onExport,
-                localFileName: localFileName,
-              );
-            },
-          ),
-          Divider(
-            height: 1,
-            color: ColorScheme.of(dialogContext).outline.withValues(alpha: 0.1),
-          ),
-          DialogOption(
-            child: const Text('输入', style: style),
-            onPressed: () {
-              Get.back();
-              importFromInput<T>(context, title: title, onImport: onImport);
-            },
-          ),
-          DialogOption(
-            child: const Text('从剪贴板导入', style: style),
-            onPressed: () {
-              Get.back();
-              importFromClipBoard<T>(
-                context,
-                title: title,
-                onExport: onExport,
-                onImport: onImport,
-              );
-            },
-          ),
-          DialogOption(
-            child: const Text('从本地文件导入', style: style),
-            onPressed: () {
-              Get.back();
-              importFromLocalFile<T>(onImport: onImport);
-            },
-          ),
-        ],
-      );
-    },
-  );
-}
+}) => showDialog(
+  context: context,
+  builder: (context) {
+    const style = TextStyle(fontSize: 15);
+    return SimpleDialog(
+      clipBehavior: .hardEdge,
+      title: Text('导入/导出$title'),
+      children: [
+        DialogOption(
+          child: const Text('导出至剪贴板', style: style),
+          onPressed: () {
+            Get.back();
+            exportToClipBoard(onExport: onExport);
+          },
+        ),
+        DialogOption(
+          child: const Text('导出文件至本地', style: style),
+          onPressed: () {
+            Get.back();
+            exportToLocalFile(onExport: onExport, localFileName: localFileName);
+          },
+        ),
+        Divider(
+          height: 1,
+          color: ColorScheme.of(context).outline.withValues(alpha: 0.1),
+        ),
+        DialogOption(
+          child: const Text('输入', style: style),
+          onPressed: () {
+            Get.back();
+            importFromInput<T>(context, title: title, onImport: onImport);
+          },
+        ),
+        DialogOption(
+          child: const Text('从剪贴板导入', style: style),
+          onPressed: () {
+            Get.back();
+            importFromClipBoard<T>(
+              context,
+              title: title,
+              onExport: onExport,
+              onImport: onImport,
+            );
+          },
+        ),
+        DialogOption(
+          child: const Text('从本地文件导入', style: style),
+          onPressed: () {
+            Get.back();
+            importFromLocalFile<T>(onImport: onImport);
+          },
+        ),
+      ],
+    );
+  },
+);

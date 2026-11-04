@@ -145,18 +145,13 @@ class _WebDavSettingPageState extends State<WebDavSettingPage> {
                   );
                 }
               } catch (error) {
-                SmartDialog.showToast(
-                  '配置失败: ${DiagnosticRedactor.text(error)}',
-                );
+                SmartDialog.showToast('配置失败: ${DiagnosticRedactor.text(error)}');
                 return;
               }
-              await GStorage.credentials.put(
-                SettingBoxKey.webdavPassword,
-                _passwordCtr.text,
-              );
               await GStorage.setting.putAll({
                 SettingBoxKey.webdavUri: _uriCtr.text.trim(),
                 SettingBoxKey.webdavUsername: _usernameCtr.text,
+                SettingBoxKey.webdavPassword: _passwordCtr.text,
                 SettingBoxKey.webdavDirectory: _directoryCtr.text,
               });
               if (_uriCtr.text.trim().isEmpty) {

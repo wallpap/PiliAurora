@@ -1,5 +1,4 @@
 import 'package:pili_aurora/common/constants.dart';
-import 'package:pili_aurora/common/widgets/dialog/backup_password.dart';
 import 'package:pili_aurora/common/widgets/pair.dart';
 import 'package:pili_aurora/services/diagnostics/redact.dart';
 import 'package:pili_aurora/services/settings/webdav_client.dart';
@@ -39,11 +38,6 @@ class WebDav {
     }
     final separator = directory.endsWith('/') ? '' : '/';
     return WebDavSettingsSync(
-      requestPassword: (creating) async {
-        final context = Get.context;
-        if (context == null) return null;
-        return requestBackupPassword(context, creating: creating);
-      },
       connect: () => WebDavSettingsClient(
         endpoint: endpoint,
         username: username,
@@ -67,9 +61,8 @@ class WebDav {
 
   Future<void> backup() async {
     try {
-      if (await (await _sync()).backup(GStorage.settingsBackup)) {
-        SmartDialog.showToast('备份成功');
-      }
+      await (await _sync()).backup(GStorage.settingsBackup);
+      SmartDialog.showToast('备份成功');
     } catch (error) {
       SmartDialog.showToast('备份失败: ${DiagnosticRedactor.text(error)}');
     }
@@ -77,9 +70,8 @@ class WebDav {
 
   Future<void> restore() async {
     try {
-      if (await (await _sync()).restore(GStorage.settingsBackup)) {
-        SmartDialog.showToast('恢复成功');
-      }
+      await (await _sync()).restore(GStorage.settingsBackup);
+      SmartDialog.showToast('恢复成功');
     } catch (error) {
       SmartDialog.showToast('恢复失败: ${DiagnosticRedactor.text(error)}');
     }

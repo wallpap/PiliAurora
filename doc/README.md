@@ -6,7 +6,7 @@
 - [弹幕合并与帧率](guides/danmaku-merge.md)：合并规则、字号、帧率与轨道间距。
 - [信息流黑名单屏蔽](guides/content-filtering.md)：过滤范围、合作作者检查和请求开销。
 - [评论与表情包](guides/comments-and-emotes.md)：评论菜单和表情包管理。
-- [账号凭证与备份](guides/data-security.md)：本机加密、旧数据迁移与备份密码。
+- [账号与设置备份](guides/data-security.md)：本机存储、JSON 导入导出和 WebDAV 备份。
 
 项目介绍、下载和构建入口见[中文 README](../README.md)及 [English README](../README.en.md)。详细指南以中文提供。
 

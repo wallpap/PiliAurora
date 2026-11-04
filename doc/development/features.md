@@ -118,7 +118,7 @@ flowchart TD
 - API：`lib/http/login.dart`、`member.dart`、`user.dart`、`fan.dart`、`follow.dart`。
 - 服务/本地状态：`lib/services/account_service.dart`、`lib/utils/accounts/`、`lib/utils/storage*`。
 - `UserHttp` 的资料、统计和余额查询绑定发起时的账号，并返回查询结果。登录流程确认账号仍为当前主账号后更新头像、缓存和余额；个人页还检查请求版本和页面是否存活。`Request.setCoin` 确认账号后更新共享余额。
-- 安全：严禁把 Cookie、Token、二维码登录信息或完整账号数据写入文档、日志和 issue。本地账号加密、旧数据迁移和备份兼容见[数据安全](../guides/data-security.md)。
+- 安全：严禁把 Cookie、Token、二维码登录信息或完整账号数据写入文档、日志和 issue。本机存储与导入导出范围见[账号与设置备份](../guides/data-security.md)。
 
 ## 动态、关注与粉丝
 

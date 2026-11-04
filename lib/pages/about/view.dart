@@ -1,8 +1,6 @@
 import 'dart:async';
 import 'dart:io';
 
-import 'package:pili_aurora/common/widgets/dialog/backup_password.dart';
-
 import 'package:pili_aurora/build_config.dart';
 import 'package:pili_aurora/common/assets.dart';
 import 'package:pili_aurora/common/constants.dart';
@@ -181,7 +179,6 @@ Commit Hash: ${BuildConfig.commitHash}''',
             onTap: () => showImportExportDialog<Map>(
               context,
               title: '登录信息',
-              encrypted: true,
               localFileName: () => 'account',
               onExport: () =>
                   Utils.jsonEncoder.convert(Accounts.account.toMap()),
@@ -206,19 +203,8 @@ Commit Hash: ${BuildConfig.commitHash}''',
               context,
               title: '设置',
               localFileName: () => 'setting_${DeviceUtils.platformName}',
-              onExport: () => GStorage.settingsBackup.exportBackup(
-                requestPassword: (creating) =>
-                    requestBackupPassword(context, creating: creating),
-              ),
-              onImport: (document) async {
-                if (!await GStorage.settingsBackup.restoreBackup(
-                  document,
-                  requestPassword: (creating) =>
-                      requestBackupPassword(context, creating: creating),
-                )) {
-                  throw StateError('已取消导入');
-                }
-              },
+              onExport: GStorage.settingsBackup.exportJson,
+              onImport: GStorage.settingsBackup.restoreMap,
             ),
           ),
           ListTile(
@@ -236,7 +222,6 @@ Commit Hash: ${BuildConfig.commitHash}''',
                         Get.back();
                         await Future.wait([
                           GStorage.setting.clear(),
-                          GStorage.credentials.clear(),
                           GStorage.video.clear(),
                         ]);
                         SmartDialog.showToast('重置成功');
