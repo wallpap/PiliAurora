@@ -2684,6 +2684,11 @@ class _PLVideoPlayerState extends State<PLVideoPlayer>
               DanmakuLikeControl(
                 extra: extra,
                 cid: plPlayerController.cid!,
+                placeholderSize: const Size(
+                  _actionItemWidth,
+                  _actionItemHeight,
+                ),
+                placeholderColor: Colors.white,
                 onLike: () async {
                   await HeaderControl.likeDanmaku(
                     extra,

@@ -100,10 +100,15 @@ void main() {
     Request();
     Request.dio.interceptors.clear();
     final requests = <RequestOptions>[];
+    RequestInterceptorHandler? pendingStats;
     Request.dio.interceptors.add(
       InterceptorsWrapper(
         onRequest: (options, handler) {
           requests.add(options);
+          if (options.method == 'GET') {
+            pendingStats = handler;
+            return;
+          }
           handler.resolve(
             Response(
               requestOptions: options,
@@ -157,6 +162,26 @@ void main() {
     );
     tester.state<_HeaderState>(find.byType(_Header)).showDanmakuPool();
     await tester.pump();
+    expect(find.byIcon(CustomIcons.player_dm_tip_like), findsNothing);
+    await tester.pump(const Duration(milliseconds: 20));
+    // 首帧和慢请求期间都不能把未知状态画成“未点赞”。
+    expect(find.byIcon(CustomIcons.player_dm_tip_like), findsNothing);
+    expect(find.byIcon(CustomIcons.player_dm_tip_like_solid), findsNothing);
+    expect(find.byType(CircularProgressIndicator), findsOneWidget);
+    await tester.pump(const Duration(seconds: 1));
+    expect(find.byIcon(CustomIcons.player_dm_tip_like), findsNothing);
+    pendingStats!.resolve(
+      Response(
+        requestOptions: requests.single,
+        data: {
+          'code': 0,
+          'data': {
+            '7': {'likes': 12, 'user_like': 1},
+          },
+        },
+      ),
+    );
+    await tester.pump(const Duration(milliseconds: 20));
     await tester.pump(const Duration(milliseconds: 20));
     expect(find.byIcon(CustomIcons.player_dm_tip_like_solid), findsOneWidget);
     expect(extra.isLike, isTrue);
@@ -210,7 +235,8 @@ void main() {
     );
     await tester.pumpWidget(control(first));
     await tester.pump(const Duration(milliseconds: 20));
-    await tester.tap(find.byType(TextButton), warnIfMissed: false);
+    expect(find.byType(TextButton), findsNothing);
+    await tester.tap(find.byType(DanmakuLikeControl));
     expect(toggles, 0);
     await tester.pumpWidget(control(second));
     await tester.pump(const Duration(milliseconds: 20));
@@ -244,6 +270,88 @@ void main() {
     expect(toggles, 1);
     expect(pending, hasLength(2));
   });
+
+  for (final networkError in [false, true]) {
+    testWidgets('查询失败保持未知，重试只查询状态（网络异常：$networkError）', (tester) async {
+      final oldAccount = Accounts.main;
+      Accounts.accountMode[0] = LoginAccount(
+        BiliCookieJar.fromJson({'DedeUserID': '123', 'bili_jct': 'fixture'}),
+        null,
+        null,
+      );
+      Request();
+      Request.dio.interceptors.clear();
+      final pending = <(RequestOptions, RequestInterceptorHandler)>[];
+      Request.dio.interceptors.add(
+        InterceptorsWrapper(
+          onRequest: (options, handler) => pending.add((options, handler)),
+        ),
+      );
+      addTearDown(() async {
+        await tester.pumpWidget(const SizedBox.shrink());
+        Accounts.accountMode[0] = oldAccount;
+        Request.dio.interceptors.clear();
+      });
+      final extra = VideoDanmaku(id: 7, mid: 'self');
+      var toggles = 0;
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: DanmakuLikeControl(
+              extra: extra,
+              cid: 99,
+              onLike: () async => toggles++,
+              builder: (context, onLike) => TextButton(
+                onPressed: onLike,
+                child: Text(extra.isLike ? '已点赞' : '未点赞'),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pump(const Duration(milliseconds: 20));
+      final (options, handler) = pending.single;
+      if (networkError) {
+        handler.reject(DioException(requestOptions: options));
+      } else {
+        handler.resolve(
+          Response(
+            requestOptions: options,
+            data: {'code': 0, 'data': <String, dynamic>{}},
+          ),
+        );
+      }
+      await tester.pump(const Duration(milliseconds: 20));
+      await tester.pump(const Duration(milliseconds: 20));
+      expect(find.text('未点赞'), findsNothing);
+      expect(find.text('已点赞'), findsNothing);
+      expect(find.byType(CircularProgressIndicator), findsNothing);
+      expect(tester.takeException(), isNull);
+      await tester.tap(find.byTooltip('重新获取弹幕点赞状态'));
+      await tester.pump(const Duration(milliseconds: 20));
+      expect(toggles, 0);
+      expect(pending, hasLength(2));
+      expect(find.byType(CircularProgressIndicator), findsOneWidget);
+      pending.last.$2.resolve(
+        Response(
+          requestOptions: pending.last.$1,
+          data: {
+            'code': 0,
+            'data': {
+              '7': {'likes': 12, 'user_like': 1},
+            },
+          },
+        ),
+      );
+      await tester.pump(const Duration(milliseconds: 20));
+      await tester.pump(const Duration(milliseconds: 20));
+      expect(find.text('已点赞'), findsOneWidget);
+      expect(toggles, 0);
+      await tester.tap(find.text('已点赞'));
+      await tester.pump();
+      expect(toggles, 1);
+    });
+  }
 }
 
 class _Header extends HeaderControl {

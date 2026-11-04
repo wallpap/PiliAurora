@@ -99,6 +99,7 @@ flowchart TD
 - 表情包入口为输入面板的设置按钮。管理与预览位于 `lib/pages/emote/manage.dart`、`preview.dart`；请求集中在 `ReplyHttp`。详情接口返回 `emotes`，模型同时兼容列表接口的 `emote` 字段。分类筛选位于未添加页签，预览页面通过 Navigator 压入页面栈。
 - 页面：`lib/pages/danmaku/`、`danmaku_block/`、`main_reply/`、`my_reply/`。
 - API/模型：`lib/http/danmaku.dart`、`reply.dart`，`lib/models/remote/danmaku/`、`reply/`。
+- 视频弹幕操作浮层与弹幕列表共用 `lib/pages/video/widgets/danmaku_like_control.dart`，通过 `DanmakuHttp.likeStats` 查询当前账号的点赞状态。查询完成前显示加载占位，失败后可重试；重试不提交点赞操作，切换弹幕、视频或账号后的迟到结果不写回当前菜单。
 - 渲染：通用组件和播放器插件；直播弹幕另走直播间链路。
 - 视频弹幕和直播消息的生命周期不同。修改渲染或消息队列时分别检查两条链路和对应测试。
 - 视频弹幕支持相似内容合并和重复字号放大；Android 提供帧率档位，Windows 自动跟随屏幕。设置入口和规则见[弹幕合并与帧率设置](../guides/danmaku-merge.md)。合并实现位于 `lib/pages/danmaku/merge.dart`，过滤与后台结果接入位于 `controller.dart`；相关测试见 `test/pages/danmaku/`。
