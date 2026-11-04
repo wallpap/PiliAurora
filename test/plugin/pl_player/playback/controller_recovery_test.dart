@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io' show Platform;
 
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
@@ -115,7 +116,7 @@ void main() {
     await f.controller.shutdownPlaybackFacade();
     await f.tester.pump();
     expect(windowManager.hasListeners, isFalse);
-  });
+  }, skip: !Platform.isWindows);
 
   _recoveryTest('隐藏和窗口恢复事件交错时，重新可见才开始视频恢复', (f) async {
     await f.load();
@@ -649,6 +650,7 @@ void _recoveryTest(
   String name,
   Future<void> Function(_Fixture) body, {
   _Mode mode = _Mode.separate,
+  bool skip = false,
 }) {
   testWidgets(name, (tester) async {
     final f = _Fixture(tester, mode: mode);
@@ -657,7 +659,7 @@ void _recoveryTest(
     } finally {
       await f.dispose();
     }
-  });
+  }, skip: skip);
 }
 
 enum _Mode { separate, combined, audioOnly, videoOnly }

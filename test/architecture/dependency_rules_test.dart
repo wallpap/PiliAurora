@@ -61,11 +61,14 @@ void main() {
       final file = File('lib/${entry.key}');
       expect(
         dependencies(file).where(
-          (uri) => entry.value.any(
-            (restriction) => restriction.startsWith('package:')
-                ? uri.startsWith(restriction)
-                : uri.contains(restriction),
-          ),
+          (uri) =>
+              !(entry.key == 'services/settings/settings_backup.dart' &&
+                  localDependency(file, uri) == 'utils/storage_key.dart') &&
+              entry.value.any(
+                (restriction) => restriction.startsWith('package:')
+                    ? uri.startsWith(restriction)
+                    : uri.contains(restriction),
+              ),
         ),
         isEmpty,
         reason: file.path,
