@@ -1,6 +1,9 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:pili_aurora/utils/credential_cipher.dart';
+import 'package:pili_aurora/utils/storage_key.dart';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hive_ce/hive.dart';
 import 'package:pili_aurora/services/settings/settings_backup.dart';
@@ -51,6 +54,41 @@ void main() {
       setting = _RecordingBox('setting', events, {'theme': 'dark', 'old': 1});
       video = _RecordingBox('video', events, {'quality': 80, 'old': 2});
       backup = SettingsBackup(setting: setting, video: video);
+    });
+
+    test(
+      'protects only the WebDAV password and imports legacy plaintext',
+      () async {
+        const key = SettingBoxKey.webdavPassword;
+        setting.data[key] = 'fixture-password';
+        final exported = backup.exportJson();
+        expect(exported, isNot(contains('fixture-password')));
+        final document = jsonDecode(exported) as Map;
+        expect(document['setting']['theme'], 'dark');
+        expect(
+          CredentialCipher.decrypt(document['setting'][key]),
+          'fixture-password',
+        );
+        await backup.restoreMap(document);
+        expect(CredentialCipher.decrypt(setting.data[key]), 'fixture-password');
+        document['setting'][key] = 'legacy-password';
+        await backup.restoreMap(document);
+        expect(setting.data[key], isNot('legacy-password'));
+        expect(CredentialCipher.decrypt(setting.data[key]), 'legacy-password');
+      },
+    );
+
+    test('rejects damaged credentials before changing any settings', () async {
+      await expectLater(
+        backup.restoreMap({
+          'setting': {
+            SettingBoxKey.webdavPassword: 'piliaurora:credential:v1:bad',
+          },
+          'video': {},
+        }),
+        throwsFormatException,
+      );
+      expect(events, isEmpty);
     });
 
     test(

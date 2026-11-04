@@ -156,3 +156,9 @@ flowchart LR
 | Windows | `windows/`、窗口管理、Windows WebView 与媒体输出代码 | 窗口尺寸/DPI、WebView 环境、GPU 解码、纹理尺寸和弹幕渲染 |
 
 工具链和平台构建要求见[构建与测试](build-and-test.md)；运行时调用时序见[运行流程图](runtime-flows.md)。
+
+## 凭证存储与备份
+
+`CredentialCipher` 复用现有 `encrypt` 依赖，以 AES-GCM 和随机 nonce 加密账号 Cookie、Token 与 WebDAV 密码。本机 Hive 和 JSON 备份共用版本化密文格式，普通设置保持原格式。
+
+启动时读取并迁移旧明文凭证，重写后压缩 Hive 文件。备份导入兼容旧明文；损坏或未知版本的密文会报错。新密文需要支持该格式的应用版本读取，维护密钥或格式时须保留旧版本解密路径。

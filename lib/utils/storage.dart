@@ -75,6 +75,22 @@ abstract final class GStorage {
       ).then((res) => watchProgress = res),
     ]);
 
+    if (memorySnapshot == null) {
+      final credentials = <dynamic, dynamic>{
+        if (setting.containsKey(SettingBoxKey.webdavPassword))
+          SettingBoxKey.webdavPassword: setting.get(
+            SettingBoxKey.webdavPassword,
+          ),
+      };
+      SettingsBackup.protectCredentials(credentials);
+      if (credentials.isNotEmpty &&
+          credentials[SettingBoxKey.webdavPassword] !=
+              setting.get(SettingBoxKey.webdavPassword)) {
+        await setting.putAll(credentials);
+        await setting.compact();
+      }
+    }
+
     if (setting.containsKey(
       LegacySettingBoxKey.androidFullscreenCalibration,
     )) {

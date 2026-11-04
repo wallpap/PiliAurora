@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:pili_aurora/utils/credential_cipher.dart';
 import 'package:pili_aurora/utils/volume_utils.dart';
 import 'package:pili_aurora/common/widgets/gesture/horizontal_drag_gesture_recognizer.dart'
     show deviceTouchSlop;
@@ -716,8 +717,9 @@ abstract final class Pref {
   static String get webdavUsername =>
       _setting.get(SettingBoxKey.webdavUsername, defaultValue: '');
 
-  static String get webdavPassword =>
-      _setting.get(SettingBoxKey.webdavPassword, defaultValue: '');
+  static String get webdavPassword => CredentialCipher.decrypt(
+    _setting.get(SettingBoxKey.webdavPassword, defaultValue: '') as String,
+  )!;
 
   static String get webdavDirectory =>
       _setting.get(SettingBoxKey.webdavDirectory, defaultValue: '/');

@@ -1,3 +1,6 @@
+import 'dart:convert';
+
+import 'package:pili_aurora/utils/credential_cipher.dart';
 import 'package:pili_aurora/common/constants.dart';
 import 'package:pili_aurora/models/common/account_type.dart';
 import 'package:pili_aurora/utils/accounts.dart';
@@ -93,9 +96,9 @@ class LoginAccount extends Account {
 
   @override
   Map<String, dynamic>? toJson() => {
-    'cookies': cookieJar.toJson(),
-    'accessKey': accessKey,
-    'refresh': refresh,
+    'cookies': CredentialCipher.encrypt(jsonEncode(cookieJar.toJson())),
+    'accessKey': CredentialCipher.encrypt(accessKey),
+    'refresh': CredentialCipher.encrypt(refresh),
     'type': type.map((i) => i.index).toList(),
   };
 
@@ -116,9 +119,13 @@ class LoginAccount extends Account {
   }
 
   factory LoginAccount.fromJson(Map json) => LoginAccount(
-    BiliCookieJar.fromJson(json['cookies']),
-    json['accessKey'],
-    json['refresh'],
+    BiliCookieJar.fromJson(
+      json['cookies'] is String
+          ? jsonDecode(CredentialCipher.decrypt(json['cookies'])!) as Map
+          : json['cookies'] as Map,
+    ),
+    CredentialCipher.decrypt(json['accessKey']),
+    CredentialCipher.decrypt(json['refresh']),
     (json['type'] as Iterable?)?.map((i) => AccountType.values[i]).toSet(),
   );
 

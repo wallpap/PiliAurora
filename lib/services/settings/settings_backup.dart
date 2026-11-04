@@ -1,5 +1,7 @@
 import 'dart:convert';
 
+import 'package:pili_aurora/utils/credential_cipher.dart';
+import 'package:pili_aurora/utils/storage_key.dart';
 import 'package:collection/collection.dart';
 import 'package:hive_ce/hive.dart';
 
@@ -18,6 +20,7 @@ class SettingsBackup {
   String exportJson() {
     final settings = _setting.toMap()
       ..remove(_legacyAndroidFullscreenCalibration);
+    protectCredentials(settings);
     return _encoder.convert({'setting': settings, 'video': _video.toMap()});
   }
 
@@ -31,6 +34,7 @@ class SettingsBackup {
     final setting = _section(document, 'setting')
       ..remove(_legacyAndroidFullscreenCalibration);
     final video = _section(document, 'video');
+    protectCredentials(setting);
     final plans = [_plan(_setting, setting), _plan(_video, video)];
 
     // 先写入变更，再删除过期键。任一写入失败时不主动删除旧设置。
@@ -45,6 +49,16 @@ class SettingsBackup {
         if (plan.removed.isNotEmpty) await plan.box.deleteAll(plan.removed);
       }),
     );
+  }
+
+  static void protectCredentials(Map<dynamic, dynamic> settings) {
+    const key = SettingBoxKey.webdavPassword;
+    if (!settings.containsKey(key)) return;
+    final value = settings[key];
+    if (value is! String) {
+      throw const FormatException('WebDAV 密码必须是字符串');
+    }
+    settings[key] = CredentialCipher.normalize(value);
   }
 
   Map<dynamic, dynamic> _section(Map document, String name) {

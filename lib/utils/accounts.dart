@@ -4,6 +4,7 @@ import 'package:pili_aurora/http/init.dart';
 import 'package:pili_aurora/models/common/account_type.dart';
 import 'package:pili_aurora/pages/mine/controller.dart';
 import 'package:pili_aurora/utils/accounts/account.dart';
+import 'package:pili_aurora/utils/accounts/account_adapter.dart';
 import 'package:pili_aurora/utils/login_utils.dart';
 import 'package:pili_aurora/services/messaging/session.dart';
 import 'package:hive_ce/hive.dart';
@@ -28,6 +29,7 @@ abstract final class Accounts {
   // static set main(Account account) => set(AccountType.main, account);
 
   static Future<void> init({Uint8List? bytes}) async {
+    LoginAccountAdapter.readLegacy = false;
     account = await Hive.openBox(
       'account',
       bytes: bytes,
@@ -35,6 +37,11 @@ abstract final class Accounts {
         return deletedEntries > 2;
       },
     );
+    if (bytes == null && LoginAccountAdapter.readLegacy) {
+      // 成功重写后压缩，清除文件中旧的明文记录；子进程快照只读。
+      await account.putAll(account.toMap());
+      await account.compact();
+    }
   }
 
   static Future<void> refresh() {

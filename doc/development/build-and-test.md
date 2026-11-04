@@ -102,6 +102,14 @@ pwsh -NoProfile -File tool/run-ci-tests.ps1
 
 定位单个功能时，可将相关测试文件或目录传给 `fvm flutter test`。测试按业务领域放在 `test/` 下，目录索引见 [`test/README.md`](../../test/README.md)。
 
+账号凭证加密、旧明文迁移与设置备份兼容改动可运行：
+
+```powershell
+fvm flutter test --no-pub test/utils/credential_cipher_test.dart test/utils/credential_migration_test.dart test/utils/accounts test/services/settings/ test/utils/account_profile_lifecycle_test.dart
+```
+
+该组覆盖随机 nonce、损坏和未知版本密文拒绝、旧 Hive 凭证迁移及明文记录清理、账号与设置备份往返，以及播放子进程使用的加密账号快照读取。Android、Windows 应用升级和实际跨设备恢复仍需目标设备验证。
+
 弹幕合并、后台处理与帧率改动可运行：
 
 ```powershell

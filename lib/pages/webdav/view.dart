@@ -1,3 +1,4 @@
+import 'package:pili_aurora/utils/credential_cipher.dart';
 import 'package:pili_aurora/common/style.dart';
 import 'package:pili_aurora/common/widgets/scaffold/simple_scaffold.dart';
 import 'package:pili_aurora/common/widgets/view_insets_safe_area.dart';
@@ -145,13 +146,17 @@ class _WebDavSettingPageState extends State<WebDavSettingPage> {
                   );
                 }
               } catch (error) {
-                SmartDialog.showToast('配置失败: ${DiagnosticRedactor.text(error)}');
+                SmartDialog.showToast(
+                  '配置失败: ${DiagnosticRedactor.text(error)}',
+                );
                 return;
               }
               await GStorage.setting.putAll({
                 SettingBoxKey.webdavUri: _uriCtr.text.trim(),
                 SettingBoxKey.webdavUsername: _usernameCtr.text,
-                SettingBoxKey.webdavPassword: _passwordCtr.text,
+                SettingBoxKey.webdavPassword: CredentialCipher.encrypt(
+                  _passwordCtr.text,
+                ),
                 SettingBoxKey.webdavDirectory: _directoryCtr.text,
               });
               if (_uriCtr.text.trim().isEmpty) {
