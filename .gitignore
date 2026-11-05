@@ -8,7 +8,7 @@ Thumbs.db
 *.iml
 *.ipr
 *.iws
-.vscode/*
+.vscode/
 !.vscode/settings.json
 !.vscode/launch.json
 !.vscode/tasks.json
