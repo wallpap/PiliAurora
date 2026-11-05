@@ -113,7 +113,7 @@ flowchart LR
 - 播放状态区分用户意图、原生实际状态和会话 inhibitor。切画质、音轨、倍速、音量、shader 与网络恢复通过 owner 命令协调；页面路由、后台和音频焦点只释放自己持有的 inhibitor，不重写用户暂停意图。
 - 快速切源共享一套 Player、VideoController、事件订阅和纹理输出。过期请求在进入原生操作前被跳过；原生已发出的操作保留在运行时串行链中，并在返回后核对请求代次。
 - Windows 独立播放窗口由 `DesktopPlaybackWindows` 启动子进程，通过本地连接接收播放请求、账号与设置快照。每个窗口有自己的 Flutter、播放器和缓存目录；窗口内的设置保存在内存中，主窗口负责排列、位置保存与离线进度回写。
-- Windows 超分更新通过会话 shader 配置槽串行化，必要时重建原生渲染器；播放器释放等待已接受的原生操作结束。原生资源释放顺序见[Windows 视频输出](../maintenance/windows-video-output.md)。
+- Windows 超分更新通过会话 shader 配置槽串行化。需要重建渲染器时，先卸载媒体，再重建输出并重新加载；点播恢复位置，会话保留最新播放意图。播放器释放等待已接受的原生操作结束。原生资源释放顺序见[Windows 视频输出](../maintenance/windows-video-output.md)。
 - protobuf 与 Android JNI 属于生成产物。修改源定义或生成脚本，再运行项目生成流程；不要直接维护生成文件。
 - 定制依赖通过 `dependency_overrides` 指向 `third_party/` 中的本地包。来源、版本和许可证以 `pubspec.yaml`、`pubspec.lock` 与 [`third_party/README.md`](../../third_party/README.md) 为准。
 

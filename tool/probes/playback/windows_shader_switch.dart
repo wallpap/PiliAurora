@@ -10,6 +10,10 @@ import 'package:media_kit_video/media_kit_video.dart';
 import 'package:pili_aurora/common/assets.dart';
 import 'package:pili_aurora/models/common/super_resolution_type.dart';
 import 'package:pili_aurora/plugin/pl_player/playback/shader_updates.dart';
+import 'package:pili_aurora/plugin/pl_player/models/data_source.dart';
+import 'package:pili_aurora/plugin/pl_player/playback/native_playback_runtime.dart';
+import 'package:pili_aurora/plugin/pl_player/playback/playback_contracts.dart';
+import 'package:pili_aurora/plugin/pl_player/playback/playback_session.dart';
 import 'package:pili_aurora/plugin/pl_player/utils/playback_load_queue.dart';
 import 'package:pili_aurora/services/diagnostics/process_metrics.dart';
 import 'package:pili_aurora/utils/path_utils.dart';
@@ -32,28 +36,89 @@ Future<void> main() async {
   if (!File(media).existsSync()) throw ArgumentError('Local media is required');
   await output.create(recursive: true);
   MediaKit.ensureInitialized();
-  final player = await Player.create(
-    configuration: const PlayerConfiguration(
-      logLevel: .warn,
-      options: {
-        'ao': 'null',
-        'gpu-dumb-mode': 'no',
-        'video-sync': 'audio',
-        'cache': 'yes',
-        'cache-secs': '16',
-        'demuxer-max-bytes': '4194304',
-        'demuxer-max-back-bytes': '4194304',
-      },
-    ),
-  );
-  final video = await VideoController.create(
-    player,
-    configuration: const VideoControllerConfiguration(
-      width: 1280,
-      height: 720,
-      hwdec: 'd3d11va',
-    ),
-  );
+  const useSession = bool.fromEnvironment('SHADER_PROBE_SESSION');
+  final runtime = useSession
+      ? NativePlaybackRuntime(
+          configuration: PlaybackRuntimeConfig(
+            playerOptions: const {
+              'ao': 'null',
+              'gpu-dumb-mode': 'no',
+              'video-sync': 'audio',
+              'cache': 'yes',
+              'cache-secs': '16',
+              'demuxer-max-bytes': '4194304',
+              'demuxer-max-back-bytes': '4194304',
+            },
+            hardwareAccelerationEnabled: true,
+            hardwareDecoder: 'd3d11va',
+            width: 1280,
+            height: 720,
+          ),
+          diagnosticsExtra: () => const {},
+        )
+      : null;
+  final session = runtime == null ? null : PlaybackSession(runtime: runtime);
+  final owner = session?.attach();
+  if (owner != null) {
+    runApp(const MaterialApp(home: ColoredBox(color: Colors.black)));
+    final attach = Timer.periodic(const Duration(milliseconds: 20), (_) {
+      final video = runtime!.videoController;
+      if (video != null) {
+        runApp(
+          MaterialApp(
+            home: Center(child: SimpleVideo(controller: video)),
+          ),
+        );
+      }
+    });
+    try {
+      final loaded = await owner.load(
+        PlaybackPlan(
+          contentKey: 'shader-fixture',
+          source: PlaybackSourceSnapshot.fromDataSource(
+            NetworkSource(videoSource: media, audioSource: null),
+          ),
+          timeline: const PlaybackTimeline(
+            kind: PlaybackTimelineKind.onDemand,
+            seekPolicy: PlaybackSeekPolicy.allowed,
+          ),
+          configuration: PlaybackConfiguration(),
+        ),
+        start: PlaybackStartPolicy.play,
+      );
+      if (loaded.outcome != LoadOutcome.ready) {
+        throw StateError('Session load failed');
+      }
+    } finally {
+      attach.cancel();
+    }
+  }
+  final player =
+      runtime?.player ??
+      await Player.create(
+        configuration: const PlayerConfiguration(
+          logLevel: .warn,
+          options: {
+            'ao': 'null',
+            'gpu-dumb-mode': 'no',
+            'video-sync': 'audio',
+            'cache': 'yes',
+            'cache-secs': '16',
+            'demuxer-max-bytes': '4194304',
+            'demuxer-max-back-bytes': '4194304',
+          },
+        ),
+      );
+  final video =
+      runtime?.videoController ??
+      await VideoController.create(
+        player,
+        configuration: const VideoControllerConfiguration(
+          width: 1280,
+          height: 720,
+          hwdec: 'd3d11va',
+        ),
+      );
   final boundary = GlobalKey();
   runApp(
     MaterialApp(
@@ -78,7 +143,8 @@ Future<void> main() async {
   final originalHandle = player.handle;
   final decoderErrors = <String>[];
   final logSubscription = player.stream.log.listen((log) {
-    if (log.prefix == 'vd' || log.prefix == 'ffmpeg/video') {
+    if ((log.prefix == 'vd' || log.prefix == 'ffmpeg/video') &&
+        const {'warn', 'error', 'fatal'}.contains(log.level)) {
       decoderErrors.add('${log.prefix}: ${log.text.trim()}');
     }
   });
@@ -114,16 +180,28 @@ Future<void> main() async {
           ? ''
           : PathUtils.buildShadersAbsolutePath('$root/assets/shaders', names);
       if (!isCurrent()) return;
-      await applyShaderList(
-        paths,
-        command: player.command,
-        resetRenderer: resetEnabled
-            ? () async {
-                resets++;
-                await video.resetRenderer();
-              }
-            : null,
-      );
+      if (owner != null) {
+        final beforeLoad = session!.loadId;
+        final changed = await owner.setShader(
+          paths.isEmpty ? [] : paths.split(';'),
+        );
+        check(
+          changed.outcome == CommandOutcome.applied,
+          'Session shader failed',
+        );
+        if (session.loadId != beforeLoad) resets++;
+      } else {
+        await applyShaderList(
+          paths,
+          command: player.command,
+          resetRenderer: resetEnabled
+              ? () async {
+                  resets++;
+                  await video.resetRenderer();
+                }
+              : null,
+        );
+      }
     });
     if (resets > beforeResets) await waitFor(() => video.id.value != beforeId);
     await Future<void>.delayed(Duration(seconds: seconds));
@@ -168,6 +246,8 @@ Future<void> main() async {
     image.dispose();
     check(high - low > 16, 'Blank Flutter video texture');
     final row = <String, Object?>{
+      'session': useSession,
+      'mpv': player.getProperty('mpv-version'),
       'mode': mode.name,
       'playing': player.state.playing,
       'privateMiB': (metrics.sample()['privateBytes'] as int) / 1048576,
@@ -187,10 +267,14 @@ Future<void> main() async {
   }
 
   try {
-    await player.open(const Media(media));
+    if (owner == null) await player.open(const Media(media));
     await waitFor(() => player.state.width > 0 && video.rect.value != null);
     if (startMs > 0) {
-      await player.seek(const Duration(milliseconds: startMs));
+      if (owner != null) {
+        await owner.seek(const Duration(milliseconds: startMs));
+      } else {
+        await player.seek(const Duration(milliseconds: startMs));
+      }
     }
     await Future<void>.delayed(const Duration(seconds: 3));
     await select(SuperResolutionType.disable);
@@ -201,14 +285,27 @@ Future<void> main() async {
     final baseline = results.first['privateMiB'] as double;
     final disabled = results.last['privateMiB'] as double;
     check(disabled < baseline + 128, 'Disabled shader resources retained');
-    await player.pause();
+    if (owner != null) {
+      await owner.setPlaying(false);
+    } else {
+      await player.pause();
+    }
     await select(SuperResolutionType.efficiency);
     await select(SuperResolutionType.disable, seconds: 12);
-    await player.play();
+    if (owner != null) {
+      await owner.setPlaying(true);
+    } else {
+      await player.play();
+    }
     await select(SuperResolutionType.disable, seconds: 2);
     updates.dispose();
     await updates.drained;
-    await player.dispose();
+    if (owner != null) {
+      owner.close();
+      await session!.shutdown();
+    } else {
+      await player.dispose();
+    }
     await logSubscription.cancel();
     await File('${output.path}/PASS')
         .writeAsString('Shader memory, texture, pause and audio checks passed');
@@ -217,7 +314,12 @@ Future<void> main() async {
     await File('${output.path}/FAIL').writeAsString('$error\n$stack');
     updates.dispose();
     await updates.drained;
-    await player.dispose();
+    if (owner != null) {
+      owner.close();
+      await session!.shutdown();
+    } else {
+      await player.dispose();
+    }
     await logSubscription.cancel();
     exit(1);
   }

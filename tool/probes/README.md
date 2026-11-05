@@ -384,7 +384,9 @@ fvm flutter build windows --debug --no-pub --target tool/probes/playback/windows
 & build/windows/x64/runner/Debug/PiliAurora.exe
 ```
 
-路径含空格时，将整个 `--dart-define=...` 参数放在引号内。探针创建输出目录，写入 `results.json` 和 `PASS` 或 `FAIL`，执行完毕自动退出。构建时增加 `--dart-define=SHADER_PROBE_RESET=false` 可对照直接更新 shader 的行为；默认启用重建。
+路径含空格时，将整个 `--dart-define=...` 参数放在引号内。探针创建输出目录，写入 `results.json` 和 `PASS` 或 `FAIL`，执行完毕自动退出。原位对照模式默认重建渲染器，增加 `--dart-define=SHADER_PROBE_RESET=false` 可改为直接更新 shader。
+
+验收当前应用行为时，增加 `--dart-define=SHADER_PROBE_SESSION=true`，通过生产 Session/Runtime 卸载并重载媒体。该模式按 shader 实际变化重载，重复相同列表不重建，也不使用上述 RESET 开关。不传 SESSION 开关时运行原位重建对照。
 
 入口要求实际后端为 `d3d11va`，输入画面需有可识别的明暗变化，片段长度应覆盖完整切换流程。探针开启与应用一致的 16 秒、前后各 4 MiB 缓存，默认从 4.3 秒开始播放，并检查切换期间的解码错误。可用 `--dart-define=SHADER_PROBE_START_MS=<毫秒>` 指定起点。
 

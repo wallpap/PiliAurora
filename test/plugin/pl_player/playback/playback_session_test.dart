@@ -1213,6 +1213,48 @@ void main() {
     await runtime.released;
   });
 
+  for (final playing in [true, false]) {
+    test('点播 shader 重建通过卸载重载恢复位置与播放意图 playing=$playing', () async {
+      final runtime = _FakeRuntime()..shaderChangeRequiresRendererReset = true;
+      final session = PlaybackSession(runtime: runtime);
+      final owner = session.attach();
+      expect(
+        (await owner.load(
+          _plan('movie'),
+          start: playing ? PlaybackStartPolicy.play : PlaybackStartPolicy.pause,
+        )).outcome,
+        LoadOutcome.ready,
+      );
+      runtime.position = const Duration(milliseconds: 4321);
+      final requestId = session.requestId;
+      final loadId = session.loadId;
+      expect(
+        (await owner.setShader(['quality'])).outcome,
+        CommandOutcome.applied,
+      );
+      expect(session.requestId, requestId);
+      expect(session.loadId, loadId + 1);
+      expect(runtime.shaderCalls, isEmpty);
+      expect(
+        runtime.loadedPlans.last.source,
+        same(runtime.loadedPlans.first.source),
+      );
+      expect(runtime.loadedPlans.last.configuration.shaders, ['quality']);
+      expect(
+        runtime.loadedPlans.last.reloadPosition,
+        const Duration(milliseconds: 4321),
+      );
+      expect(session.currentSnapshot.intent.playing, playing);
+      expect(runtime.playCalls.last, playing);
+      expect((await owner.setShader([])).outcome, CommandOutcome.applied);
+      expect(session.loadId, loadId + 2);
+      expect(runtime.loadedPlans.last.configuration.shaders, isEmpty);
+      expect(session.currentSnapshot.intent.playing, playing);
+      owner.close();
+      await runtime.released;
+    });
+  }
+
   test('不可 seek 直播的解码器和音频模式改动经加载协议应用', () async {
     final runtime = _FakeRuntime();
     final session = PlaybackSession(runtime: runtime);
@@ -1253,8 +1295,8 @@ void main() {
     await runtime.released;
   });
 
-  test('可 seek 点播的 shader、解码器和音频模式原位更新', () async {
-    final runtime = _FakeRuntime()..shaderChangeRequiresRendererReset = true;
+  test('无需重建输出的点播 shader、解码器和音频模式原位更新', () async {
+    final runtime = _FakeRuntime();
     final session = PlaybackSession(runtime: runtime);
     final owner = session.attach();
     expect((await owner.load(_plan('movie'))).outcome, LoadOutcome.ready);

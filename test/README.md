@@ -35,6 +35,8 @@
 
 `plugin/pl_player/playback/native_media_clock_sampling_test.dart` 覆盖异步媒体时钟采样的通知合并、在途结果失效、冻结锚点时刻、读取失败恢复，以及释放前等待原生读取完成；属性一致性由 `native_media_clock_test.dart` 覆盖。
 
+`plugin/pl_player/playback/playback_session_test.dart` 覆盖 shader 重建触发的媒体重载，检查续播位置、原媒体源、请求身份和播放意图，并验证清除 shader 也走同一协议。实际 Windows 硬解、纹理、音频时间线和资源回收使用 `tool/probes/playback/windows_shader_switch.dart` 的生产会话模式检查。
+
 `plugin/pl_player/playback/native_shutdown_test.dart` 使用真实原生运行时与模拟 Player/输出，检查 stop 成功及回执超时后继续等待完整卸载证据、输出释放回执和 Player 销毁的顺序，并覆盖 open 提交前失败和提交后的迟到文件身份。
 
 `plugin/pl_player/playback/controller_recovery_test.dart` 将真实播放器控制器、会话与网络/音轨恢复器接到模拟原生输入，检查合流、分轨、只听音频、纯视频和本地媒体在断流、缓存耗尽、静音、暂停、跳转、切源、完成及关闭时的恢复协调；恢复预算矩阵见 `playback_session_test.dart`。

@@ -31,16 +31,13 @@ GL 纹理状态。真实直播的首次播放、刷新与纹理像素验证见
 
 视频尺寸超过当前屏幕、或尺寸尚未确认时，播放器超分入口置灰并禁用菜单；悬停或长按保留原因提示，点击灰色入口显示提示，不发起切换。显式选择请求在修改档位、保存设置和进入 shader 队列前再次检查；重复选择当前档位也直接返回，保留连续播放。媒体加载时的默认档位仍随源尺寸核对，必要时清除上一媒体的滤镜。
 
-页面将超分模式解析为 shader 路径后，通过 `PlaybackOwner.setShader` 提交配置命令。`PlaybackSession` 将其放入 shader 配置槽，与加载、播放意图和其他原生写入协调；加载 ready 后，控制器按已保存档位计算目标路径，并与规范快照中的期望路径比较，避免重复提交相同 shader。Windows 当前输出已有视频尺寸时，`NativePlaybackRuntime` 调用 [`applyShaderList`](../../lib/plugin/pl_player/playback/shader_updates.dart)：
+页面将超分模式解析为 shader 路径后，通过 `PlaybackOwner.setShader` 提交配置命令。`PlaybackSession` 将其放入 shader 配置槽，与加载、播放意图和其他原生写入协调；加载 ready 后，控制器按已保存档位计算目标路径，并与规范快照中的期望路径比较，避免重复提交相同 shader。Windows 当前输出已有视频尺寸时，shader 变更通过 Session 的配置重载协议：
 
-1. 将 mpv 的 `vo` 切到 `null`，解除视频输出对 render context 的使用。
-2. 调用 `resetRenderer()`，在原生输出线程释放并重建 render context 与 ANGLE 设备。
-3. 提交新的 `glsl-shaders` 列表。
-4. 在 `finally` 中恢复 `vo=libmpv`；重建后的纹理等待 mpv 通知实际视频帧后发布。
+1. 保存当前点播位置和最新播放意图，等待旧媒体的卸载屏障。
+2. 在下一次 open 前调用 `applyShaderList`，切换空输出、重建 render context 与 ANGLE，再提交新 shader 并恢复 `vo=libmpv`。
+3. 使用同一媒体源重新加载，点播恢复位置，直播回到当前直播进度；按最新播放意图继续播放或保持暂停。
 
-切换 `vo` 会同时重建 mpv 的视频解码链。固定原生库通过 `vo-reinit-seek.patch` 在重建后、返回播放循环前完成补偿 seek，使缓存读取位置和解码状态先恢复到关键帧。否则缓存中的非关键包可能耗尽解码器的 96 包等待额度，产生 AV1 参考帧错误并触发硬解回退。
-
-该过程保留 Player 和媒体。Android、未就绪的 Windows 输出直接更新 shader；软件输出跳过原生重建。owner 关闭后，会话不再接受它的配置命令；运行时在等待已发出的 shader 更新和媒体卸载后释放输出，再销毁 Player。跨控制器资源槽等到 `Player.released` 才允许创建下一实例。
+重建发生在旧媒体卸载后，可避开活跃解码链的补偿 seek 时序问题。Player 保留，网络媒体会重新请求，切换时有短暂停顿。Android、未就绪的 Windows 输出直接更新 shader；软件输出跳过原生重建。owner 关闭后，会话不再接受它的配置命令；运行时在等待已发出的 shader 更新和媒体卸载后释放输出，再销毁 Player。跨控制器资源槽等到 `Player.released` 才允许创建下一实例。
 
 ## 原生库与验证
 

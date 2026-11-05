@@ -1300,6 +1300,12 @@ class PlaybackSession implements PlaybackMediaClock {
   };
 
   bool _requiresConfigurationReload(PlaybackConfigurationKey key) {
+    // 活跃解码链切换 VO 会在补偿 seek 前消费旧缓存包。先走卸载屏障，
+    // 在下一次 open 前重建渲染器，避免依赖 mpv 的本地时序补丁。
+    if (key == PlaybackConfigurationKey.shaders &&
+        _runtime.shaderChangeRequiresRendererReset) {
+      return true;
+    }
     final plan = _currentPlan;
     if (plan?.timeline.kind != PlaybackTimelineKind.live ||
         _capabilities.seekSupport == PlaybackSeekSupport.supported) {
@@ -1308,8 +1314,6 @@ class PlaybackSession implements PlaybackMediaClock {
     return switch (key) {
       PlaybackConfigurationKey.decoder ||
       PlaybackConfigurationKey.audioOnly => true,
-      PlaybackConfigurationKey.shaders =>
-        _runtime.shaderChangeRequiresRendererReset,
       _ => false,
     };
   }

@@ -190,7 +190,7 @@ flowchart TD
 
 Windows 在确定硬件或软件后端后注册纹理，硬件初始化失败时先释放 GL 资源再进入软件路径。Android 保留既有 MediaCodec、Surface 与解码恢复实现，GPU、MediaCodec、Surface 行为和帧率在目标设备验证。
 
-Windows 超分切换通过 owner 的 shader 配置命令进入会话调度；运行时在需要时暂停视频输出、重建渲染器、提交 shader 并恢复输出。释放顺序和首帧条件见[Windows 视频输出](../maintenance/windows-video-output.md#超分切换)。
+Windows 超分切换通过 owner 的 shader 配置命令进入会话调度。需要重建渲染器时，会话先等待旧媒体卸载，运行时在下一次打开媒体前重建输出并提交 shader，再恢复点播位置和最新播放意图。网络媒体会重新请求，切换时有短暂停顿。释放顺序和首帧条件见[Windows 视频输出](../maintenance/windows-video-output.md#超分切换)。
 
 ## 下载
 
