@@ -45,24 +45,6 @@ function(download_and_verify url md5 locationForArchive)
   endif()
 endfunction()
 
-function(check_directory_exists_and_not_empty dir result_var)
-  # Check if the directory exists
-  if(EXISTS "${dir}")
-    # Check if the directory is not empty
-    file(GLOB dir_contents "${dir}/*")
-
-    if(dir_contents)
-      set(${result_var} TRUE PARENT_SCOPE)
-    else()
-      set(${result_var} FALSE PARENT_SCOPE)
-      message(STATUS "Directory ${dir} exists but is empty!")
-    endif()
-  else()
-    set(${result_var} FALSE PARENT_SCOPE)
-    message(STATUS "Directory ${dir} does not exist!")
-  endif()
-endfunction()
-
 include("${CMAKE_CURRENT_LIST_DIR}/libmpv.cmake")
 
 # ------------------------------------------------------------------------------
@@ -84,18 +66,15 @@ download_and_verify(
   ${ANGLE_ARCHIVE}
 )
 
-check_directory_exists_and_not_empty(${ANGLE_SRC} ANGLE_SRC_VALID)
-
-# Extract the ANGLE archive.
-if(NOT ANGLE_SRC_VALID)
-  message(STATUS "Extracting ${ANGLE}...")
-  make_directory("${ANGLE_SRC}")
-  add_custom_target("${PROJECT_NAME}_ANGLE_EXTRACT" ALL)
-  add_custom_command(
-    TARGET "${PROJECT_NAME}_ANGLE_EXTRACT"
-    COMMAND "${CMAKE_COMMAND}" -E tar xzf "\"${ANGLE_ARCHIVE}\""
-    WORKING_DIRECTORY "${ANGLE_SRC}"
-  )
+# 配置阶段同步提取，保证首次并行构建前头文件和导入库已经存在。
+file(MAKE_DIRECTORY "${ANGLE_SRC}")
+execute_process(
+  COMMAND "${CMAKE_COMMAND}" -E tar xf "${ANGLE_ARCHIVE}"
+  WORKING_DIRECTORY "${ANGLE_SRC}"
+  RESULT_VARIABLE angle_extract_result
+)
+if(NOT angle_extract_result EQUAL 0)
+  message(FATAL_ERROR "ANGLE extraction failed: ${angle_extract_result}")
 endif()
 
 # ------------------------------------------------------------------------------
@@ -132,10 +111,6 @@ target_link_libraries(
   flutter_wrapper_plugin
 )
 
-if(LIBMPV_LOCAL_RUNTIME)
-  set(media_kit_libs_windows_video_bundled_libraries
-    ${LIBMPV_LOCAL_RUNTIME} PARENT_SCOPE)
-else()
 set(
   media_kit_libs_windows_video_bundled_libraries
   "${LIBMPV_SRC}/libmpv-2.dll"
@@ -145,6 +120,6 @@ set(
   "${ANGLE_SRC}/vk_swiftshader.dll"
   "${ANGLE_SRC}/vulkan-1.dll"
   "${ANGLE_SRC}/zlib.dll"
+  "${ANGLE_SRC}/libc++.dll"
   PARENT_SCOPE
 )
-endif()

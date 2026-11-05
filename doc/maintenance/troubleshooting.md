@@ -44,7 +44,7 @@ icacls .\build\windows\x64\runner\Release\PiliAurora.exe
 
 排查播放状态时先记录 `PlaybackSnapshot` 的 phase、stage、requestId、loadId 和 outputEpoch，再沿 owner → session → runtime 对照日志。命令返回、原生事件和输出回执必须属于同一代次；直接读取 Player 或界面控件只能作为补充证据。Android Surface、Windows 纹理和首帧像素分别验收。
 
-Windows 视频输出的 EGL/mpv 释放顺序、超分切换重建和首帧条件见[视频输出说明](windows-video-output.md)。原生库来源与构建步骤见[mpv 构建入口](../../third_party/mpv/README.md)，探针命令见[平台探针](../../tool/probes/README.md)。
+Windows 视频输出的 EGL/mpv 释放顺序、超分切换重建和首帧条件见[视频输出说明](windows-video-output.md)。原生库来源与构建步骤见[mpv 构建入口](../../third_party/media_kit_libs_windows_video/UPSTREAM.md)，探针命令见[平台探针](../../tool/probes/README.md)。
 
 ### 视频弹幕
 

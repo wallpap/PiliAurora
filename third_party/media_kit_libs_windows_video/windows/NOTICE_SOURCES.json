@@ -1,0 +1,1515 @@
+{
+  "scope": "Notices for identified components; historical MSYS notices and fetched references are not evidence of the exact upstream binary revision.",
+  "components": {
+    "aom": {
+      "origin": "prior project MSYS2 package, notice reference only; version not asserted",
+      "notices": [
+        {
+          "original_path": "aom/LICENSE",
+          "section": "notice-4764a286d8b2faea"
+        },
+        {
+          "original_path": "aom/PATENTS",
+          "section": "notice-661fb8e504744e95"
+        }
+      ]
+    },
+    "brotli": {
+      "origin": "prior project MSYS2 package, notice reference only; version not asserted",
+      "notices": [
+        {
+          "original_path": "brotli/LICENSE",
+          "section": "notice-3d180008e36922a4"
+        }
+      ]
+    },
+    "bzip2": {
+      "origin": "prior project MSYS2 package, notice reference only; version not asserted",
+      "notices": [
+        {
+          "original_path": "bzip2/LICENSE",
+          "section": "notice-c6dbbf828498be84"
+        }
+      ]
+    },
+    "curl": {
+      "origin": "prior project MSYS2 package, notice reference only; version not asserted",
+      "notices": [
+        {
+          "original_path": "curl/LICENSE",
+          "section": "notice-82f2f4427d6545ee"
+        }
+      ]
+    },
+    "dav1d": {
+      "origin": "prior project MSYS2 package, notice reference only; version not asserted",
+      "notices": [
+        {
+          "original_path": "dav1d/COPYING",
+          "section": "notice-dd92c3c2247c5651"
+        },
+        {
+          "original_path": "dav1d/PATENTS",
+          "section": "notice-335eca574598bf4c"
+        }
+      ]
+    },
+    "expat": {
+      "origin": "prior project MSYS2 package, notice reference only; version not asserted",
+      "notices": [
+        {
+          "original_path": "expat/COPYING",
+          "section": "notice-31b15de82aa19a84"
+        }
+      ]
+    },
+    "fontconfig": {
+      "origin": "prior project MSYS2 package, notice reference only; version not asserted",
+      "notices": [
+        {
+          "original_path": "fontconfig/COPYING",
+          "section": "notice-51a51aa9823704fd"
+        }
+      ]
+    },
+    "freetype": {
+      "origin": "prior project MSYS2 package, notice reference only; version not asserted",
+      "notices": [
+        {
+          "original_path": "freetype/FTL.TXT",
+          "section": "notice-5a5ee54c5001bbad"
+        },
+        {
+          "original_path": "freetype/GPLv2.TXT",
+          "section": "notice-c4120c6752c910c2"
+        }
+      ]
+    },
+    "fribidi": {
+      "origin": "prior project MSYS2 package, notice reference only; version not asserted",
+      "notices": [
+        {
+          "original_path": "fribidi/COPYING",
+          "section": "notice-20e50fe7aae3e563"
+        }
+      ]
+    },
+    "harfbuzz": {
+      "origin": "prior project MSYS2 package, notice reference only; version not asserted",
+      "notices": [
+        {
+          "original_path": "harfbuzz/COPYING",
+          "section": "notice-ba8f810f2455c2f0"
+        }
+      ]
+    },
+    "highway": {
+      "origin": "prior project MSYS2 package, notice reference only; version not asserted",
+      "notices": [
+        {
+          "original_path": "highway/LICENSE",
+          "section": "notice-e340270d4f643845"
+        }
+      ]
+    },
+    "lcms2": {
+      "origin": "prior project MSYS2 package, notice reference only; version not asserted",
+      "notices": [
+        {
+          "original_path": "lcms2/LICENSE",
+          "section": "notice-6dbd60437f8ef91d"
+        },
+        {
+          "original_path": "lcms2/LICENSE-fast_float",
+          "section": "notice-c53a65c2fd561c87"
+        }
+      ]
+    },
+    "libbluray": {
+      "origin": "prior project MSYS2 package, notice reference only; version not asserted",
+      "notices": [
+        {
+          "original_path": "libbluray/COPYING",
+          "section": "notice-b3aa400aca6d2ba1"
+        }
+      ]
+    },
+    "libiconv": {
+      "origin": "prior project MSYS2 package, notice reference only; version not asserted",
+      "notices": [
+        {
+          "original_path": "libiconv/COPYING",
+          "section": "notice-8ceb4b9ee5adedde"
+        },
+        {
+          "original_path": "libiconv/COPYING.LIB",
+          "section": "notice-20e50fe7aae3e563"
+        },
+        {
+          "original_path": "libiconv/README",
+          "section": "notice-4ae66e61d1c6593c"
+        },
+        {
+          "original_path": "libiconv/libcharset/COPYING.LIB",
+          "section": "notice-20e50fe7aae3e563"
+        }
+      ]
+    },
+    "libjpeg-turbo": {
+      "origin": "prior project MSYS2 package, notice reference only; version not asserted",
+      "notices": [
+        {
+          "original_path": "libjpeg-turbo/LICENSE.md",
+          "section": "notice-ba6bceebcba0fdd3"
+        },
+        {
+          "original_path": "libjpeg-turbo/README.ijg",
+          "section": "notice-75815e3bf6484201"
+        },
+        {
+          "original_path": "libjpeg-turbo/README.md",
+          "section": "notice-a44ba17ac66c57ed"
+        },
+        {
+          "original_path": "libjpeg-turbo/simd/jsimdext.inc",
+          "section": "notice-68c5d236785edf75"
+        }
+      ]
+    },
+    "libjxl": {
+      "origin": "prior project MSYS2 package, notice reference only; version not asserted",
+      "notices": [
+        {
+          "original_path": "libjxl/LICENSE",
+          "section": "notice-8405932022a55638"
+        }
+      ]
+    },
+    "libmodplug": {
+      "origin": "prior project MSYS2 package, notice reference only; version not asserted",
+      "notices": [
+        {
+          "original_path": "libmodplug/LICENSE",
+          "section": "notice-49942e7b3b175f54"
+        }
+      ]
+    },
+    "libogg": {
+      "origin": "prior project MSYS2 package, notice reference only; version not asserted",
+      "notices": [
+        {
+          "original_path": "libogg/COPYING",
+          "section": "notice-d2ab5758336489da"
+        }
+      ]
+    },
+    "libplacebo": {
+      "origin": "prior project MSYS2 package, notice reference only; version not asserted",
+      "notices": [
+        {
+          "original_path": "libplacebo/LICENSE",
+          "section": "notice-b3aa400aca6d2ba1"
+        }
+      ]
+    },
+    "libpng": {
+      "origin": "prior project MSYS2 package, notice reference only; version not asserted",
+      "notices": [
+        {
+          "original_path": "libpng/LICENSE",
+          "section": "notice-bdb0a645ea18c605"
+        }
+      ]
+    },
+    "libpsl": {
+      "origin": "prior project MSYS2 package, notice reference only; version not asserted",
+      "notices": [
+        {
+          "original_path": "libpsl/COPYING",
+          "section": "notice-322392e6001b2b3b"
+        }
+      ]
+    },
+    "libsoxr": {
+      "origin": "prior project MSYS2 package, notice reference only; version not asserted",
+      "notices": [
+        {
+          "original_path": "libsoxr/COPYING.LGPL",
+          "section": "notice-f2f118b9029ec187"
+        },
+        {
+          "original_path": "libsoxr/LICENSE",
+          "section": "notice-dc98676341fdcd29"
+        },
+        {
+          "original_path": "libsoxr/LICENSE-PFFFT",
+          "section": "notice-a9f3d236f3c14a41"
+        }
+      ]
+    },
+    "libunibreak": {
+      "origin": "prior project MSYS2 package, notice reference only; version not asserted",
+      "notices": [
+        {
+          "original_path": "libunibreak/LICENCE",
+          "section": "notice-0c57e2ec42ece177"
+        }
+      ]
+    },
+    "libva": {
+      "origin": "prior project MSYS2 package, notice reference only; version not asserted",
+      "notices": [
+        {
+          "original_path": "libva/COPYING",
+          "section": "notice-c86a782ee845b524"
+        }
+      ]
+    },
+    "libvpl": {
+      "origin": "prior project MSYS2 package, notice reference only; version not asserted",
+      "notices": [
+        {
+          "original_path": "libvpl/LICENSE",
+          "section": "notice-bf1cfac2e2792b6e"
+        }
+      ]
+    },
+    "libwebp": {
+      "origin": "prior project MSYS2 package, notice reference only; version not asserted",
+      "notices": [
+        {
+          "original_path": "libwebp/COPYING",
+          "section": "notice-5aec868f669e384a"
+        }
+      ]
+    },
+    "libxml2": {
+      "origin": "prior project MSYS2 package, notice reference only; version not asserted",
+      "notices": [
+        {
+          "original_path": "libxml2/COPYING",
+          "section": "notice-5d4873884a890122"
+        }
+      ]
+    },
+    "nghttp2": {
+      "origin": "prior project MSYS2 package, notice reference only; version not asserted",
+      "notices": [
+        {
+          "original_path": "nghttp2/COPYING",
+          "section": "notice-6b94f3abc1aabd0c"
+        }
+      ]
+    },
+    "nghttp3": {
+      "origin": "prior project MSYS2 package, notice reference only; version not asserted",
+      "notices": [
+        {
+          "original_path": "nghttp3/COPYING",
+          "section": "notice-58cc3fc8c6d6cb24"
+        }
+      ]
+    },
+    "ngtcp2": {
+      "origin": "prior project MSYS2 package, notice reference only; version not asserted",
+      "notices": [
+        {
+          "original_path": "ngtcp2/COPYING",
+          "section": "notice-542dd526d2ea2356"
+        }
+      ]
+    },
+    "openssl": {
+      "origin": "prior project MSYS2 package, notice reference only; version not asserted",
+      "notices": [
+        {
+          "original_path": "openssl/LICENSE",
+          "section": "notice-7d5450cb2d142651"
+        }
+      ]
+    },
+    "opus": {
+      "origin": "prior project MSYS2 package, notice reference only; version not asserted",
+      "notices": [
+        {
+          "original_path": "opus/COPYING",
+          "section": "notice-01e1167d54a096d1"
+        }
+      ]
+    },
+    "shaderc": {
+      "origin": "prior project MSYS2 package, notice reference only; version not asserted",
+      "notices": [
+        {
+          "original_path": "shaderc/LICENSE",
+          "section": "notice-c71d239df91726fc"
+        }
+      ]
+    },
+    "speex": {
+      "origin": "prior project MSYS2 package, notice reference only; version not asserted",
+      "notices": [
+        {
+          "original_path": "speex/LICENSE",
+          "section": "notice-2654a4264b2bfe29"
+        }
+      ]
+    },
+    "spirv-cross": {
+      "origin": "prior project MSYS2 package, notice reference only; version not asserted",
+      "notices": [
+        {
+          "original_path": "spirv-cross/LICENSE",
+          "section": "notice-cfc7749b96f63bd3"
+        }
+      ]
+    },
+    "srt": {
+      "origin": "prior project MSYS2 package, notice reference only; version not asserted",
+      "notices": [
+        {
+          "original_path": "srt/LICENSE",
+          "section": "notice-fab3dd6bdab226f1"
+        }
+      ]
+    },
+    "svt-av1": {
+      "origin": "prior project MSYS2 package, notice reference only; version not asserted",
+      "notices": [
+        {
+          "original_path": "svt-av1/LICENSE",
+          "section": "notice-0acc2fcb27472bdc"
+        },
+        {
+          "original_path": "svt-av1/PATENTS.md",
+          "section": "notice-20678ab104026591"
+        }
+      ]
+    },
+    "zlib": {
+      "origin": "prior project MSYS2 package, notice reference only; version not asserted",
+      "notices": [
+        {
+          "original_path": "zlib/LICENSE",
+          "section": "notice-e32ff4e00d9d9493"
+        }
+      ]
+    },
+    "zstd": {
+      "origin": "prior project MSYS2 package, notice reference only; version not asserted",
+      "notices": [
+        {
+          "original_path": "zstd/LICENSE",
+          "section": "notice-7055266497633c90"
+        }
+      ]
+    },
+    "zvbi": {
+      "origin": "prior project MSYS2 package, notice reference only; version not asserted",
+      "notices": [
+        {
+          "original_path": "zvbi/COPYING.md",
+          "section": "notice-6d67953925389758"
+        }
+      ]
+    },
+    "xz": {
+      "origin": "prior project MSYS2 package, notice reference only; version not asserted",
+      "notices": [
+        {
+          "original_path": "xz/COPYING",
+          "section": "notice-616a3ad264ce29b8"
+        },
+        {
+          "original_path": "xz/COPYING.0BSD",
+          "section": "notice-0b01625d853911cd"
+        },
+        {
+          "original_path": "xz/COPYING.GPLv2",
+          "section": "notice-edaef632cbb643e4"
+        },
+        {
+          "original_path": "xz/COPYING.GPLv3",
+          "section": "notice-3972dc9744f6499f"
+        },
+        {
+          "original_path": "xz/COPYING.LGPLv2.1",
+          "section": "notice-20e50fe7aae3e563"
+        }
+      ]
+    },
+    "angleproject": {
+      "origin": "prior project MSYS2 package, notice reference only; version not asserted",
+      "notices": [
+        {
+          "original_path": "angleproject/LICENSE",
+          "section": "notice-bf4da21bd20bcfb5"
+        }
+      ]
+    },
+    "mpv": {
+      "origin": "https://github.com/mpv-player/mpv/tree/3138fc8eea",
+      "revision_status": "binary-reported or release-identified, not a full dependency provenance proof",
+      "notices": [
+        {
+          "original_path": "mpv/Copyright",
+          "section": "notice-bfe9ee4cceabcb8e"
+        },
+        {
+          "original_path": "mpv/LICENSE.GPL",
+          "section": "notice-edaef632cbb643e4"
+        },
+        {
+          "original_path": "mpv/LICENSE.LGPL",
+          "section": "notice-72b672113d642cbb"
+        },
+        {
+          "original_path": "mpv-root/Copyright",
+          "section": "notice-bfe9ee4cceabcb8e"
+        },
+        {
+          "original_path": "mpv-root/LICENSE.GPL",
+          "section": "notice-edaef632cbb643e4"
+        },
+        {
+          "original_path": "mpv-root/LICENSE.LGPL",
+          "section": "notice-72b672113d642cbb"
+        }
+      ]
+    },
+    "ffmpeg": {
+      "origin": "https://github.com/FFmpeg/FFmpeg/tree/baa68e68b",
+      "revision_status": "binary-reported or release-identified, not a full dependency provenance proof",
+      "notices": [
+        {
+          "original_path": "ffmpeg/COPYING.GPLv3",
+          "section": "notice-8ceb4b9ee5adedde"
+        },
+        {
+          "original_path": "ffmpeg/COPYING.LGPLv2.1",
+          "section": "notice-246041b6ecf9bc32"
+        },
+        {
+          "original_path": "ffmpeg/COPYING.LGPLv3",
+          "section": "notice-da7eabb7bafdf7d3"
+        },
+        {
+          "original_path": "ffmpeg/LICENSE.md",
+          "section": "notice-e6dc72d5665a1ebd"
+        }
+      ]
+    },
+    "angle": {
+      "origin": "https://github.com/google/angle/tree/2693b03eba82",
+      "revision_status": "binary-reported or release-identified, not a full dependency provenance proof",
+      "notices": [
+        {
+          "original_path": "angle/LICENSE",
+          "section": "notice-bf4da21bd20bcfb5"
+        }
+      ]
+    },
+    "libass": {
+      "origin": "https://github.com/libass/libass",
+      "reference_commit": "2a8a5673dc1edec79edd2e309a66a09c1e7d26ec",
+      "revision_status": "notice reference only, actual binary revision unknown",
+      "error": null,
+      "notices": [
+        {
+          "url": "https://raw.githubusercontent.com/libass/libass/2a8a5673dc1edec79edd2e309a66a09c1e7d26ec/COPYING",
+          "source_sha256": "f7e30699d02798351e7f839e3d3bfeb29ce65e44efa7735c225464c4fd7dfe9c",
+          "original_path": "libass/COPYING",
+          "section": "notice-f7e30699d0279835"
+        }
+      ]
+    },
+    "x265": {
+      "origin": "https://github.com/Multicorewareinc/x265",
+      "reference_commit": "1836f70c17cde142ac023da71a96ba9cc49c9213",
+      "revision_status": "notice reference only, actual binary revision unknown",
+      "error": null,
+      "notices": [
+        {
+          "url": "https://raw.githubusercontent.com/Multicorewareinc/x265/1836f70c17cde142ac023da71a96ba9cc49c9213/COPYING",
+          "source_sha256": "d8afb1bcc7a2cfc603683b168d6987ef0a48e59e0da3693bf55c5d33b67e2b49",
+          "original_path": "x265/COPYING",
+          "section": "notice-d8afb1bcc7a2cfc6"
+        }
+      ]
+    },
+    "vorbis": {
+      "origin": "https://github.com/xiph/vorbis",
+      "reference_commit": "1b75110b5a2754ba1931d82dd83cb822b266a21d",
+      "revision_status": "notice reference only, actual binary revision unknown",
+      "error": null,
+      "notices": [
+        {
+          "url": "https://raw.githubusercontent.com/xiph/vorbis/1b75110b5a2754ba1931d82dd83cb822b266a21d/COPYING",
+          "source_sha256": "ec1815db59fcd302846df949d7424876cb2e2dc5ed1606c5fb0b36787b1cf43a",
+          "original_path": "vorbis/COPYING",
+          "section": "notice-ec1815db59fcd302"
+        }
+      ]
+    },
+    "libarchive": {
+      "origin": "https://github.com/libarchive/libarchive",
+      "reference_commit": "2774b74cb7269c9b5fa89e7d876b11d5a729c421",
+      "revision_status": "notice reference only, actual binary revision unknown",
+      "error": null,
+      "notices": [
+        {
+          "url": "https://raw.githubusercontent.com/libarchive/libarchive/2774b74cb7269c9b5fa89e7d876b11d5a729c421/COPYING",
+          "source_sha256": "30e556b3959e3985d66efefec5eaac51d4995053caa1d3cffe6eb916f146f229",
+          "original_path": "libarchive/COPYING",
+          "section": "notice-30e556b3959e3985"
+        }
+      ]
+    },
+    "libaribcaption": {
+      "origin": "https://github.com/xqq/libaribcaption",
+      "reference_commit": "da5ae9b1479168c9560161a916e12e6159f116b4",
+      "revision_status": "notice reference only, actual binary revision unknown",
+      "error": null,
+      "notices": [
+        {
+          "url": "https://raw.githubusercontent.com/xqq/libaribcaption/da5ae9b1479168c9560161a916e12e6159f116b4/LICENSE",
+          "source_sha256": "5149f1ce4fe89190d86bfb440456701a3a7406fc2b19ef0d8b57661f62b32c04",
+          "original_path": "libaribcaption/LICENSE",
+          "section": "notice-5149f1ce4fe89190"
+        }
+      ]
+    },
+    "libmysofa": {
+      "origin": "https://github.com/hoene/libmysofa",
+      "reference_commit": "648eed03472e6720a1ea45d1a1f86c4efb569ff9",
+      "revision_status": "notice reference only, actual binary revision unknown",
+      "error": null,
+      "notices": [
+        {
+          "url": "https://raw.githubusercontent.com/hoene/libmysofa/648eed03472e6720a1ea45d1a1f86c4efb569ff9/LICENSE",
+          "source_sha256": "9c8713ccc5d6d93d20c7a1cfcb876e64baf551bfbe67faa4e60d39cda9ffd023",
+          "original_path": "libmysofa/LICENSE",
+          "section": "notice-9c8713ccc5d6d93d"
+        }
+      ]
+    },
+    "libsamplerate": {
+      "origin": "https://github.com/libsndfile/libsamplerate",
+      "reference_commit": "0844c208f683527c08ea8a80acc13b398aa9c8bf",
+      "revision_status": "notice reference only, actual binary revision unknown",
+      "error": null,
+      "notices": [
+        {
+          "url": "https://raw.githubusercontent.com/libsndfile/libsamplerate/0844c208f683527c08ea8a80acc13b398aa9c8bf/COPYING",
+          "source_sha256": "2c1f76ce2effdddb425018405d5690c0b1ab4e6976e35296b0a6db65c5e1a55d",
+          "original_path": "libsamplerate/COPYING",
+          "section": "notice-2c1f76ce2effdddb"
+        }
+      ]
+    },
+    "libbs2b": {
+      "origin": "https://github.com/alexmarsev/libbs2b",
+      "reference_commit": "5ca2d59888df047f1e4b028e3a2fd5be8b5a7277",
+      "revision_status": "notice reference only, actual binary revision unknown",
+      "error": null,
+      "notices": [
+        {
+          "url": "https://raw.githubusercontent.com/alexmarsev/libbs2b/5ca2d59888df047f1e4b028e3a2fd5be8b5a7277/COPYING",
+          "source_sha256": "dfd5a8d7dc501447bf0d58b0fc9ef85ab9e713963d7dcf459897adefa4c710ca",
+          "original_path": "libbs2b/COPYING",
+          "section": "notice-dfd5a8d7dc501447"
+        }
+      ]
+    },
+    "SDL2": {
+      "origin": "https://github.com/libsdl-org/SDL",
+      "reference_commit": "cee83f2d9a916e9de30c5712e798541fdc134b06",
+      "revision_status": "notice reference only, actual binary revision unknown",
+      "error": null,
+      "notices": [
+        {
+          "url": "https://raw.githubusercontent.com/libsdl-org/SDL/cee83f2d9a916e9de30c5712e798541fdc134b06/LICENSE.txt",
+          "source_sha256": "1c040b8271b37e5076359f8fd54240e371114112924d2df81ef87c7d6a1dfdfd",
+          "original_path": "SDL2/LICENSE.txt",
+          "section": "notice-1c040b8271b37e50"
+        }
+      ]
+    },
+    "sixel": {
+      "origin": "https://github.com/saitoha/libsixel",
+      "reference_commit": "f0b705a365563c56f977afaca73997ca68669c62",
+      "revision_status": "notice reference only, actual binary revision unknown",
+      "error": null,
+      "notices": [
+        {
+          "url": "https://raw.githubusercontent.com/saitoha/libsixel/f0b705a365563c56f977afaca73997ca68669c62/LICENSE",
+          "source_sha256": "f719f01f57fec5dea2103ce3b2443b0d457bac44dcb8989f08885116bae12d18",
+          "original_path": "sixel/LICENSE",
+          "section": "notice-f719f01f57fec5de"
+        }
+      ]
+    },
+    "zimg": {
+      "origin": "https://github.com/sekrit-twc/zimg",
+      "reference_commit": "67e0603271c080e22c8429856dd4a8a56587e61e",
+      "revision_status": "notice reference only, actual binary revision unknown",
+      "error": null,
+      "notices": [
+        {
+          "url": "https://raw.githubusercontent.com/sekrit-twc/zimg/67e0603271c080e22c8429856dd4a8a56587e61e/COPYING",
+          "source_sha256": "7637386b5f81e8a719ca336233149005e5fa28b5e6054ea7b67de49355b0ad40",
+          "original_path": "zimg/COPYING",
+          "section": "notice-7637386b5f81e8a7"
+        }
+      ]
+    },
+    "luajit": {
+      "origin": "https://github.com/openresty/luajit2",
+      "reference_commit": "5d8d0a27bfa4595b24b8ed36123555fcd2bb2f8c",
+      "revision_status": "notice reference only, actual binary revision unknown",
+      "error": null,
+      "notices": [
+        {
+          "url": "https://raw.githubusercontent.com/openresty/luajit2/5d8d0a27bfa4595b24b8ed36123555fcd2bb2f8c/COPYRIGHT",
+          "source_sha256": "15477efb3696e3c49979294a2a79f9ef11e83a2414124629f996805a8967a14d",
+          "original_path": "luajit/COPYRIGHT",
+          "section": "notice-15477efb3696e3c4"
+        }
+      ]
+    },
+    "openal-soft": {
+      "origin": "https://github.com/kcat/openal-soft",
+      "reference_commit": "3f81767d4180881c8b14582df601f68f6878688e",
+      "revision_status": "notice reference only, actual binary revision unknown",
+      "error": null,
+      "notices": [
+        {
+          "url": "https://raw.githubusercontent.com/kcat/openal-soft/3f81767d4180881c8b14582df601f68f6878688e/COPYING",
+          "source_sha256": "d808ce217e5b611854da622b57ec29fe545584c48bc5352fae72a4b6e5074a15",
+          "original_path": "openal-soft/COPYING",
+          "section": "notice-d808ce217e5b6118"
+        }
+      ]
+    },
+    "rubberband": {
+      "origin": "https://github.com/breakfastquay/rubberband",
+      "reference_commit": "e4296ac80b1170018a110bc326fd0d45a0eb27d6",
+      "revision_status": "notice reference only, actual binary revision unknown",
+      "error": null,
+      "notices": [
+        {
+          "url": "https://raw.githubusercontent.com/breakfastquay/rubberband/e4296ac80b1170018a110bc326fd0d45a0eb27d6/COPYING",
+          "source_sha256": "cedd4c1885d75991bf1077cc6e33359103cf04fbc996f20d30ab043d5fc5fcc5",
+          "original_path": "rubberband/COPYING",
+          "section": "notice-cedd4c1885d75991"
+        }
+      ]
+    },
+    "subrandr": {
+      "origin": "https://github.com/afishhh/subrandr",
+      "reference_commit": "a41311bb5e382abcc47ef141e2ea1098d22a8d58",
+      "revision_status": "notice reference only, actual binary revision unknown",
+      "error": null,
+      "notices": [
+        {
+          "url": "https://raw.githubusercontent.com/afishhh/subrandr/a41311bb5e382abcc47ef141e2ea1098d22a8d58/LICENSE",
+          "source_sha256": "3f3d9e0024b1921b067d6f7f88deb4a60cbe7a78e76c64e3f1d7fc3b779b9d04",
+          "original_path": "subrandr/LICENSE",
+          "section": "notice-3f3d9e0024b1921b"
+        }
+      ]
+    },
+    "uavs3d": {
+      "origin": "https://github.com/uavs3/uavs3d",
+      "reference_commit": "0e20d2c291853f196c68922a264bcd8471d75b68",
+      "revision_status": "notice reference only, actual binary revision unknown",
+      "error": null,
+      "notices": [
+        {
+          "url": "https://raw.githubusercontent.com/uavs3/uavs3d/0e20d2c291853f196c68922a264bcd8471d75b68/COPYING",
+          "source_sha256": "5a8dcb7da222df8a81b6e334000f859248196335e2d28e1db9f3c552827d7cdf",
+          "original_path": "uavs3d/COPYING",
+          "section": "notice-5a8dcb7da222df8a"
+        }
+      ]
+    },
+    "davs2": {
+      "origin": "https://github.com/saindriches/davs2",
+      "reference_commit": "f50435051b72c168c2b566c544e27fcff71ba61a",
+      "revision_status": "notice reference only, actual binary revision unknown",
+      "error": null,
+      "notices": [
+        {
+          "url": "https://raw.githubusercontent.com/saindriches/davs2/f50435051b72c168c2b566c544e27fcff71ba61a/COPYING",
+          "source_sha256": "971f09fd8dedc915472df12845fb7c653563689672fb1a658e28004887ba4a07",
+          "original_path": "davs2/COPYING",
+          "section": "notice-971f09fd8dedc915"
+        }
+      ]
+    },
+    "c-ares": {
+      "origin": "https://github.com/c-ares/c-ares",
+      "reference_commit": "46266f4ae2d309ce52009d85fc6198b5f0db6225",
+      "revision_status": "notice reference only, actual binary revision unknown",
+      "error": null,
+      "notices": [
+        {
+          "url": "https://raw.githubusercontent.com/c-ares/c-ares/46266f4ae2d309ce52009d85fc6198b5f0db6225/LICENSE.md",
+          "source_sha256": "460f5e768fda3752ca2169a95df062578a10fb126bfd65f3b9b1a1bed2f84807",
+          "original_path": "c-ares/LICENSE.md",
+          "section": "notice-460f5e768fda3752"
+        }
+      ]
+    },
+    "glslang": {
+      "origin": "https://github.com/KhronosGroup/glslang",
+      "reference_commit": "9e78d9ffe78a8bc7fa1d3326f2da91d19eba3479",
+      "revision_status": "notice reference only, actual binary revision unknown",
+      "error": null,
+      "notices": [
+        {
+          "url": "https://raw.githubusercontent.com/KhronosGroup/glslang/9e78d9ffe78a8bc7fa1d3326f2da91d19eba3479/LICENSE.txt",
+          "source_sha256": "17e70c676e1521ff3e4686f04a2053d93a7e28a33be8de7ec37ab0ff72feb677",
+          "original_path": "glslang/LICENSE.txt",
+          "section": "notice-17e70c676e1521ff"
+        }
+      ]
+    },
+    "SPIRV-Tools": {
+      "origin": "https://github.com/KhronosGroup/SPIRV-Tools",
+      "reference_commit": "b570f00a782a7bf4006964e8284dd8c10c4c549b",
+      "revision_status": "notice reference only, actual binary revision unknown",
+      "error": null,
+      "notices": [
+        {
+          "url": "https://raw.githubusercontent.com/KhronosGroup/SPIRV-Tools/b570f00a782a7bf4006964e8284dd8c10c4c549b/LICENSE",
+          "source_sha256": "7d52847928f607914a1218a7afd40d8d0fe1570dcf094205c276c8aa52d5a816",
+          "original_path": "SPIRV-Tools/LICENSE",
+          "section": "notice-7d52847928f60791"
+        }
+      ]
+    },
+    "x264": {
+      "origin": "https://github.com/mirror/x264",
+      "reference_commit": "c24e06c2e184345ceb33eb20a15d1024d9fd3497",
+      "revision_status": "notice reference only; actual binary revision unknown",
+      "error": null,
+      "notices": [
+        {
+          "url": "https://raw.githubusercontent.com/mirror/x264/c24e06c2e184345ceb33eb20a15d1024d9fd3497/COPYING",
+          "source_sha256": "32b1062f7da84967e7019d01ab805935caa7ab7321a7ced0e30ebe75e5df1670",
+          "original_path": "x264/COPYING",
+          "section": "notice-32b1062f7da84967"
+        }
+      ]
+    },
+    "libvpx": {
+      "origin": "https://github.com/webmproject/libvpx",
+      "reference_commit": "035e29b4fc38295670ed44722ea1be13485fb544",
+      "revision_status": "notice reference only; actual binary revision unknown",
+      "error": null,
+      "notices": [
+        {
+          "url": "https://raw.githubusercontent.com/webmproject/libvpx/035e29b4fc38295670ed44722ea1be13485fb544/LICENSE",
+          "source_sha256": "8267348d5af1262c11d1a08de2f5afc77457755f1ac658627dd9acf71011d615",
+          "original_path": "libvpx/LICENSE",
+          "section": "notice-8267348d5af1262c"
+        }
+      ]
+    },
+    "mujs": {
+      "origin": "https://github.com/ArtifexSoftware/mujs",
+      "reference_commit": "01a75ff4324ae8a54cae91a26edd38029424edaa",
+      "revision_status": "notice reference only; actual binary revision unknown",
+      "error": null,
+      "notices": [
+        {
+          "url": "https://raw.githubusercontent.com/ArtifexSoftware/mujs/01a75ff4324ae8a54cae91a26edd38029424edaa/COPYING",
+          "source_sha256": "0ca9b4fbfbcab8ac7d32475890d866efc02f4cffb6b6da5c0e9a0615cc3d82fe",
+          "original_path": "mujs/COPYING",
+          "section": "notice-0ca9b4fbfbcab8ac"
+        }
+      ]
+    },
+    "lame": {
+      "origin": "https://github.com/zlargon/lame",
+      "reference_commit": "59a722d49e9f2bea65917dcdd17b94c710a02f0c",
+      "revision_status": "notice reference only; actual binary revision unknown",
+      "error": null,
+      "notices": [
+        {
+          "url": "https://raw.githubusercontent.com/zlargon/lame/59a722d49e9f2bea65917dcdd17b94c710a02f0c/LICENSE",
+          "source_sha256": "2ebbced843af4594e4862bd2bdf60672d8a00f2792c6e050435614227a1a55f4",
+          "original_path": "lame/LICENSE",
+          "section": "notice-2ebbced843af4594"
+        },
+        {
+          "url": "https://raw.githubusercontent.com/zlargon/lame/59a722d49e9f2bea65917dcdd17b94c710a02f0c/COPYING",
+          "source_sha256": "bfe4a52dc4645385f356a8e83cc54216a293e3b6f1cb4f79f5fc0277abf937fd",
+          "original_path": "lame/COPYING",
+          "section": "notice-bfe4a52dc4645385"
+        }
+      ]
+    },
+    "libssh": {
+      "origin": "https://github.com/libssh/libssh-mirror",
+      "reference_commit": "6b11b107f78d02ae49d58940d4f41febdd9ec16b",
+      "revision_status": "notice reference only; actual binary revision unknown",
+      "error": null,
+      "notices": [
+        {
+          "url": "https://raw.githubusercontent.com/libssh/libssh-mirror/6b11b107f78d02ae49d58940d4f41febdd9ec16b/COPYING",
+          "source_sha256": "1656186e951db1c010a8485481fa94587f7e53a26d24976bef97945ad0c4df5a",
+          "original_path": "libssh/COPYING",
+          "section": "notice-1656186e951db1c0"
+        }
+      ]
+    },
+    "swiftshader": {
+      "origin": "https://github.com/google/swiftshader",
+      "reference_commit": "cddb5c91b23ff70a1f607ea31610aa0d7f4b5ad5",
+      "revision_status": "notice reference only; actual binary revision unknown",
+      "error": null,
+      "notices": [
+        {
+          "url": "https://raw.githubusercontent.com/google/swiftshader/cddb5c91b23ff70a1f607ea31610aa0d7f4b5ad5/LICENSE.txt",
+          "source_sha256": "3ddf9be5c28fe27dad143a5dc76eea25222ad1dd68934a047064e56ed2fa40c5",
+          "original_path": "swiftshader/LICENSE.txt",
+          "section": "notice-3ddf9be5c28fe27d"
+        }
+      ]
+    },
+    "libcxx": {
+      "origin": "https://github.com/llvm/llvm-project",
+      "reference_commit": "ea0fe45545a3679e13de218507bcac6bcae07eda",
+      "revision_status": "notice reference only; actual binary revision unknown",
+      "error": null,
+      "notices": [
+        {
+          "url": "https://raw.githubusercontent.com/llvm/llvm-project/ea0fe45545a3679e13de218507bcac6bcae07eda/libcxx/LICENSE.TXT",
+          "source_sha256": "539dd7aed86e8a4f12cbdd0e6c50c189c7d74847e4fecc64ce2c6ee3a01da38b",
+          "original_path": "libcxx/libcxx_LICENSE.TXT",
+          "section": "notice-539dd7aed86e8a4f"
+        }
+      ]
+    },
+    "vulkan-loader": {
+      "origin": "https://github.com/KhronosGroup/Vulkan-Loader",
+      "reference_commit": "dc0519b95997439e470df1b9214e4b3b2a2c6a2d",
+      "revision_status": "notice reference only; actual binary revision unknown",
+      "error": null,
+      "notices": [
+        {
+          "url": "https://raw.githubusercontent.com/KhronosGroup/Vulkan-Loader/dc0519b95997439e470df1b9214e4b3b2a2c6a2d/LICENSE.txt",
+          "source_sha256": "43c0a37e6a0fa7ff3c843b3ec5a4fac84b712558ddac103fbd4c1649662a9ece",
+          "original_path": "vulkan-loader/LICENSE.txt",
+          "section": "notice-43c0a37e6a0fa7ff"
+        }
+      ]
+    },
+    "libopenmpt": {
+      "origin": "https://github.com/OpenMPT/openmpt",
+      "reference_commit": "52f41d55329d23b7dedcba894e703415dcde1058",
+      "revision_status": "notice reference only; actual binary revision unknown",
+      "error": null,
+      "notices": [
+        {
+          "url": "https://raw.githubusercontent.com/OpenMPT/openmpt/52f41d55329d23b7dedcba894e703415dcde1058/LICENSE",
+          "source_sha256": "2c999e99533c10a347916a72e075bacf10fcedeff793bd90d41d812b46161da2",
+          "original_path": "libopenmpt/LICENSE",
+          "section": "notice-2c999e99533c10a3"
+        }
+      ]
+    },
+    "libdvdread": {
+      "origin": "https://download.videolan.org/pub/videolan/libdvdread/6.1.3/libdvdread-6.1.3.tar.bz2",
+      "archive_sha256": "ce35454997a208cbe50e91232f0e73fb1ac3471965813a13b8730a8f18a15369",
+      "reference_version": "6.1.3",
+      "revision_status": "notice reference only; actual binary revision unknown",
+      "notices": [
+        {
+          "archive_member": "libdvdread-6.1.3/COPYING",
+          "source_sha256": "d6cb0e9e560f51085556949a84af12b79a00f10ab8b66c752537faf7cd665572",
+          "original_path": "libdvdread/COPYING",
+          "section": "notice-d6cb0e9e560f5108"
+        },
+        {
+          "archive_member": "libdvdread-6.1.3/AUTHORS",
+          "source_sha256": "fa94e2d6c994ac16bc1fdc0348f694b9794fd2453fab40e3ddbc2c6401750085",
+          "original_path": "libdvdread/AUTHORS",
+          "section": "notice-fa94e2d6c994ac16"
+        }
+      ]
+    },
+    "libdvdnav": {
+      "origin": "https://download.videolan.org/pub/videolan/libdvdnav/6.1.1/libdvdnav-6.1.1.tar.bz2",
+      "archive_sha256": "c191a7475947d323ff7680cf92c0fb1be8237701885f37656c64d04e98d18d48",
+      "reference_version": "6.1.1",
+      "revision_status": "notice reference only; actual binary revision unknown",
+      "notices": [
+        {
+          "archive_member": "libdvdnav-6.1.1/COPYING",
+          "source_sha256": "32b1062f7da84967e7019d01ab805935caa7ab7321a7ced0e30ebe75e5df1670",
+          "original_path": "libdvdnav/COPYING",
+          "section": "notice-32b1062f7da84967"
+        },
+        {
+          "archive_member": "libdvdnav-6.1.1/AUTHORS",
+          "source_sha256": "120360d44a585630a4bcef395da624620690023ec177857b1cb6baa02513265b",
+          "original_path": "libdvdnav/AUTHORS",
+          "section": "notice-120360d44a585630"
+        }
+      ]
+    },
+    "libdvdcss": {
+      "origin": "https://download.videolan.org/pub/videolan/libdvdcss/1.4.3/libdvdcss-1.4.3.tar.bz2",
+      "archive_sha256": "233cc92f5dc01c5d3a96f5b3582be7d5cee5a35a52d3a08158745d3d86070079",
+      "reference_version": "1.4.3",
+      "revision_status": "notice reference only; actual binary revision unknown",
+      "notices": [
+        {
+          "archive_member": "libdvdcss-1.4.3/COPYING",
+          "source_sha256": "8177f97513213526df2cf6184d8ff986c675afb514d4e68a404010521b880643",
+          "original_path": "libdvdcss/COPYING",
+          "section": "notice-8177f97513213526"
+        },
+        {
+          "archive_member": "libdvdcss-1.4.3/AUTHORS",
+          "source_sha256": "b2de31ac3382bbadd18eb2f9abea4e209372c62bdf722c96a62043ad074e93b1",
+          "original_path": "libdvdcss/AUTHORS",
+          "section": "notice-b2de31ac3382bbad"
+        }
+      ]
+    },
+    "uchardet": {
+      "origin": "https://www.freedesktop.org/software/uchardet/releases/uchardet-0.0.8.tar.xz",
+      "archive_sha256": "e97a60cfc00a1c147a674b097bb1422abd9fa78a2d9ce3f3fdcc2e78a34ac5f0",
+      "reference_version": "0.0.8",
+      "revision_status": "notice reference only; actual binary revision unknown",
+      "notices": [
+        {
+          "archive_member": "uchardet-0.0.8/AUTHORS",
+          "source_sha256": "36c52690fb39c9c4d2929577577050f486b5be36acb5c0038339b7b83c892536",
+          "original_path": "uchardet/AUTHORS",
+          "section": "notice-36c52690fb39c9c4"
+        },
+        {
+          "archive_member": "uchardet-0.0.8/COPYING",
+          "source_sha256": "107a29ccdd2d778aa2df5462f85dddfa099059abd22e064e07ec2cc9bafc37cd",
+          "original_path": "uchardet/COPYING",
+          "section": "notice-107a29ccdd2d778a"
+        }
+      ]
+    },
+    "libudfread": {
+      "origin": "https://download.videolan.org/pub/videolan/libudfread/libudfread-1.2.0.tar.xz",
+      "archive_sha256": "bb477cbd4cfbfc7787d9d05b71ee5e70430f5cfebf1297497f7e83547958050f",
+      "reference_version": "1.2.0",
+      "revision_status": "notice reference only; actual binary revision unknown",
+      "notices": [
+        {
+          "archive_member": "libudfread-1.2.0/COPYING",
+          "source_sha256": "dc626520dcd53a22f727af3ee42c770e56c97a64fe3adb063799d8ab032fe551",
+          "original_path": "libudfread/COPYING",
+          "section": "notice-dc626520dcd53a22"
+        }
+      ]
+    }
+  },
+  "unresolved": {},
+  "format_version": 1,
+  "notice_file": "THIRD_PARTY_NOTICES.txt",
+  "notice_file_sha256": "9ed97e3ab584abef34d54768391a280efcd0c7950f9f5e77412c3d575df4f74d",
+  "sections": {
+    "notice-01e1167d54a096d1": {
+      "offset": 358,
+      "length": 1945,
+      "sha256": "01e1167d54a096d123cf6dfbbeb19587278845c6481d2d66d545669846079551"
+    },
+    "notice-0acc2fcb27472bdc": {
+      "offset": 2376,
+      "length": 1709,
+      "sha256": "0acc2fcb27472bdc9aaf8b71f37055bbdac4f54671b7d922f241bd7fcd0dd3e6"
+    },
+    "notice-0b01625d853911cd": {
+      "offset": 4158,
+      "length": 607,
+      "sha256": "0b01625d853911cd0e2e088dcfb743261034a091bb379246cb25a14cc4c74bf1"
+    },
+    "notice-0c57e2ec42ece177": {
+      "offset": 4842,
+      "length": 1045,
+      "sha256": "0c57e2ec42ece17791a75d2f9b2f8e0663181be008667a507f765b3ef22522db"
+    },
+    "notice-0ca9b4fbfbcab8ac": {
+      "offset": 5957,
+      "length": 759,
+      "sha256": "0ca9b4fbfbcab8ac7d32475890d866efc02f4cffb6b6da5c0e9a0615cc3d82fe"
+    },
+    "notice-107a29ccdd2d778a": {
+      "offset": 6790,
+      "length": 70517,
+      "sha256": "107a29ccdd2d778aa2df5462f85dddfa099059abd22e064e07ec2cc9bafc37cd"
+    },
+    "notice-120360d44a585630": {
+      "offset": 77382,
+      "length": 312,
+      "sha256": "120360d44a585630a4bcef395da624620690023ec177857b1cb6baa02513265b"
+    },
+    "notice-15477efb3696e3c4": {
+      "offset": 77768,
+      "length": 3056,
+      "sha256": "15477efb3696e3c49979294a2a79f9ef11e83a2414124629f996805a8967a14d"
+    },
+    "notice-1656186e951db1c0": {
+      "offset": 80896,
+      "length": 25008,
+      "sha256": "1656186e951db1c010a8485481fa94587f7e53a26d24976bef97945ad0c4df5a"
+    },
+    "notice-17e70c676e1521ff": {
+      "offset": 105981,
+      "length": 54615,
+      "sha256": "17e70c676e1521ff3e4686f04a2053d93a7e28a33be8de7ec37ab0ff72feb677"
+    },
+    "notice-1c040b8271b37e50": {
+      "offset": 160670,
+      "length": 884,
+      "sha256": "1c040b8271b37e5076359f8fd54240e371114112924d2df81ef87c7d6a1dfdfd"
+    },
+    "notice-20678ab104026591": {
+      "offset": 161630,
+      "length": 5767,
+      "sha256": "20678ab10402659106dc4c147c97b2a6e94b5c0695415e15a8f195ebc3547922"
+    },
+    "notice-20e50fe7aae3e563": {
+      "offset": 167549,
+      "length": 26419,
+      "sha256": "20e50fe7aae3e56378ebf0417d9de904f55a0e61e4df315333e632a4d3555d95"
+    },
+    "notice-246041b6ecf9bc32": {
+      "offset": 194049,
+      "length": 26517,
+      "sha256": "246041b6ecf9bc32d718a62c57877c78b5eb397b6467e74ed7ae2626ab189c30"
+    },
+    "notice-2654a4264b2bfe29": {
+      "offset": 220637,
+      "length": 1773,
+      "sha256": "2654a4264b2bfe298dedc508748d140111840c315cc8eb646a3a68c13fa75b01"
+    },
+    "notice-2c1f76ce2effdddb": {
+      "offset": 222489,
+      "length": 1334,
+      "sha256": "2c1f76ce2effdddb425018405d5690c0b1ab4e6976e35296b0a6db65c5e1a55d"
+    },
+    "notice-2c999e99533c10a3": {
+      "offset": 223899,
+      "length": 1621,
+      "sha256": "2c999e99533c10a347916a72e075bacf10fcedeff793bd90d41d812b46161da2"
+    },
+    "notice-2ebbced843af4594": {
+      "offset": 225590,
+      "length": 465,
+      "sha256": "2ebbced843af4594e4862bd2bdf60672d8a00f2792c6e050435614227a1a55f4"
+    },
+    "notice-30e556b3959e3985": {
+      "offset": 226131,
+      "length": 3089,
+      "sha256": "30e556b3959e3985d66efefec5eaac51d4995053caa1d3cffe6eb916f146f229"
+    },
+    "notice-31b15de82aa19a84": {
+      "offset": 229291,
+      "length": 1144,
+      "sha256": "31b15de82aa19a845156169a17a5488bf597e561b2c318d159ed583139b25e87"
+    },
+    "notice-322392e6001b2b3b": {
+      "offset": 230507,
+      "length": 1060,
+      "sha256": "322392e6001b2b3b0fca705dc9f11f26e12441188ecde50eb1d22909980b2925"
+    },
+    "notice-32b1062f7da84967": {
+      "offset": 231657,
+      "length": 17992,
+      "sha256": "32b1062f7da84967e7019d01ab805935caa7ab7321a7ced0e30ebe75e5df1670"
+    },
+    "notice-335eca574598bf4c": {
+      "offset": 249720,
+      "length": 5730,
+      "sha256": "335eca574598bf4ca181b12f708d6669e5a5e78c8e1513e5b35fa1f03901484b"
+    },
+    "notice-36c52690fb39c9c4": {
+      "offset": 255524,
+      "length": 449,
+      "sha256": "36c52690fb39c9c4d2929577577050f486b5be36acb5c0038339b7b83c892536"
+    },
+    "notice-3972dc9744f6499f": {
+      "offset": 256047,
+      "length": 35149,
+      "sha256": "3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986"
+    },
+    "notice-3d180008e36922a4": {
+      "offset": 291268,
+      "length": 1084,
+      "sha256": "3d180008e36922a4e8daec11c34c7af264fed5962d07924aea928c38e8663c94"
+    },
+    "notice-3ddf9be5c28fe27d": {
+      "offset": 292433,
+      "length": 11560,
+      "sha256": "3ddf9be5c28fe27dad143a5dc76eea25222ad1dd68934a047064e56ed2fa40c5"
+    },
+    "notice-3f3d9e0024b1921b": {
+      "offset": 304067,
+      "length": 16726,
+      "sha256": "3f3d9e0024b1921b067d6f7f88deb4a60cbe7a78e76c64e3f1d7fc3b779b9d04"
+    },
+    "notice-43c0a37e6a0fa7ff": {
+      "offset": 320876,
+      "length": 11661,
+      "sha256": "43c0a37e6a0fa7ff3c843b3ec5a4fac84b712558ddac103fbd4c1649662a9ece"
+    },
+    "notice-460f5e768fda3752": {
+      "offset": 332612,
+      "length": 1211,
+      "sha256": "460f5e768fda3752ca2169a95df062578a10fb126bfd65f3b9b1a1bed2f84807"
+    },
+    "notice-4764a286d8b2faea": {
+      "offset": 333892,
+      "length": 1316,
+      "sha256": "4764a286d8b2faeaf42f4418e7d7a28d58fc8fd4d00a3d0a7f44b0a4099de7f2"
+    },
+    "notice-49942e7b3b175f54": {
+      "offset": 335284,
+      "length": 57,
+      "sha256": "49942e7b3b175f549e751feb08b5270ca6f6c5fb7a1be9f9517db275ec32c92e"
+    },
+    "notice-4ae66e61d1c6593c": {
+      "offset": 335414,
+      "length": 5741,
+      "sha256": "4ae66e61d1c6593c84c47105b368d579bcee1af566dbb959ec63a0c48425dcf4"
+    },
+    "notice-5149f1ce4fe89190": {
+      "offset": 341235,
+      "length": 1065,
+      "sha256": "5149f1ce4fe89190d86bfb440456701a3a7406fc2b19ef0d8b57661f62b32c04"
+    },
+    "notice-51a51aa9823704fd": {
+      "offset": 342376,
+      "length": 8616,
+      "sha256": "51a51aa9823704fd90bccc616cdd17ebabb5b2b3e9cbde886ca02c7002288067"
+    },
+    "notice-539dd7aed86e8a4f": {
+      "offset": 351075,
+      "length": 16703,
+      "sha256": "539dd7aed86e8a4f12cbdd0e6c50c189c7d74847e4fecc64ce2c6ee3a01da38b"
+    },
+    "notice-542dd526d2ea2356": {
+      "offset": 367850,
+      "length": 1080,
+      "sha256": "542dd526d2ea23565f0571cc68df6f05ed11248a90ff0f32de19d8ba589db513"
+    },
+    "notice-58cc3fc8c6d6cb24": {
+      "offset": 369003,
+      "length": 1081,
+      "sha256": "58cc3fc8c6d6cb2485ab35eb5918e849b5bf1e56522974e106d7a39a88d61dcd"
+    },
+    "notice-5a5ee54c5001bbad": {
+      "offset": 370158,
+      "length": 6743,
+      "sha256": "5a5ee54c5001bbad1cdc1a57cc3dd4c42199b2da09d39c7ee41fab002d02967f"
+    },
+    "notice-5a8dcb7da222df8a": {
+      "offset": 376973,
+      "length": 1690,
+      "sha256": "5a8dcb7da222df8a81b6e334000f859248196335e2d28e1db9f3c552827d7cdf"
+    },
+    "notice-5aec868f669e384a": {
+      "offset": 378736,
+      "length": 1496,
+      "sha256": "5aec868f669e384a22372a4e8a1a6cd7d44c64cd451f960ca69cc170d1e13acf"
+    },
+    "notice-5d4873884a890122": {
+      "offset": 380305,
+      "length": 1314,
+      "sha256": "5d4873884a890122a4b9b20ad56ac6f7da1d796a5bfcf04a427970ac96217626"
+    },
+    "notice-616a3ad264ce29b8": {
+      "offset": 381687,
+      "length": 3119,
+      "sha256": "616a3ad264ce29b8f1cb97e53037b139d406899ca8d1f799651e17bfa09830b8"
+    },
+    "notice-661fb8e504744e95": {
+      "offset": 384875,
+      "length": 5701,
+      "sha256": "661fb8e504744e95587b556b94a58343448300606a41bea8c7a9b97125696e61"
+    },
+    "notice-68c5d236785edf75": {
+      "offset": 390665,
+      "length": 15563,
+      "sha256": "68c5d236785edf75344cebe8b9bec36568bd35c96eb72cc67ffecd66c17dbd74"
+    },
+    "notice-6b94f3abc1aabd0c": {
+      "offset": 406301,
+      "length": 1156,
+      "sha256": "6b94f3abc1aabd0c72a7c7d92a77f79dda7c8a0cb3df839a97890b4116a2de2a"
+    },
+    "notice-6d67953925389758": {
+      "offset": 407530,
+      "length": 78695,
+      "sha256": "6d679539253897582d38fcd1eabfa670c01c0ece73d8cd3dc97869fcf723f106"
+    },
+    "notice-6dbd60437f8ef91d": {
+      "offset": 486296,
+      "length": 1080,
+      "sha256": "6dbd60437f8ef91d8de1f08ad75882547fd4931bfcc3566a0735f28db1484d31"
+    },
+    "notice-7055266497633c90": {
+      "offset": 487446,
+      "length": 1549,
+      "sha256": "7055266497633c9025b777c78eb7235af13922117480ed5c674677adc381c9d8"
+    },
+    "notice-72b672113d642cbb": {
+      "offset": 489093,
+      "length": 26410,
+      "sha256": "72b672113d642cbb8ef5dcc76938db801983c56e50b1400ab930f1a64d6dc8d9"
+    },
+    "notice-75815e3bf6484201": {
+      "offset": 515585,
+      "length": 12799,
+      "sha256": "75815e3bf6484201a3c3d17a1bbf10f2e8e3237f84df10a2357ea896db2a81d6"
+    },
+    "notice-7637386b5f81e8a7": {
+      "offset": 528454,
+      "length": 484,
+      "sha256": "7637386b5f81e8a719ca336233149005e5fa28b5e6054ea7b67de49355b0ad40"
+    },
+    "notice-7d52847928f60791": {
+      "offset": 529015,
+      "length": 12900,
+      "sha256": "7d52847928f607914a1218a7afd40d8d0fe1570dcf094205c276c8aa52d5a816"
+    },
+    "notice-7d5450cb2d142651": {
+      "offset": 541988,
+      "length": 10175,
+      "sha256": "7d5450cb2d142651b8afa315b5f238efc805dad827d91ba367d8516bc9d49e7a"
+    },
+    "notice-8177f97513213526": {
+      "offset": 552238,
+      "length": 18092,
+      "sha256": "8177f97513213526df2cf6184d8ff986c675afb514d4e68a404010521b880643"
+    },
+    "notice-8267348d5af1262c": {
+      "offset": 570402,
+      "length": 1537,
+      "sha256": "8267348d5af1262c11d1a08de2f5afc77457755f1ac658627dd9acf71011d615"
+    },
+    "notice-82f2f4427d6545ee": {
+      "offset": 572009,
+      "length": 1088,
+      "sha256": "82f2f4427d6545ee5aaac4f0b80428da6cc8ba41c2cf5da3a03680ec327b9681"
+    },
+    "notice-8405932022a55638": {
+      "offset": 573169,
+      "length": 1508,
+      "sha256": "8405932022a556380c2d8c272eff154a923feb197233f348ce5f7334fb0a5ede"
+    },
+    "notice-8ceb4b9ee5adedde": {
+      "offset": 574774,
+      "length": 35147,
+      "sha256": "8ceb4b9ee5adedde47b31e975c1d90c73ad27b6b165a1dcd80c7c545eb65b903"
+    },
+    "notice-971f09fd8dedc915": {
+      "offset": 609992,
+      "length": 18121,
+      "sha256": "971f09fd8dedc915472df12845fb7c653563689672fb1a658e28004887ba4a07"
+    },
+    "notice-9c8713ccc5d6d93d": {
+      "offset": 628188,
+      "length": 1453,
+      "sha256": "9c8713ccc5d6d93d20c7a1cfcb876e64baf551bfbe67faa4e60d39cda9ffd023"
+    },
+    "notice-a44ba17ac66c57ed": {
+      "offset": 629722,
+      "length": 17722,
+      "sha256": "a44ba17ac66c57edaf0ea7c6e4b31358f08322c780e4e6af092082abb3e20793"
+    },
+    "notice-a9f3d236f3c14a41": {
+      "offset": 647523,
+      "length": 2122,
+      "sha256": "a9f3d236f3c14a41a1293f176d4c7c46d85404403417fcb8df6d6c9707104e42"
+    },
+    "notice-b2de31ac3382bbad": {
+      "offset": 649720,
+      "length": 1708,
+      "sha256": "b2de31ac3382bbadd18eb2f9abea4e209372c62bdf722c96a62043ad074e93b1"
+    },
+    "notice-b3aa400aca6d2ba1": {
+      "offset": 651524,
+      "length": 24478,
+      "sha256": "b3aa400aca6d2ba1f0bd03bd98d03d1fe7489a3bbb26969d72016360af8a5c9d"
+    },
+    "notice-ba6bceebcba0fdd3": {
+      "offset": 676084,
+      "length": 6077,
+      "sha256": "ba6bceebcba0fdd35488477c2cca8c4632ce82c74dbfbc87d886ce6fc4433579"
+    },
+    "notice-ba8f810f2455c2f0": {
+      "offset": 682235,
+      "length": 1971,
+      "sha256": "ba8f810f2455c2f08e2d56bb49b72f37fcf68f1f4fade38977cfd7372050ad64"
+    },
+    "notice-bdb0a645ea18c605": {
+      "offset": 684278,
+      "length": 5345,
+      "sha256": "bdb0a645ea18c60507d0368379b1ac5474b92255fcc2d115e07486a7672ba526"
+    },
+    "notice-bf1cfac2e2792b6e": {
+      "offset": 689695,
+      "length": 1074,
+      "sha256": "bf1cfac2e2792b6e1e995ce103d70796aecaf2ec7e4c5fe5474f7acec7b4a677"
+    },
+    "notice-bf4da21bd20bcfb5": {
+      "offset": 690863,
+      "length": 1643,
+      "sha256": "bf4da21bd20bcfb5b60b7ecc67fa864a79be049e21d6178076887f178dd6c71a"
+    },
+    "notice-bfe4a52dc4645385": {
+      "offset": 692576,
+      "length": 25284,
+      "sha256": "bfe4a52dc4645385f356a8e83cc54216a293e3b6f1cb4f79f5fc0277abf937fd"
+    },
+    "notice-bfe9ee4cceabcb8e": {
+      "offset": 717952,
+      "length": 4096,
+      "sha256": "bfe9ee4cceabcb8ecbfadf208d04156f73d801e6a57369a5606bb8341e204a23"
+    },
+    "notice-c4120c6752c910c2": {
+      "offset": 722124,
+      "length": 17994,
+      "sha256": "c4120c6752c910c299e3bd9cb3a46ff262c268303ca2069b61f92f10a5656c18"
+    },
+    "notice-c53a65c2fd561c87": {
+      "offset": 740200,
+      "length": 35146,
+      "sha256": "c53a65c2fd561c87eaabf1072ef5dcab8653042bc15308465f52413585eb6271"
+    },
+    "notice-c6dbbf828498be84": {
+      "offset": 775417,
+      "length": 1896,
+      "sha256": "c6dbbf828498be844a89eaa3b84adbab3199e342eb5cb2ed2f0d4ba7ec0f38a3"
+    },
+    "notice-c71d239df91726fc": {
+      "offset": 777386,
+      "length": 11357,
+      "sha256": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4"
+    },
+    "notice-c86a782ee845b524": {
+      "offset": 788814,
+      "length": 1130,
+      "sha256": "c86a782ee845b52472dae9b9d79fb915d333628ac0efe49cdce63644814931de"
+    },
+    "notice-cedd4c1885d75991": {
+      "offset": 790020,
+      "length": 30260,
+      "sha256": "cedd4c1885d75991bf1077cc6e33359103cf04fbc996f20d30ab043d5fc5fcc5"
+    },
+    "notice-cfc7749b96f63bd3": {
+      "offset": 820357,
+      "length": 11358,
+      "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+    },
+    "notice-d2ab5758336489da": {
+      "offset": 831787,
+      "length": 1466,
+      "sha256": "d2ab5758336489da61c12cc5bb757da5339c4ae9001f9bb0562b4370249af814"
+    },
+    "notice-d6cb0e9e560f5108": {
+      "offset": 833329,
+      "length": 18097,
+      "sha256": "d6cb0e9e560f51085556949a84af12b79a00f10ab8b66c752537faf7cd665572"
+    },
+    "notice-d808ce217e5b6118": {
+      "offset": 851503,
+      "length": 23330,
+      "sha256": "d808ce217e5b611854da622b57ec29fe545584c48bc5352fae72a4b6e5074a15"
+    },
+    "notice-d8afb1bcc7a2cfc6": {
+      "offset": 874903,
+      "length": 18120,
+      "sha256": "d8afb1bcc7a2cfc603683b168d6987ef0a48e59e0da3693bf55c5d33b67e2b49"
+    },
+    "notice-da7eabb7bafdf7d3": {
+      "offset": 893102,
+      "length": 7651,
+      "sha256": "da7eabb7bafdf7d3ae5e9f223aa5bdc1eece45ac569dc21b3b037520b4464768"
+    },
+    "notice-dc626520dcd53a22": {
+      "offset": 900829,
+      "length": 26530,
+      "sha256": "dc626520dcd53a22f727af3ee42c770e56c97a64fe3adb063799d8ab032fe551"
+    },
+    "notice-dc98676341fdcd29": {
+      "offset": 927432,
+      "length": 1024,
+      "sha256": "dc98676341fdcd29d9f279c9679d6a75288785b174ded8d1b2e316c366166135"
+    },
+    "notice-dd92c3c2247c5651": {
+      "offset": 928527,
+      "length": 1317,
+      "sha256": "dd92c3c2247c5651606fc23a5e2d6a1ebc5ace9a3e49cbde0e12f05ad1cb1ee5"
+    },
+    "notice-dfd5a8d7dc501447": {
+      "offset": 929917,
+      "length": 1059,
+      "sha256": "dfd5a8d7dc501447bf0d58b0fc9ef85ab9e713963d7dcf459897adefa4c710ca"
+    },
+    "notice-e32ff4e00d9d9493": {
+      "offset": 931046,
+      "length": 1002,
+      "sha256": "e32ff4e00d9d94930537635291da39e7e612703334bf6fde8c7f1686fe8a45a2"
+    },
+    "notice-e340270d4f643845": {
+      "offset": 932121,
+      "length": 20785,
+      "sha256": "e340270d4f64384569a91d546acb5b094d69ce47f0c015db77abb74dc6f815af"
+    },
+    "notice-e6dc72d5665a1ebd": {
+      "offset": 952981,
+      "length": 4352,
+      "sha256": "e6dc72d5665a1ebd6dcc841de59278dad4ca77ecc47b03f1064a55c3e9ea8bb8"
+    },
+    "notice-ec1815db59fcd302": {
+      "offset": 957405,
+      "length": 1470,
+      "sha256": "ec1815db59fcd302846df949d7424876cb2e2dc5ed1606c5fb0b36787b1cf43a"
+    },
+    "notice-edaef632cbb643e4": {
+      "offset": 958990,
+      "length": 17984,
+      "sha256": "edaef632cbb643e4e7a221717a6c441a4c1a7c918e6e4d56debc3d8739b233f6"
+    },
+    "notice-f2f118b9029ec187": {
+      "offset": 977052,
+      "length": 26432,
+      "sha256": "f2f118b9029ec1871b953639ecc46651b2fc7b62e295e6cf3ef2ac4c9a058b33"
+    },
+    "notice-f719f01f57fec5de": {
+      "offset": 1003555,
+      "length": 1061,
+      "sha256": "f719f01f57fec5dea2103ce3b2443b0d457bac44dcb8989f08885116bae12d18"
+    },
+    "notice-f7e30699d0279835": {
+      "offset": 1004688,
+      "length": 755,
+      "sha256": "f7e30699d02798351e7f839e3d3bfeb29ce65e44efa7735c225464c4fd7dfe9c"
+    },
+    "notice-fa94e2d6c994ac16": {
+      "offset": 1005519,
+      "length": 753,
+      "sha256": "fa94e2d6c994ac16bc1fdc0348f694b9794fd2453fab40e3ddbc2c6401750085"
+    },
+    "notice-fab3dd6bdab226f1": {
+      "offset": 1006341,
+      "length": 16726,
+      "sha256": "fab3dd6bdab226f1c08630b1dd917e11fcb4ec5e1e020e2c16f83a0a13863e85"
+    }
+  }
+}

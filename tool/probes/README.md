@@ -377,7 +377,7 @@ python -m http.server 8765 --bind 127.0.0.1 --directory build/window-validation
 可增加 `--dart-define=SESSION_SHADER=<本地 glsl 文件绝对路径>`，检查直播时间线策略下
 shader 切换和清除均重载、保留暂停意图。输入仍是本地样片，这项检查不代表真实直播网络验收。
 
-`playback/windows_shader_switch.dart` 使用实际 Flutter、ANGLE 与 libmpv 检查 shader 切换、纹理更新、硬解、暂停状态、音频时间线和私有内存。先确认[mpv 预编译包](../../third_party/mpv/README.md)完整，并准备含音轨的本地视频，再构建专用入口：
+`playback/windows_shader_switch.dart` 使用实际 Flutter、ANGLE 与 libmpv 检查 shader 切换、纹理更新、硬解、暂停状态、音频时间线和私有内存。准备含音轨的本地视频，并确认[上游 mpv 包](../../third_party/media_kit_libs_windows_video/UPSTREAM.md)可下载且通过校验，然后构建专用入口：
 
 ```powershell
 fvm flutter build windows --debug --no-pub --target tool/probes/playback/windows_shader_switch.dart --dart-define=SHADER_PROBE_ROOT=<仓库绝对路径> --dart-define=SHADER_PROBE_VIDEO=<本地视频绝对路径> --dart-define=SHADER_PROBE_OUTPUT=<输出目录绝对路径>
@@ -386,7 +386,7 @@ fvm flutter build windows --debug --no-pub --target tool/probes/playback/windows
 
 路径含空格时，将整个 `--dart-define=...` 参数放在引号内。探针创建输出目录，写入 `results.json` 和 `PASS` 或 `FAIL`，执行完毕自动退出。原位对照模式默认重建渲染器，增加 `--dart-define=SHADER_PROBE_RESET=false` 可改为直接更新 shader。
 
-验收当前应用行为时，增加 `--dart-define=SHADER_PROBE_SESSION=true`，通过生产 Session/Runtime 卸载并重载媒体。该模式按 shader 实际变化重载，重复相同列表不重建，也不使用上述 RESET 开关。不传 SESSION 开关时运行原位重建对照。
+验收当前应用行为时，增加 `--dart-define=SHADER_PROBE_SESSION=true`，通过生产 Session/Runtime 卸载并重载媒体。该模式按 shader 实际变化重载，重复相同列表不重建，也不使用上述 RESET 开关。不传 SESSION 开关时运行原位重建对照；标准上游库在这一旧路径下仍可能出现 AV1 解码错误。
 
 入口要求实际后端为 `d3d11va`，输入画面需有可识别的明暗变化，片段长度应覆盖完整切换流程。探针开启与应用一致的 16 秒、前后各 4 MiB 缓存，默认从 4.3 秒开始播放，并检查切换期间的解码错误。可用 `--dart-define=SHADER_PROBE_START_MS=<毫秒>` 指定起点。
 

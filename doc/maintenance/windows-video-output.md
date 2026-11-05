@@ -41,7 +41,7 @@ GL 纹理状态。真实直播的首次播放、刷新与纹理像素验证见
 
 ## 原生库与验证
 
-Windows 的 Debug、Profile、Release 构建均使用 `third_party/mpv/prebuilt/` 的预编译包，GitHub CI 使用相同归档。源码、工具链和许可说明见[mpv 构建入口](../../third_party/mpv/README.md)；CMake 检查构建输入和运行文件摘要，缺失或过期时终止。
+Windows 的 Debug、Profile、Release 构建均使用官网推荐的 shinchiro 标准预编译包，固定来源和 SHA-256，GitHub CI 使用相同归档。来源及许可说明见 [mpv 说明](../../third_party/media_kit_libs_windows_video/UPSTREAM.md)。CMake 校验原始归档并提取运行文件，不再从本地补丁源码编译。
 
 Flutter 窗口的最终呈现由引擎负责。[Windows 帧节奏引擎](../../tool/engine/windows_frame_pacing/README.md)在 ANGLE 支持时启用 DirectComposition，并调整 DWM 相位、Surface vsync 与呈现队列。本地通过 `-WindowsEngineLibrary` 显式装配到 Profile/Release 应用；正式发布和 CI 使用 [Git 跟踪的预编译引擎](../../third_party/flutter_engine/README.md)。排查弹幕呈现时使用[帧节奏探针](../../tool/probes/README.md#windows-弹幕帧节奏探针)保留实际 `PresentMode` 与逐帧关联结果。
 
@@ -52,4 +52,4 @@ Flutter 窗口的最终呈现由引擎负责。[Windows 帧节奏引擎](../../t
 - `tool/probes/windows/windows_texture_frame_probe.py`：模拟纹理首帧和重建后的帧发布条件。
 - `tool/probes/playback/windows_shader_switch.dart`：实际 Flutter、ANGLE、libmpv 的超分切换；运行参数见[平台探针](../../tool/probes/README.md#windows-超分切换探针)。
 
-历史本机测量中，暂停重建出现过约 0.33 秒时间线回退。上述入口覆盖编译与模拟路径，音频输出、长时间播放和更多 GPU 驱动的实测单独进行。
+历史本机测量中，暂停重建出现过约 0.33 秒时间线回退。2026-11-05 的生产会话探针使用长 GOP AV1，通过 8 个阶段、6 次实际重载，覆盖 D3D11 硬解、有效纹理、暂停恢复、音频时间线和超分资源回收。探针使用空音频输出，实际扬声器、长时间播放和其他 GPU 驱动仍需单独验证。

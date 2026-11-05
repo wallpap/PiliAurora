@@ -100,7 +100,7 @@ jobs:
 
       - name: Verify prebuilt libmpv
         shell: pwsh
-        run: python third_party/mpv/package-runtime.py verify third_party/mpv
+        run: python tool/verify_libmpv.py
 
       - name: Test Windows upgrade installation
         shell: pwsh

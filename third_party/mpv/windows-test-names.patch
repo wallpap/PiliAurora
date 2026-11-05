@@ -1,5 +1,0 @@
---- a/test/samples/meson.build
-+++ b/test/samples/meson.build
-@@ -91,1 +91,1 @@
--    exe = executable(testname, '../libmpv_test_track_selection.c',
-+    exe = executable(testname.replace('.', '-'), '../libmpv_test_track_selection.c',

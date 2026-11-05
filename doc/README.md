@@ -39,4 +39,4 @@
 
 从 [GitHub Releases](https://github.com/wallpap/PiliAurora/releases) 下载发布包；应用当前源码版本记录在 [`pubspec.yaml`](../pubspec.yaml)。[v1.6.5 更新说明](releases/v1.6.5.md)、[v1.6.4 准备记录](releases/v1.6.4.md)及[其他版本说明](releases/)保存在 `releases/`。旧版说明对应发布时的行为和验证结果。
 
-[依赖迁移验收](../third_party/VALIDATION.md)和[依赖精简记录](../third_party/SIMPLIFICATION.md)介绍依赖调整。Windows mpv 的来源和构建流程见 [mpv 构建入口](../third_party/mpv/README.md)。
+[依赖迁移验收](../third_party/VALIDATION.md)和[依赖精简记录](../third_party/SIMPLIFICATION.md)介绍依赖调整。Windows mpv 的来源和构建流程见 [mpv 构建入口](../third_party/media_kit_libs_windows_video/UPSTREAM.md)。

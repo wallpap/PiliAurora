@@ -15,7 +15,7 @@ Android Studio 的 Gradle JDK 和 `JAVA_HOME` 都设为 25。JDK 25 是构建工
 
 Windows 构建需要安装 Visual Studio，并启用“使用 C++ 的桌面开发”工作负载。Windows 开发建议使用 PowerShell 7。
 
-Windows 各构建模式使用 `third_party/mpv/prebuilt/` 中的预编译包，无需为普通应用构建安装 MSYS2。本地与 GitHub Windows CI 校验归档、构建材料和运行文件摘要；原生库更新时可在 UCRT64 终端或独立工作流中从固定源码重建，见[mpv 构建说明](../../third_party/mpv/README.md)。
+Windows 各构建模式使用官网推荐的 shinchiro 标准预编译包，无需安装 MSYS2。本地与 GitHub Windows CI 按固定 URL 获取并校验 SHA-256；版本、来源及更新流程见 [mpv 说明](../../third_party/media_kit_libs_windows_video/UPSTREAM.md)。
 
 Windows x64 另使用 [cnativeapi 预编译包](../../third_party/nativeapi/README.md)，内部 nativeapi 已静态链接。普通应用构建跳过这两个库的源码编译；更新源码后按该说明重建。WebView NuGet 依赖按固定版本保存在 `build/windows/x64/packages/`，Windows CI 缓存该目录及 Flutter/Pub 缓存。
 

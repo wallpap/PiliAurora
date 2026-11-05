@@ -1,0 +1,3 @@
+windows/THIRD_PARTY_NOTICES.txt -text
+windows/NOTICE_SOURCES.json text eol=lf
+windows/libmpv.json text eol=lf

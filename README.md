@@ -122,7 +122,7 @@ PiliAurora 从 PiliPlus 2.1.5 开始独立维护，当前发布 Android 和 Wind
 
 ## 从源码构建
 
-项目使用 [.fvmrc](.fvmrc) 固定 Flutter 版本。Android 构建需要 Android SDK 和 JDK 25；Windows 构建需要启用了“使用 C++ 的桌面开发”工作负载的 Visual Studio。Windows 使用仓库内的 [mpv 预编译包](third_party/mpv/README.md)，本地构建和 GitHub Windows CI 都会校验并解压；更新原生库时可从固定源码重建。环境要求与验证命令见[构建与测试](doc/development/build-and-test.md)。
+项目使用 [.fvmrc](.fvmrc) 固定 Flutter 版本。Android 构建需要 Android SDK 和 JDK 25；Windows 构建需要启用了“使用 C++ 的桌面开发”工作负载的 Visual Studio。Windows 使用固定版本的 [标准上游 mpv 预编译包](third_party/media_kit_libs_windows_video/UPSTREAM.md)，本地构建和 GitHub Windows CI 都会下载、校验并解压。环境要求与验证命令见[构建与测试](doc/development/build-and-test.md)。
 
 ```powershell
 git clone https://github.com/wallpap/PiliAurora.git

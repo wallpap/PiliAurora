@@ -8,6 +8,7 @@
 | `run-ci-tests.ps1` | 本地运行 GitHub Actions 选择的测试范围。 |
 | `run-native-probes.ps1` | 使用项目固定 Flutter 源码执行 Android 主机 Java 探针。 |
 | `check_dependencies.dart` | 依赖版本、来源和许可证验收。 |
+| `verify_libmpv.py` | 校验 Windows libmpv 下载归档、合并通知及原文哈希。 |
 | `packaging/` | Windows 安装前的引擎装配、程序文件清单及覆盖安装回归。 |
 | [`probes/`](probes/README.md) | Android、Windows、播放链路和事件循环的隔离回归探针。 |
 | [`experiments/`](experiments/README.md) | 按业务领域组织的按需对照与性能测量。 |
@@ -39,7 +40,7 @@ pwsh -NoProfile -File tool/run-native-probes.ps1
 
 ## 平台构建
 
-Windows 构建使用[仓库内的 mpv 预编译包](../third_party/mpv/README.md)，构建脚本自动校验和解压。工具链要求见[构建与测试](../doc/development/build-and-test.md)。
+Windows 构建使用[标准上游 mpv 预编译包](../third_party/media_kit_libs_windows_video/UPSTREAM.md)，构建脚本自动校验和解压。工具链要求见[构建与测试](../doc/development/build-and-test.md)。
 
 项目使用 `.fvmrc` 指定的 Flutter 版本。安装 Android SDK 或 Visual Studio 后，在仓库根目录运行：
 

@@ -230,7 +230,7 @@
     },
     {
       "name": "media_kit_libs_windows_video",
-      "version": "1.0.10+piliaurora.2",
+      "version": "1.0.10+piliaurora.3",
       "upstream_version": "1.0.10",
       "path": "third_party/media_kit_libs_windows_video",
       "source": {
@@ -241,7 +241,7 @@
       "licenses": [
         "LICENSE"
       ],
-      "reason": "接入仓库内含 D3D11/EGL 与语言修复的 mpv 预编译包、固定源码及运行库校验。"
+      "reason": "固定官网推荐的标准上游 libmpv 预编译包、SHA-256 校验与 ANGLE 打包。"
     },
     {
       "name": "media_kit_video",

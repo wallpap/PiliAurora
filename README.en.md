@@ -118,7 +118,7 @@ Feature availability depends on Bilibili APIs, account permissions, the platform
 
 ## Build from source
 
-The Flutter version is pinned in [.fvmrc](.fvmrc). Android builds require the Android SDK and JDK 25. Windows builds require Visual Studio with the **Desktop development with C++** workload. Windows uses the repository's [prebuilt mpv packages](third_party/mpv/README.md), which are verified and extracted by local builds and Windows CI. Native libraries can be rebuilt from pinned sources when updated. See [Build and test](doc/development/build-and-test.md) for environment requirements and validation commands.
+The Flutter version is pinned in [.fvmrc](.fvmrc). Android builds require the Android SDK and JDK 25. Windows builds require Visual Studio with the **Desktop development with C++** workload. Windows uses pinned [upstream mpv packages](third_party/media_kit_libs_windows_video/UPSTREAM.md), which local builds and Windows CI download, verify and extract. See [Build and test](doc/development/build-and-test.md) for environment requirements and validation commands.
 
 ```powershell
 git clone https://github.com/wallpap/PiliAurora.git

@@ -48,7 +48,7 @@ media_kit 的 seek 提交回执与落点完成分离；完成事件携带观察�
 
 ## 原生二进制与 SDK
 
-Windows 各构建模式使用 [mpv 预编译包](mpv/README.md)。源码、重建脚本、许可与 `prebuilt/` 中的归档和摘要均纳入 Git；工具链、编译缓存与解压目录保存在 `build/`。应用 CI 直接校验并使用预编译包，独立原生库工作流负责从固定源码重建。打包收集 libmpv、ANGLE 的 DLL 依赖闭包，并随应用交付许可与包来源记录。
+Windows 各构建模式使用官网推荐的 [标准上游 mpv 预编译包](media_kit_libs_windows_video/UPSTREAM.md)。固定版本、来源、SHA-256 与许可纳入 Git；下载和解压缓存保存在 `build/`。本地与 CI 使用同一归档，不再维护 mpv 本地补丁及编译流程。打包包含 libmpv、原有 ANGLE 及其运行依赖，并交付许可与来源记录。
 
 Android 原生库继续使用版本化下载地址与 SHA-256 校验。mpv 属于原生构建材料；`dependencies.json` 仍登记 19 个本地 Dart/Flutter 包。
 

@@ -1,30 +1,22 @@
-name: Rebuild Windows libmpv
+name: Verify upstream Windows libmpv
 
 on:
   workflow_dispatch:
 
 jobs:
-  build-mpv:
+  verify-mpv:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v7
-      - name: Set up UCRT64
-        uses: msys2/setup-msys2@v2
+      - uses: actions/setup-python@v6
         with:
-          msystem: UCRT64
-          update: true
-      - name: Install build dependencies
-        shell: msys2 {0}
-        run: pacman -S --needed --noconfirm $(cat third_party/mpv/packages.txt)
-      - name: Build and test libmpv
-        shell: msys2 {0}
-        run: bash third_party/mpv/build.sh
-      - name: Verify prebuilt package
-        shell: msys2 {0}
-        run: python third_party/mpv/package-runtime.py verify third_party/mpv
-      - name: Upload prebuilt package
-        uses: actions/upload-artifact@v7
+          python-version: '3.14'
+      - name: Download and verify upstream package
+        run: python tool/verify_libmpv.py
+      - uses: actions/upload-artifact@v7
         with:
-          name: mpv-windows-x64
+          name: upstream-mpv-windows-x64
           if-no-files-found: error
-          path: third_party/mpv/prebuilt/
+          path: |
+            build/upstream-mpv/*.7z
+            third_party/media_kit_libs_windows_video/windows/libmpv.json

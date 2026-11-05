@@ -1,8 +1,0 @@
-*.sh text eol=lf
-*.py text eol=lf
-*.json text eol=lf
-*.txt text eol=lf
-*.patch text eol=lf
-prebuilt/SHA256SUMS text eol=lf
-*.gz binary
-*.zip binary
