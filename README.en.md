@@ -1,3 +1,10 @@
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/images/logo/logo_chibi_dark.png">
+    <img src="assets/images/logo/logo_chibi.png" alt="PiliAurora app icon" width="128" height="128">
+  </picture>
+</p>
+
 # PiliAurora
 
 [简体中文](README.md) · [English](README.en.md)
