@@ -14,7 +14,7 @@ class ImSettingsItem extends StatelessWidget {
   });
 
   final Setting item;
-  final Future<bool> Function(Setting setting) onSet;
+  final Future<void> Function(Setting setting) onSet;
   final VoidCallback onRedirect;
 
   @override

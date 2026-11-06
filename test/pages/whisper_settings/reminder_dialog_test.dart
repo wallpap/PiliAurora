@@ -127,20 +127,20 @@ void main() {
     const type = IMSettingType.SETTING_TYPE_OLD_RECEIVE_LIKE;
     final harness = _Harness(type);
     await tester.pumpWidget(harness.build());
-    final navigator = Navigator.of(
-      tester.element(find.byType(MessageReminderButton)),
-    );
-    navigator.push(
-      MaterialPageRoute<void>(
-        builder: (_) => const Scaffold(
-          body: MessageReminderButton(
-            type: type,
-            title: '提醒',
-            icon: Icon(Icons.settings),
+    final navigator =
+        Navigator.of(
+          tester.element(find.byType(MessageReminderButton)),
+        )..push(
+          MaterialPageRoute<void>(
+            builder: (_) => const Scaffold(
+              body: MessageReminderButton(
+                type: type,
+                title: '提醒',
+                icon: Icon(Icons.settings),
+              ),
+            ),
           ),
-        ),
-      ),
-    );
+        );
     await tester.pumpAndSettle();
     await tester.tap(find.byType(IconButton));
     navigator.pop();

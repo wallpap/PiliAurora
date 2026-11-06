@@ -108,12 +108,9 @@ class FeedHandle<T> {
     final current = _refreshFuture;
     if (current != null) return current;
 
-    late final Future<void> future;
-    future = _refresh().whenComplete(() {
-      if (identical(_refreshFuture, future)) _refreshFuture = null;
+    return _refreshFuture = _refresh().whenComplete(() {
+      _refreshFuture = null;
     });
-    _refreshFuture = future;
-    return future;
   }
 
   Future<void> _refresh() async {
@@ -359,12 +356,9 @@ class LikeFeedHandle {
     if (_disposed || !session.isActive) return Future<void>.value();
     final current = _refreshFuture;
     if (current != null) return current;
-    late final Future<void> future;
-    future = _refresh().whenComplete(() {
-      if (identical(_refreshFuture, future)) _refreshFuture = null;
+    return _refreshFuture = _refresh().whenComplete(() {
+      _refreshFuture = null;
     });
-    _refreshFuture = future;
-    return future;
   }
 
   Future<void> _refresh() async {

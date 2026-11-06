@@ -48,10 +48,10 @@ class WindowsGraphicsMemoryMetrics {
     unawaited(
       request.then<void>(
         (_) {
-          if (identical(_pending, request)) _pending = null;
+          _pending = null;
         },
         onError: (Object _, StackTrace _) {
-          if (identical(_pending, request)) _pending = null;
+          _pending = null;
         },
       ),
     );

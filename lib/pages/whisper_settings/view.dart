@@ -43,7 +43,7 @@ class _WhisperSettingsPageState extends ConsumerState<WhisperSettingsPage> {
     );
   }
 
-  Future<bool> onSet(
+  Future<void> onSet(
     int key,
     Setting item,
     WhisperSettingsNotifier controller,
@@ -54,7 +54,6 @@ class _WhisperSettingsPageState extends ConsumerState<WhisperSettingsPage> {
     } else {
       result.toast();
     }
-    return result.isSuccess;
   }
 
   void onRedirect(
@@ -72,7 +71,6 @@ class _WhisperSettingsPageState extends ConsumerState<WhisperSettingsPage> {
         preventDuplicates: false,
       );
     } else if (item.redirect.hasWindowSelect()) {
-      String? selected;
       showDialog(
         context: context,
         builder: (context) => SimpleDialog(
@@ -80,7 +78,6 @@ class _WhisperSettingsPageState extends ConsumerState<WhisperSettingsPage> {
           contentPadding: const EdgeInsets.symmetric(vertical: 12),
           children: item.redirect.windowSelect.item.map(
             (option) {
-              if (option.selected) selected ??= option.text;
               return DialogOption(
                 onPressed: () async {
                   if (option.selected) return;
