@@ -125,29 +125,6 @@ abstract final class DynamicsHttp {
   }
 
   // 动态点赞
-  // static Future likeDynamic({
-  //   required String? dynamicId,
-  //   required int? up,
-  // }) async {
-  //   final res = await Request().post(
-  //     Api.likeDynamic,
-  //     queryParameters: {
-  //       'dynamic_id': dynamicId,
-  //       'up': up,
-  //       'csrf': Accounts.main.csrf,
-  //     },
-  //   );
-  //   if (res.data['code'] == 0) {
-  //     return {
-  //       'status': true,
-  //       'data': res.data['data'],
-  //     };
-  //   } else {
-  //     return {'status': false, 'msg': res.data['message']};
-  //   }
-  // }
-
-  // 动态点赞
   static Future<LoadingState<void>> thumbDynamic({
     required String? dynamicId,
     required int? up,

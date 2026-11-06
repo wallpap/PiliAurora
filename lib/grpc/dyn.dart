@@ -16,22 +16,6 @@ import 'package:pili_aurora/http/loading_state.dart';
 import 'package:fixnum/fixnum.dart';
 
 abstract final class DynGrpc {
-  // static Future dynSpace({
-  //   required int uid,
-  //   required int page,
-  // }) {
-  //   return _request(
-  //     GrpcUrl.dynSpace,
-  //     DynSpaceReq(
-  //       hostUid: Int64(uid),
-  //       localTime: 8,
-  //       page: Int64(page),
-  //       from: 'space',
-  //     ),
-  //     DynSpaceRsp.fromBuffer,
-  //   );
-  // }
-
   static Future<int?> dynRed() async {
     final res = await GrpcReq.request(
       GrpcUrl.dynRed,

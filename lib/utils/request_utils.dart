@@ -226,25 +226,6 @@ abstract final class RequestUtils {
     );
   }
 
-  // static Future<dynamic> getWwebid(mid) async {
-  //   try {
-  //     final response = await Request().get(
-  //       '${HttpString.spaceBaseUrl}/$mid/dynamic',
-  //       options: Options(
-  //         extra: {'account': AnonymousAccount()},
-  //       ),
-  //     );
-  //     dom.Document document = html_parser.parse(response.data);
-  //     dom.Element? scriptElement =
-  //         document.querySelector('script#__RENDER_DATA__');
-  //     return jsonDecode(
-  //         Uri.decodeComponent(scriptElement?.text ?? ''))['access_id'];
-  //   } catch (e) {
-  //     if (kDebugMode) debugPrint('failed to get wwebid: $e');
-  //     return null;
-  //   }
-  // }
-
   static Future<void> insertCreatedDyn(dynamic id) async {
     if (id != null) {
       try {

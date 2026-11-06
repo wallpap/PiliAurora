@@ -207,49 +207,6 @@ abstract final class MemberHttp {
     }
   }
 
-  // static Future<LoadingState> spaceStory({
-  //   required Object mid,
-  //   required Object aid,
-  //   required Object beforeSize,
-  //   required Object afterSize,
-  //   required Object cid,
-  //   required Object contain,
-  //   required Object index,
-  // }) async {
-  //   final params = {
-  //     'aid': aid,
-  //     'before_size': beforeSize,
-  //     'after_size': afterSize,
-  //     'cid': cid,
-  //     'contain': contain,
-  //     'index': index,
-  //     'build': 8430300,
-  //     'version': '8.43.0',
-  //     'c_locale': 'zh_CN',
-  //     'channel': 'master',
-  //     'mobi_app': 'android',
-  //     'platform': 'android',
-  //     's_locale': 'zh_CN',
-  //     'statistics': Constants.statisticsApp,
-  //     'vmid': mid,
-  //   };
-  //   final res = await Request().get(
-  //     Api.spaceStory,
-  //     queryParameters: params,
-  //     options: Options(
-  //       headers: {
-  //         'bili-http-engine': 'cronet',
-  //         'user-agent': Constants.userAgentApp,
-  //       },
-  //     ),
-  //   );
-  //   if (res.data['code'] == 0) {
-  //     return Success(res.data['data']);
-  //   } else {
-  //     return Error(res.data['message']);
-  //   }
-  // }
-
   static Future<LoadingState<SpaceData>> space({
     int? mid,
     dynamic fromViewAid,

@@ -237,10 +237,6 @@ abstract final class Api {
   static const String followDynamic = '/x/polymer/web-dynamic/v1/feed/all';
 
   // 动态点赞
-  // static const String likeDynamic =
-  //     '${HttpString.tUrl}/dynamic_like/v1/dynamic_like/thumb';
-
-  // 动态点赞 new
   static const String thumbDynamic = '/x/dynamic/feed/dyn/thumb';
 
   // 获取稍后再看
@@ -348,9 +344,6 @@ abstract final class Api {
 
   static const String spaceArchive =
       '${HttpString.appBaseUrl}/x/v2/space/archive/cursor';
-
-  static const String spaceStory =
-      '${HttpString.appBaseUrl}/x/v2/feed/index/space/story/cursor';
 
   static const String spaceChargingArchive =
       '${HttpString.appBaseUrl}/x/v2/space/archive/charging';

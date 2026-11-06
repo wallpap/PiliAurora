@@ -94,7 +94,6 @@ abstract final class LoginHttp {
   static Future sendSmsCode({
     required Object cid,
     required String tel,
-    // String? deviceTouristId,
     String? geeChallenge,
     String? geeSeccode,
     String? geeValidate,
@@ -107,7 +106,6 @@ abstract final class LoginHttp {
       'c_locale': 'zh_CN',
       'channel': 'master',
       'cid': cid,
-      // if (deviceTouristId != null) 'device_tourist_id': deviceTouristId,
       'disable_rcmd': '0',
       'gee_challenge': ?geeChallenge,
       'gee_seccode': ?geeSeccode,
@@ -147,45 +145,6 @@ abstract final class LoginHttp {
       };
     }
   }
-
-  // static Future getGuestId(String key) async {
-  //   dynamic publicKey = RSAKeyParser().parse(key);
-  //   final params = {
-  //     'appkey': Constants.appKey,
-  //     'build': '2001100',
-  //     'buvid': buvid,
-  //     'c_locale': 'zh_CN',
-  //     'channel': 'master',
-  //     'deviceInfo': 'xxxxxx',
-  //     'disable_rcmd': '0',
-  //     'dt': Uri.encodeComponent(Encrypter(RSA(publicKey: publicKey))
-  //         .encrypt(generateRandomString(16))
-  //         .base64),
-  //     'local_id': buvid,
-  //     'mobi_app': 'android_hd',
-  //     'platform': 'android',
-  //     's_locale': 'zh_CN',
-  //     'statistics': Constants.statistics,
-  //     'ts': (DateTime.now().millisecondsSinceEpoch ~/ 1000).toString(),
-  //   };
-  //   String sign = AppSign.appSign(
-  //     params,
-  //     Constants.appKey,
-  //     Constants.appSec,
-  //   );
-  //   final res = await Request().post(Api.getGuestId,
-  //       queryParameters: {...params, 'sign': sign},
-  //       options: Options(
-  //         contentType: Headers.formUrlEncodedContentType,
-  //         headers: headers,
-  //       ));
-  //   print("getGuestId: $res");
-  //   if (res.data['code'] == 0) {
-  //     return {'status': true, 'data': res.data['data']};
-  //   } else {
-  //     return {'status': false, 'msg': res.data['message']};
-  //   }
-  // }
 
   // app端密码登录
   static Future loginByPwd({

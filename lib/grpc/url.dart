@@ -10,7 +10,6 @@ abstract final class GrpcUrl {
   static const dynRed = '$dynV1/DynRed';
   static const opusSpaceFlow = '$opusV2/OpusSpaceFlow';
   static const opusDetail = '$opusV2/OpusDetail';
-  // static const dynSpace = '$dynV2/DynSpace';
   static const likeList = '$dynV2/LikeList';
   static const repostList = '$dynV2/RepostList';
 

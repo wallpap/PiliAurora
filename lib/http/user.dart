@@ -214,25 +214,6 @@ abstract final class UserHttp {
     }
   }
 
-  // 获取用户凭证 失效
-  // static Future thirdLogin() async {
-  //   final res = await Request().get(
-  //     'https://passport.bilibili.com/login/app/third',
-  //     queryParameters: {
-  //       'appkey': Constants.appKey,
-  //       'api': Constants.thirdApi,
-  //       'sign': Constants.thirdSign,
-  //     },
-  //   );
-  //   try {
-  //     if (res.data['code'] == 0 && res.data['data']['has_login'] == 1) {
-  //       Request().get(res.data['data']['confirm_uri']);
-  //     }
-  //   } catch (err) {
-  //     SmartDialog.showNotify(msg: '获取用户凭证: $err', notifyType: NotifyType.error);
-  //   }
-  // }
-
   // 清空稍后再看 // clean_type: null->all, 1->invalid, 2->viewed
   static Future<LoadingState<void>> toViewClear([int? cleanType]) async {
     final res = await Request().post(

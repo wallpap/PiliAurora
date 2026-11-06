@@ -561,52 +561,9 @@ class LoginPageController extends GetxController
       SmartDialog.showToast('手机号不能为空');
       return;
     }
-    // String? guestId;
-    // final webKeyRes = await LoginHttp.getWebKey();
-    // if (!webKeyRes['status']) {
-    //   SmartDialog.showToast(webKeyRes['msg']);
-    // } else {
-    //   String key = webKeyRes['data']['key'];
-    //   final guestIdRes = await LoginHttp.getGuestId(key);
-    //   if (!guestIdRes['status']) {
-    //     SmartDialog.showToast(guestIdRes['msg']);
-    //   } else {
-    //     guestId = guestIdRes['data']['guest_id'];
-    //   }
-    // }
-    // final preCaptureRes = await LoginHttp.preCapture();
-    // if (!preCaptureRes['status']) {
-    //   SmartDialog.showToast("获取验证码失败，请尝试其它登录方式\n"
-    //       "(${preCaptureRes['code']}) ${preCaptureRes['msg']}");
-    //   return;
-    // }
-    // String geeGt = preCaptureRes['data']['gee_gt']!;
-    // String geeChallenge = preCaptureRes['data']['gee_challenge'];
-    // captchaData.token = preCaptureRes['data']['recaptcha_token']!;
-
-    // getCaptcha(geeGt, geeChallenge, () async {
-
-    // final safeCenterSendSmsCodeRes =
-    // await LoginHttp.safeCenterSmsCode(
-    //   tmpCode: currentUri.queryParameters['tmp_token']!,
-    //   geeChallenge: geeChallenge,
-    //   geeSeccode: captchaData.seccode!,
-    //   geeValidate: captchaData.validate!,
-    //   recaptchaToken: captchaData.token!,
-    //   refererUrl: url,
-    // );
-    // if (!safeCenterSendSmsCodeRes['status']) {
-    //   SmartDialog.showToast("发送短信验证码失败，请尝试其它登录方式\n"
-    //       "(${safeCenterSendSmsCodeRes['code']}) ${safeCenterSendSmsCodeRes['msg']}");
-    //   return;
-    // }
-    // SmartDialog.showToast("短信验证码已发送，请查收");
-    // captchaKey = safeCenterSendSmsCodeRes['data']['captcha_key'];
-
     final res = await LoginHttp.sendSmsCode(
       tel: telTextController.text,
       cid: selectedCountryCodeId.countryId,
-      // deviceTouristId: guestId,
       geeValidate: captchaData.validate,
       geeSeccode: captchaData.seccode,
       geeChallenge: captchaData.geetest?.challenge,
