@@ -100,29 +100,7 @@ mixin _NoRightMarginMixin on StandardFabLocation {
   }
 }
 
-mixin _NoBottomPaddingMixin on StandardFabLocation {
-  @override
-  double getOffsetY(scaffoldGeometry, _) {
-    return scaffoldGeometry.contentBottom -
-        scaffoldGeometry.floatingActionButtonSize.height;
-  }
-}
-
 class NoRightMarginFabLocation extends StandardFabLocation
     with FabFloatOffsetY, _NoRightMarginMixin {
   const NoRightMarginFabLocation();
-}
-
-class NoBottomPaddingFabLocation extends StandardFabLocation
-    with FabEndOffsetX, _NoBottomPaddingMixin {
-  const NoBottomPaddingFabLocation();
-}
-
-class ActionBarLocation extends StandardFabLocation with _NoBottomPaddingMixin {
-  const ActionBarLocation();
-
-  @override
-  double getOffsetX(scaffoldGeometry, _) {
-    return 0.0;
-  }
 }

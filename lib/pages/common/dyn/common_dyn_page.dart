@@ -331,11 +331,6 @@ mixin CommonDynPageMixin<T extends StatefulWidget>
     icon: const Icon(CustomIcons.splitscreen_rotate_90, size: 19),
   );
 
-  FloatingActionButtonLocation get floatingActionButtonLocation =>
-      controller.showDynActionBar
-      ? const ActionBarLocation()
-      : const NoBottomPaddingFabLocation();
-
   Widget get fabButton => Padding(
     padding: .only(
       right: kFloatingActionButtonMargin + padding.right,

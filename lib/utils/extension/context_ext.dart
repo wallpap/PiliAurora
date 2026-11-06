@@ -28,16 +28,7 @@ extension ContextExtensions on BuildContext {
   TextTheme get textTheme => TextTheme.of(this);
 
   /// similar to [MediaQuery.of(context).padding]
-  EdgeInsets get mediaQueryPadding => MediaQuery.viewPaddingOf(this);
-
-  /// similar to [MediaQuery.of(context).padding]
   MediaQueryData get mediaQuery => MediaQuery.of(this);
-
-  /// similar to [MediaQuery.of(context).viewPadding]
-  EdgeInsets get mediaQueryViewPadding => MediaQuery.viewPaddingOf(this);
-
-  /// similar to [MediaQuery.of(context).viewInsets]
-  EdgeInsets get mediaQueryViewInsets => MediaQuery.viewInsetsOf(this);
 
   /// similar to [MediaQuery.of(context).orientation]
   Orientation get orientation => MediaQuery.orientationOf(this);
@@ -57,17 +48,8 @@ extension ContextExtensions on BuildContext {
   /// get the shortestSide from screen
   double get mediaQueryShortestSide => mediaQuerySize.shortestSide;
 
-  /// True if width be larger than 800
-  bool get showNavbar => (width > 800);
-
-  /// True if the shortestSide is smaller than 600p
-  bool get isPhone => (mediaQueryShortestSide < 600);
-
   /// True if the shortestSide is largest than 600p
   bool get isSmallTablet => (mediaQueryShortestSide >= 600);
-
-  /// True if the shortestSide is largest than 720p
-  bool get isLargeTablet => (mediaQueryShortestSide >= 720);
 
   /// True if the current device is Tablet
   bool get isTablet => isSmallTablet;
