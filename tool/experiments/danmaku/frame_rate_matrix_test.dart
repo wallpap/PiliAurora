@@ -7,18 +7,16 @@ import '../../../test/pages/danmaku/frame_sync_fixture.dart';
 void main() {
   const synchronizedPairs = {
     (24, 120),
-    (30, 30),
     (30, 60),
     (30, 90),
     (30, 120),
-    (60, 30),
     (60, 60),
     (60, 120),
   };
   for (final refreshRate in [60, 90, 120, 144]) {
     for (final displaySyncActive in [false, true]) {
       for (final videoRate in [24, 30, 60]) {
-        for (final danmakuRate in [30, 60, 90, 120]) {
+        for (final danmakuRate in [60, 90, 120]) {
           testWidgets('$refreshRate Hz：视频 $videoRate FPS / 弹幕 $danmakuRate FPS，'
               '显示同步=$displaySyncActive', (
             tester,

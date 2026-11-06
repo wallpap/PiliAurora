@@ -666,7 +666,6 @@ Future<void> _showDanmakuFrameRateDialog(
       value: Pref.danmakuFrameRate,
       values: const [
         (0, '跟随屏幕'),
-        (30, '30 FPS'),
         (60, '60 FPS'),
         (90, '90 FPS'),
         (120, '120 FPS'),

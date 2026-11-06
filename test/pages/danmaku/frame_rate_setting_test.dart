@@ -76,10 +76,10 @@ void main() {
       await GStorage.setting.put(SettingBoxKey.videoSync, 'audio');
       await tester.pump();
       expect(syncState(), same(player.frameSource));
-      for (final fps in [30, 60, 90, 120, 0]) {
+      for (final fps in [60, 90, 120, 30, 0]) {
         await GStorage.setting.put(SettingBoxKey.danmakuFrameRate, fps);
         await tester.pump();
-        expect(rate(), Platform.isWindows ? 0 : fps);
+        expect(rate(), Platform.isWindows || fps == 30 ? 0 : fps);
         expect(player.danmakuDisplay, same(controller));
       }
       if (isLive) {

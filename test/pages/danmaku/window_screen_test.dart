@@ -426,7 +426,7 @@ void main() {
         renderer: renderer,
         clock: clock,
         size: const Size(320, 120),
-        frameRate: 30,
+        frameRate: 60,
         monotonicUs: () => now,
         frameTimeUs: () => now,
         prepareFrame: (r, p, {required effectiveRate}) => _prepare(r, p),
@@ -441,16 +441,16 @@ void main() {
       await _mount(tester, screen());
       positions.add(renderer.presentationTimeUs);
     }
-    expect(positions.length, inInclusiveRange(29, 31));
+    expect(positions.length, inInclusiveRange(59, 61));
     await _mount(tester, const SizedBox.shrink());
   });
 
   // 每个目标覆盖 120/165 Hz 与稠密/稀疏采样，避免重复全交叉。
   for (final (refreshRate, sampleStride, target) in [
-    (120, 1, 30),
+    (120, 1, 120),
     (120, 5, 60),
     (120, 1, 90),
-    (165, 5, 30),
+    (165, 5, 120),
     (165, 1, 60),
     (165, 5, 90),
   ]) {

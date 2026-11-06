@@ -63,6 +63,7 @@ void main() {
       await tester.tap(types.first);
       await tester.pumpAndSettle();
       expect(DanmakuOptions.blockTypes, contains(2));
+      expect(find.widgetWithText(ChoiceChip, '30 FPS'), findsNothing);
       final fps = find.widgetWithText(ChoiceChip, '60 FPS');
       expect(fps, findsNothing);
       await tester.tap(find.text('运动'));
@@ -71,6 +72,7 @@ void main() {
         expect(fps, findsNothing);
         expect(find.text('弹幕帧率（实验性）'), findsNothing);
       } else {
+        expect(find.widgetWithText(ChoiceChip, '30 FPS'), findsNothing);
         await tester.ensureVisible(fps);
         await tester.pumpAndSettle();
         await tester.tap(fps);
@@ -121,9 +123,10 @@ void main() {
     } else {
       await tester.tap(find.text('性能'));
       await tester.pumpAndSettle();
-      await tester.tap(find.widgetWithText(ChoiceChip, '30 FPS'));
+      expect(find.widgetWithText(ChoiceChip, '30 FPS'), findsNothing);
+      await tester.tap(find.widgetWithText(ChoiceChip, '60 FPS'));
       await tester.pumpAndSettle();
-      expect(Pref.danmakuFrameRate, 30);
+      expect(Pref.danmakuFrameRate, 60);
     }
     expect(find.text('合并弹幕'), findsNothing);
     expect(find.text('智能云屏蔽'), findsNothing);

@@ -151,7 +151,7 @@ void main() {
     ticker.dispose();
   });
 
-  for (final fps in [30, 120]) {
+  for (final fps in [60, 120]) {
     testWidgets('$fps FPS 减少帧请求并保持实际经过时间', (tester) async {
       tester.view.display.refreshRate = 120;
       addTearDown(tester.view.display.resetRefreshRate);
@@ -174,7 +174,7 @@ void main() {
 
   testWidgets('暂停、静音和档位切换会取消等待中的帧请求', (tester) async {
     final ticks = <Duration>[];
-    final ticker = FrameRateTicker(ticks.add, frameRate: 30)..start();
+    final ticker = FrameRateTicker(ticks.add, frameRate: 60)..start();
     await tester.pump();
     ticker.stop();
     await tester.pump(const Duration(seconds: 1));
@@ -187,7 +187,7 @@ void main() {
     await tester.pump(const Duration(seconds: 1));
     expect(ticks.length, 2);
     expect(tester.binding.hasScheduledFrame, isFalse);
-    ticker.frameRate = 60;
+    ticker.frameRate = 90;
     expect(ticker.muted, isTrue);
     ticker.muted = false;
     await tester.pump();

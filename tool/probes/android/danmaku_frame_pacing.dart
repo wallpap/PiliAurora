@@ -147,7 +147,7 @@ class _Probe extends StatefulWidget {
 }
 
 class _ProbeState extends State<_Probe> {
-  static const rates = [30, 60, 90, 120, 0];
+  static const rates = [60, 90, 120, 0];
   final messages = StreamController<LiveDanmakuMessage<void>>.broadcast(
     sync: true,
   );

@@ -409,7 +409,7 @@ void main() {
           child: DanmakuScreen<void>(
             option: const DanmakuOption(),
             size: const Size(800, 600),
-            frameRate: 30,
+            frameRate: 60,
             createdController: (value) => controller = value,
           ),
         ),

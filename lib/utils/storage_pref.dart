@@ -601,9 +601,15 @@ abstract final class Pref {
   static bool get showDmChart =>
       _setting.get(SettingBoxKey.showDmChart, defaultValue: false);
 
-  static int get danmakuFrameRate => Platform.isWindows
-      ? 0
-      : _setting.get(SettingBoxKey.danmakuFrameRate, defaultValue: 0);
+  static int get danmakuFrameRate {
+    if (Platform.isWindows) return 0;
+    final int frameRate = _setting.get(
+      SettingBoxKey.danmakuFrameRate,
+      defaultValue: 0,
+    );
+    // 已移除的旧档位回退到默认值，设置备份恢复后也不再启用限频。
+    return frameRate == 30 ? 0 : frameRate;
+  }
 
   static Color? get dmChartColor {
     final int? color = _setting.get(SettingBoxKey.dmChartColor);

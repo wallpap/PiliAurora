@@ -33,7 +33,7 @@ void main() {
     for (var i = 1; i < slots.length; i++) slots[i] - slots[i - 1],
   ].reduce(math.max);
   for (final reportedHz in [119.88, 120.00000762939453, 120.12]) {
-    for (final target in [0, 30, 60, 90, 120]) {
+    for (final target in [0, 60, 90, 120]) {
       for (final videoRate in [29.97, 59.94]) {
         for (final delayedBatch in [false, true]) {
           testWidgets('实测槽位 Android 刷新率读数 $reportedHz Hz / $target FPS / '

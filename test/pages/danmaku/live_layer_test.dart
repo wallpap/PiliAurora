@@ -82,7 +82,7 @@ void main() {
             visible: true,
             option: const DanmakuOption(duration: 8),
             size: const Size(800, 400),
-            frameRate: 30,
+            frameRate: 60,
             monotonicUs: () => now,
             frameTimeUs: () => now,
             createdInteraction: (get, _) => interaction = get,
@@ -110,7 +110,7 @@ void main() {
         if (x != previous) moves.add(now);
         previous = x;
       }
-      expect(moves.length, inInclusiveRange(29, 31));
+      expect(moves.length, inInclusiveRange(59, 61));
       expect(
         initial.left - previous,
         closeTo((800 + initial.width) / 8 * moves.last / 1000000, 0.0001),
@@ -120,7 +120,7 @@ void main() {
     },
   );
 
-  testWidgets('message arrivals preserve 30 FPS scrolling cadence on 120 Hz', (
+  testWidgets('message arrivals preserve 60 FPS scrolling cadence on 120 Hz', (
     tester,
   ) async {
     tester.view.display.refreshRate = 120;
@@ -143,7 +143,7 @@ void main() {
             visible: true,
             option: const DanmakuOption(massiveMode: true),
             size: const Size(800, 400),
-            frameRate: 30,
+            frameRate: 60,
             frameSource: source,
             monotonicUs: () => now,
             frameTimeUs: () => now,
@@ -166,7 +166,7 @@ void main() {
       final next = (slot * 1000000 / 120).round();
       await tester.binding.delayed(Duration(microseconds: next - now));
       now = next;
-      if (slot % 4 == 0) source.emit(slot ~/ 4);
+      if (slot % 2 == 0) source.emit(slot ~/ 2);
       messages.add(
         LiveDanmakuMessage(
           identity: slot,
@@ -183,9 +183,9 @@ void main() {
       if (previous != null && x != previous) moves.add(now);
       previous = x;
     }
-    expect(moves.length, inInclusiveRange(29, 31));
+    expect(moves.length, inInclusiveRange(59, 61));
     for (var i = 1; i < moves.length; i++) {
-      expect(moves[i] - moves[i - 1], inInclusiveRange(33332, 33334));
+      expect(moves[i] - moves[i - 1], inInclusiveRange(16666, 16668));
     }
     await tester.pumpWidget(const SizedBox.shrink());
     await messages.close();

@@ -328,7 +328,7 @@ mixin HeaderMixin<T extends StatefulWidget> on State<T> {
               spacing: 6,
               runSpacing: 4,
               children: [
-                for (final fps in [0, 30, 60, 90, 120])
+                for (final fps in [0, 60, 90, 120])
                   ChoiceChip(
                     label: Text(
                       fps == 0 ? '跟随屏幕' : '$fps FPS',

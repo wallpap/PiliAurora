@@ -5,7 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   for (final hz in [60, 90, 120, 144]) {
-    for (final fps in [30, 60, 90, 120]) {
+    for (final fps in [60, 90, 120]) {
       for (final workMicros in [0, 2000]) {
         testWidgets('$hz Hz / $fps FPS：更新耗时 $workMicros us，夹杂高频 UI 帧', (
           tester,
