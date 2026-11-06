@@ -55,6 +55,7 @@ class DownloadService extends GetxService {
   static const _maxDanmakuConcurrency = 4;
 
   final _lock = Lock();
+  final _creatingCids = <int>{};
   Object? _operation;
 
   final flagNotifier = SetNotifier();
@@ -253,12 +254,25 @@ class DownloadService extends GetxService {
   }
 
   Future<void> _createDownload(BiliDownloadEntryInfo entry) async {
-    // 先持久化再排队，进程重启后仍能从目录记录恢复任务。
-    await _repository.create(entry);
-    entry.status = DownloadStatus.wait;
-    waitDownloadQueue.add(entry);
-    if (curDownload.value?.status.isDownloading != true) {
-      startDownload(entry);
+    final cid = entry.cid;
+    if (_creatingCids.contains(cid) ||
+        downloadList.any((e) => e.cid == cid) ||
+        waitDownloadQueue.any((e) => e.cid == cid))
+      return;
+    // 在首次 await 前预留 CID，持久化失败时释放以允许重试。
+    _creatingCids.add(cid);
+    try {
+      await _repository.create(entry);
+      entry.status = DownloadStatus.wait;
+      waitDownloadQueue.add(entry);
+      if (curDownload.value?.status.isDownloading != true) {
+        unawaited(startDownload(entry));
+      }
+    } catch (error, stackTrace) {
+      logger.e('创建下载失败', error: error, stackTrace: stackTrace);
+      SmartDialog.showToast('创建下载失败，请重试');
+    } finally {
+      _creatingCids.remove(cid);
     }
   }
 

@@ -1,3 +1,8 @@
+import 'package:pili_aurora/models/remote/video/video_detail/page.dart';
+import 'package:pili_aurora/models/remote/video/video_detail/data.dart';
+import 'package:pili_aurora/models/common/video/video_quality.dart';
+import 'package:pili_aurora/models/common/video/audio_quality.dart';
+
 import 'dart:async';
 import 'dart:io';
 import 'dart:typed_data';
@@ -62,6 +67,20 @@ class _PendingCommitRepository extends DownloadRepository {
   }
 }
 
+class _BarrierRepository extends DownloadRepository {
+  _BarrierRepository({required super.rootPath});
+  final gate = Completer<void>();
+  final finished = Completer<void>();
+  int count = 0;
+  @override
+  Future<void> create(BiliDownloadEntryInfo entry) async {
+    count++;
+    await gate.future;
+    await super.create(entry);
+    if (!finished.isCompleted) finished.complete();
+  }
+}
+
 void main() {
   late Directory directory;
   late DownloadRepository repository;
@@ -84,6 +103,34 @@ void main() {
     service.initDownloadList();
     await service.waitForInitialization;
   }
+
+  test('持久化期间同一 CID 仅创建一次', () async {
+    final repo = _BarrierRepository(rootPath: () => directory.path);
+    final pending = _SchedulingDownloadService(
+      repository: repo,
+      downloadClient: client,
+    );
+    final video = VideoDetailData(
+      aid: 1,
+      bvid: 'BV-test',
+      title: 'test',
+      pic: 'https://example.test/cover.jpg',
+    );
+    for (var i = 0; i < 2; i++) {
+      pending.downloadVideo(
+        Part(cid: 11, page: 1, duration: 60),
+        video,
+        null,
+        VideoQuality.high1080,
+        AudioQuality.k192,
+      );
+    }
+    repo.gate.complete();
+    await repo.finished.future;
+    await Future<void>.delayed(Duration.zero);
+    expect(pending.waitDownloadQueue, hasLength(1));
+    expect(repo.count, 1);
+  });
 
   test('暂停不等待准备阶段网络请求', () async {
     final entry = downloadEntry();
