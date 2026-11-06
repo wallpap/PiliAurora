@@ -42,12 +42,17 @@ import 'package:get/get.dart';
 import 'package:material_ui/material_ui.dart';
 
 abstract final class RequestUtils {
+  static int _historyStatusGeneration = 0;
   static Future<void> syncHistoryStatus() async {
+    final generation = ++_historyStatusGeneration;
     final account = Accounts.history;
     if (!account.isLogin) {
       return;
     }
     final res = await UserHttp.historyStatus(account: account);
+    if (generation != _historyStatusGeneration ||
+        !identical(account, Accounts.history))
+      return;
     if (res case Success(:final response)) {
       GStorage.localCache.put(LocalCacheKey.historyPause, response);
     }
