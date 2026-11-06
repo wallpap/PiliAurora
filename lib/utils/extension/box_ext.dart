@@ -6,13 +6,6 @@ extension BoxExt<E> on Box<E> {
     return const DeepCollectionEquality().equals(value, get(key));
   }
 
-  Future<void>? putNE(dynamic key, E value) {
-    if (!equal(key, value)) {
-      return put(key, value);
-    }
-    return null;
-  }
-
   Future<void>? putAllNE(Map<dynamic, E> entries) {
     final Map<dynamic, E> newEntries = {};
     entries.forEach((key, value) {

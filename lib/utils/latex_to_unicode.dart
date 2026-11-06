@@ -72,29 +72,10 @@ final class EnvironmentNode extends TexNode {
 }
 
 abstract final class LatexToUnicode {
-  static String convert(String tex) {
-    return _normalizeSpaces(Renderer().render(parse(tex)));
-  }
-
   static (String, List<String>) convertWithWarnings(String tex) {
     final renderer = Renderer();
     final rendered = _normalizeSpaces(renderer.render(parse(tex)));
     return (rendered, renderer.warnings);
-  }
-
-  static (String, List<String>) convertEmbedded(String text) {
-    final (spans, warnings) = convertSpans(text);
-    if (spans.isEmpty) return (text, warnings);
-    final buffer = StringBuffer();
-    int cursor = 0;
-    for (final span in spans) {
-      buffer
-        ..write(text.substring(cursor, span.start))
-        ..write(span.converted);
-      cursor = span.end;
-    }
-    buffer.write(text.substring(cursor));
-    return (buffer.toString(), warnings);
   }
 
   /// Scans [text] for `$...$` / `$$...$$` spans and converts each one.
@@ -155,8 +136,6 @@ abstract final class LatexToUnicode {
   /// String to AST; throws [ParseError] on structural errors.
   static List<TexNode> parse(String source) =>
       Parser(Lexer(source).run()).parse();
-
-  static List<Token> tokenize(String source) => Lexer(source).run();
 
   /// Whole text styled with a math font.
   ///
