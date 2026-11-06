@@ -608,10 +608,6 @@ class PlPlayerController
 
   static PlPlayerController? get instance => _instance;
 
-  static bool instanceExists() {
-    return _instance != null;
-  }
-
   static void setPlayCallBack(
     PlayCallback? playCallBack, {
     Object? owner,
@@ -897,7 +893,6 @@ class PlPlayerController
       windowManager.setAlwaysOnTop(false);
     }
     _removeListeners();
-    _positionListeners.clear();
     _coarsePositionListeners.clear();
     _statusListeners.clear();
     _lastCoarsePositionBucket = null;
@@ -1643,7 +1638,6 @@ class PlPlayerController
   // 首次加载倍速、shader 与音轨配置均随 PlaybackPlan 提交。
 
   List<StreamSubscription>? _subscriptions;
-  final Set<ValueChanged<Duration>> _positionListeners = {};
   final Set<ValueChanged<Duration>> _coarsePositionListeners = {};
   final Set<ValueChanged<PlayerStatus>> _statusListeners = {};
   int? _lastCoarsePositionBucket;
@@ -1898,9 +1892,6 @@ class PlPlayerController
       position.value = seconds;
       makeHeartBeat(seconds);
     }
-    for (final listener in _positionListeners) {
-      listener(value);
-    }
     final bucket = value.inMilliseconds ~/ 100;
     if (bucket != _lastCoarsePositionBucket) {
       _lastCoarsePositionBucket = bucket;
@@ -2037,12 +2028,6 @@ class PlPlayerController
     await owner.setPlaybackSpeed(speed, mediaOptions: options);
   }
 
-  // 还原默认速度
-  double playSpeedDefault = Pref.playSpeedDefault;
-  Future<void> setDefaultSpeed() async {
-    await setPlaybackSpeed(playSpeedDefault);
-  }
-
   /// 播放视频
   Future<void> play({bool repeat = false, bool hideControls = true}) async {
     final owner = _activeOwner;
@@ -2165,14 +2150,6 @@ class PlPlayerController
       videoFit.value = .contain;
     } else {
       videoFit.value = _prefFit;
-    }
-  }
-
-  /// 设置后台播放
-  void setBackgroundPlay(bool val) {
-    videoPlayerServiceHandler?.enableBackgroundPlay = val;
-    if (!tempPlayerConf) {
-      setting.put(SettingBoxKey.enableBackgroundPlay, val);
     }
   }
 
@@ -2377,19 +2354,9 @@ class PlPlayerController
     }
   }
 
-  void addPositionListener(ValueChanged<Duration> listener) {
-    if (_activeOwner?.isActive != true) return;
-    _positionListeners.add(listener);
-  }
-
   void addCoarsePositionListener(ValueChanged<Duration> listener) {
     if (_activeOwner?.isActive != true) return;
     _coarsePositionListeners.add(listener);
-  }
-
-  void removePositionListener(ValueChanged<Duration> listener) {
-    _positionListeners.remove(listener);
-    _coarsePositionListeners.remove(listener);
   }
 
   void removeCoarsePositionListener(ValueChanged<Duration> listener) {

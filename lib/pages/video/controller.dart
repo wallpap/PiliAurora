@@ -2,7 +2,6 @@ import 'dart:async';
 import 'dart:math' show min;
 import 'dart:ui';
 
-import 'package:pili_aurora/common/style.dart';
 import 'package:pili_aurora/services/logger.dart';
 import 'package:pili_aurora/common/widgets/pair.dart';
 import 'package:pili_aurora/common/widgets/progress_bar/segment_progress_bar.dart';
@@ -1752,62 +1751,6 @@ class VideoDetailController extends GetxController
         },
       );
     }
-  }
-
-  void editPlayUrl() {
-    String videoUrl = this.videoUrl ?? '';
-    String audioUrl = this.audioUrl ?? '';
-    Widget textField({
-      required String label,
-      required String initialValue,
-      required ValueChanged<String> onChanged,
-    }) => TextFormField(
-      minLines: 1,
-      maxLines: 3,
-      onChanged: onChanged,
-      initialValue: initialValue,
-      decoration: InputDecoration(
-        label: Text(label),
-        border: const OutlineInputBorder(),
-      ),
-    );
-    showDialog(
-      context: Get.context!,
-      builder: (context) => AlertDialog(
-        constraints: Style.dialogFixedConstraints,
-        title: const Text('播放地址'),
-        content: Column(
-          spacing: 20,
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            textField(
-              label: 'Video Url',
-              initialValue: videoUrl,
-              onChanged: (value) => videoUrl = value,
-            ),
-            textField(
-              label: 'Audio Url',
-              initialValue: audioUrl,
-              onChanged: (value) => audioUrl = value,
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () {
-              Get.back();
-              _networkSource = NetworkSource(
-                videoSource: videoUrl,
-                audioSource: audioUrl,
-              );
-              playerInit();
-            },
-            child: const Text('确定'),
-          ),
-        ],
-      ),
-    );
   }
 
   @pragma('vm:notify-debugger-on-exception')

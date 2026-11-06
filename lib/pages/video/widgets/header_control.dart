@@ -15,7 +15,6 @@ import 'package:pili_aurora/http/init.dart';
 import 'package:pili_aurora/http/live.dart';
 import 'package:pili_aurora/http/loading_state.dart';
 import 'package:pili_aurora/http/video.dart';
-import 'package:pili_aurora/models/common/video/video_quality.dart';
 import 'package:pili_aurora/models/video/play/url.dart';
 import 'package:pili_aurora/models/remote/video/video_play_info/subtitle.dart';
 import 'package:pili_aurora/pages/common/common_intro_controller.dart';
@@ -36,7 +35,6 @@ import 'package:pili_aurora/plugin/pl_player/widgets/desktop_window_controls.dar
 import 'package:pili_aurora/utils/accounts.dart';
 import 'package:pili_aurora/utils/accounts/account.dart';
 import 'package:pili_aurora/utils/android/bindings.g.dart';
-import 'package:pili_aurora/utils/connectivity_utils.dart';
 import 'package:pili_aurora/utils/extension/num_ext.dart';
 import 'package:pili_aurora/utils/extension/string_ext.dart';
 import 'package:pili_aurora/utils/platform_utils.dart';
@@ -321,7 +319,6 @@ class HeaderControlState extends State<HeaderControl>
   late final PlPlayerController plPlayerController = widget.controller;
   late final VideoDetailController videoDetailCtr = widget.videoDetailCtr;
   late final PlayUrlModel videoInfo = videoDetailCtr.data;
-  static const TextStyle subTitleStyle = TextStyle(fontSize: 12);
   static const TextStyle titleStyle = TextStyle(fontSize: 14);
 
   String get heroTag => widget.heroTag;
@@ -435,115 +432,6 @@ class HeaderControlState extends State<HeaderControl>
       volume: player.getProperty('volume'),
     );
     showDialog(context: context, builder: (_) => dialog);
-  }
-
-  /// 选择画质
-  void showSetVideoQa() {
-    if (videoInfo.dash == null) {
-      SmartDialog.showToast('当前视频不支持选择画质');
-      return;
-    }
-    final VideoQuality? currentVideoQa = videoDetailCtr.currentVideoQa.value;
-    if (currentVideoQa == null) return;
-
-    final List<FormatItem> videoFormat = videoInfo.supportFormats!;
-    final availableQa = videoInfo.dash!.video!.availableVideoQualities;
-
-    showBottomSheet(
-      (context, setState) {
-        final theme = Theme.of(context);
-        final isPortrait =
-            MediaQuery.orientationOf(context) == Orientation.portrait;
-        return Padding(
-          padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
-          child: Material(
-            clipBehavior: Clip.hardEdge,
-            color: theme.colorScheme.surface,
-            borderRadius: isPortrait
-                ? const BorderRadius.vertical(top: Radius.circular(12))
-                : BorderRadius.circular(12),
-            child: SafeArea(
-              top: false,
-              child: CustomScrollView(
-                slivers: [
-                  SliverToBoxAdapter(
-                    child: SizedBox(
-                      height: 45,
-                      child: GestureDetector(
-                        onTap: () => SmartDialog.showToast(
-                          '标灰画质需要bilibili会员（已是会员？请关闭无痕模式）；4k和杜比视界播放效果可能不佳',
-                        ),
-                        child: Row(
-                          spacing: 8,
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            const Text('选择画质', style: titleStyle),
-                            Icon(
-                              Icons.info_outline,
-                              size: 16,
-                              color: theme.colorScheme.outline,
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-                  SliverList.builder(
-                    itemCount: videoFormat.length,
-                    itemBuilder: (context, index) {
-                      final item = videoFormat[index];
-                      final isCurr = currentVideoQa.code == item.quality;
-                      return ListTile(
-                        dense: true,
-                        onTap: () async {
-                          if (isCurr) {
-                            return;
-                          }
-                          Get.back();
-                          final int quality = item.quality!;
-                          final newQa = VideoQuality.fromCode(quality);
-                          videoDetailCtr
-                            ..plPlayerController.cacheVideoQa = newQa.code
-                            ..currentVideoQa.value = newQa
-                            ..updatePlayer();
-
-                          SmartDialog.showToast("画质已变为：${newQa.desc}");
-
-                          // update
-                          if (!plPlayerController.tempPlayerConf) {
-                            setting.put(
-                              await ConnectivityUtils.isWiFi
-                                  ? SettingBoxKey.defaultVideoQa
-                                  : SettingBoxKey.defaultVideoQaCellular,
-                              quality,
-                            );
-                          }
-                        },
-                        // 可能包含会员解锁画质
-                        enabled: availableQa.contains(item.quality),
-                        contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 20,
-                        ),
-                        title: Text(item.newDesc!),
-                        trailing: isCurr
-                            ? Icon(
-                                Icons.done,
-                                color: theme.colorScheme.primary,
-                              )
-                            : Text(
-                                item.format!,
-                                style: subTitleStyle,
-                              ),
-                      );
-                    },
-                  ),
-                ],
-              ),
-            ),
-          ),
-        );
-      },
-    );
   }
 
   void onExportSubtitle() {

@@ -4,7 +4,6 @@ import 'dart:math' as math;
 import 'package:pili_aurora/common/widgets/view_safe_area.dart';
 import 'package:pili_aurora/grpc/dyn.dart';
 import 'package:pili_aurora/models/common/dynamic/dynamic_badge_mode.dart';
-import 'package:pili_aurora/models/common/home_tab_type.dart';
 import 'package:pili_aurora/models/common/msg/msg_unread_type.dart';
 import 'package:pili_aurora/models/common/nav_bar_config.dart';
 import 'package:pili_aurora/pages/dynamics/controller.dart';
@@ -297,16 +296,6 @@ class MainController extends GetxController
     if (hasHome) {
       homeController.showTopBar?.value = true;
     }
-  }
-
-  bool refreshRecommendations() {
-    if (navigationBars[selectedIndex.value] == NavigationBarType.home &&
-        homeController.tabs[homeController.tabController.index] ==
-            HomeTabType.rcmd) {
-      homeController.onRefresh();
-      return true;
-    }
-    return false;
   }
 
   @override

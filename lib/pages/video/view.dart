@@ -320,11 +320,6 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
     }
   }
 
-  // 继续播放或重新播放
-  void continuePlay() {
-    plPlayerController!.play();
-  }
-
   /// 未开启自动播放时触发播放
   Future<void>? handlePlay() {
     final plPlayerController = this.plPlayerController =

@@ -691,9 +691,6 @@ class LiveRoomController extends GetxController {
     }
   }
 
-  Future<void> getSuperChatMsg() =>
-      _getSuperChatMsgFor(_messageGeneration, roomId);
-
   Future<void> _getSuperChatMsgFor(int generation, int targetRoomId) async {
     if (!_isCurrentMessageTask(generation, targetRoomId)) return;
     try {
