@@ -93,8 +93,10 @@ class ArticleController extends CommonDynController {
       if (response.fallback?.id != null) {
         id = response.fallback!.id!;
         type = 'read';
-        init();
-        return false;
+        url = 'https://www.bilibili.com/read/cv$id';
+        commentId = int.parse(id);
+        commentType = 12;
+        return queryRead(commentId);
       }
       opusData = response;
       commentType = response.basic!.commentType!;
