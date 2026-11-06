@@ -234,8 +234,6 @@ class PlPlayerController
   ValueListenable<bool> get videoFramePresented => _runtime.videoFramePresented;
   ValueListenable<bool> get videoDisplaySyncActive =>
       _runtime.videoDisplaySyncActive;
-  double get playbackVolumePercent =>
-      _session.currentSnapshot.configuration.desired.volume;
 
   final RxBool muted = DesktopPlaybackWindows.isPlayerWindow.obs;
   bool get isMuted => muted.value;

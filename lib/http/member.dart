@@ -659,20 +659,6 @@ abstract final class MemberHttp {
     }
   }
 
-  // 获取up置顶
-  static Future<LoadingState<List<MemberTagItemModel>?>> getTopVideo() async {
-    final res = await Request().get(Api.getTopVideoApi);
-    if (res.data['code'] == 0) {
-      return Success(
-        (res.data['data'] as List?)
-            ?.map<MemberTagItemModel>((e) => MemberTagItemModel.fromJson(e))
-            .toList(),
-      );
-    } else {
-      return Error(res.data['message']);
-    }
-  }
-
   // 获取up播放数、点赞数
   static Future<LoadingState<Map>> memberView({required int mid}) async {
     final res = await Request().get(

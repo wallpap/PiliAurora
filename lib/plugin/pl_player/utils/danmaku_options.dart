@@ -21,8 +21,6 @@ abstract final class DanmakuOptions {
   static bool danmakuMassiveMode = Pref.danmakuMassiveMode;
   static double danmakuLineHeight = Pref.danmakuLineHeight;
 
-  static bool get sameFontScale => danmakuFontScale == danmakuFontScaleFS;
-
   static DanmakuOption get({
     required bool notFullscreen,
     double speed = 1.0,

@@ -503,26 +503,6 @@ abstract final class Api {
   static const String sessionList =
       '${HttpString.tUrl}/session_svr/v1/session_svr/get_sessions';
 
-  /// 私聊用户信息
-  /// uids
-  /// build=0&mobi_app=web
-  static const String sessionAccountList =
-      '${HttpString.tUrl}/account/v1/user/cards';
-
-  /// https://api.vc.bilibili.com/svr_sync/v1/svr_sync/fetch_session_msgs?
-  /// talker_id=400787461&
-  /// session_type=1&
-  /// size=20&
-  /// sender_device_id=1&
-  /// build=0&
-  /// mobi_app=web&
-  /// web_location=333.1296&
-  /// w_rid=cfe3bf58c9fe181bbf4dd6c75175e6b0&
-  /// wts=1697350697
-
-  static const String sessionMsg =
-      '${HttpString.tUrl}/svr_sync/v1/svr_sync/fetch_session_msgs';
-
   /// 标记已读 POST
   /// talker_id:
   /// session_type: 1
@@ -552,19 +532,6 @@ abstract final class Api {
   // captcha验证码
   static const String getCaptcha =
       '${HttpString.passBaseUrl}/x/passport-login/captcha?source=main_web';
-
-  // web端短信验证码
-  static const String smsCode =
-      '${HttpString.passBaseUrl}/x/passport-login/web/sms/send';
-
-  // web端验证码登录
-
-  // web端密码登录
-  static const String logInByWebPwd =
-      '${HttpString.passBaseUrl}/x/passport-login/web/login';
-
-  // 获取guestID
-  // static const String getGuestId = '/x/passport-user/guest/reg';
 
   // app端短信验证码
   static const String appSmsCode =
@@ -622,10 +589,6 @@ abstract final class Api {
   /// local_id
   static const getWebKey = '${HttpString.passBaseUrl}/x/passport-login/web/key';
 
-  /// cookie转access_key
-  static const qrcodeConfirm =
-      '${HttpString.passBaseUrl}/x/passport-tv-login/h5/qrcode/confirm';
-
   /// 申请二维码(TV端)
   static const getTVCode =
       '${HttpString.passBaseUrl}/x/passport-tv-login/qrcode/auth_code';
@@ -635,23 +598,6 @@ abstract final class Api {
       '${HttpString.passBaseUrl}/x/passport-tv-login/qrcode/poll';
 
   static const logout = '${HttpString.passBaseUrl}/login/exit/v2';
-
-  /// 置顶视频
-  static const getTopVideoApi = '/x/space/top/arc';
-
-  /// 主页 - 最近投币的视频
-  /// vmid
-  /// gaia_source = main_web
-  /// web_location
-  /// w_rid
-  /// wts
-  static const getRecentCoinVideoApi = '/x/space/coin/video';
-
-  /// 最近点赞的视频
-  static const getRecentLikeVideoApi = '/x/space/like/video';
-
-  /// 用户专栏
-  static const getMemberSeasonsApi = '/x/polymer/web-space/home/seasons_series';
 
   /// 获赞数 播放数
   /// mid
@@ -730,13 +676,9 @@ abstract final class Api {
 
   static const String userNoteList = '/x/note/publish/list/user';
 
-  static const String addNote = '/x/note/add';
-
   static const String delNote = '/x/note/del';
 
   static const String delPublishNote = '/x/note/publish/del';
-
-  static const String archiveNote = '/x/note/list/archive';
 
   static const String favArticle = '/x/polymer/web-dynamic/v1/opus/feed/fav';
 
@@ -932,8 +874,6 @@ abstract final class Api {
   static const String loginLog = '/x/member/web/login/log';
 
   static const String expLog = '/x/member/web/exp/log';
-
-  static const String moralLog = '/x/member/web/moral/log';
 
   static const String liveLikeReport =
       '${HttpString.liveBaseUrl}/xlive/app-ucenter/v1/like_info_v3/like/likeReportV3';

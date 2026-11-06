@@ -259,9 +259,6 @@ class PlaybackSession implements PlaybackMediaClock {
   bool isCurrent(int requestId) =>
       !_closingRequested && !_disposed && requestId == _requestId;
 
-  Future<void> get shutdownDone =>
-      _shutdownTask?.then<void>((_) {}) ?? Future<void>.value();
-
   Future<PlaybackShutdownResult> shutdown() {
     if (!_shutdownStarted && !_disposed) _requestShutdown();
     return _shutdownTask ??

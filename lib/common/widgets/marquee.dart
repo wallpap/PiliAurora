@@ -244,14 +244,6 @@ abstract class MarqueeRender extends RenderBox
   @override
   bool get isRepaintBoundary => hasTicker;
 
-  void paintCenter(PaintingContext context, Offset offset) {
-    if (_direction == Axis.horizontal) {
-      context.paintChild(child!, Offset(offset.dx - _distance / 2, offset.dy));
-    } else {
-      context.paintChild(child!, Offset(offset.dx, offset.dy - _distance / 2));
-    }
-  }
-
   void _onTick(Duration elapsed) {
     delta = _simulation!.x(
       elapsed.inMicroseconds.toDouble() / Duration.microsecondsPerSecond,
