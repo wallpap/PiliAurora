@@ -88,9 +88,6 @@ abstract final class Assets {
   static const livingRect = 'assets/images/live/live.gif';
   static const livingBackground = 'assets/images/live/default_bg.webp';
 
-  static const thunder1 = 'assets/images/paycoins/ic_thunder_1.png';
-  static const thunder2 = 'assets/images/paycoins/ic_thunder_2.png';
-  static const thunder3 = 'assets/images/paycoins/ic_thunder_3.png';
   static const coinsEmpty = 'assets/images/paycoins/ic_22_not_enough_pay.png';
   static const coinsReadyOne = 'assets/images/paycoins/ic_22_mario.png';
   static const coinsReadyTwo = 'assets/images/paycoins/ic_22_gun_sister.png';

@@ -90,17 +90,3 @@ mixin LazyFabMixin<T extends StatefulWidget> on BaseFabMixin<T> {
     super.dispose();
   }
 }
-
-mixin _NoRightMarginMixin on StandardFabLocation {
-  @override
-  double getOffsetX(scaffoldGeometry, _) {
-    return scaffoldGeometry.scaffoldSize.width -
-        scaffoldGeometry.minInsets.right -
-        scaffoldGeometry.floatingActionButtonSize.width;
-  }
-}
-
-class NoRightMarginFabLocation extends StandardFabLocation
-    with FabFloatOffsetY, _NoRightMarginMixin {
-  const NoRightMarginFabLocation();
-}

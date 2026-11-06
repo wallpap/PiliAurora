@@ -171,8 +171,6 @@ class PlPlayerController
 
   final RxBool showControls = false.obs;
 
-  final RxBool showBrightnessStatus = false.obs;
-
   final RxBool longPressStatus = false.obs;
 
   final RxBool controlsLock = false.obs;

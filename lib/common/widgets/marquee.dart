@@ -93,27 +93,6 @@ class NormalMarquee extends Marquee {
   );
 }
 
-class BounceMarquee extends Marquee {
-  const BounceMarquee({
-    super.key,
-    required super.velocity,
-    required super.child,
-    super.direction,
-    super.clipBehavior,
-    super.spacing,
-    super.provider,
-  });
-
-  @override
-  RenderObject createRenderObject(BuildContext context) => _BounceMarqueeRender(
-    direction: direction,
-    velocity: velocity,
-    clipBehavior: clipBehavior,
-    spacing: spacing,
-    provider: provider ?? ContextSingleTicker(context),
-  );
-}
-
 abstract class MarqueeRender extends RenderBox
     with RenderObjectWithChildMixin<RenderBox> {
   MarqueeRender({
@@ -253,48 +232,6 @@ abstract class MarqueeRender extends RenderBox
   void updateSize();
 }
 
-class _BounceMarqueeRender extends MarqueeRender {
-  _BounceMarqueeRender({
-    required super.direction,
-    required super.velocity,
-    required super.clipBehavior,
-    required super.spacing,
-    required super.provider,
-  });
-
-  @override
-  void updateSize() {
-    final size = _distance + _spacing;
-    if (size == _simulation?.size) return;
-    _simulation = _MarqueeSimulation(_delta, size, false, _velocity);
-  }
-
-  @override
-  void paint(PaintingContext context, Offset offset) {
-    if (child == null) return;
-
-    if (_distance > 0) {
-      final delta = _spacing / 2.0 - _delta;
-      void paintChild() {
-        if (_direction == Axis.horizontal) {
-          context.paintChild(child!, Offset(offset.dx + delta, offset.dy));
-        } else {
-          context.paintChild(child!, Offset(offset.dx, offset.dy + delta));
-        }
-      }
-
-      if (clipBehavior == Clip.none) {
-        paintChild();
-      } else {
-        final rect = Rect.fromLTRB(0, 0, size.width, size.height);
-        context.clipRectAndPaint(rect, clipBehavior, rect, paintChild);
-      }
-    } else {
-      context.paintChild(child!, offset);
-    }
-  }
-}
-
 class _NormalMarqueeRender extends MarqueeRender {
   _NormalMarqueeRender({
     required super.direction,
@@ -312,7 +249,7 @@ class _NormalMarqueeRender extends MarqueeRender {
             : child!.size.height) +
         _spacing;
     if (size == _simulation?.size) return;
-    _simulation = _MarqueeSimulation(_delta, size, true, _velocity);
+    _simulation = _MarqueeSimulation(_delta, size, _velocity);
   }
 
   @override
@@ -359,24 +296,18 @@ class _MarqueeSimulation extends Simulation {
   _MarqueeSimulation(
     this.initialValue,
     this.size,
-    this.notBounce,
     this.velocity,
   );
 
   final double initialValue;
   final double size;
-  final bool notBounce;
   final double velocity;
 
   @override
   double x(double timeInSeconds) {
     assert(timeInSeconds >= 0.0);
     final totalX = initialValue + velocity * timeInSeconds;
-    if (notBounce) return totalX % size;
-
-    final doublePeriod = 2.0 * size;
-    final doubleX = totalX % doublePeriod;
-    return doubleX < size ? doubleX : doublePeriod - doubleX;
+    return totalX % size;
   }
 
   @override
@@ -388,12 +319,10 @@ class _MarqueeSimulation extends Simulation {
   _MarqueeSimulation copyWith({
     double? initialValue,
     double? addSize,
-    bool? notBounce,
     double? velocity,
   }) => _MarqueeSimulation(
     initialValue ?? this.initialValue,
     addSize == null ? size : size + addSize,
-    notBounce ?? this.notBounce,
     velocity ?? this.velocity,
   );
 }
