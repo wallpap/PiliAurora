@@ -33,7 +33,8 @@ file(MAKE_DIRECTORY "${LIBMPV_SRC}/include")
 foreach(name libmpv-2.dll libmpv.dll.a)
   configure_file("${upstream_dir}/${name}" "${LIBMPV_SRC}/${name}" COPYONLY)
 endforeach()
-file(COPY "${upstream_dir}/include/mpv/" DESTINATION "${LIBMPV_SRC}/include/mpv")
+# 播放器以 <client.h> 引用 API，保持其 libmpv/include 搜索路径约定。
+file(COPY "${upstream_dir}/include/mpv/" DESTINATION "${LIBMPV_SRC}/include")
 file(TOUCH_NOCREATE "${LIBMPV_SRC}/libmpv-2.dll")
 install(FILES
   "${LIBMPV_PACKAGE_DIR}/libmpv.json"

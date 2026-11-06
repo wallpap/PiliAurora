@@ -1,6 +1,6 @@
 # media_kit_libs_windows_video 本地版本
 
-- 本地版本：`1.0.10+piliaurora.3`；来源包版本：`1.0.10`。
+- 本地版本：`1.0.10+piliaurora.4`；来源包版本：`1.0.10`。
 - 来源仓库：https://github.com/My-Responsitories/media-kit.git
 - 来源提交：`73771ec38176be2d984a3049c28177bce23b54a0`。
 - 来源子目录：`libs/windows/media_kit_libs_windows_video`。
@@ -8,6 +8,8 @@
 - 保留原因：固定官网推荐的标准上游 libmpv 预编译包、SHA-256 校验与 ANGLE 打包。
 
 2026-11-05：Windows 切回标准上游 `0.42.0-1-g3138fc8ee`（shinchiro 20261105），移除本地 mpv 补丁及编译流程，按固定 URL 与 SHA-256 下载。应用会话等待旧媒体卸载后再重建超分输出，随后恢复点播位置和播放意图；本地与 CI 构建见 [下方原生库说明](#windows-libmpv-标准上游包)。原 `20260819` 归档及旧临时 DLL 的验证保留为[历史记录](LOCAL_LIBMPV.md)。
+
+`piliaurora.4` 修正标准包头文件的装配层级：将上游 `include/mpv/` 的内容放入播放器约定的 `libmpv/include/`，避免全新 Release 构建找不到 `client.h`、`render.h` 和 `render_gl.h`。`tool/packaging/libmpv_layout_test.py` 使用生产 CMake 验证全新解压与旧头文件覆盖，不依赖已有应用构建缓存。
 
 仅收录生产源码、构建配置、资源及许可说明；不复制上游示例、测试、缓存或 Git 元数据。
 导入时除包版本、禁止发布声明及必要依赖声明外，不重写来源实现。

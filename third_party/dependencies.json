@@ -230,7 +230,7 @@
     },
     {
       "name": "media_kit_libs_windows_video",
-      "version": "1.0.10+piliaurora.3",
+      "version": "1.0.10+piliaurora.4",
       "upstream_version": "1.0.10",
       "path": "third_party/media_kit_libs_windows_video",
       "source": {
