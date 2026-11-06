@@ -56,14 +56,17 @@ class FansController extends FollowTypeController {
   }
 
   Future<void> onRemoveFan(int index, int mid) async {
-    final list = loadingState.value.data;
+    final list = loadingState.value.dataOrNull;
     final res = await VideoHttp.relationMod(
       mid: mid,
       act: 7,
       reSrc: 11,
     );
-    if (isClosed || list == null || !identical(list, loadingState.value.data))
+    if (isClosed ||
+        list == null ||
+        !identical(list, loadingState.value.dataOrNull)) {
       return;
+    }
     if (res.isSuccess) {
       loadingState
         ..value.data!.removeWhere((e) => e.mid == mid)

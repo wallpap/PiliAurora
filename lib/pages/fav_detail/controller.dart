@@ -36,13 +36,16 @@ mixin BaseFavController
   void onViewFav(FavDetailItemModel item, int? index);
 
   Future<void> onCancelFav(int index, int id, int type) async {
-    final list = loadingState.value.data;
+    final list = loadingState.value.dataOrNull;
     final res = await FavHttp.favVideo(
       resources: '$id:$type',
       delIds: mediaId.toString(),
     );
-    if (isClosed || list == null || !identical(list, loadingState.value.data))
+    if (isClosed ||
+        list == null ||
+        !identical(list, loadingState.value.dataOrNull)) {
       return;
+    }
     if (res.isSuccess) {
       final before = list.length;
       loadingState

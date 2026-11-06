@@ -37,11 +37,11 @@ class BlackListController
       context: context,
       title: Text('确定将 $name 移出黑名单？'),
       onConfirm: () async {
+        final list = loadingState.value.dataOrNull;
+        if (list == null) return;
         final result = await VideoHttp.relationMod(mid: mid, act: 6, reSrc: 11);
-        if (isClosed) return;
+        if (isClosed || !identical(list, loadingState.value.dataOrNull)) return;
         if (result.isSuccess) {
-          final list = loadingState.value.data;
-          if (list == null) return;
           final before = list.length;
           loadingState
             ..value.data!.removeWhere((item) => item.mid == mid)

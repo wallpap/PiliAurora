@@ -102,13 +102,16 @@ class PgcReviewController
   }
 
   Future<void> onDel(int index, int reviewId) async {
-    final list = loadingState.value.data;
+    final list = loadingState.value.dataOrNull;
     final res = await PgcHttp.pgcReviewDel(
       mediaId: mediaId,
       reviewId: reviewId,
     );
-    if (isClosed || list == null || !identical(list, loadingState.value.data))
+    if (isClosed ||
+        list == null ||
+        !identical(list, loadingState.value.dataOrNull)) {
       return;
+    }
     if (res.isSuccess) {
       loadingState
         ..value.data!.removeWhere((e) => e.reviewId == reviewId)

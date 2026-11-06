@@ -259,7 +259,7 @@ abstract class ReplyController<R> extends CommonListController<R, ReplyInfo> {
     oid,
     int type,
   ) async {
-    final list = loadingState.value.data;
+    final list = loadingState.value.dataOrNull;
     bool isUpTop = item.replyControl.isUpTop;
     final res = await ReplyHttp.replyTop(
       oid: oid,
@@ -267,8 +267,11 @@ abstract class ReplyController<R> extends CommonListController<R, ReplyInfo> {
       rpid: item.id,
       isUpTop: isUpTop,
     );
-    if (isClosed || list == null || !identical(list, loadingState.value.data))
+    if (isClosed ||
+        list == null ||
+        !identical(list, loadingState.value.dataOrNull)) {
       return;
+    }
     final currentIndex = list.indexWhere((reply) => reply.id == item.id);
     if (currentIndex < 0) return;
     item = list[currentIndex];

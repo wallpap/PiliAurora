@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:dio/dio.dart';
@@ -10,11 +9,8 @@ import 'package:hive_ce/hive.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:pili_aurora/http/init.dart';
 import 'package:pili_aurora/http/loading_state.dart';
-import 'package:pili_aurora/models/dynamics/result.dart' show FilePicModel;
 import 'package:pili_aurora/models/remote/fav/fav_detail/media.dart';
-import 'package:pili_aurora/pages/article/controller.dart';
 import 'package:pili_aurora/pages/fav_detail/controller.dart';
-import 'package:pili_aurora/pages/common/publish/common_rich_text_pub_page.dart';
 import 'package:pili_aurora/utils/storage.dart';
 import 'package:pili_aurora/utils/storage_key.dart';
 
@@ -45,27 +41,9 @@ class _Adapter implements HttpClientAdapter {
   void close({bool force = false}) {}
 }
 
-class _Composer extends CommonRichTextPubPage {
-  const _Composer({super.key}) : super(autofocus: false);
-  @override
-  State<_Composer> createState() => _ComposerState();
-}
-
-class _ComposerState extends CommonRichTextPubPageState<_Composer> {
-  int submissions = 0;
-  @override
-  Future<void> onCustomPublish({List? pictures}) async {
-    submissions++;
-  }
-
-  @override
-  Widget build(BuildContext context) => const SizedBox();
-}
-
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   late _Adapter adapter;
-  late File syntheticImage;
   setUpAll(() async {
     GStorage.setting = await Hive.openBox(
       'audit3-settings',
@@ -81,10 +59,6 @@ void main() {
       LocalCacheKey.timeStamp,
       DateTime.now().millisecondsSinceEpoch,
     );
-    syntheticImage = File(
-      '${Directory.current.path}/build/implicit-state-audit/synthetic-upload.bin',
-    );
-    await syntheticImage.writeAsBytes([1, 2, 3]);
     Request();
     Request.dio.interceptors.clear();
   });
@@ -133,5 +107,20 @@ void main() {
     expect(controller.loadingState.value.data!.map((e) => e.id), [3]);
     await tester.pump(const Duration(seconds: 5));
     await tester.pumpAndSettle();
+  });
+  testWidgets('刷新中的收藏列表拒绝迟到删除结果', (tester) async {
+    await mount(tester);
+    final controller = FavDetailController()..mediaId = 7;
+    addTearDown(controller.onClose);
+    controller.loadingState.value = Success([
+      FavDetailItemModel(id: 1, type: 2),
+    ]);
+    final remove = controller.onCancelFav(0, 1, 2);
+    await flush(tester);
+    controller.loadingState.value = LoadingState.loading();
+    adapter.reply(0, {'code': 0});
+    await flush(tester);
+    await remove;
+    expect(controller.loadingState.value, isA<Loading>());
   });
 }
