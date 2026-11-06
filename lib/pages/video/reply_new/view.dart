@@ -378,6 +378,7 @@ class _ReplyPageState extends CommonRichTextPubPageState<ReplyPage> {
 
   @override
   Future<void> onCustomPublish({List? pictures}) async {
+    if (!mounted) return;
     Map<String, int> atNameToMid = {};
     for (final e in editController.items) {
       if (e.type == RichTextType.at) {
@@ -397,6 +398,7 @@ class _ReplyPageState extends CommonRichTextPubPageState<ReplyPage> {
       pictures: pictures,
       syncToDynamic: _syncToDynamic.value,
     );
+    if (!mounted) return;
     if (res case Success(:final response)) {
       hasPub = true;
       SmartDialog.showToast('发送成功');

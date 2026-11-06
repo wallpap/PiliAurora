@@ -402,6 +402,7 @@ class _RepostPanelState extends CommonRichTextPubPageState<RepostPanel>
 
   @override
   Future<void> onCustomPublish({List? pictures}) async {
+    if (!mounted) return;
     SmartDialog.showLoading();
     List<Map<String, dynamic>>? richContent = getRichContent();
     final hasRichText = richContent != null;
@@ -419,6 +420,7 @@ class _RepostPanelState extends CommonRichTextPubPageState<RepostPanel>
       rawText: hasRichText ? null : editController.text,
       extraContent: richContent ?? repostContent,
     );
+    if (!mounted) return;
     SmartDialog.dismiss();
     if (res case Success(:final response)) {
       hasPub = true;

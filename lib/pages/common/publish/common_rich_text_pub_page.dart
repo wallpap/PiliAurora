@@ -1,4 +1,4 @@
-import 'dart:io' show File, HttpException;
+import 'dart:io' show File;
 
 import 'package:pili_aurora/common/style.dart';
 import 'package:pili_aurora/common/widgets/button/icon_button.dart';
@@ -52,6 +52,7 @@ abstract class CommonRichTextPubPage
 
 abstract class CommonRichTextPubPageState<T extends CommonRichTextPubPage>
     extends CommonPublishPageState<T> {
+  CancelToken? _uploadToken;
   final key = GlobalKey<RichTextFieldState>();
   late final imagePicker = ImagePicker();
   late final RxList<PicModel> imageList;
@@ -74,6 +75,11 @@ abstract class CommonRichTextPubPageState<T extends CommonRichTextPubPage>
 
   @override
   void dispose() {
+    if (_uploadToken != null) {
+      _uploadToken!.cancel();
+      _uploadToken = null;
+      SmartDialog.dismiss();
+    }
     if (PlatformUtils.isMobile) {
       for (final img in imageList) {
         if (img is FilePicModel) {
@@ -493,45 +499,58 @@ abstract class CommonRichTextPubPageState<T extends CommonRichTextPubPage>
     },
   );
 
+  Future<Map<String, dynamic>> uploadPicture(
+    FilePicModel image,
+    CancelToken cancelToken,
+  ) async {
+    final result = await MsgHttp.uploadBfs(
+      path: image.path,
+      category: 'daily',
+      biz: 'new_dyn',
+      cancelToken: cancelToken,
+    );
+    final data = result.data;
+    return {
+      'img_width': data.imageWidth,
+      'img_height': data.imageHeight,
+      'img_size': data.imgSize,
+      'img_src': data.imageUrl,
+    };
+  }
+
   @override
   Future<void> onPublish() async {
+    if (!mounted) return;
     feedBack();
     List<Map<String, dynamic>>? pictures;
     if (imageList.isNotEmpty) {
       SmartDialog.showLoading(msg: '正在上传图片...');
-      final cancelToken = CancelToken();
+      final cancelToken = _uploadToken = CancelToken();
       try {
         pictures = await Future.wait<Map<String, dynamic>>(
           imageList.map((img) async {
             switch (img) {
               case FilePicModel e:
-                final result = await MsgHttp.uploadBfs(
-                  path: e.path,
-                  category: 'daily',
-                  biz: 'new_dyn',
-                  cancelToken: cancelToken,
-                );
-                final data = result.data;
-                return {
-                  'img_width': data.imageWidth,
-                  'img_height': data.imageHeight,
-                  'img_size': data.imgSize,
-                  'img_src': data.imageUrl,
-                };
+                return uploadPicture(e, cancelToken);
               case OpusPicModel e:
                 return e.toJson();
             }
           }),
           eagerError: true,
         );
+        if (!mounted) return;
         SmartDialog.dismiss();
-      } on HttpException catch (e) {
+      } catch (e) {
         cancelToken.cancel();
+        if (!mounted) return;
         SmartDialog.dismiss();
-        SmartDialog.showToast(e.message);
+        SmartDialog.showToast(e.toString());
         return;
+      } finally {
+        _uploadToken = null;
       }
     }
+    if (!mounted) return;
     return onCustomPublish(pictures: pictures);
   }
 }

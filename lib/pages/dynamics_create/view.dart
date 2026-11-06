@@ -726,6 +726,7 @@ class _CreateDynPanelState extends CommonRichTextPubPageState<CreateDynPanel> {
 
   @override
   Future<void> onCustomPublish({List? pictures}) async {
+    if (!mounted) return;
     SmartDialog.showLoading(msg: '正在发布');
     List<Map<String, dynamic>>? extraContent = getRichContent();
     final hasRichText = extraContent != null;
@@ -743,6 +744,7 @@ class _CreateDynPanelState extends CommonRichTextPubPageState<CreateDynPanel> {
         topic: _topic.value,
         extraContent: extraContent,
       );
+      if (!mounted) return;
       SmartDialog.dismiss();
       if (res.isSuccess) {
         hasPub = true;
@@ -779,6 +781,7 @@ class _CreateDynPanelState extends CommonRichTextPubPageState<CreateDynPanel> {
               },
             },
     );
+    if (!mounted) return;
     SmartDialog.dismiss();
     if (res case Success(:final response)) {
       hasPub = true;
