@@ -640,6 +640,106 @@ void main() {
     await tester.pumpWidget(const SizedBox.shrink());
   });
 
+  testWidgets('单张合作卡片揭示不重发列表或重建普通卡片', (tester) async {
+    Get.testMode = true;
+    Get.put<RcmdController>(feed);
+    addTearDown(Get.reset);
+    final authors = Completer<Set<int>?>();
+    feed.lookup = CooperativeAuthors(load: (_) => authors.future);
+    addTearDown(() {
+      if (!authors.isCompleted) authors.complete(null);
+    });
+    await tester.pumpWidget(
+      const MaterialApp(home: Scaffold(body: RcmdPage())),
+    );
+    final cooperation = _Video(1, cooperation: true);
+    final ordinary = _Video(2);
+    feed.requests.single.complete(
+      Success([
+        cooperation,
+        ordinary,
+        ...List.generate(30, (i) => _Video(i + 3)),
+      ]),
+    );
+    await tester.pump();
+    final cards = find.byWidgetPredicate(
+      (widget) => widget is VideoCardV && identical(widget.videoItem, ordinary),
+    );
+    final before = tester.widget<VideoCardV>(cards);
+    final snapshot = feed.loadingState.value;
+    var publications = 0;
+    final subscription = feed.loadingState.listen((_) => publications++);
+    addTearDown(subscription.cancel);
+    authors.complete({8});
+    await tester.pump();
+    expect(find.text('视频 1'), findsOneWidget);
+    expect(find.byType(VideoCardVSkeleton), findsNothing);
+    expect(tester.widget<VideoCardV>(cards), same(before));
+    expect(feed.loadingState.value, same(snapshot));
+    expect(publications, 0);
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
+
+  testWidgets('合作卡片被过滤后保留其他卡片元素和图片子树', (tester) async {
+    Get.testMode = true;
+    Get.put<RcmdController>(feed);
+    addTearDown(Get.reset);
+    final authors = Completer<Set<int>?>();
+    feed.lookup = CooperativeAuthors(load: (_) => authors.future);
+    addTearDown(() {
+      if (!authors.isCompleted) authors.complete(null);
+    });
+    await tester.pumpWidget(
+      const MaterialApp(home: Scaffold(body: RcmdPage())),
+    );
+    final ordinary = _Video(2);
+    feed.requests.single.complete(
+      Success([
+        _Video(1, cooperation: true),
+        ordinary,
+        ...List.generate(30, (i) => _Video(i + 3)),
+      ]),
+    );
+    await tester.pump();
+    final cards = find.byWidgetPredicate(
+      (widget) => widget is VideoCardV && identical(widget.videoItem, ordinary),
+    );
+    final before = tester.element(cards);
+    final image = find.descendant(
+      of: cards,
+      matching: find.byType(LayoutBuilder),
+    );
+    final imageBefore = tester.element(image.first);
+    authors.complete({7});
+    await tester.pump();
+    expect(feed.loadingState.value.data!.first, same(ordinary));
+    expect(tester.element(cards), same(before));
+    expect(tester.element(image.first), same(imageBefore));
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
+
+  testWidgets('卸载卡片取消局部揭示订阅', (tester) async {
+    final authors = Completer<Set<int>?>();
+    feed.lookup = CooperativeAuthors(load: (_) => authors.future);
+    addTearDown(() {
+      if (!authors.isCompleted) authors.complete(null);
+    });
+    final item = _Video(1, cooperation: true);
+    var cancelled = 0, active = 0;
+    final unsubscribe = feed.listenToCard(item, () => cancelled++);
+    final unsubscribeActive = feed.listenToCard(item, () => active++);
+    addTearDown(unsubscribeActive);
+    final query = feed.onRefresh();
+    feed.requests.single.complete(Success([item]));
+    await tester.idle();
+    unsubscribe();
+    authors.complete({8});
+    await tester.idle();
+    await query;
+    expect(cancelled, 0);
+    expect(active, 1);
+  });
+
   testWidgets('首页补位期间保留骨架，分页失败在页尾提供原页重试', (tester) async {
     Get.testMode = true;
     Get.put<RcmdController>(feed);

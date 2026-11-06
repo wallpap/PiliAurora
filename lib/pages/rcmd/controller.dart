@@ -48,12 +48,24 @@ class RcmdController extends DiscoveryListController<List<dynamic>, dynamic> {
 
   _RecommendationQuery? _query;
   StreamSubscription<bool>? _accountChanges;
+  final _cardListeners = HashMap<Object, Set<void Function()>>.identity();
   bool _disposed = false, _active = true;
   int _viewportItems = 0, _columns = 1;
 
   int get viewportItems => _viewportItems;
   String? get loadMoreError => _query?.error;
   bool isPending(Object item) => _query?.pending.contains(item) ?? false;
+
+  /// 监听可见卡片的揭示；卸载时移除空项，避免首页保活期间积累旧卡片引用。
+  void Function() listenToCard(Object item, void Function() listener) {
+    final listeners = _cardListeners.putIfAbsent(item, () => {})..add(listener);
+    return () {
+      listeners.remove(listener);
+      if (listeners.isEmpty && identical(_cardListeners[item], listeners)) {
+        _cardListeners.remove(item);
+      }
+    };
+  }
 
   bool _current(_RecommendationQuery query) =>
       !_disposed &&
@@ -144,14 +156,24 @@ class RcmdController extends DiscoveryListController<List<dynamic>, dynamic> {
         ? query.historyStart
         : null;
     loadingState.value = Success(data);
-    final ready = data.where((item) => !isPending(item)).length;
+    _finishReadyTraces(query);
+  }
+
+  void _finishReadyTraces(_RecommendationQuery query) {
+    // 首屏诊断结束后，不再为每张合作卡片扫描完整历史列表。
+    if (query.firstItems == null && query.firstViewport == null) return;
+    final data = query.items;
+    final ready = data.where((item) => !query.pending.contains(item)).length;
     if (ready > 0) {
       query.firstItems?.finish(details: {'items': ready});
       query.firstItems = null;
     }
-    if (_viewportItems > 0 &&
+    if (query.firstViewport != null &&
+        _viewportItems > 0 &&
         data.length >= _viewportItems &&
-        data.take(_viewportItems).every((item) => !isPending(item))) {
+        data
+            .take(_viewportItems)
+            .every((item) => !query.pending.contains(item))) {
       query.firstViewport?.finish(
         details: {'items': ready, 'target': _viewportItems},
       );
@@ -187,7 +209,15 @@ class RcmdController extends DiscoveryListController<List<dynamic>, dynamic> {
       _remove(query, item);
     }
     onChecked();
-    _publish(query);
+    if (blocked) {
+      _publish(query);
+    } else {
+      // 列表成员和顺序未变，只揭示对应卡片，不复制列表或重建整个网格。
+      _finishReadyTraces(query);
+      for (final listener in _cardListeners[item]?.toList() ?? []) {
+        listener();
+      }
+    }
     if (blocked && _active && !query.stopped) unawaited(_run(query));
   }
 
@@ -464,6 +494,7 @@ class RcmdController extends DiscoveryListController<List<dynamic>, dynamic> {
   @override
   void onClose() {
     _disposed = true;
+    _cardListeners.clear();
     unawaited(_accountChanges?.cancel());
     _accountChanges = null;
     if (_query case final query?) _invalidate(query);

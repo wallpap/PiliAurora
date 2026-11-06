@@ -1,3 +1,5 @@
+import 'dart:collection';
+
 import 'package:pili_aurora/common/skeleton/video_card_v.dart';
 import 'package:pili_aurora/common/sliver_single_child_delegate.dart';
 import 'package:pili_aurora/common/style.dart';
@@ -7,6 +9,7 @@ import 'package:pili_aurora/common/widgets/flutter/refresh_indicator.dart';
 import 'package:pili_aurora/common/widgets/loading_widget/http_error.dart';
 import 'package:pili_aurora/common/widgets/video_card/video_card_v.dart';
 import 'package:pili_aurora/http/loading_state.dart';
+import 'package:pili_aurora/models/model_rec_video_item.dart';
 import 'package:pili_aurora/pages/rcmd/controller.dart';
 import 'package:pili_aurora/pages/rcmd/viewport.dart';
 import 'package:pili_aurora/utils/grid.dart';
@@ -108,61 +111,7 @@ class _RcmdPageState extends State<RcmdPage>
       Loading() => _buildSkeleton(gridDelegate, skeletonItems),
       Success(:final response) =>
         response != null && response.isNotEmpty
-            ? InactiveFeedSliver(
-                sliver: SliverGrid.builder(
-                  gridDelegate: gridDelegate,
-                  itemBuilder: (context, index) {
-                    if (controller.lastRefreshAt != null) {
-                      if (controller.lastRefreshAt == index) {
-                        return GestureDetector(
-                          onTap: () => controller
-                            ..animateToTop()
-                            ..onRefresh(),
-                          child: Card(
-                            child: Container(
-                              alignment: Alignment.center,
-                              padding: const .symmetric(horizontal: 10),
-                              child: Text(
-                                '上次看到这里\n点击刷新',
-                                textAlign: .center,
-                                style: TextStyle(
-                                  color: colorScheme.onSurfaceVariant,
-                                ),
-                              ),
-                            ),
-                          ),
-                        );
-                      }
-                      final actualIndex = index > controller.lastRefreshAt!
-                          ? index - 1
-                          : index;
-                      if (controller.isPending(response[actualIndex])) {
-                        return const VideoCardVSkeleton();
-                      }
-                      return VideoCardV(
-                        videoItem: response[actualIndex],
-                        onRemove: () {
-                          controller.removeRecommendation(
-                            response[actualIndex],
-                          );
-                        },
-                      );
-                    } else {
-                      if (controller.isPending(response[index])) {
-                        return const VideoCardVSkeleton();
-                      }
-                      return VideoCardV(
-                        videoItem: response[index],
-                        onRemove: () =>
-                            controller.removeRecommendation(response[index]),
-                      );
-                    }
-                  },
-                  itemCount: controller.lastRefreshAt != null
-                      ? response.length + 1
-                      : response.length,
-                ),
-              )
+            ? _buildGrid(response, gridDelegate, colorScheme)
             : controller.isLoading
             ? _buildSkeleton(gridDelegate, skeletonItems)
             : HttpError(onReload: controller.onReload),
@@ -171,6 +120,62 @@ class _RcmdPageState extends State<RcmdPage>
         onReload: controller.onReload,
       ),
     };
+  }
+
+  Widget _buildGrid(
+    List<dynamic> items,
+    SliverGridDelegateWithExtentAndRatio gridDelegate,
+    ColorScheme colorScheme,
+  ) {
+    final historyStart = controller.lastRefreshAt;
+    const historyKey = ValueKey('recommendation-history');
+    // 仅在列表结构发布时建立索引；卡片揭示不进入这里。
+    final indices = HashMap<Object, int>.identity();
+    for (var i = 0; i < items.length; i++) {
+      indices[items[i] as Object] =
+          i + (historyStart != null && i >= historyStart ? 1 : 0);
+    }
+    return InactiveFeedSliver(
+      sliver: SliverGrid.builder(
+        gridDelegate: gridDelegate,
+        findChildIndexCallback: (key) => key == historyKey
+            ? historyStart
+            : key is ObjectKey
+            ? indices[key.value]
+            : null,
+        itemCount: items.length + (historyStart != null ? 1 : 0),
+        itemBuilder: (context, index) {
+          if (index == historyStart) {
+            return GestureDetector(
+              key: historyKey,
+              onTap: () => controller
+                ..animateToTop()
+                ..onRefresh(),
+              child: Card(
+                child: Container(
+                  alignment: .center,
+                  padding: const .symmetric(horizontal: 10),
+                  child: Text(
+                    '上次看到这里\n点击刷新',
+                    textAlign: .center,
+                    style: TextStyle(color: colorScheme.onSurfaceVariant),
+                  ),
+                ),
+              ),
+            );
+          }
+          final actualIndex = historyStart != null && index > historyStart
+              ? index - 1
+              : index;
+          final item = items[actualIndex] as BaseRcmdVideoItemModel;
+          return _RecommendationCard(
+            key: ObjectKey(item),
+            controller: controller,
+            item: item,
+          );
+        },
+      ),
+    );
   }
 
   Widget _buildSkeleton(
@@ -183,4 +188,54 @@ class _RcmdPageState extends State<RcmdPage>
       child: const VideoCardVSkeleton(),
     ),
   );
+}
+
+class _RecommendationCard extends StatefulWidget {
+  const _RecommendationCard({
+    super.key,
+    required this.controller,
+    required this.item,
+  });
+
+  final RcmdController controller;
+  final BaseRcmdVideoItemModel item;
+
+  @override
+  State<_RecommendationCard> createState() => _RecommendationCardState();
+}
+
+class _RecommendationCardState extends State<_RecommendationCard> {
+  late void Function() _unsubscribe;
+
+  @override
+  void initState() {
+    super.initState();
+    _unsubscribe = widget.controller.listenToCard(widget.item, _reveal);
+  }
+
+  void _reveal() => setState(() {});
+
+  @override
+  void didUpdateWidget(_RecommendationCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!identical(oldWidget.controller, widget.controller) ||
+        !identical(oldWidget.item, widget.item)) {
+      _unsubscribe();
+      _unsubscribe = widget.controller.listenToCard(widget.item, _reveal);
+    }
+  }
+
+  @override
+  void dispose() {
+    _unsubscribe();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => widget.controller.isPending(widget.item)
+      ? const VideoCardVSkeleton()
+      : VideoCardV(
+          videoItem: widget.item,
+          onRemove: () => widget.controller.removeRecommendation(widget.item),
+        );
 }
