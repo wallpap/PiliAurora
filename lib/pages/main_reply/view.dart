@@ -161,8 +161,11 @@ class _MainReplyPageState extends State<MainReplyPage>
                 },
               )
             : HttpError(
-                errMsg: '还没有评论',
-                onReload: _controller.onReload,
+                errMsg: _controller.emptyReplyMessage,
+                btnText: _controller.canLoadMore ? '继续加载' : null,
+                onReload: _controller.canLoadMore
+                    ? _controller.onLoadMore
+                    : _controller.onReload,
               ),
       Error(:final errMsg) => HttpError(
         errMsg: errMsg,

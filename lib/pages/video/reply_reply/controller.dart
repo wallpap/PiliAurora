@@ -79,13 +79,19 @@ class VideoReplyReplyController extends ReplyController
       if (isRefresh && !hasRoot) {
         firstFloor.value ??= data.root;
       }
-      if (id != null) {
-        setIndexById(Int64(id!), data.root.replies);
-        id = null;
-      }
     }
 
     return false;
+  }
+
+  @override
+  List<ReplyInfo> filterList(List<ReplyInfo> source, bool isRefresh) {
+    final filtered = super.filterList(source, isRefresh);
+    if (id != null) {
+      setIndexById(Int64(id!), filtered);
+      id = null;
+    }
+    return filtered;
   }
 
   bool setIndexById(Int64 id64, [List<ReplyInfo>? replies]) {

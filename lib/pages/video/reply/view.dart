@@ -210,8 +210,11 @@ class _VideoReplyPanelState extends State<VideoReplyPanel>
         }
 
         final child = HttpError(
-          errMsg: '还没有评论',
-          onReload: _videoReplyController.onReload,
+          errMsg: _videoReplyController.emptyReplyMessage,
+          btnText: _videoReplyController.canLoadMore ? '继续加载' : null,
+          onReload: _videoReplyController.canLoadMore
+              ? _videoReplyController.onLoadMore
+              : _videoReplyController.onReload,
         );
         if (_videoReplyController.voteCard case final voteCard?) {
           return SliverMainAxisGroup(

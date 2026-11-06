@@ -205,8 +205,11 @@ mixin CommonDynPageMixin<T extends StatefulWidget>
         }
 
         final child = httpError(
-          errMsg: '还没有评论',
-          onReload: controller.onReload,
+          errMsg: controller.emptyReplyMessage,
+          btnText: controller.canLoadMore ? '继续加载' : null,
+          onReload: controller.canLoadMore
+              ? controller.onLoadMore
+              : controller.onReload,
         );
         if (controller.voteCard case final voteCard?) {
           return SliverMainAxisGroup(
@@ -227,10 +230,12 @@ mixin CommonDynPageMixin<T extends StatefulWidget>
     }
   }
 
-  Widget httpError({String? errMsg, VoidCallback? onReload}) => HttpError(
-    errMsg: errMsg,
-    onReload: onReload,
-  );
+  Widget httpError({String? errMsg, String? btnText, VoidCallback? onReload}) =>
+      HttpError(
+        errMsg: errMsg,
+        btnText: btnText,
+        onReload: onReload,
+      );
 
   void replyReply(BuildContext context, ReplyInfo replyItem, int? id) {
     ActionThrottle.run('replyReply', const Duration(milliseconds: 500), () {

@@ -10,6 +10,7 @@ import 'package:pili_aurora/pages/common/publish/publish_route.dart';
 import 'package:pili_aurora/pages/video/reply_new/view.dart';
 import 'package:pili_aurora/utils/feed_back.dart';
 import 'package:pili_aurora/utils/reply_utils.dart';
+import 'package:pili_aurora/utils/reply_filter.dart';
 import 'package:pili_aurora/utils/storage_pref.dart';
 import 'package:fixnum/fixnum.dart';
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
@@ -35,6 +36,21 @@ abstract class ReplyController<R> extends CommonListController<R, ReplyInfo> {
   @override
   bool? get hasFooter => true;
 
+  @override
+  bool get refillFilteredPages => Pref.minimumReplyUserLevel > 0;
+
+  @override
+  List<ReplyInfo> filterList(List<ReplyInfo> source, bool isRefresh) {
+    final top = isRefresh && hasUpTop ? source.firstOrNull : null;
+    filterRepliesByLevel(source, Pref.minimumReplyUserLevel);
+    if (top != null) {
+      hasUpTop = source.isNotEmpty && identical(source.first, top);
+    }
+    return source;
+  }
+
+  String get emptyReplyMessage => refillFilteredPages ? '暂无符合等级条件的评论' : '还没有评论';
+
   // comment antifraud
   late final _enableCommAntifraud = Pref.enableCommAntifraud;
   late final _biliSendCommAntifraud = Pref.biliSendCommAntifraud;
@@ -52,6 +68,8 @@ abstract class ReplyController<R> extends CommonListController<R, ReplyInfo> {
 
   @override
   void checkIsEnd(int length) {
+    // 过滤后可见条数与总数不同，且置顶项可能重复；以响应游标为准。
+    if (refillFilteredPages) return;
     final count = this.count.value;
     if (count != -1 && length >= count) {
       isEnd = true;

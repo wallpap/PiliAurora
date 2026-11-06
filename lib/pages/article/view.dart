@@ -50,11 +50,12 @@ class _ArticlePageState extends CommonDynPageState<ArticlePage> {
   bool get isArticle => true;
 
   @override
-  Widget httpError({String? errMsg, VoidCallback? onReload}) =>
+  Widget httpError({String? errMsg, String? btnText, VoidCallback? onReload}) =>
       ArticleSliverToBoxAdapter(
         child: HttpError(
           isSliver: false,
           errMsg: errMsg,
+          btnText: btnText,
           onReload: onReload,
         ),
       );

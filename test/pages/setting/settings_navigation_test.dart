@@ -6,6 +6,8 @@ import 'package:pili_aurora/models/common/setting_type.dart';
 import 'package:pili_aurora/models/common/video/cdn_type.dart';
 import 'package:pili_aurora/pages/setting/common_setting.dart';
 import 'package:pili_aurora/pages/setting/models/model.dart';
+import 'package:pili_aurora/pages/setting/models/content_settings.dart';
+import 'package:pili_aurora/models/common/reply/reply_level_filter.dart';
 import 'package:pili_aurora/pages/setting/models/play_settings.dart';
 import 'package:pili_aurora/pages/setting/models/privacy_settings.dart';
 import 'package:pili_aurora/pages/setting/models/video_settings.dart';
@@ -22,6 +24,34 @@ void main() {
   });
   setUp(settings._values.clear);
   tearDown(Get.reset);
+
+  testWidgets('评论等级默认关闭，选择后保存并可恢复关闭', (tester) async {
+    final group = contentSettings.whereType<SettingsGroup>().firstWhere(
+      (group) => group.title == '内容过滤',
+    );
+    final item = group.children
+        .whereType<PopupModel<ReplyLevelFilter>>()
+        .single;
+    await tester.pumpWidget(MaterialApp(home: Scaffold(body: item.widget)));
+    expect(Pref.minimumReplyUserLevel, 0);
+    await tester.tap(find.text('最低评论用户等级'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Lv4 及以上'));
+    await tester.pumpAndSettle();
+    expect(Pref.minimumReplyUserLevel, 4);
+    await tester.tap(find.text('最低评论用户等级'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('不屏蔽'));
+    await tester.pumpAndSettle();
+    expect(Pref.minimumReplyUserLevel, 0);
+  });
+
+  test('损坏或越界的评论等级设置回退为关闭', () async {
+    for (final value in [-1, 7, '4', null]) {
+      await settings.put(SettingBoxKey.minimumReplyUserLevel, value);
+      expect(Pref.minimumReplyUserLevel, 0);
+    }
+  });
 
   testWidgets('增强黑名单屏蔽默认开启并支持切换保存', (tester) async {
     final item = privacySettings.whereType<SwitchModel>().single;

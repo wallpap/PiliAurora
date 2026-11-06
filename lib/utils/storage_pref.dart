@@ -52,6 +52,11 @@ import 'package:hive_ce/hive.dart';
 import 'package:material_ui/material_ui.dart';
 
 abstract final class Pref {
+  static int get minimumReplyUserLevel {
+    final value = _setting.get(SettingBoxKey.minimumReplyUserLevel);
+    return value is int && value >= 0 && value <= 6 ? value : 0;
+  }
+
   static bool get checkCooperativeAuthors => _setting.get(
     SettingBoxKey.checkCooperativeAuthors,
     defaultValue: true,

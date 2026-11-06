@@ -295,6 +295,13 @@ class _VideoReplyReplyPanelState extends State<VideoReplyReplyPanel>
           child: VideoReplySkeleton(),
         ),
       ),
+      Success(:final response!) when response.isEmpty => HttpError(
+        errMsg: _controller.emptyReplyMessage,
+        btnText: _controller.canLoadMore ? '继续加载' : null,
+        onReload: _controller.canLoadMore
+            ? _controller.onLoadMore
+            : _controller.onReload,
+      ),
       Success(:final response!) => SuperSliverList.builder(
         listController: _controller.listController,
         itemBuilder: (context, index) {

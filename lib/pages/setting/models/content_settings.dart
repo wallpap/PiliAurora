@@ -13,6 +13,7 @@ import 'package:pili_aurora/http/loading_state.dart';
 import 'package:pili_aurora/models/common/dynamic/dynamics_type.dart';
 import 'package:pili_aurora/models/common/member/tab_type.dart';
 import 'package:pili_aurora/models/common/reply/reply_sort_type.dart';
+import 'package:pili_aurora/models/common/reply/reply_level_filter.dart';
 import 'package:pili_aurora/models/dynamics/result.dart'
     show DynamicsDataModel, ItemModulesModel;
 import 'package:pili_aurora/pages/home/controller.dart';
@@ -265,7 +266,7 @@ List<SettingsModel> get contentSettings => [
   ),
   SettingsGroup(
     title: '内容过滤',
-    subtitle: '关键词、带货与争议信息',
+    subtitle: '关键词、评论等级、带货与争议信息',
     leading: const Icon(Icons.filter_alt_outlined),
     children: [
       const SwitchModel(
@@ -288,6 +289,15 @@ List<SettingsModel> get contentSettings => [
           ReplyGrpc.replyRegExp = value;
           ReplyGrpc.enableFilter = value.pattern.isNotEmpty;
         },
+      ),
+      PopupModel(
+        title: '最低评论用户等级',
+        leading: const Icon(Icons.filter_alt_outlined),
+        value: () => ReplyLevelFilter.values[Pref.minimumReplyUserLevel],
+        items: ReplyLevelFilter.values,
+        onSelected: (value, setState) => GStorage.setting
+            .put(SettingBoxKey.minimumReplyUserLevel, value.index)
+            .whenComplete(setState),
       ),
       getBanWordModel(
         title: '动态关键词过滤',
