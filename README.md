@@ -16,7 +16,7 @@ PiliAurora 是面向 Android 和 Windows x64 的 Bilibili 第三方客户端，�
 
 项目保留上游的浏览、播放、互动和多账号功能，并针对播放资源占用、Windows 弹幕渲染和视频输出做了调整，同时提供视频与直播独立窗口、弹幕合并和帧率调节、原生表情包管理等功能。
 
-[下载](https://github.com/wallpap/PiliAurora/releases/latest) · [1.6.5 更新日志](doc/releases/v1.6.5.md) · [问题反馈](https://github.com/wallpap/PiliAurora/issues) · [许可证](LICENSE)
+[下载](https://github.com/wallpap/PiliAurora/releases/latest) · [v1.6.7 更新说明](doc/releases/v1.6.7.md) · [问题反馈](https://github.com/wallpap/PiliAurora/issues) · [许可证](LICENSE)
 
 ## 界面预览
 
@@ -49,7 +49,7 @@ PiliAurora 是面向 Android 和 Windows x64 的 Bilibili 第三方客户端，�
   <br>
   <img src="assets/display/android-home.jpg" alt="Android 主页" width="230">
   <img src="assets/display/android-bangumi.jpg" alt="Android 番剧界面" width="230">
-  <img src="assets/display/android-danmaku-filter-settings.jpg" alt="Android 弹幕合并" width="230">
+  <img src="assets/display/android-danmaku-filter-settings.jpg" alt="Android 弹幕屏蔽与合并设置" width="230">
 </p>
 
 ## 适配平台与下载
@@ -72,7 +72,7 @@ Windows 安装版更新时，先退出主窗口与独立播放窗口，再将 EX
 
 视频和直播可以弹出为多个独立窗口，一边看视频或直播，一边在主窗口继续浏览。播放窗口支持置顶、拖动、缩放、网格和层叠排列，记住上次的位置与大小；各窗口可分别调节音量，也可切换声音来源。使用方式见[Windows 独立播放窗口](doc/guides/windows-playback-windows.md)。
 
-### 降低播放与弹幕的资源开销
+### 播放与弹幕资源管理
 
 Windows 播放优先使用 D3D11 硬件解码和共享纹理输出，视频输出尺寸按显示区域限制，减少渲染表面和纹理开销。快速切源复用播放器资源，图片解码限制并发，隐藏页签卸载图片并保留滚动位置，减少后台页面占用。
 
@@ -80,11 +80,13 @@ Android 和 Windows 的视频与直播弹幕共用显示实现，分别按媒体
 
 ### 弹幕合并与帧率调节
 
-视频弹幕可合并 20 秒内相同或相似的内容，并按重复数量放大字号。Windows 弹幕自动跟随屏幕刷新节奏；Android 可跟随屏幕，或选择 30、60、90、120 FPS，调整后即时生效。轨道间距按实际文字高度分配，高能进度条也可自定义颜色。设置说明见[弹幕合并与帧率设置](doc/guides/danmaku-merge.md)。
+视频弹幕可合并 20 秒内相同或相似的内容，并按重复数量放大字号。Windows 弹幕自动跟随屏幕刷新节奏；Android 可跟随屏幕，或选择 60、90、120 FPS，调整后即时生效。旧版保存的 30 FPS 设置按“跟随屏幕”生效。轨道间距按实际文字高度分配，高能进度条也可自定义颜色。设置说明见[弹幕合并与帧率设置](doc/guides/danmaku-merge.md)。
 
 ### 播放稳定性修复
 
 视频和直播统一管理播放会话，切换内容时隔离旧请求与回调。Android 在解码前准备视频 Surface，Windows 独立窗口在稳定纹理出现后再交接。读取中断时根据媒体和缓冲状态尝试恢复，可按需启用备用 CDN；硬件解码失败时会尝试其他路径。
+
+Windows 切换超分时会短暂重载媒体，点播恢复原播放位置，并保留暂停或播放状态。进入全屏前先更新播放器布局，减少过渡闪动。
 
 Android 另有按屏幕分辨率缩放输出的实验选项，默认关闭。输出尺寸限制减少的是渲染开销，源视频仍按原分辨率解码；实际资源占用和流畅度随设备、驱动、编码、清晰度、弹幕设置及窗口数量变化。
 
@@ -94,11 +96,13 @@ Android 另有按屏幕分辨率缩放输出的实验选项，默认关闭。输
 
 私信支持文本、图片和分享卡片。卡片与附言共用发送锁，分别反馈结果；发送结果待确认时保留草稿，并提示核对聊天记录。
 
-### 黑名单屏蔽
+### 内容过滤
 
 “设置 → 账号与隐私”中的“增强黑名单屏蔽”默认开启，在推荐、热门、搜索、动态和直播等列表中过滤已拉黑作者。“检查合作视频作者”也默认开启，列表已标识的合作视频中，任一作者被拉黑即屏蔽整条视频。合作作者查询会增加请求量和加载时间，可单独关闭。适用范围见[信息流黑名单屏蔽](doc/guides/content-filtering.md)。
 
-首页推荐按视口容量补充内容，普通卡片可在合作作者检查期间先显示；分页失败时保留已有内容并提供重试。
+首页推荐按视口容量补充内容，普通卡片先显示，合作视频卡片核验通过后逐张显示；分页失败时保留已有内容并提供重试。
+
+“设置 → 内容与互动 → 内容过滤”中的“最低评论用户等级”可按 Lv1～Lv6 过滤评论及回复，默认不屏蔽。修改后刷新评论区生效；缺少用户资料的评论保留。适用范围见[评论等级过滤](doc/guides/comments-and-emotes.md#评论等级过滤)。
 
 ### 账号与备份
 
@@ -121,7 +125,7 @@ PiliAurora 从 PiliPlus 2.1.5 开始独立维护，当前发布 Android 和 Wind
 - 内容浏览：首页推荐、热门、排行榜、视频、番剧、文章、音频、直播和搜索。
 - 播放：清晰度和音质选择、播放速度、硬件解码设置、弹幕、字幕、分集切换和播放记录。分集间可继承字幕状态，高能进度条支持自定义颜色。
 - 互动：评论、动态、关注、粉丝、消息通知、私信和直播聊天，直播弹幕支持表情。
-- 评论长按菜单支持拉黑用户；表情包可按分类添加、移除和预览，详见[评论与表情包](doc/guides/comments-and-emotes.md)。
+- 评论支持按用户等级过滤，长按菜单可拉黑用户；表情包可按分类添加、移除和预览，详见[评论与表情包](doc/guides/comments-and-emotes.md)。
 - 账号与内容管理：多账号、收藏夹、观看历史、稍后再看、番剧订阅和离线下载。支持清理失效番剧订阅、选择下载音质。
 - 扩展能力：DLNA 投屏、WebDAV 设置备份、SponsorBlock 和 WebView。
 

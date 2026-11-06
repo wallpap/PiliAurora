@@ -166,7 +166,7 @@ void main() {
       final next = (slot * 1000000 / 120).round();
       await tester.binding.delayed(Duration(microseconds: next - now));
       now = next;
-      if (slot % 2 == 0) source.emit(slot ~/ 2);
+      if (slot.isEven) source.emit(slot ~/ 2);
       messages.add(
         LiveDanmakuMessage(
           identity: slot,

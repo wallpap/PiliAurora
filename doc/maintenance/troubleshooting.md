@@ -58,7 +58,7 @@ Windows 点播和直播弹幕自动跟随屏幕，排查时同时记录屏幕刷
 
 首页推荐的 `recommendFirstItems.ready` 记录当前查询首次有已通过过滤的数据交付，`recommendViewport.ready` 记录数据达到视口及一行预取余量；待检查的合作卡片不计入就绪数量。操作详情包含数量、目标及耗时，查询中断时标记 `interrupted`。这两项衡量数据交付，封面下载、解码与首帧交付分别查看 `imageFile`、`imageDecode`、`imageFrame`。
 
-Android 高刷屏相位问题应同时记录 Scene、视频刷新和弹幕调度。开启性能记录后，`danmaku.layer.*` 快照的 `scheduler` 提供 `updates`、`frameRequests`、`timerWakeups` 累计数，按同一窗口的差值计算频率。`updates` 是实际 ticker 更新次数；`frameRequests` 是提交给引擎的帧请求数，含被合并的请求。`mode` 为 `locked`、`independent`、`vsync`、`muted` 或 `stopped`；`nativePeriodUs`、`syncPeriodUs`、`stableIntervals` 用于检查相位学习和回退，`lastUpdateMonotonicUs` 与 `lastFrameRequestMonotonicUs` 使用本进程单调时钟。Android 与 Windows 使用同一图层快照。图层还记录活动图片、缓存、窗口、配置准备和工作集预算；直播包含候选、资源任务和在途预留。计数读取沿用现有诊断周期。
+Android 高刷屏相位问题应同时记录 Scene、视频刷新和弹幕调度。开启性能记录后，`danmaku.layer.*` 快照的 `scheduler` 提供 `updates`、`frameRequests`、`timerWakeups` 累计数，按同一窗口的差值计算频率。图层的 `updates` 是 `DanmakuFrameScheduler` 实际交付次数，包含连续 ticker 和按需 one-shot 更新；`frameRequests` 包含两类请求，也包含被引擎合并的请求。`frameCallbacks` 只统计 ticker 收到的回调，因此 `stopped` 期间仍可能有 `updates` 增长。`mode` 为 `locked`、`independent`、`vsync`、`muted` 或 `stopped`；`nativePeriodUs`、`syncPeriodUs`、`stableIntervals` 用于检查相位学习和回退，`lastUpdateMonotonicUs` 与 `lastFrameRequestMonotonicUs` 来自 ticker，不覆盖独立 one-shot 的时刻。Android 与 Windows 使用同一图层快照。图层还记录活动图片、缓存、窗口、配置准备和工作集预算；直播包含候选、资源任务和在途预留。计数读取沿用现有诊断周期。
 
 `danmaku.processWorkQuota` 独立记录进程处理任务、预留字节和等待描述，来源页面卸载后继续保留。`obsoleteRunningTasks/obsoleteReservedBytes` 表示预约绑定的取消 token 已失效、任务仍未实际结束的占用。来源快照另有 `rawEstimatedBytes`、`processedEstimatedBytes/processedByteLimit`；显示工作集包含仍持有的表情源图及直播图片任务预留。这些字段按代码中的存储计费规则统计，RSS 与 GPU 使用现有进程和平台采样读取。
 
@@ -68,7 +68,9 @@ Android 的 `nativeFrameBatches/nativeFrameSamples` 统计刷新请求批次，`
 
 点播图层的 `mediaAnchor` 记录位置、采样单调时刻、倍速、推进状态、连续域和有效期限；`presentationTimeUs` 是实际呈现的媒体时间，`sampledAtUs` 是读取诊断的单调时刻。结合 `visible/opacity/tickerEnabled` 区分隐藏与时钟冻结。播放器额外记录规范 `session` 的 phase、stage、runtime/request/load 身份、播放意图和 inhibitor。性能记录的各部分及各来源使用独立的有界快照预算，导出时再分别脱敏，慢帧详情不会耗尽后续图层的预算。
 
-统计弹幕实际频率时，按 Player、媒体代次和 `targetFrameRate` 分组，对相邻且目标不变、active、非 muted 的采样作累计计数差分；排除暂停、缓冲与目标切换边界。`targetFrameRate=0` 表示跟随屏幕，不能与 60/90 FPS 阶段混算。`locked/independent` 切换本身不足以证明实际更新频率异常。
+统计连续弹幕更新频率时，按运行会话、进程、图层、Player 和媒体代次分组，对相邻且目标不变、active、非 muted 的可见采样作累计计数差分；排除暂停、缓冲、来源或视图代次变化及目标切换边界。点播同时核对媒体锚点 ready 且 advancing。没有活动弹幕时允许按需更新，不能用整段视频时长作连续弹幕频率的分母。`targetFrameRate=0` 表示跟随屏幕，不能与 60/90 FPS 阶段混算。`locked/independent` 切换本身不足以证明实际更新频率异常。
+
+Flutter 慢帧按当前屏幕周期判断，Build 或 Raster 任一超预算就计数；165 Hz 下门槛约为 6.06 ms。FrameTiming 会批量回报，某个采样周期的帧数为零不代表停止渲染。定位长帧应使用 `slowFrameDetails.buildStartUtc` 对齐导航与全屏事件；每周期最多保留 16 条详情，先核对是否截断。聚合均值不能还原全体逐帧 P95/P99，零解码丢帧也不能证明最终显示间隔均匀。
 
 连续滚动由 ticker 统一推进，位移按引擎帧目标时间计算，回调实际交付时刻用于锚点有效期、消息年龄和暂停边界。点播锚点校准、来源就绪、直播消息和组件重建合并到后续限帧更新，避免通知频率改变实际滚动节奏；直播重建保留两次更新之间的累计运动时间。首次显示、暂停和媒体连续域切换仍按各自状态及时处理。直播图层以 `presentationTimeUs` 记录投影到帧目标的已呈现时间，`motionUs` 记录截至实际采样时刻的累计运动时间，两者可以相差当前帧的预测余量。
 

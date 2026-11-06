@@ -1,6 +1,6 @@
 # 播放、弹幕与消息设置
 
-设置的生效范围与对应入口如下。媒体加载由 `PlaybackSession` 管理，播放器实例会跨视频页面复用，因此设置生效范围应以会话和媒体加载为准。
+媒体加载由 `PlaybackSession` 管理，原生资源由 `NativePlaybackRuntime` 持有。切源可以复用当前播放器，设置的生效时机以会话、媒体加载或播放器重建为准。
 
 | 设置 | 行为与生效时机 | 主要入口 |
 | --- | --- | --- |
@@ -13,7 +13,7 @@
 | Android 音频输出后端 | 选择 OpenSL ES、AAudio、AudioTrack 的尝试顺序；重新创建播放器时生效 | `PlaybackRuntimeConfig` |
 | Android 纹理缩放 | 输出尺寸策略读取当前设置，随后准备媒体输出时应用 | `native_playback_runtime.dart` |
 | 超分辨率 | 默认档位用于番剧，其他视频可在播放器选择；根据源视频和屏幕分辨率判断可用性。Windows 需要重建输出时会短暂重载媒体，恢复点播位置并保留播放意图 | `super_resolution_policy.dart`、`setShader` |
-| 弹幕帧率 | Android 等平台支持目标档位，Windows 跟随屏幕；当前弹幕立即更新且保留显示实例 | `frame_rate_setting.dart`、`frame_scheduler.dart` |
+| 弹幕帧率 | Android 可选跟随屏幕、60、90、120 FPS，旧 30 FPS 设置按跟随屏幕生效；Windows 跟随屏幕。修改后当前弹幕立即更新且保留显示实例 | `frame_rate_setting.dart`、`frame_scheduler.dart` |
 | 弹幕密度、固定速度、固定转滚动、轨道间距 | 作用于窗口编排与呈现几何；配置交接保留活动弹幕资源 | `window_renderer.dart`、`arrangement.dart` |
 | 会员彩色弹幕、合并及合并字号 | 当前来源刷新规则与显示内容；不重新获取播放器 | `pages/danmaku/view.dart` |
 | 禁用“收到的赞”入口和角标 | 消息页入口禁用，首页未读数排除赞；已有订阅立即更新 | `messaging/preferences.dart` |

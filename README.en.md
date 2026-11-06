@@ -16,7 +16,7 @@ PiliAurora is a third-party Bilibili client for Android and Windows x64, built w
 
 The project retains upstream browsing, playback, social features, and multi-account support. It also adjusts playback resource usage, Windows danmaku rendering, and video output, and adds separate video and live-stream windows, danmaku merging and frame-rate controls, and native sticker management. Danmaku are timed comments displayed over the video.
 
-[Download](https://github.com/wallpap/PiliAurora/releases/latest) · [1.6.5 release notes](doc/releases/v1.6.5.md) · [Report an issue](https://github.com/wallpap/PiliAurora/issues) · [License](LICENSE)
+[Download](https://github.com/wallpap/PiliAurora/releases/latest) · [v1.6.7 release notes](doc/releases/v1.6.7.md) · [Report an issue](https://github.com/wallpap/PiliAurora/issues) · [License](LICENSE)
 
 ## Screenshots
 
@@ -49,7 +49,7 @@ Pop out videos or live streams into separate windows while continuing to browse 
   <br>
   <img src="assets/display/android-home.jpg" alt="Android home page" width="230">
   <img src="assets/display/android-bangumi.jpg" alt="Android bangumi screen" width="230">
-  <img src="assets/display/android-danmaku-filter-settings.jpg" alt="Android danmaku merging" width="230">
+  <img src="assets/display/android-danmaku-filter-settings.jpg" alt="Android danmaku filtering and merging settings" width="230">
 </p>
 
 ## Supported platforms and downloads
@@ -63,13 +63,15 @@ Download the package for your platform from [GitHub Releases](https://github.com
 
 The in-app update check skips prereleases. Download prerelease builds manually from the Releases page.
 
+For a Windows installer update, close the main window and playback windows, then install to the existing directory. For a portable update, extract the ZIP into a new directory and run `PiliAurora.exe`. Accounts and settings remain in the Windows user data directory. If a pinned taskbar shortcut still points to the old folder, unpin it and pin the updated app.
+
 ## Improvements over PiliPlus 2.1.5
 
 ### Multiple playback windows on Windows
 
 Open videos and live streams in separate windows while continuing to browse in the main window. Playback windows support always-on-top mode, moving and resizing, grid and cascade arrangements, and saved positions and sizes. Adjust each window's volume independently or switch the audio source. See [Windows playback windows](doc/guides/windows-playback-windows.md).
 
-### Lower playback and danmaku overhead
+### Playback and danmaku resource management
 
 Windows playback prefers D3D11 hardware decoding and shared-texture output. Video output dimensions are limited to the display area to reduce rendering surface and texture overhead. Player resources are reused during rapid source changes. Image decoding uses bounded concurrency, and hidden tabs unload images while preserving their scroll positions.
 
@@ -77,11 +79,13 @@ On Android and Windows, video and live-stream danmaku share a display implementa
 
 ### Danmaku merging and frame-rate controls
 
-Video danmaku can merge identical or similar comments within 20 seconds and enlarge text based on the number of duplicates. Windows danmaku automatically follow the display refresh rate. On Android, danmaku can follow the display or target 30, 60, 90, or 120 FPS; changes take effect immediately. Track spacing accounts for actual text height, and the comment-density progress bar supports custom colors. See [Danmaku merging and frame-rate settings](doc/guides/danmaku-merge.md).
+Video danmaku can merge identical or similar comments within 20 seconds and enlarge text based on the number of duplicates. Windows danmaku automatically follow the display refresh rate. On Android, danmaku can follow the display or target 60, 90, or 120 FPS; changes take effect immediately. Saved 30 FPS settings now use the display refresh rate. Track spacing accounts for actual text height, and the comment-density progress bar supports custom colors. See [Danmaku merging and frame-rate settings](doc/guides/danmaku-merge.md).
 
 ### Playback stability fixes
 
 Videos and live streams share playback-session management that isolates old requests and callbacks when switching content. Android prepares the video Surface before decoding, and separate Windows playback windows wait for a stable texture before handing over output. Interrupted reads trigger recovery attempts based on media and buffer state. A fallback CDN can be enabled when needed, and hardware-decoding failures trigger attempts with alternative paths.
+
+On Windows, changing super-resolution briefly reloads the media. On-demand videos resume at the previous position and retain their paused or playing state. The player updates its layout before entering fullscreen to reduce transition flicker.
 
 Android also has an experimental option to scale output to the screen resolution, disabled by default. Output-size limits reduce rendering overhead; the source video is still decoded at its original resolution. Resource usage and smoothness vary with the device, drivers, codec, video quality, danmaku settings, and number of windows.
 
@@ -91,15 +95,17 @@ The home page and message entry points share unread state. Replies, mentions, li
 
 Direct messages support text, images, and share cards. Cards and accompanying text share a send lock and report their results separately. Drafts are retained when delivery is awaiting confirmation, with a prompt to check the conversation history.
 
-### Blacklist filtering
+### Content filtering
 
 Enhanced blacklist filtering is enabled by default under Settings → Account and privacy. It filters blocked authors from recommendations, popular content, search, feeds, and live-stream lists. Cooperative-author checks are also enabled by default: videos marked as collaborations are hidden if any author is blocked. These checks add requests and loading time and can be disabled separately. See [Blacklist filtering](doc/guides/content-filtering.md) for coverage.
 
-The recommendation feed loads enough items for the viewport and can show ordinary cards while cooperative-author checks finish. If pagination fails, existing items remain visible and loading can be retried.
+The recommendation feed loads enough items for the viewport. Ordinary cards appear first, and collaboration cards appear individually after their author checks pass. If pagination fails, existing items remain visible and loading can be retried.
+
+The minimum commenter level setting under Settings → Content and interactions → Content filtering filters comments and replies by levels Lv1 through Lv6. It is off by default and takes effect after refreshing the comments. Comments without user data remain visible. See [Comment level filtering](doc/guides/comments-and-emotes.md#评论等级过滤) for coverage.
 
 ### Accounts and backups
 
-The current source encrypts local account credentials and the WebDAV password. Exporting login information requires a backup password. A settings backup with a WebDAV password encrypts that field; other settings remain readable JSON. Older plaintext backups can still be imported. See [Account credentials and backups](doc/guides/data-security.md) for migration and password requirements.
+Local account credentials and the WebDAV password are encrypted. Login and settings backups require no additional password and can be restored on another device. Other settings remain readable JSON, and older plaintext backups can still be imported. Encrypted backups require a version that supports the format. See [Account credentials and backups](doc/guides/data-security.md).
 
 ### Everyday additions
 
@@ -117,7 +123,7 @@ PiliAurora has been maintained independently since PiliPlus 2.1.5 and currently 
 - Browsing: recommendations, trending content, rankings, videos, series, articles, audio, live streams, and search.
 - Playback: video and audio quality, playback speed, hardware-decoding settings, danmaku, subtitles, episode switching, and playback history. Subtitle preferences carry between episodes, and the comment-density progress bar supports custom colors.
 - Social features: comments, activity feeds, following, followers, notifications, direct messages, and live chat with emotes.
-- Comment and sticker tools: block users from the comment long-press menu and add, remove, or preview sticker packs by category. See [Comments and stickers](doc/guides/comments-and-emotes.md).
+- Comment and sticker tools: filter comments by user level, block users from the long-press menu, and add, remove, or preview sticker packs by category. See [Comments and stickers](doc/guides/comments-and-emotes.md).
 - Account and content management: multiple accounts, favorites, watch history, watch later, series subscriptions, and offline downloads, including unavailable-subscription cleanup and download audio-quality selection.
 - Extras: DLNA casting, WebDAV settings backup, SponsorBlock, and WebView.
 
