@@ -49,6 +49,7 @@ $ciTests = @(
     "test/plugin/pl_player/playback/network_recovery_test.dart",
     "test/plugin/pl_player/playback/progress_projection_test.dart",
     "test/plugin/pl_player/player_loading_test.dart",
+    "test/plugin/pl_player/fullscreen_transition_test.dart",
     "test/plugin/pl_player/playback/player_architecture_acceptance_test.dart",
     "test/plugin/pl_player/playback/playback_operation_scheduler_test.dart",
     "test/plugin/pl_player/playback/playback_runtime_slot_test.dart",

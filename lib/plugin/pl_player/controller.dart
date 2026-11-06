@@ -8,6 +8,7 @@ import 'dart:math' show max, min;
 import 'package:pili_aurora/utils/volume_utils.dart';
 import 'package:flutter/foundation.dart'
     show ValueListenable, visibleForTesting;
+import 'package:flutter/scheduler.dart' show SchedulerBinding;
 
 import 'package:pili_aurora/common/assets.dart';
 import 'package:pili_aurora/http/loading_state.dart';
@@ -2303,6 +2304,11 @@ class PlPlayerController
     _fsProcessing = true;
     this.isManualFS = isManualFS;
     try {
+      if (Platform.isWindows && status && (isDesktopPip || !inAppFullScreen)) {
+        // 先提交隐藏详情面板的全屏布局，再放大原生窗口，避免旧布局被拉伸后又跳一次。
+        _setFullScreen(true);
+        await SchedulerBinding.instance.endOfFrame;
+      }
       if (isDesktopPip) {
         await windowManager.setFullScreen(status);
       } else if (status) {
@@ -2329,7 +2335,7 @@ class PlPlayerController
         }
       }
     } finally {
-      _setFullScreen(status);
+      if (isFullScreen.value != status) _setFullScreen(status);
       _fsProcessing = false;
     }
   }

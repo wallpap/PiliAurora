@@ -25,6 +25,8 @@ GL 纹理状态。真实直播的首次播放、刷新与纹理像素验证见
 
 输出尺寸策略和截图交接位于 [`view.dart`](../../lib/plugin/pl_player/view/view.dart) 与 [`video_output_resizer.dart`](../../lib/plugin/pl_player/utils/video_output_resizer.dart)。Windows 首次检测 Flutter 窗口所在显示器的物理尺寸并缓存上限，窗口布局变化由 Flutter 缩放。输出限幅降低渲染目标的开销，媒体解码仍使用源分辨率。
 
+Windows 进入原生全屏前，先切换播放器全屏状态并等待 Flutter 提交该帧布局，再调整窗口尺寸，避免新窗口尺寸先展示普通详情布局。此等待确认 UI 提交，不代表 GPU 已完成呈现；播放器元素与纹理继续复用。回归见 `test/plugin/pl_player/fullscreen_transition_test.dart`，实际过渡闪屏仍需目标设备验证。
+
 截图交接在收到对应 Flutter 帧的 raster 回执后才提交原生 resize。等待回执超过 3 秒时取消本次调整、撤掉截图并继续显示原生纹理；原生 resize 已提交后的截图仍保留到新输出确认，或恢复旧几何完成。
 
 ## 超分切换
