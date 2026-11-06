@@ -430,31 +430,6 @@ class PgcIntroController extends CommonIntroController {
   }
 
   Future<void> queryIsFollowed() async {
-    // try {
-    //   final result = await Request().get(
-    //     'https://www.bilibili.com/bangumi/play/ss$seasonId',
-    //   );
-    //   dom.Document document = html_parser.parse(result.data);
-    //   dom.Element? scriptElement =
-    //       document.querySelector('script#__NEXT_DATA__');
-    //   if (scriptElement != null) {
-    //     dynamic scriptContent = jsonDecode(scriptElement.text);
-    //     isFollowed.value =
-    //         scriptContent['props']['pageProps']['followState']['isFollowed'];
-    //     followStatus.value =
-    //         scriptContent['props']['pageProps']['followState']['followStatus'];
-    //   }
-    // } catch (_) {}
-
-    // ViewGrpc.view(bvid: bvid).then((res) {
-    //   if (res.isSuccess) {
-    //     ViewPgcAny view = ViewPgcAny.fromBuffer(res.data.supplement.value);
-    //     final userStatus = view.ogvData.userStatus;
-    //     isFollowed.value = userStatus.follow == 1;
-    //     followStatus.value = userStatus.followStatus;
-    //   }
-    // });
-
     final res = await PgcHttp.seasonStatus(seasonId!);
     if (res case Success(:final response)) {
       isFollowed.value = response['follow'] == 1;

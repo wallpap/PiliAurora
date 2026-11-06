@@ -48,10 +48,6 @@ abstract final class GrpcUrl {
   static const getTotalUnread = '$im/GetTotalUnread';
   static const sessionDetail = '$im/SessionDetail';
 
-  // view
-  static const viewunite = '/bilibili.app.viewunite.v1.View';
-  static const view = '$viewunite/View';
-
   // audio
   static const audio = '/bilibili.app.listener.v1.Listener';
   static const audioPlayUrl = '$audio/PlayURL';
