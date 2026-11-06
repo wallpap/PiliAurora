@@ -48,7 +48,7 @@ PiliAurora 是面向 Android 和 Windows x64 的 Bilibili 第三方客户端，�
   <img src="assets/display/android-playback-settings.jpg" alt="Android 播放器设置面板" width="800">
   <br>
   <img src="assets/display/android-home.jpg" alt="Android 主页" width="230">
-  <img src="assets/display/android-danmaku-motion-settings.jpg" alt="Android 弹幕密度&帧率控制" width="230">
+  <img src="assets/display/android-bangumi.jpg" alt="Android 番剧界面" width="230">
   <img src="assets/display/android-danmaku-filter-settings.jpg" alt="Android 弹幕合并" width="230">
 </p>
 

@@ -39,7 +39,7 @@ Pop out videos or live streams into separate windows while continuing to browse 
 <p align="center">
   <img src="assets/display/windows-bangumi.png" alt="Windows series page" width="800">
   <br>
-  <em>Windows series page</em>
+  <em>Windows bangumi page</em>
 </p>
 
 ### Android
@@ -47,8 +47,8 @@ Pop out videos or live streams into separate windows while continuing to browse 
 <p align="center">
   <img src="assets/display/android-playback-settings.jpg" alt="Android playback settings panel" width="800">
   <br>
-  <img src="assets/display/android-home.jpg" alt="Android home screen" width="230">
-  <img src="assets/display/android-danmaku-motion-settings.jpg" alt="Android danmaku density and frame-rate controls" width="230">
+  <img src="assets/display/android-home.jpg" alt="Android home page" width="230">
+  <img src="assets/display/android-bangumi.jpg" alt="Android bangumi screen" width="230">
   <img src="assets/display/android-danmaku-filter-settings.jpg" alt="Android danmaku merging" width="230">
 </p>
 
