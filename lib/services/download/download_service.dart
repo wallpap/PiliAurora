@@ -257,8 +257,9 @@ class DownloadService extends GetxService {
     final cid = entry.cid;
     if (_creatingCids.contains(cid) ||
         downloadList.any((e) => e.cid == cid) ||
-        waitDownloadQueue.any((e) => e.cid == cid))
+        waitDownloadQueue.any((e) => e.cid == cid)) {
       return;
+    }
     // 在首次 await 前预留 CID，持久化失败时释放以允许重试。
     _creatingCids.add(cid);
     try {

@@ -3,15 +3,10 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:dio/dio.dart';
-import 'package:fixnum/fixnum.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hive_ce/hive.dart';
-import 'package:pili_aurora/grpc/grpc_req.dart';
-import 'package:pili_aurora/grpc/bilibili/app/listener/v1.pb.dart';
 import 'package:pili_aurora/http/init.dart';
 import 'package:pili_aurora/models/common/account_type.dart';
-import 'package:pili_aurora/pages/audio/controller.dart';
-import 'package:pili_aurora/services/settings/settings_backup.dart';
 import 'package:pili_aurora/utils/accounts.dart';
 import 'package:pili_aurora/utils/accounts/account.dart';
 import 'package:pili_aurora/utils/request_utils.dart';
@@ -37,24 +32,6 @@ class _Adapter implements HttpClientAdapter {
       200,
       headers: {
         'content-type': ['application/json'],
-      },
-    ),
-  );
-  void playlist(int index, List<int> ids) => requests[index].complete(
-    ResponseBody.fromBytes(
-      GrpcReq.compressProtobuf(
-        PlaylistResp(
-          list: ids.map(
-            (id) => DetailItem(item: PlayItem(oid: Int64(id), itemType: 2)),
-          ),
-          reachStart: true,
-          reachEnd: true,
-        ).writeToBuffer(),
-      ),
-      200,
-      headers: {
-        'grpc-status': ['0'],
-        'content-type': ['application/grpc'],
       },
     ),
   );
@@ -99,12 +76,6 @@ void main() {
       await Future<void>.delayed(Duration.zero);
     }
     expect(adapter.requests.length, count);
-  }
-
-  Future<void> settle() async {
-    for (var i = 0; i < 20; i++) {
-      await Future<void>.delayed(Duration.zero);
-    }
   }
 
   Account account(int mid) => LoginAccount(

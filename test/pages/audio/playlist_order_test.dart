@@ -9,14 +9,10 @@ import 'package:hive_ce/hive.dart';
 import 'package:pili_aurora/grpc/grpc_req.dart';
 import 'package:pili_aurora/grpc/bilibili/app/listener/v1.pb.dart';
 import 'package:pili_aurora/http/init.dart';
-import 'package:pili_aurora/models/common/account_type.dart';
 import 'package:pili_aurora/pages/audio/controller.dart';
-import 'package:pili_aurora/services/settings/settings_backup.dart';
 import 'package:pili_aurora/utils/accounts.dart';
 import 'package:pili_aurora/utils/accounts/account.dart';
-import 'package:pili_aurora/utils/request_utils.dart';
 import 'package:pili_aurora/utils/storage.dart';
-import 'package:pili_aurora/utils/storage_pref.dart';
 
 class _Adapter implements HttpClientAdapter {
   final requests = <Completer<ResponseBody>>[];
@@ -107,20 +103,14 @@ void main() {
     }
   }
 
-  Account account(int mid) => LoginAccount(
-    BiliCookieJar.fromJson({'DedeUserID': '$mid', 'bili_jct': 'synthetic'}),
-    null,
-    null,
-  );
-
   test('AUDIT2: playlist order keeps the most recent selection', () async {
     final controller = AudioController()
       ..id = Int64(11)
       ..oid = Int64(11)
       ..subId = [Int64(11)]
       ..itemType = 2
-      ..from = PlaylistSource.DEFAULT;
-    controller.onChangeOrder(ListOrder.ORDER_REVERSE);
+      ..from = PlaylistSource.DEFAULT
+      ..onChangeOrder(ListOrder.ORDER_REVERSE);
     await dispatched(1);
     controller.onChangeOrder(ListOrder.ORDER_NORMAL);
     await dispatched(2);

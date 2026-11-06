@@ -44,8 +44,9 @@ void main() {
     await _mount(tester);
     controller.telTextController.text = '10000000000';
     controller.smsCodeTextController.text = '123456';
-    controller.captchaKey = 'synthetic';
-    controller.smsSendTimestamp = DateTime.now().millisecondsSinceEpoch;
+    controller
+      ..captchaKey = 'synthetic'
+      ..smsSendTimestamp = DateTime.now().millisecondsSinceEpoch;
     final request = controller.loginBySmsCode();
     await _flush(tester);
     adapter.reply(0, {
