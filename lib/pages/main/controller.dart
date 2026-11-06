@@ -20,6 +20,7 @@ import 'package:pili_aurora/utils/storage.dart';
 import 'package:pili_aurora/utils/storage_key.dart';
 import 'package:pili_aurora/utils/storage_pref.dart';
 import 'package:pili_aurora/utils/update.dart';
+import 'package:pili_aurora/utils/accounts.dart';
 import 'package:pili_aurora/utils/rate_limiter.dart';
 import 'package:get/get.dart';
 import 'package:material_ui/material_ui.dart';
@@ -40,6 +41,7 @@ class MainController extends GetxController
   final RxInt selectedIndex = 0.obs;
   late final VoidCallback _unregisterPageDiagnostics;
 
+  int _dynamicGeneration = 0;
   final RxInt dynCount = 0.obs;
   late DynamicBadgeMode dynamicBadgeMode;
   late bool checkDynamic = Pref.checkDynamic;
@@ -154,14 +156,21 @@ class MainController extends GetxController
     if (!accountService.isLogin.value || !hasDyn) {
       return;
     }
+    final generation = ++_dynamicGeneration;
+    final account = Accounts.main;
     DynGrpc.dynRed().then((res) {
-      if (res != null) {
+      if (!isClosed &&
+          generation == _dynamicGeneration &&
+          identical(account, Accounts.main) &&
+          accountService.isLogin.value &&
+          res != null) {
         setDynCount(res);
       }
     });
   }
 
   void setDynCount([int count = 0]) {
+    _dynamicGeneration++;
     if (!hasDyn) return;
     dynCount.value = count;
   }
@@ -300,6 +309,7 @@ class MainController extends GetxController
 
   @override
   void onClose() {
+    _dynamicGeneration++;
     _unregisterPageDiagnostics();
     barOffset?.close();
     controller.dispose();
@@ -308,6 +318,7 @@ class MainController extends GetxController
 
   @override
   void onChangeAccount(bool isLogin) {
+    setDynCount();
     if (isLogin) {
       queryUnreadMsg();
       getUnreadDynamic();
