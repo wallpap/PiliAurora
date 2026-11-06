@@ -18,8 +18,6 @@ class RenderRetainedLayerCleanupPrototype extends RenderProxyBox {
     VoidCallback? afterDartRelease,
     bool recomposeAttachedScopes = false,
     bool recomposeAttachedRoots = false,
-    bool recomposeHiddenAncestors = false,
-    bool nearestHiddenBoundaryOnly = false,
     bool recursiveScopeContainers = false,
   }) {
     final nodes = <RenderObject>[];
@@ -27,7 +25,6 @@ class RenderRetainedLayerCleanupPrototype extends RenderProxyBox {
     final detachedRoots = <ContainerLayer>{};
     final attachedRoots = <ContainerLayer>{};
     final originallyDetached = <ContainerLayer>{};
-    final hiddenAncestorLayers = <ContainerLayer>{};
     final inspected = <Layer>{};
     final handles = <LayerHandle<ContainerLayer>>[];
     var hasExternalContent = false;
@@ -91,41 +88,10 @@ class RenderRetainedLayerCleanupPrototype extends RenderProxyBox {
         collectContainers(layer);
       }
     }
-    if (recomposeHiddenAncestors) {
-      final ancestors = <RenderObject>[];
-      int? hiddenBoundaryIndex;
-      for (RenderObject? node = this; node != null; node = node.parent) {
-        ancestors.add(node);
-        final data = node.parentData;
-        if ((node is RenderOffstage && node.offstage) ||
-            (data is SliverMultiBoxAdaptorParentData && data.keptAlive)) {
-          hiddenBoundaryIndex = ancestors.length - 1;
-          if (nearestHiddenBoundaryOnly) break;
-        }
-      }
-      if (hiddenBoundaryIndex != null) {
-        for (final node in ancestors.take(hiddenBoundaryIndex + 1)) {
-          if (node.layer case final layer?) hiddenAncestorLayers.add(layer);
-        }
-        // 只纳入连接到已确认隐藏祖先的中间层，绝不越过该边界去找全局根。
-        final intermediateLayers = <ContainerLayer>{};
-        for (final layer in {...scopedLayers, ...hiddenAncestorLayers}) {
-          final chain = <ContainerLayer>[];
-          var parent = layer.parent;
-          while (parent != null && !hiddenAncestorLayers.contains(parent)) {
-            chain.add(parent);
-            parent = parent.parent;
-          }
-          if (parent != null) intermediateLayers.addAll(chain);
-        }
-        hiddenAncestorLayers.addAll(intermediateLayers);
-      }
-    }
     for (final layer in {
       ...scopedLayers,
       ...detachedRoots,
       ...attachedRoots,
-      ...hiddenAncestorLayers,
     }) {
       inspect(layer);
     }
@@ -137,7 +103,6 @@ class RenderRetainedLayerCleanupPrototype extends RenderProxyBox {
         ...scopedLayers,
         ...detachedRoots,
         ...attachedRoots,
-        ...hiddenAncestorLayers,
       }) {
         handles.add(LayerHandle<ContainerLayer>(layer));
       }
@@ -165,15 +130,6 @@ class RenderRetainedLayerCleanupPrototype extends RenderProxyBox {
       for (final root in attachedRoots) {
         if (!recomposeAttachedScopes || !scopedLayers.contains(root)) {
           root.buildScene(ui.SceneBuilder()).dispose();
-        }
-      }
-      // scoped layers 可能已从当前 Dart 父链分离，但隐藏 route 的旧 native
-      // 层仍引用它们。按由深到浅的顺序更新，保留隐藏祖先其余绘制内容。
-      if (hiddenAncestorLayers.isNotEmpty) {
-        final hiddenLayers = {...scopedLayers, ...hiddenAncestorLayers}.toList()
-          ..sort((a, b) => b.depth.compareTo(a.depth));
-        for (final layer in hiddenLayers) {
-          layer.buildScene(ui.SceneBuilder()).dispose();
         }
       }
       for (final node in nodes) {
