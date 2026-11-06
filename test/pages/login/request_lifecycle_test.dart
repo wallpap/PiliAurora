@@ -40,6 +40,44 @@ void main() {
     await GStorage.localCache.close();
   });
 
+  testWidgets('短信登录忽略页面关闭后的成功响应', (tester) async {
+    await _mount(tester);
+    controller.telTextController.text = '10000000000';
+    controller.smsCodeTextController.text = '123456';
+    controller.captchaKey = 'synthetic';
+    controller.smsSendTimestamp = DateTime.now().millisecondsSinceEpoch;
+    final request = controller.loginBySmsCode();
+    await _flush(tester);
+    adapter.reply(0, {
+      'code': 0,
+      'data': {
+        'key': r'''-----BEGIN PUBLIC KEY-----
+MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAsKp7BlzBqHjItsLoDk3O
+oTObb150+8f/ofV2B/ltmsbxIRDBBcq1vQPD9fCvh5+nhXG+v09RMBJHflAlDqxF
+6mH3dLYMcxLynahOHijj+LxYfiuymAaiX++UdV88mbFRDd5wkxNkz06525GjhvZt
+lWyViYnFj0J/x30OLupfYDZ/dPKL8TVy0ez36hyt/YZMviPtAMiXJYIIeOCsCmqa
+4DtX8qJ3JVE6XXfAS+DSYx9TxEylk3O+ctkjP2Pd2Q8uoCyGkeBL+89Aut5wkfB6
+NAj0muc73KLXjpD7vYYDsgbMp37hz9TdCn3TxrXB/n9yz8hgJga/t9u9qcSGsqj+
+SQIDAQAB
+-----END PUBLIC KEY-----
+''',
+      },
+    });
+    await _flush(tester);
+    expect(adapter.pending, hasLength(2));
+    controller.onDelete();
+    adapter.reply(1, {
+      'code': 0,
+      'data': {
+        'token_info': <String, dynamic>{},
+        'cookie_info': {'cookies': <Object>[]},
+      },
+    });
+    await _flush(tester);
+    await request;
+    expect(controller.savedAccounts, 0);
+  });
+
   testWidgets('二维码申请失败显示错误并允许重新申请', (tester) async {
     final first = controller.refreshQRCode();
     await _flush(tester);

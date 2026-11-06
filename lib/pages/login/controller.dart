@@ -49,6 +49,7 @@ class LoginPageController extends GetxController
 
   bool _isReq = false;
   int _qrGeneration = 0;
+  int _smsLoginGeneration = 0;
   int _lastTabIndex = 0;
 
   @override
@@ -65,6 +66,7 @@ class LoginPageController extends GetxController
       ..dispose();
     qrCodeTimer?.cancel();
     _qrGeneration++;
+    _smsLoginGeneration++;
     smsSendCooldownTimer?.cancel();
     telTextController.dispose();
     usernameTextController.dispose();
@@ -502,6 +504,8 @@ class LoginPageController extends GetxController
 
   // 短信验证码登录
   Future<void> loginBySmsCode() async {
+    if (isClosed) return;
+    final generation = ++_smsLoginGeneration;
     if (telTextController.text.isEmpty) {
       SmartDialog.showToast('手机号不能为空');
       return;
@@ -520,6 +524,7 @@ class LoginPageController extends GetxController
       return;
     }
     final webKeyRes = await LoginHttp.getWebKey();
+    if (isClosed || generation != _smsLoginGeneration) return;
     if (!webKeyRes['status']) {
       SmartDialog.showToast(webKeyRes['msg']);
       return;
@@ -532,11 +537,12 @@ class LoginPageController extends GetxController
       cid: selectedCountryCodeId.countryId,
       key: key,
     );
+    if (isClosed || generation != _smsLoginGeneration) return;
     if (res['status']) {
       SmartDialog.showToast('登录成功');
       final data = res['data'];
       await setAccount(data['token_info'], data['cookie_info']['cookies']);
-      Get.back();
+      if (!isClosed && generation == _smsLoginGeneration) Get.back();
     } else {
       SmartDialog.showToast(res['msg']);
     }
