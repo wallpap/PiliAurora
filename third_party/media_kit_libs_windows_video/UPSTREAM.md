@@ -34,7 +34,7 @@ CI 可独立运行：
 python tool/verify_libmpv.py
 ```
 
-该命令先校验合并通知及各原文段落，再下载并校验原始归档，缓存到 `build/upstream-mpv/`。独立的 [验收工作流](../../.github/workflows/mpv.yml)下载并校验同一归档。更新时修改 `windows/libmpv.json` 的版本、来源和摘要，同步依赖包修订，执行依赖验收、Windows 构建及真实播放探针。
+该命令先校验合并通知及各原文段落，再下载并校验原始归档，缓存到 `build/upstream-mpv/`。[发布工作流](../../.github/workflows/build.yml)的 Windows 任务执行同一校验。更新时修改 `windows/libmpv.json` 的版本、来源和摘要，同步依赖包修订，执行依赖验收、Windows 构建及真实播放探针。
 
 ### 输出重建
 

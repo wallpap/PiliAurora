@@ -60,7 +60,7 @@ pwsh -File tool/build.ps1 -Platform android -Mode release
 pwsh -File tool/build.ps1 -Platform windows -Mode release
 ```
 
-Android 通用 APK 位于 `build/app/outputs/flutter-apk/app-release.apk`，Windows 运行目录位于 `build/windows/x64/runner/Release/`。GitHub Release 由 `.github/workflows/build.yml` 手动触发并传入 `vX.Y.Z`；预发布须启用 `prerelease`，需要先验证附件时可同时启用 `draft_release`。Android 使用对应架构的定制引擎生成三个分 ABI APK，Windows 使用定制引擎生成 x64 便携包和安装程序。引擎产物及身份文件随 Git 保存，CI 校验后直接装配，维护步骤见[预编译引擎](../../third_party/flutter_engine/README.md)。版本名与构建号取自 `pubspec.yaml`，工作流会用 tag 和提交数重写本次构建的版本和 `pili_release.json`。
+Android 通用 APK 位于 `build/app/outputs/flutter-apk/app-release.apk`，Windows 运行目录位于 `build/windows/x64/runner/Release/`。GitHub Release 由 `.github/workflows/build.yml` 手动触发并传入 `vX.Y.Z`，通过 `build_android` 和 `build_win_x64` 选择平台；预发布须启用 `prerelease`，需要先验证附件时可同时启用 `draft_release`。Android 使用对应架构的定制引擎生成三个分 ABI APK，Windows 使用定制引擎生成 x64 便携包和安装程序。引擎产物及身份文件随 Git 保存，CI 校验后直接装配，维护步骤见[预编译引擎](../../third_party/flutter_engine/README.md)。版本名与构建号取自 `pubspec.yaml`，工作流会用 tag 和提交数重写本次构建的版本和 `pili_release.json`。
 
 Windows 的 fastforge 打包前置入口为 `tool/packaging/prepare_windows_package.py`，先装配并校验定制引擎，再生成 `piliaurora-runtime.sha256`。安装版和便携版携带相同的程序文件清单；Inno 模板要求该清单存在。覆盖安装完成后，旧清单中已退役且摘要未改变的程序文件会被清理，用户修改的文件和未登记文件会保留。从尚无清单的旧安装升级时，开始记录本次包的文件归属。
 
@@ -84,7 +84,7 @@ fvm flutter test
 
 常规分析覆盖应用、测试和工具代码。本地依赖包有各自的依赖上下文；更新依赖包时，按[依赖维护流程](../../third_party/README.md)单独检查。全仓库分析会包含上游源码和实验代码，结果按来源区分。
 
-PR 检查由 `.github/workflows/checks.yml` 独立执行，以只读仓库权限运行依赖验收、CI 测试、Android 主机探针、采集器单元测试、呈现引擎身份与 APK 装配回归及 Windows 采样门控主机探针。严格分析范围为 `lib/plugin/pl_player lib/pages/danmaku test tool`；全量分析还应手动运行上述命令，当前 `lib/common/widgets/flutter/` 的上游控件副本存在既存提示。
+PR 检查由 `.github/workflows/checks.yml` 独立执行，使用只读仓库权限。Linux 任务运行依赖验收、共享 CI 测试、Android 主机探针、采集器单元测试、呈现引擎身份与 APK 装配回归及 Windows 采样门控的主机探针。Windows 任务运行 CI 测试及页面、WebView 保留回归，覆盖依赖实际 Windows 主机的全屏布局交接。严格分析范围为 `lib/plugin/pl_player lib/pages/danmaku test tool`；全量分析还应手动运行上述命令，当前 `lib/common/widgets/flutter/` 的上游控件副本存在既存提示。
 
 CI 从 `.fvmrc` 读取 Flutter 固定版本，避免 Windows 为解析 `pubspec.yaml` 额外安装 yq；升级 SDK 时仍须同步 `pubspec.yaml` 的版本约束。同一 PR 有新提交时自动取消旧检查，手动检查与发布构建保留独立运行。Android 发布启用 Gradle 任务缓存，配合现有 Gradle 用户目录缓存复用可缓存的任务输出；Gradle 脚本、属性与 Pub 锁文件参与缓存键。实际命中率和耗时需在后续 GitHub Actions 运行中确认。
 
@@ -102,7 +102,7 @@ uv run --locked python -m unittest discover -s tool/probes/android -p '*_test.py
 pwsh -NoProfile -File tool/run-ci-tests.ps1
 ```
 
-`tool/run-ci-tests.ps1` 只调用 `fvm flutter test --no-pub`，不会运行 `pub get`、修改 Flutter SDK、应用补丁或构建应用。运行前需准备好依赖；依赖来源检查和补丁由 GitHub Actions 的独立步骤执行。
+`tool/run-ci-tests.ps1` 默认调用 `fvm flutter test --no-pub`，两端共用会话、消息、设置和弹幕等逻辑回归。Windows 主机另运行桌面主题、小窗启动和原生全屏布局测试；Linux 主机另运行 `test/plugin/pl_player/android/` 中选定的模拟平台通道测试。共享文件内少量依赖 Windows 的用例保留主机跳过条件。脚本不会运行 `pub get`、修改 Flutter SDK、应用补丁或构建应用。运行前需准备好依赖；依赖来源检查和补丁由 GitHub Actions 的独立步骤执行。
 
 定位单个功能时，可将相关测试文件或目录传给 `fvm flutter test`。测试按业务领域放在 `test/` 下，目录索引见 [`test/README.md`](../../test/README.md)。
 

@@ -14,6 +14,7 @@ concurrency:
 
 jobs:
   checks:
+    name: Linux host checks
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -42,16 +43,9 @@ jobs:
       - name: Analyze playback, danmaku, tests and tools
         run: flutter analyze --no-pub lib/plugin/pl_player lib/pages/danmaku test tool
 
-      - name: Run CI tests
+      - name: Run Linux host CI tests
         shell: pwsh
         run: pwsh -NoProfile -File tool/run-ci-tests.ps1 -FlutterTool path
-
-      - name: Test Windows page and WebView retention
-        shell: pwsh
-        run: |
-          lib/scripts/patch.ps1 windows -SkipPubGet
-          flutter test --no-pub test/common/widgets/inactive_sliver_cache_test.dart test/common/widgets/inactive_sliver_semantics_test.dart test/common/widgets/pipeline_owner_semantics_test.dart test/common/widgets/image/retained_layer_release_test.dart
-          flutter test --no-pub third_party/flutter_inappwebview_windows/test/webview_environment_channel_test.dart
 
       - name: Run Android host probes
         shell: pwsh
@@ -77,3 +71,31 @@ jobs:
           python tool/probes/windows/windows_renderer_release_probe.py
           python -m unittest discover -s tool/engine/frame_plan -p '*_test.py' -v
           python -m unittest discover -s tool/packaging -p '*_test.py' -v
+
+  windows:
+    name: Windows host checks
+    runs-on: windows-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version-file: .fvmrc
+          cache: true
+
+      - name: Apply Windows patches and prepare dependencies
+        shell: pwsh
+        run: lib/scripts/patch.ps1 windows
+
+      - name: Run Windows host CI tests
+        shell: pwsh
+        run: pwsh -NoProfile -File tool/run-ci-tests.ps1 -FlutterTool path
+
+      - name: Test Windows page retention
+        run: flutter test --no-pub test/common/widgets/inactive_sliver_cache_test.dart test/common/widgets/inactive_sliver_semantics_test.dart test/common/widgets/pipeline_owner_semantics_test.dart test/common/widgets/image/retained_layer_release_test.dart
+
+      - name: Test Windows WebView environment lifecycle
+        run: flutter test --no-pub third_party/flutter_inappwebview_windows/test/webview_environment_channel_test.dart

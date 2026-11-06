@@ -8,4 +8,4 @@
 
 校验入口：`python third_party/nativeapi/package.py verify`。CMake 在应用构建时核对源码、脚本、归档与交付文件摘要。许可随应用安装到 `nativeapi-licenses/`。
 
-重建工作流 `.github/workflows/nativeapi.yml` 手动运行并上传产物；普通 Windows CI 使用仓库预编译包。WinUI3 和非 x64 架构保留源码路径。实际窗口、托盘与系统交互需要目标设备验证。
+预编译包使用本目录的 `build.ps1` 在本地重建，普通 Windows 发布构建只校验并使用仓库中的产物。WinUI3 和非 x64 架构保留源码路径。实际窗口、托盘与系统交互需要目标设备验证。

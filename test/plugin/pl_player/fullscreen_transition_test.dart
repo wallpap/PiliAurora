@@ -1,3 +1,4 @@
+import 'dart:io' show Platform;
 import 'dart:typed_data';
 
 import 'package:flutter/services.dart' show MethodChannel;
@@ -85,5 +86,5 @@ void main() {
     await tester.pump();
     expect(controller.isFullScreen.value, isFalse);
     expect(tester.element(find.byKey(videoKey)), same(original));
-  });
+  }, skip: !Platform.isWindows);
 }

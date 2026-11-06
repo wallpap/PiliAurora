@@ -35,13 +35,14 @@ on:
 
 jobs:
     android:
-        if: ${{ (github.event_name == 'pull_request' && github.repository == 'wallpap/PiliAurora') || github.event.inputs.build_android == 'true' }}
+        if: ${{ inputs.build_android }}
         name: Release Android
         runs-on: ubuntu-latest
         env:
             # CI 不复用目录监听状态，避免 Linux runner 重复注册同一路径。
             GRADLE_OPTS: "--enable-native-access=ALL-UNNAMED -Dorg.gradle.vfs.watch=false -Dorg.gradle.caching=true"
-        permissions: write-all
+        permissions:
+            contents: write
 
         steps:
             - name: Checkout repository
@@ -77,12 +78,11 @@ jobs:
             - name: Check dependency sources and versions
               run: dart --packages=.dart_tool/package_config.json tool/check_dependencies.dart
 
-            - name: Run CI tests
+            - name: Run Linux host CI tests
               shell: pwsh
               run: pwsh -NoProfile -File tool/run-ci-tests.ps1 -FlutterTool path
 
             - name: Write signing key
-              if: github.event_name == 'workflow_dispatch'
               run: |
                   set -euo pipefail
 
@@ -114,7 +114,7 @@ jobs:
 
             - name: Write version and build info
               shell: pwsh
-              run: lib/scripts/build.ps1 android -Version '${{ github.event_name == 'workflow_dispatch' && github.event.inputs.tag || '' }}'
+              run: lib/scripts/build.ps1 android -Version '${{ inputs.tag }}'
 
             - name: Export Android version
               id: android_version
@@ -129,7 +129,6 @@ jobs:
                   key: android-libmpv-${{ hashFiles('third_party/media_kit_libs_android_video/android/build.gradle') }}
 
             - name: Build release APK with verified prebuilt engines
-              if: ${{ github.event_name == 'workflow_dispatch' }}
               shell: pwsh
               run: |
                   $ErrorActionPreference = 'Stop'
@@ -145,26 +144,12 @@ jobs:
                     Copy-Item "build/release-apks/PiliAurora_android_$($env:version)_$abi.apk" .
                   }
 
-            - name: Build dev APK
-              if: ${{ github.event_name == 'pull_request' }}
-              run: |
-                  flutter build apk --release --split-per-abi --android-project-arg dev=1 --no-pub
-
-            - name: Rename APK with version and ABI
-              if: ${{ github.event_name == 'pull_request' }}
-              run: |
-                  for file in build/app/outputs/flutter-apk/app-*-release.apk; do
-                    abi=$(echo "$file" | sed -E 's|.*app-(.*)-release\.apk|\1|')
-                    mv "$file" "PiliAurora_android_${{ steps.android_version.outputs.version }}_${abi}.apk"
-                  done
-              shell: bash
-
             - name: Release
-              if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.tag != '' }}
+              if: ${{ inputs.tag != '' }}
               uses: softprops/action-gh-release@v3
               with:
-                  tag_name: ${{ github.event.inputs.tag }}
-                  name: ${{ github.event.inputs.tag }}
+                  tag_name: ${{ inputs.tag }}
+                  name: ${{ inputs.tag }}
                   draft: ${{ inputs.draft_release }}
                   prerelease: ${{ inputs.prerelease }}
                   files: PiliAurora_android_*.apk
@@ -193,11 +178,159 @@ jobs:
                   name: PiliAurora_android_${{ steps.android_version.outputs.version }}_x86_64
                   path: PiliAurora_android_*_x86_64.apk
 
-    win_x64:
-        if: ${{ (github.event_name == 'pull_request' && github.repository == 'wallpap/PiliAurora') || github.event.inputs.build_win_x64 == 'true' }}
-        uses: ./.github/workflows/win_x64.yml
-        permissions: write-all
-        with:
-            tag: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.tag || '' }}
-            draft_release: ${{ github.event_name == 'workflow_dispatch' && inputs.draft_release }}
-            prerelease: ${{ github.event_name == 'workflow_dispatch' && inputs.prerelease }}
+    windows:
+        name: Release Windows x64
+        if: ${{ inputs.build_win_x64 }}
+        permissions:
+              contents: write
+        runs-on: windows-latest
+        env:
+            INNO_SETUP_PATH: 'C:\Program Files (x86)\Inno Setup 6'
+        steps:
+            - name: Checkout repository
+              uses: actions/checkout@v7
+              with:
+                fetch-depth: 0
+
+            - name: Set up Flutter
+              uses: subosito/flutter-action@v2
+              with:
+                channel: stable
+                flutter-version-file: .fvmrc
+                cache: true
+
+            - name: Cache WebView NuGet packages
+              uses: actions/cache@v5
+              with:
+                path: build/windows/x64/packages
+                key: windows-x64-webview-${{ hashFiles('third_party/flutter_inappwebview_windows/windows/CMakeLists.txt') }}
+
+            - name: Install fastforge and Inno Setup
+              shell: pwsh
+              run: |
+                $ErrorActionPreference = "Stop"
+                dart pub global activate fastforge
+
+                $innoSetupPath = $env:INNO_SETUP_PATH
+                $iscc = Join-Path $innoSetupPath "ISCC.exe"
+                if (-not (Test-Path $iscc)) {
+                  choco install innosetup -y --no-progress
+                }
+                if (-not (Test-Path $iscc)) {
+                  throw "ISCC.exe not found at $iscc; fastforge silently skips the exe target when Inno Setup 6 is missing"
+                }
+                Copy-Item "windows/packaging/exe/ChineseSimplified.isl" (Join-Path $innoSetupPath "Languages/ChineseSimplified.isl") -Force
+                Write-Host "Inno Setup: $iscc"
+
+            - name: Write version and build info
+              shell: pwsh
+              run: lib/scripts/build.ps1 -Version '${{ inputs.tag }}'
+
+            - name: Apply Flutter patches
+              shell: pwsh
+              run: lib/scripts/patch.ps1 windows
+
+            - name: Check dependency sources and versions
+              run: dart --packages=.dart_tool/package_config.json tool/check_dependencies.dart
+
+            - name: Run Windows host CI tests
+              shell: pwsh
+              run: pwsh -NoProfile -File tool/run-ci-tests.ps1 -FlutterTool path
+
+            - name: Set up Python for native package verification
+              uses: actions/setup-python@v6
+              with:
+                python-version: '3.14'
+
+            - name: Verify prebuilt libmpv
+              shell: pwsh
+              run: python tool/verify_libmpv.py
+
+            - name: Test Windows upgrade installation
+              shell: pwsh
+              run: |
+                $env:PATH = "$env:INNO_SETUP_PATH;$env:PATH"
+                python -m unittest discover -s tool/packaging -p '*_test.py' -v
+
+            - name: Verify prebuilt cnativeapi
+              shell: pwsh
+              run: python third_party/nativeapi/package.py verify
+
+            - name: Build Windows release with verified prebuilt engine
+              shell: pwsh
+              run: |
+                $ErrorActionPreference = 'Stop'
+                $configuration = python third_party/flutter_engine/package.py unpack --target windows-x64 --output build/prebuilt-engine/windows-x64
+                if ($LASTEXITCODE -ne 0) { throw 'Windows engine validation failed' }
+                $configuration | Set-Content build/windows-engine-config.json -Encoding utf8NoBOM
+                $defines = @(($configuration | ConvertFrom-Json).dartDefines | ForEach-Object { "--build-dart-define=$_" })
+                fastforge package --platform windows --targets exe --flutter-build-args="dart-define-from-file=pili_release.json,no-pub" --skip-clean @defines --hook-pre "python tool/packaging/prepare_windows_package.py --runtime build/windows/x64/runner/Release"
+                if ($LASTEXITCODE -ne 0) { throw 'Windows packaging failed' }
+                $expected = ($configuration | ConvertFrom-Json).identity.binarySha256
+                $actual = (Get-FileHash build/windows/x64/runner/Release/flutter_windows.dll -Algorithm SHA256).Hash.ToLowerInvariant()
+                if ($actual -ne $expected) { throw 'Packaged Windows engine differs from verified artifact' }
+
+            - name: Package Windows portable and installer
+              shell: pwsh
+              run: |
+                $ErrorActionPreference = "Stop"
+                $portable = "PiliAurora_windows_${{ env.version }}_x64"
+                $setupDir = "PiliAurora-Win-Setup"
+
+                $releaseDir = "build/windows/x64/runner/Release"
+                if (-not (Test-Path "$releaseDir/PiliAurora.exe")) {
+                  throw "Portable build output is incomplete: $releaseDir/PiliAurora.exe not found"
+                }
+                New-Item -ItemType Directory -Path $portable -Force | Out-Null
+                Move-Item "$releaseDir/*" $portable -Force
+                Write-Host "Portable folder: $portable"
+
+                Write-Host "dist directory:"
+                if (Test-Path dist) { Get-ChildItem dist -Recurse | ForEach-Object { Write-Host "  $($_.FullName)" } }
+
+                New-Item -ItemType Directory -Path $setupDir -Force | Out-Null
+                if (-not (Test-Path dist)) {
+                  throw "The Windows installer was not produced: dist directory does not exist"
+                }
+                $installers = @(Get-ChildItem -Path "dist" -Filter *.exe -File -Recurse)
+                if ($installers.Count -ne 1) {
+                  $found = if ($installers.Count) { ($installers.FullName -join ', ') } else { 'none' }
+                  throw "Expected exactly one installer in dist, found $($installers.Count): $found"
+                }
+                $setup = Join-Path $setupDir "PiliAurora_windows_${{ env.version }}_x64_setup.exe"
+                Move-Item $installers[0].FullName $setup -Force
+                Write-Host "Installer: $setup"
+
+            - name: Compress Windows portable
+              shell: pwsh
+              run: |
+                $ErrorActionPreference = "Stop"
+                Compress-Archive -Path "PiliAurora_windows_${{ env.version }}_x64" -DestinationPath "PiliAurora_windows_${{ env.version }}_x64_portable.zip"
+
+            - name: Release
+              if: ${{ inputs.tag != '' }}
+              uses: softprops/action-gh-release@v3
+              with:
+                tag_name: ${{ inputs.tag }}
+                name: ${{ inputs.tag }}
+                draft: ${{ inputs.draft_release }}
+                prerelease: ${{ inputs.prerelease }}
+                files: |
+                  PiliAurora_windows_*_x64_portable.zip
+                  PiliAurora-Win-Setup/PiliAurora_windows_*_x64_setup.exe
+
+            - name: Upload Windows portable
+              uses: actions/upload-artifact@v7
+              with:
+                archive: false
+                if-no-files-found: error
+                name: PiliAurora_windows_${{ env.version }}_x64_portable
+                path: PiliAurora_windows_*_x64_portable.zip
+
+            - name: Upload Windows setup
+              uses: actions/upload-artifact@v7
+              with:
+                archive: false
+                if-no-files-found: error
+                name: PiliAurora_windows_${{ env.version }}_x64_setup
+                path: PiliAurora-Win-Setup/PiliAurora_windows_*_x64_setup.exe

@@ -31,8 +31,6 @@ $ciTests = @(
     "test/pages/home/controller_lifecycle_test.dart",
     "test/pages/rcmd/",
     "test/router/get_route_lifecycle_test.dart",
-    "test/app/desktop_theme_test.dart",
-    "test/app/desktop_playback_launch_test.dart",
     "test/utils/app_release_test.dart",
     "test/pages/video/playback_lifecycle_test.dart",
     "test/pages/video/pgc_sharing_test.dart",
@@ -49,7 +47,6 @@ $ciTests = @(
     "test/plugin/pl_player/playback/network_recovery_test.dart",
     "test/plugin/pl_player/playback/progress_projection_test.dart",
     "test/plugin/pl_player/player_loading_test.dart",
-    "test/plugin/pl_player/fullscreen_transition_test.dart",
     "test/plugin/pl_player/playback/player_architecture_acceptance_test.dart",
     "test/plugin/pl_player/playback/playback_operation_scheduler_test.dart",
     "test/plugin/pl_player/playback/playback_runtime_slot_test.dart",
@@ -59,11 +56,7 @@ $ciTests = @(
     "test/plugin/pl_player/playback/video_frame_timings_test.dart",
     "test/plugin/pl_player/playback/presentation_profile_test.dart",
     "test/plugin/pl_player/playback/shader_updates_test.dart",
-    # 原生输出、首帧与切换
-    "test/plugin/pl_player/android/preloaded_surface_test.dart",
-    "test/plugin/pl_player/android/android_video_output_test.dart",
-    "test/plugin/pl_player/android/android_video_frame_handoff_test.dart",
-    "test/plugin/pl_player/android/android_decode_lifecycle_test.dart",
+    # 跨平台输出、首帧与切换
     "test/plugin/pl_player/video_output/video_output_resizer_test.dart",
     "test/plugin/pl_player/video_output/video_output_handoff_test.dart",
     # 弹幕生产链路与帧计划
@@ -78,6 +71,24 @@ $ciTests = @(
     "test/pages/danmaku/frame_plan_identity_test.dart",
     "test/pages/danmaku/video_presentation_cadence_test.dart"
 )
+
+# 原生 Windows 窗口时序依赖 dart:io 的主机平台，Linux 上不模拟该分支。
+if ($IsWindows) {
+    $ciTests += @(
+        "test/app/desktop_theme_test.dart",
+        "test/app/desktop_playback_launch_test.dart",
+        "test/plugin/pl_player/fullscreen_transition_test.dart"
+    )
+}
+elseif ($IsLinux) {
+    # Android 平台通道使用模拟输入，在发布所用 Linux 主机运行。
+    $ciTests += @(
+        "test/plugin/pl_player/android/preloaded_surface_test.dart",
+        "test/plugin/pl_player/android/android_video_output_test.dart",
+        "test/plugin/pl_player/android/android_video_frame_handoff_test.dart",
+        "test/plugin/pl_player/android/android_decode_lifecycle_test.dart"
+    )
+}
 
 Write-Host "Running the CI test suite ($($ciTests.Count) paths)..."
 if ($FlutterTool -eq "fvm") {

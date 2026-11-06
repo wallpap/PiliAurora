@@ -1,45 +1,38 @@
 name: 功能请求
-description: 对于功能的一些建议
-labels: [ "enhancement" ]
+description: 提出 PiliAurora 的功能建议
+labels: [enhancement]
 title: "[FR] "
 body:
-
-  - type: checkboxes
-    id: checklist
+  - type: markdown
     attributes:
-      label: 检查清单
-      options:
-        - label: 搜索了 [历史 issue](https://github.com/wallpap/PiliAurora/issues?q=is%3Aissue) ，并未发现相同功能请求
-          required: true
-        - label: 正在使用最新版本。
-          required: true
-        - label: 设置中未搜索到该功能
-          required: true
-
-  - type: checkboxes
-    id: assign
-    attributes:
-      label: Assign
-      options:
-        - label: self-assign
-          required: false
-
+      value: 请先搜索已有 Issue，并检查设置中是否已有该功能。公开内容请勿包含账号、凭证或私信。
   - type: textarea
-    id: desc
+    id: problem
     attributes:
-      label: 功能描述
-      description: 请提供对所请求功能的清晰描述。
+      label: 使用场景
+      description: 请描述你遇到的需求或问题。
     validations:
       required: true
-
   - type: textarea
-    id: solution
+    id: proposal
     attributes:
-      label: 解决方案
-      description: 如果你有任何关于如何实现这个功能的想法或建议，请在这里提供。
-
+      label: 功能建议
+      description: 请描述你希望增加或调整的功能。
+    validations:
+      required: true
+  - type: dropdown
+    id: platform
+    attributes:
+      label: 涉及平台
+      options:
+        - Android 和 Windows
+        - Android
+        - Windows
+        - 不确定
+    validations:
+      required: true
   - type: textarea
-    id: addition
+    id: additional
     attributes:
-      label: 其他
-      description: 请提供已实现该功能或类似功能的应用
+      label: 补充信息
+      description: 可提供相关示例或脱敏截图。
