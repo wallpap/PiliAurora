@@ -9,6 +9,7 @@ import 'package:pili_aurora/pages/common/common_list_controller.dart';
 import 'package:pili_aurora/services/account_service.dart';
 import 'package:pili_aurora/utils/extension/scroll_controller_ext.dart';
 import 'package:pili_aurora/utils/storage_pref.dart';
+import 'package:pili_aurora/utils/accounts.dart';
 import 'package:flutter/widgets.dart' show ScrollController;
 import 'package:get/get.dart';
 
@@ -49,7 +50,11 @@ class PgcController
     return super.onRefresh();
   }
 
+  int _followGeneration = 0;
+
   void _refreshPgcFollow() {
+    _followGeneration++;
+    followLoading = false;
     followPage = 1;
     followEnd = false;
     queryPgcFollow();
@@ -93,43 +98,53 @@ class PgcController
         (!isRefresh && followEnd)) {
       return;
     }
+    if (isClosed) return;
+    final generation = _followGeneration;
+    final account = Accounts.main;
     followLoading = true;
-    final res = await FavHttp.favPgc(
-      type: tabType == HomeTabType.bangumi ? 1 : 2,
-      pn: followPage,
-    );
+    try {
+      final res = await FavHttp.favPgc(
+        type: tabType == HomeTabType.bangumi ? 1 : 2,
+        pn: followPage,
+      );
 
-    if (res case Success(:final response)) {
-      final list = response.list;
-      followCount.value = response.total ?? -1;
-
-      if (list == null || list.isEmpty) {
-        followEnd = true;
-        if (isRefresh) {
-          followState.value = Success(list);
-        }
-        followLoading = false;
+      if (isClosed ||
+          generation != _followGeneration ||
+          !identical(account, Accounts.main)) {
         return;
       }
+      if (res case Success(:final response)) {
+        final list = response.list;
+        followCount.value = response.total ?? -1;
 
-      if (isRefresh) {
-        if (list.length >= followCount.value) {
+        if (list == null || list.isEmpty) {
           followEnd = true;
+          if (isRefresh) {
+            followState.value = Success(list);
+          }
+          return;
         }
-        followState.value = Success(list);
-        followController.jumpToTop();
-      } else if (followState.value case Success(:final response)) {
-        final currentList = response!..addAll(list);
-        if (currentList.length >= followCount.value) {
-          followEnd = true;
+
+        if (isRefresh) {
+          if (list.length >= followCount.value) {
+            followEnd = true;
+          }
+          followState.value = Success(list);
+          followController.jumpToTop();
+        } else if (followState.value case Success(:final response)) {
+          final currentList = response!..addAll(list);
+          if (currentList.length >= followCount.value) {
+            followEnd = true;
+          }
+          followState.refresh();
         }
-        followState.refresh();
+        followPage++;
+      } else if (isRefresh) {
+        followState.value = res as Error;
       }
-      followPage++;
-    } else if (isRefresh) {
-      followState.value = res as Error;
+    } finally {
+      if (generation == _followGeneration) followLoading = false;
     }
-    followLoading = false;
   }
 
   @override
@@ -140,12 +155,17 @@ class PgcController
 
   @override
   void onClose() {
+    _followGeneration++;
     followController.dispose();
     super.onClose();
   }
 
   @override
   void onChangeAccount(bool isLogin) {
+    _followGeneration++;
+    followLoading = false;
+    followState.value = LoadingState.loading();
+    followCount.value = -1;
     if (isLogin) {
       _refreshPgcFollow();
     } else {
