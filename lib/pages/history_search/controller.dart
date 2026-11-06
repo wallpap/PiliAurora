@@ -28,13 +28,18 @@ class HistorySearchController
   final account = Accounts.history;
 
   Future<void> onDelHistory(int index, kid, String business) async {
+    final list = loadingState.value.data;
     final res = await UserHttp.delHistory(
       '${business}_$kid',
       account: account,
     );
+    if (isClosed || list == null || !identical(list, loadingState.value.data))
+      return;
     if (res.isSuccess) {
       loadingState
-        ..value.data!.removeAt(index)
+        ..value.data!.removeWhere(
+          (e) => e.kid == kid && e.history.business == business,
+        )
         ..refresh();
       SmartDialog.showToast('已删除');
     } else {

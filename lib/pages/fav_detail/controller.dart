@@ -36,15 +36,19 @@ mixin BaseFavController
   void onViewFav(FavDetailItemModel item, int? index);
 
   Future<void> onCancelFav(int index, int id, int type) async {
+    final list = loadingState.value.data;
     final res = await FavHttp.favVideo(
       resources: '$id:$type',
       delIds: mediaId.toString(),
     );
+    if (isClosed || list == null || !identical(list, loadingState.value.data))
+      return;
     if (res.isSuccess) {
+      final before = list.length;
       loadingState
-        ..value.data!.removeAt(index)
+        ..value.data!.removeWhere((e) => e.id == id && e.type == type)
         ..refresh();
-      updateCount?.call(1);
+      if (list.length < before) updateCount?.call(before - list.length);
       SmartDialog.showToast('取消收藏');
     } else {
       res.toast();

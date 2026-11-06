@@ -259,6 +259,7 @@ abstract class ReplyController<R> extends CommonListController<R, ReplyInfo> {
     oid,
     int type,
   ) async {
+    final list = loadingState.value.data;
     bool isUpTop = item.replyControl.isUpTop;
     final res = await ReplyHttp.replyTop(
       oid: oid,
@@ -266,13 +267,17 @@ abstract class ReplyController<R> extends CommonListController<R, ReplyInfo> {
       rpid: item.id,
       isUpTop: isUpTop,
     );
+    if (isClosed || list == null || !identical(list, loadingState.value.data))
+      return;
+    final currentIndex = list.indexWhere((reply) => reply.id == item.id);
+    if (currentIndex < 0) return;
+    item = list[currentIndex];
     if (res.isSuccess) {
       item.replyControl.isUpTop = !isUpTop;
-      if (!isUpTop && index != 0) {
-        final list = loadingState.value.data!;
+      if (!isUpTop && currentIndex != 0) {
         list
           ..first.replyControl.isUpTop = false
-          ..insert(0, list.removeAt(index));
+          ..insert(0, list.removeAt(currentIndex));
       }
       loadingState.refresh();
       SmartDialog.showToast('${isUpTop ? '取消' : ''}置顶成功');

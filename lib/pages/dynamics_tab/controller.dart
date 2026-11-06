@@ -57,10 +57,13 @@ class DynamicsTabController
       );
 
   Future<void> onRemove(int index, dynamic dynamicId) async {
+    final list = loadingState.value.data;
     final res = await MsgHttp.removeDynamic(dynIdStr: dynamicId);
+    if (isClosed || list == null || !identical(list, loadingState.value.data))
+      return;
     if (res.isSuccess) {
       loadingState
-        ..value.data!.removeAt(index)
+        ..value.data!.removeWhere((e) => e.idStr == dynamicId.toString())
         ..refresh();
       SmartDialog.showToast('删除成功');
     } else {

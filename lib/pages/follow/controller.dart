@@ -112,7 +112,8 @@ class FollowController extends GetxController with GetTickerProviderStateMixin {
   Future<void> onDelTag(int index, int tagid) async {
     final res = await MemberHttp.delFollowTag(tagid);
     if (res.isSuccess) {
-      tabs.removeAt(index);
+      if (isClosed) return;
+      tabs.removeWhere((item) => item.tagid == tagid);
       onInitTab();
       followState.refresh();
       SmartDialog.showToast('删除成功');

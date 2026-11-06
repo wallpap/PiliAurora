@@ -38,11 +38,15 @@ class BlackListController
       title: Text('确定将 $name 移出黑名单？'),
       onConfirm: () async {
         final result = await VideoHttp.relationMod(mid: mid, act: 6, reSrc: 11);
+        if (isClosed) return;
         if (result.isSuccess) {
+          final list = loadingState.value.data;
+          if (list == null) return;
+          final before = list.length;
           loadingState
-            ..value.data!.removeAt(index)
+            ..value.data!.removeWhere((item) => item.mid == mid)
             ..refresh();
-          total.value -= 1;
+          total.value -= before - list.length;
           SmartDialog.showToast('移除成功');
         }
       },

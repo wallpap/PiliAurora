@@ -52,7 +52,8 @@ class DanmakuBlockController extends GetxController
     final res = await DanmakuFilterHttp.danmakuFilterDel(ids: id);
     SmartDialog.dismiss();
     if (res.isSuccess) {
-      rules[tabIndex].removeAt(itemIndex);
+      if (isClosed) return;
+      rules[tabIndex].removeWhere((rule) => rule.id == id);
       SmartDialog.showToast('删除成功');
     } else {
       res.toast();

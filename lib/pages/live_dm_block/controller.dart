@@ -84,14 +84,16 @@ class LiveDmBlockController extends GetxController
         type: 0,
       );
       if (res.isSuccess) {
-        shieldUserList.removeAt(index);
+        if (isClosed) return;
+        shieldUserList.removeWhere((user) => user.uid == item.uid);
       } else {
         res.toast();
       }
     } else {
       final res = await LiveHttp.delShieldKeyword(keyword: item as String);
       if (res.isSuccess) {
-        keywordList.removeAt(index);
+        if (isClosed) return;
+        keywordList.remove(item);
       } else {
         res.toast();
       }
