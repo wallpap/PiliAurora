@@ -84,7 +84,10 @@ abstract final class WbiSign {
             Utils.getFileName(wbiUrls['sub_url'], fileExt: false),
       );
 
-      _localCache.put(LocalCacheKey.mixinKey, mixinKey);
+      await _localCache.putAll({
+        LocalCacheKey.mixinKey: mixinKey,
+        LocalCacheKey.timeStamp: DateTime.now().millisecondsSinceEpoch,
+      });
 
       return mixinKey;
     } catch (_) {
@@ -93,18 +96,27 @@ abstract final class WbiSign {
   }
 
   static FutureOr<String> getWbiKeys() {
-    final nowDate = DateTime.now();
-    if (DateTime.fromMillisecondsSinceEpoch(
-          _localCache.get(LocalCacheKey.timeStamp, defaultValue: 0) as int,
-        ).day ==
-        nowDate.day) {
-      final String? mixinKey = _localCache.get(LocalCacheKey.mixinKey);
-      if (mixinKey != null) return mixinKey;
-      return _future ??= _getWbiKeys();
-    } else {
-      return _future = _localCache
-          .put(LocalCacheKey.timeStamp, nowDate.millisecondsSinceEpoch)
-          .then((_) => _getWbiKeys());
+    final now = DateTime.now();
+    final cachedAt = DateTime.fromMillisecondsSinceEpoch(
+      _localCache.get(LocalCacheKey.timeStamp, defaultValue: 0) as int,
+    );
+    final String? key = _localCache.get(LocalCacheKey.mixinKey);
+    if (key != null &&
+        key.isNotEmpty &&
+        cachedAt.year == now.year &&
+        cachedAt.month == now.month &&
+        cachedAt.day == now.day) {
+      return key;
+    }
+    return _future ??= _fetchKeys();
+  }
+
+  static Future<String> _fetchKeys() async {
+    try {
+      return await _getWbiKeys();
+    } finally {
+      // 只共享在途任务，空结果或异常均允许下一次调用重新获取。
+      _future = null;
     }
   }
 
