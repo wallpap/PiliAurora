@@ -1,5 +1,6 @@
 import 'dart:async' show Timer;
 
+import 'package:pili_aurora/common/widgets/app_popup_menu_item.dart';
 import 'package:pili_aurora/common/widgets/image/cached_image.dart';
 import 'package:pili_aurora/common/widgets/image/network_img_layer.dart';
 import 'package:pili_aurora/common/widgets/selection_text.dart';
@@ -108,7 +109,7 @@ class _SuperChatCardState extends State<SuperChatCard> {
       context: context,
       position: PageUtils.menuPosition(offset),
       items: [
-        PopupMenuItem(
+        AppPopupMenuItem(
           height: 38,
           onTap: () => Get.toNamed('/member?mid=${item.uid}'),
           child: Text(
@@ -116,7 +117,7 @@ class _SuperChatCardState extends State<SuperChatCard> {
             style: const TextStyle(fontSize: 13),
           ),
         ),
-        PopupMenuItem(
+        AppPopupMenuItem(
           height: 38,
           onTap: () => Utils.copyText(Utils.jsonEncoder.convert(item.toJson())),
           child: const Text(
@@ -124,7 +125,7 @@ class _SuperChatCardState extends State<SuperChatCard> {
             style: TextStyle(fontSize: 13),
           ),
         ),
-        PopupMenuItem(
+        AppPopupMenuItem(
           height: 38,
           onTap: () {
             if (!mounted) return;
@@ -135,7 +136,7 @@ class _SuperChatCardState extends State<SuperChatCard> {
             style: TextStyle(fontSize: 13),
           ),
         ),
-        PopupMenuItem(
+        AppPopupMenuItem(
           height: 38,
           onTap: widget.onReport,
           child: const Text(

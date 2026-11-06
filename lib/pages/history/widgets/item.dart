@@ -1,3 +1,4 @@
+import 'package:pili_aurora/common/widgets/app_popup_menu_item.dart';
 import 'package:pili_aurora/common/style.dart';
 import 'package:pili_aurora/common/widgets/badge.dart';
 import 'package:pili_aurora/common/widgets/image/network_img_layer.dart';
@@ -213,7 +214,7 @@ class HistoryItem extends StatelessWidget {
                 itemBuilder: (_) => [
                   if (item.authorMid != null &&
                       item.authorName?.isNotEmpty == true)
-                    PopupMenuItem(
+                    AppPopupMenuItem(
                       onTap: () => Get.toNamed('/member?mid=${item.authorMid}'),
                       height: 38,
                       child: Row(
@@ -235,7 +236,7 @@ class HistoryItem extends StatelessWidget {
                       item.tagName?.contains('动画') != true &&
                       business != 'live' &&
                       business?.contains('article') != true)
-                    PopupMenuItem(
+                    AppPopupMenuItem(
                       onTap: () =>
                           UserHttp.toViewLater(bvid: item.history.bvid),
                       height: 38,
@@ -247,7 +248,7 @@ class HistoryItem extends StatelessWidget {
                         ],
                       ),
                     ),
-                  PopupMenuItem(
+                  AppPopupMenuItem(
                     onTap: () => onDelete(item.kid!, business!),
                     height: 38,
                     child: const Row(

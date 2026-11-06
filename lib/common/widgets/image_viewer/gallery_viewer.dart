@@ -18,6 +18,7 @@
 import 'dart:async';
 import 'dart:io' show File, Platform;
 
+import 'package:pili_aurora/common/widgets/app_popup_menu_item.dart';
 import 'package:pili_aurora/common/widgets/colored_box_transition.dart';
 import 'package:pili_aurora/common/widgets/dialog/simple_dialog_option.dart';
 import 'package:pili_aurora/common/widgets/gesture/image_horizontal_drag_gesture_recognizer.dart';
@@ -610,23 +611,23 @@ class _GalleryViewerState extends State<GalleryViewer>
       context: context,
       position: PageUtils.menuPosition(details.globalPosition),
       items: [
-        PopupMenuItem(
+        AppPopupMenuItem(
           height: 42,
           onTap: () => ImageUtils.downloadImg([item.url]),
           child: const Text('保存图片', style: TextStyle(fontSize: 14)),
         ),
-        PopupMenuItem(
+        AppPopupMenuItem(
           height: 42,
           onTap: () => Utils.copyText(item.url),
           child: const Text('复制链接', style: TextStyle(fontSize: 14)),
         ),
-        PopupMenuItem(
+        AppPopupMenuItem(
           height: 42,
           onTap: () => PageUtils.launchURL(item.url),
           child: const Text('网页打开', style: TextStyle(fontSize: 14)),
         ),
         if (widget.sources.length > 1)
-          PopupMenuItem(
+          AppPopupMenuItem(
             height: 42,
             onTap: () => ImageUtils.downloadImg(
               widget.sources.map((item) => item.url).toList(),
@@ -634,7 +635,7 @@ class _GalleryViewerState extends State<GalleryViewer>
             child: const Text('保存全部图片', style: TextStyle(fontSize: 14)),
           ),
         if (item.sourceType == SourceType.livePhoto)
-          PopupMenuItem(
+          AppPopupMenuItem(
             height: 42,
             onTap: () => ImageUtils.downloadLivePhoto(
               url: item.url,

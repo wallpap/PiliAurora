@@ -1,6 +1,7 @@
 import 'dart:io' show Platform;
 import 'dart:math' as math;
 
+import 'package:pili_aurora/common/widgets/app_popup_menu_item.dart';
 import 'package:pili_aurora/common/style.dart';
 import 'package:pili_aurora/common/widgets/button/icon_button.dart';
 import 'package:pili_aurora/common/widgets/dialog/report_member.dart';
@@ -348,7 +349,7 @@ class _MemberPageState extends State<MemberPage> {
       itemBuilder: (_) => <PopupMenuEntry>[
         if (_userController.account.isLogin &&
             _userController.account.mid != _mid) ...[
-          PopupMenuItem(
+          AppPopupMenuItem(
             onTap: () => _userController.blockUser(context),
             child: Row(
               mainAxisSize: MainAxisSize.min,
@@ -362,7 +363,7 @@ class _MemberPageState extends State<MemberPage> {
             ),
           ),
           if (_userController.isFollowed == 1)
-            PopupMenuItem(
+            AppPopupMenuItem(
               onTap: _userController.onRemoveFan,
               child: const Row(
                 mainAxisSize: MainAxisSize.min,
@@ -374,7 +375,7 @@ class _MemberPageState extends State<MemberPage> {
               ),
             ),
         ],
-        PopupMenuItem(
+        AppPopupMenuItem(
           onTap: _userController.shareUser,
           child: Row(
             mainAxisSize: MainAxisSize.min,
@@ -388,7 +389,7 @@ class _MemberPageState extends State<MemberPage> {
           ),
         ),
         if (PlatformUtils.isMobile)
-          PopupMenuItem(
+          AppPopupMenuItem(
             onTap: _createShortcut,
             child: const Row(
               mainAxisSize: MainAxisSize.min,
@@ -432,7 +433,7 @@ class _MemberPageState extends State<MemberPage> {
         //     ),
         //   ),
         if (Get.isRegistered<MemberContributeCtr>(tag: _heroTag))
-          PopupMenuItem(
+          AppPopupMenuItem(
             onTap: _toWebArchive,
             child: const Row(
               mainAxisSize: MainAxisSize.min,
@@ -454,7 +455,7 @@ class _MemberPageState extends State<MemberPage> {
                         ?.status ??
                     0) >
                 0)
-              PopupMenuItem(
+              AppPopupMenuItem(
                 onTap: _userController.vipExpAdd,
                 child: const Row(
                   mainAxisSize: MainAxisSize.min,
@@ -465,7 +466,7 @@ class _MemberPageState extends State<MemberPage> {
                   ],
                 ),
               ),
-            PopupMenuItem(
+            AppPopupMenuItem(
               onTap: () => Get.to(const LoginDevicesPage()),
               child: const Row(
                 mainAxisSize: MainAxisSize.min,
@@ -476,7 +477,7 @@ class _MemberPageState extends State<MemberPage> {
                 ],
               ),
             ),
-            PopupMenuItem(
+            AppPopupMenuItem(
               onTap: () => Get.to(
                 const LogPage(),
                 arguments: LoginLogController(),
@@ -490,7 +491,7 @@ class _MemberPageState extends State<MemberPage> {
                 ],
               ),
             ),
-            PopupMenuItem(
+            AppPopupMenuItem(
               onTap: () => Get.to(
                 const LogPage(),
                 arguments: CoinLogController(),
@@ -504,7 +505,7 @@ class _MemberPageState extends State<MemberPage> {
                 ],
               ),
             ),
-            PopupMenuItem(
+            AppPopupMenuItem(
               onTap: () => Get.to(
                 const LogPage(),
                 arguments: ExpLogController(),
@@ -518,7 +519,7 @@ class _MemberPageState extends State<MemberPage> {
                 ],
               ),
             ),
-            PopupMenuItem(
+            AppPopupMenuItem(
               onTap: () => Get.toNamed('/spaceSetting'),
               child: const Row(
                 mainAxisSize: MainAxisSize.min,
@@ -531,7 +532,7 @@ class _MemberPageState extends State<MemberPage> {
             ),
           ] else ...[
             if (_userController.isFollow)
-              PopupMenuItem(
+              AppPopupMenuItem(
                 onTap: _showFollowTime,
                 child: const Row(
                   mainAxisSize: MainAxisSize.min,
@@ -543,7 +544,7 @@ class _MemberPageState extends State<MemberPage> {
                 ),
               ),
             const PopupMenuDivider(),
-            PopupMenuItem(
+            AppPopupMenuItem(
               onTap: () => showMemberReportDialog(
                 context,
                 name: _userController.username,

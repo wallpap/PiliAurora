@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io' show File;
 
+import 'package:pili_aurora/common/widgets/app_popup_menu_item.dart';
 import 'package:pili_aurora/common/assets.dart';
 import 'package:pili_aurora/common/widgets/dialog/report.dart';
 import 'package:pili_aurora/common/widgets/flutter/chat_list_view.dart';
@@ -264,13 +265,13 @@ class _WhisperDetailPageState
       position: PageUtils.menuPosition(offset),
       items: [
         if (isOwner)
-          PopupMenuItem(
+          AppPopupMenuItem(
             height: 42,
             onTap: () => _recall(message, conversation),
             child: const Text('撤回', style: TextStyle(fontSize: 14)),
           )
         else
-          PopupMenuItem(
+          AppPopupMenuItem(
             height: 42,
             onTap: () => _onReport(message, conversation),
             child: const Text('举报', style: TextStyle(fontSize: 14)),

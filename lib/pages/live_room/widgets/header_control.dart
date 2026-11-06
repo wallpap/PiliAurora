@@ -1,6 +1,7 @@
 import 'dart:io' show Platform;
 import 'dart:math' as math;
 
+import 'package:pili_aurora/common/widgets/app_popup_menu_item.dart';
 import 'package:pili_aurora/common/widgets/marquee.dart';
 import 'package:pili_aurora/pages/live_room/controller.dart';
 import 'package:pili_aurora/pages/live_room/widgets/live_stream_panel.dart';
@@ -253,7 +254,7 @@ class _LiveHeaderControlState extends State<LiveHeaderControl>
                     padding: .zero,
                     iconColor: Colors.white,
                     itemBuilder: (context) => [
-                      PopupMenuItem(
+                      AppPopupMenuItem(
                         height: 35,
                         onTap: _showLiveStreamDialog,
                         child: const Row(
@@ -264,7 +265,7 @@ class _LiveHeaderControlState extends State<LiveHeaderControl>
                           ],
                         ),
                       ),
-                      PopupMenuItem(
+                      AppPopupMenuItem(
                         height: 35,
                         child: const Row(
                           spacing: 8,

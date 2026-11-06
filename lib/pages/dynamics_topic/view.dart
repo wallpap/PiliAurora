@@ -1,3 +1,4 @@
+import 'package:pili_aurora/common/widgets/app_popup_menu_item.dart';
 import 'package:pili_aurora/common/assets.dart';
 import 'package:pili_aurora/common/widgets/custom_icon.dart';
 import 'package:pili_aurora/common/widgets/dynamic_sliver_app_bar/dynamic_sliver_app_bar.dart';
@@ -326,13 +327,13 @@ class _DynTopicPageState extends State<DynTopicPage>
           PopupMenuButton(
             itemBuilder: (context) {
               return [
-                PopupMenuItem(
+                AppPopupMenuItem(
                   onTap: _controller.onFav,
                   child: Text(
                     '${_controller.isFav.value ? '取消' : ''}收藏',
                   ),
                 ),
-                PopupMenuItem(
+                AppPopupMenuItem(
                   child: const Text('举报'),
                   onTap: () {
                     if (!_controller.isLogin) {

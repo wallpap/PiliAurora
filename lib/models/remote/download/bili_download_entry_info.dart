@@ -1,3 +1,4 @@
+import 'package:pili_aurora/common/widgets/app_popup_menu_item.dart';
 import 'package:pili_aurora/models/common/video/video_type.dart';
 import 'package:pili_aurora/pages/common/multi_select/base.dart'
     show MultiSelectData;
@@ -70,7 +71,7 @@ class BiliDownloadEntryInfo with MultiSelectData {
         size: 18,
       ),
       itemBuilder: (_) => [
-        PopupMenuItem(
+        AppPopupMenuItem(
           height: 38,
           child: const Text('查看详情页', style: TextStyle(fontSize: 13)),
           onTap: () {
@@ -100,19 +101,19 @@ class BiliDownloadEntryInfo with MultiSelectData {
           },
         ),
         if (PlatformUtils.isDesktop)
-          PopupMenuItem(
+          AppPopupMenuItem(
             height: 38,
             child: const Text('打开本地文件夹', style: TextStyle(fontSize: 13)),
             onTap: () => PathUtils.openDir(entryDirPath),
           )
         else
-          PopupMenuItem(
+          AppPopupMenuItem(
             height: 38,
             child: const Text('复制缓存路径', style: TextStyle(fontSize: 13)),
             onTap: () => Utils.copyText(entryDirPath),
           ),
         if (ownerId case final mid?)
-          PopupMenuItem(
+          AppPopupMenuItem(
             height: 38,
             child: Text(
               '访问${ownerName != null ? '：$ownerName' : '用户主页'}',

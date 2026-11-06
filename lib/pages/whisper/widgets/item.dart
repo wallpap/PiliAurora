@@ -1,3 +1,4 @@
+import 'package:pili_aurora/common/widgets/app_popup_menu_item.dart';
 import 'package:pili_aurora/common/assets.dart';
 import 'package:pili_aurora/common/widgets/badge.dart';
 import 'package:pili_aurora/common/widgets/dialog/dialog.dart';
@@ -123,25 +124,25 @@ class WhisperSessionItem extends StatelessWidget {
               context: context,
               position: PageUtils.menuPosition(details.globalPosition),
               items: <PopupMenuEntry<Never>>[
-                PopupMenuItem(
+                AppPopupMenuItem(
                   height: 42,
                   onTap: () => onSetTop(item.isPinned),
                   child: Text(item.isPinned ? '移除置顶' : '置顶'),
                 ),
                 if (target is PrivateSessionTarget) ...[
                   if (kDebugMode || item.unread.isUnread)
-                    PopupMenuItem(
+                    AppPopupMenuItem(
                       height: 42,
                       onTap: () => _markRead(context),
                       child: const Text('标为已读'),
                     ),
-                  PopupMenuItem(
+                  AppPopupMenuItem(
                     height: 42,
                     onTap: () => onSetMute(item.isMuted),
                     child: Text('${item.isMuted ? '关闭' : '开启'}免打扰'),
                   ),
                   const PopupMenuDivider(height: 10),
-                  PopupMenuItem(
+                  AppPopupMenuItem(
                     height: 42,
                     onTap: () => showConfirmDialog(
                       context: context,

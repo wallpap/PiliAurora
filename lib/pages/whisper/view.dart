@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:pili_aurora/common/widgets/app_popup_menu_item.dart';
 import 'package:pili_aurora/common/skeleton/whisper_item.dart';
 import 'package:pili_aurora/common/sliver_single_child_delegate.dart';
 import 'package:pili_aurora/common/widgets/flutter/refresh_indicator.dart';
@@ -96,7 +97,7 @@ class _WhisperActions extends ConsumerWidget {
           PopupMenuButton(
             itemBuilder: (context) => snapshot.menuItems
                 .map(
-                  (item) => PopupMenuItem(
+                  (item) => AppPopupMenuItem(
                     onTap: () => item.action.action(
                       context: context,
                       controller: controller,

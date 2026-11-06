@@ -1,3 +1,4 @@
+import 'package:pili_aurora/common/widgets/app_popup_menu_item.dart';
 import 'package:pili_aurora/common/widgets/dialog/dialog.dart';
 import 'package:pili_aurora/common/widgets/dialog/simple_dialog_option.dart';
 import 'package:pili_aurora/common/widgets/loading_widget/loading_widget.dart';
@@ -129,7 +130,7 @@ class _FollowPageState extends State<FollowPage>
             PopupMenuButton(
               icon: const Icon(Icons.more_vert),
               itemBuilder: (context) => [
-                PopupMenuItem(
+                AppPopupMenuItem(
                   onTap: () => Get.toNamed('/blackListPage'),
                   child: const Row(
                     spacing: 10,

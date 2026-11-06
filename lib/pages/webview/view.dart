@@ -1,5 +1,6 @@
 import 'dart:io' show Platform;
 
+import 'package:pili_aurora/common/widgets/app_popup_menu_item.dart';
 import 'package:pili_aurora/common/widgets/route_aware_mixin.dart'
     show routeObserver;
 import 'package:pili_aurora/common/widgets/selection_text.dart';
@@ -95,13 +96,13 @@ class _WebviewPageState extends State<WebviewPage> with RouteAware {
           ...WebviewMenuItem.values
               .take(WebviewMenuItem.values.length - 1)
               .map(
-                (item) => PopupMenuItem(
+                (item) => AppPopupMenuItem(
                   value: item,
                   child: Text(item.title),
                 ),
               ),
           const PopupMenuDivider(),
-          PopupMenuItem(
+          AppPopupMenuItem(
             value: WebviewMenuItem.goBack,
             child: Text(
               WebviewMenuItem.goBack.title,

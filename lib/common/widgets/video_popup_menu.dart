@@ -1,3 +1,4 @@
+import 'package:pili_aurora/common/widgets/app_popup_menu_item.dart';
 import 'package:pili_aurora/common/widgets/custom_icon.dart';
 import 'package:pili_aurora/http/user.dart';
 import 'package:pili_aurora/http/video.dart';
@@ -314,7 +315,7 @@ class VideoPopupMenu extends StatelessWidget {
                 ),
               ]
               .map(
-                (e) => PopupMenuItem(
+                (e) => AppPopupMenuItem(
                   height: menuItemHeight,
                   onTap: e.onTap,
                   child: Row(

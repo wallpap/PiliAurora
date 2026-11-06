@@ -1,3 +1,4 @@
+import 'package:pili_aurora/common/widgets/app_popup_menu_item.dart';
 import 'package:pili_aurora/pages/danmaku/live_layer.dart';
 import 'package:pili_aurora/pages/danmaku/display_binding.dart';
 
@@ -635,7 +636,7 @@ class _LiveRoomPageState extends State<LiveRoomPage>
             final liveUrl =
                 'https://live.bilibili.com/${_liveRoomController.roomId}';
             return <PopupMenuEntry>[
-              PopupMenuItem(
+              AppPopupMenuItem(
                 onTap: () => Utils.copyText(liveUrl),
                 child: const Row(
                   spacing: 10,
@@ -647,7 +648,7 @@ class _LiveRoomPageState extends State<LiveRoomPage>
                 ),
               ),
               if (PlatformUtils.isMobile)
-                PopupMenuItem(
+                AppPopupMenuItem(
                   onTap: () => ShareUtils.shareText(liveUrl),
                   child: const Row(
                     spacing: 10,
@@ -658,7 +659,7 @@ class _LiveRoomPageState extends State<LiveRoomPage>
                     ],
                   ),
                 ),
-              PopupMenuItem(
+              AppPopupMenuItem(
                 onTap: () => PageUtils.inAppWebview(liveUrl, off: true),
                 child: const Row(
                   spacing: 10,
@@ -670,7 +671,7 @@ class _LiveRoomPageState extends State<LiveRoomPage>
                 ),
               ),
               if (_liveRoomController.roomInfoH5.value != null)
-                PopupMenuItem(
+                AppPopupMenuItem(
                   onTap: () {
                     try {
                       RoomInfoH5Data roomInfo =

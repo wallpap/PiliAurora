@@ -1,5 +1,6 @@
 import 'dart:math';
 
+import 'package:pili_aurora/common/widgets/app_popup_menu_item.dart';
 import 'package:pili_aurora/common/widgets/badge.dart';
 import 'package:pili_aurora/common/widgets/custom_icon.dart';
 import 'package:pili_aurora/common/widgets/flutter/refresh_indicator.dart';
@@ -281,7 +282,7 @@ class _ArticlePageState extends CommonDynPageState<ArticlePage> {
       PopupMenuButton(
         icon: const Icon(Icons.more_vert, size: 19),
         itemBuilder: (BuildContext context) => <PopupMenuEntry>[
-          PopupMenuItem(
+          AppPopupMenuItem(
             onTap: () => ShareUtils.shareText(controller.url),
             child: const Row(
               spacing: 10,
@@ -292,7 +293,7 @@ class _ArticlePageState extends CommonDynPageState<ArticlePage> {
               ],
             ),
           ),
-          PopupMenuItem(
+          AppPopupMenuItem(
             onTap: () => Utils.copyText(controller.url),
             child: const Row(
               spacing: 10,
@@ -306,7 +307,7 @@ class _ArticlePageState extends CommonDynPageState<ArticlePage> {
           if (controller.commentType == 12 &&
               controller.stats.value != null &&
               controller.opusData?.modules.moduleBlocked == null)
-            PopupMenuItem(
+            AppPopupMenuItem(
               onTap: () async {
                 final summary = controller.summary;
                 try {

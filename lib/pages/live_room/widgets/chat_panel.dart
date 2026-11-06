@@ -1,5 +1,6 @@
 import 'dart:math' as math;
 
+import 'package:pili_aurora/common/widgets/app_popup_menu_item.dart';
 import 'package:pili_aurora/common/widgets/flutter/popup_menu.dart';
 import 'package:pili_aurora/common/widgets/gesture/tap_gesture_recognizer.dart';
 import 'package:pili_aurora/common/widgets/image/network_img_layer.dart';
@@ -342,23 +343,23 @@ class LiveRoomChatPanel extends StatelessWidget {
           child: Text(item.name, style: const TextStyle(fontSize: 13)),
         ),
         const CustomPopupMenuDivider(height: 1),
-        PopupMenuItem(
+        AppPopupMenuItem(
           height: 38,
           onTap: () => Utils.copyText(Utils.jsonEncoder.convert(item.toJson())),
           child: const Text('复制弹幕信息', style: TextStyle(fontSize: 13)),
         ),
-        PopupMenuItem(
+        AppPopupMenuItem(
           height: 38,
           onTap: () => Get.toNamed('/member?mid=${item.extra.mid}'),
           child: const Text('去TA的个人空间', style: TextStyle(fontSize: 13)),
         ),
         if (liveRoomController.isLogin) ...[
-          PopupMenuItem(
+          AppPopupMenuItem(
             height: 38,
             onTap: () => liveRoomController.onAtUser(item),
             child: const Text('@TA', style: TextStyle(fontSize: 13)),
           ),
-          PopupMenuItem(
+          AppPopupMenuItem(
             height: 38,
             onTap: () async {
               final res = await LiveHttp.liveShieldUser(
@@ -374,7 +375,7 @@ class LiveRoomChatPanel extends StatelessWidget {
             },
             child: const Text('屏蔽发送者', style: TextStyle(fontSize: 13)),
           ),
-          PopupMenuItem(
+          AppPopupMenuItem(
             height: 38,
             onTap: () => HeaderControl.reportLiveDanmaku(
               context,

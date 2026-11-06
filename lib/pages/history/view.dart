@@ -1,3 +1,4 @@
+import 'package:pili_aurora/common/widgets/app_popup_menu_item.dart';
 import 'package:pili_aurora/common/widgets/appbar/appbar.dart';
 import 'package:pili_aurora/common/widgets/flutter/pop_scope.dart';
 import 'package:pili_aurora/common/widgets/flutter/refresh_indicator.dart';
@@ -166,7 +167,7 @@ class _HistoryPageState extends State<HistoryPage>
       ),
       PopupMenuButton(
         itemBuilder: (_) => [
-          PopupMenuItem(
+          AppPopupMenuItem(
             onTap: () => _historyController.baseCtr.onPauseHistory(context),
             child: Text(
               !_historyController.baseCtr.pauseStatus.value
@@ -174,7 +175,7 @@ class _HistoryPageState extends State<HistoryPage>
                   : '恢复观看记录',
             ),
           ),
-          PopupMenuItem(
+          AppPopupMenuItem(
             onTap: () => _historyController.baseCtr.onClearHistory(
               context,
               () {
@@ -194,7 +195,7 @@ class _HistoryPageState extends State<HistoryPage>
             ),
             child: const Text('清空观看记录'),
           ),
-          PopupMenuItem(
+          AppPopupMenuItem(
             onTap: currCtr().onDelViewedHistory,
             child: const Text('删除已看记录'),
           ),

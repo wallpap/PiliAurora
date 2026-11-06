@@ -15,6 +15,7 @@
  * along with PiliPlus.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+import 'package:pili_aurora/common/widgets/app_popup_menu_item.dart';
 import 'package:pili_aurora/common/assets.dart';
 import 'package:pili_aurora/common/style.dart';
 import 'package:pili_aurora/common/widgets/badge.dart';
@@ -149,31 +150,31 @@ class ImageGridView extends StatelessWidget {
       position: PageUtils.menuPosition(offset),
       items: [
         if (PlatformUtils.isMobile)
-          PopupMenuItem(
+          AppPopupMenuItem(
             height: 42,
             onTap: () => ImageUtils.onShareImg(item.url),
             child: const Text('分享', style: TextStyle(fontSize: 14)),
           ),
-        PopupMenuItem(
+        AppPopupMenuItem(
           height: 42,
           onTap: () => ImageUtils.downloadImg([item.url]),
           child: const Text('保存图片', style: TextStyle(fontSize: 14)),
         ),
         if (PlatformUtils.isDesktop)
-          PopupMenuItem(
+          AppPopupMenuItem(
             height: 42,
             onTap: () => PageUtils.launchURL(item.url),
             child: const Text('网页打开', style: TextStyle(fontSize: 14)),
           ),
         if (picArr.length > 1)
-          PopupMenuItem(
+          AppPopupMenuItem(
             height: 42,
             onTap: () =>
                 ImageUtils.downloadImg(picArr.map((item) => item.url).toList()),
             child: const Text('保存全部', style: TextStyle(fontSize: 14)),
           ),
         if (item.isLivePhoto)
-          PopupMenuItem(
+          AppPopupMenuItem(
             height: 42,
             onTap: () => ImageUtils.downloadLivePhoto(
               url: item.url,

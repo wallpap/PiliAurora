@@ -49,6 +49,7 @@ flowchart TD
 
 - 设置页的选择字段使用 `lib/common/widgets/app_select_field.dart`，菜单表面、圆角、边框、阴影和选中态由 `lib/common/widgets/app_menu_theme.dart` 统一提供。
 - 全局 `popupMenuTheme` 和 `menuTheme` 已接入同一套参数，新增 `PopupMenuButton`、`showMenu` 或 `MenuAnchor` 会继承统一表面；需要当前值标题、选中勾和长列表滚动的设置项优先使用 `AppSelectField`。
+- 操作菜单的内部选项使用 `AppPopupMenuItem`，统一选中背景与悬停水波的内圆角和裁剪；普通 `PopupMenuItem` 仅继承外层菜单主题，内部悬停背景仍可能为直角。
 - 组件行为测试见 `test/common/widgets/app_select_field_test.dart`。
 
 ## 首页与内容发现
