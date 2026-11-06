@@ -82,9 +82,7 @@ class _DownloadingPageState extends State<DownloadingPage>
                           onDelete: () => _downloadService.deleteDownload(
                             entry: entry,
                             removeQueue: true,
-                            downloadNext:
-                                isCurr &&
-                                entry.status == DownloadStatus.downloading,
+                            downloadNext: isCurr && entry.status.isDownloading,
                           ),
                           controller: this,
                         );
@@ -110,8 +108,7 @@ class _DownloadingPageState extends State<DownloadingPage>
         SmartDialog.showLoading();
         final allChecked = this.allChecked.toSet();
         final isDownloading =
-            _downloadService.curDownload.value?.status ==
-            DownloadStatus.downloading;
+            _downloadService.curDownload.value?.status.isDownloading == true;
         for (final entry in allChecked) {
           await _downloadService.deleteDownload(
             entry: entry,

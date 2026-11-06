@@ -132,6 +132,31 @@ void main() {
     expect(repo.count, 1);
   });
 
+  for (final status in [
+    DownloadStatus.getDanmaku,
+    DownloadStatus.getPlayUrl,
+    DownloadStatus.audioDownloading,
+  ]) {
+    test('删除 $status 当前任务后继续调度', () async {
+      final entry = downloadEntry()..status = status;
+      final next = downloadEntry(cid: 22);
+      final pending = _SchedulingDownloadService(
+        repository: repository,
+        downloadClient: client,
+      );
+      await repository.create(entry);
+      pending.waitDownloadQueue.addAll([entry, next]);
+      pending.curDownload.value = entry;
+      await pending.deleteDownload(
+        entry: entry,
+        removeQueue: true,
+        downloadNext: entry.status.isDownloading,
+      );
+      expect(pending.started, [22]);
+      expect(pending.curDownload.value, isNull);
+    });
+  }
+
   test('暂停不等待准备阶段网络请求', () async {
     final entry = downloadEntry();
     await repository.create(entry);
