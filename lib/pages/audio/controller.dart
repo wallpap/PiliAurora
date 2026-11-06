@@ -74,6 +74,7 @@ class AudioController extends GetxController
 
   final audioItem = Rxn<DetailItem>();
 
+  int _playlistGeneration = 0;
   bool _hasInit = false;
   @override
   Player? player;
@@ -249,6 +250,8 @@ class AudioController extends GetxController
     bool isLoadPrev = false,
     bool isLoadNext = false,
   }) async {
+    if (isClosed) return;
+    final generation = isInit ? ++_playlistGeneration : _playlistGeneration;
     final res = await AudioGrpc.audioPlayList(
       id: id,
       oid: isInit ? oid : null,
@@ -263,6 +266,7 @@ class AudioController extends GetxController
       extraId: extraId,
       order: order,
     );
+    if (isClosed || generation != _playlistGeneration) return;
     if (res case Success(:final response)) {
       if (isInit) {
         late final paginationReply = response.paginationReply;
@@ -828,6 +832,7 @@ class AudioController extends GetxController
 
   @override
   void onClose() {
+    _playlistGeneration++;
     _stopStatusTimer();
     shutdownTimerService
       ..onPause = null
