@@ -56,6 +56,20 @@ void main() {
       backup = SettingsBackup(setting: setting, video: video);
     });
 
+    test('不同入口的恢复按完整操作串行执行', () async {
+      final other = SettingsBackup(setting: setting, video: video);
+      final first = backup.restoreMap({
+        'setting': {'theme': 'A'},
+        'video': {},
+      });
+      final second = other.restoreMap({
+        'setting': {'theme': 'B', 'old': 2},
+        'video': {},
+      });
+      await Future.wait([first, second]);
+      expect(setting.data, {'theme': 'B', 'old': 2});
+    });
+
     test(
       'protects only the WebDAV password and imports legacy plaintext',
       () async {

@@ -4,6 +4,7 @@ import 'package:pili_aurora/utils/credential_cipher.dart';
 import 'package:pili_aurora/utils/storage_key.dart';
 import 'package:collection/collection.dart';
 import 'package:hive_ce/hive.dart';
+import 'package:synchronized/synchronized.dart';
 
 /// 设置备份的格式、校验与替换规则集中在这里，不依赖页面或全局存储初始化。
 class SettingsBackup {
@@ -11,6 +12,7 @@ class SettingsBackup {
 
   final Box<dynamic> _setting;
   final Box<dynamic> _video;
+  static final _restoreLock = Lock();
   static const _equality = DeepCollectionEquality();
   static const _encoder = JsonEncoder.withIndent('    ');
   static const _legacyAndroidFullscreenCalibration =
@@ -26,30 +28,31 @@ class SettingsBackup {
 
   Future<void> restoreJson(String data) => restoreMap(jsonDecode(data));
 
-  Future<void> restoreMap(Object? document) async {
-    if (document is! Map) {
-      throw const FormatException('设置备份必须是 JSON 对象');
-    }
-    // 所有分区都在第一次写入之前校验；不完整备份不会先清空另一分区。
-    final setting = _section(document, 'setting')
-      ..remove(_legacyAndroidFullscreenCalibration);
-    final video = _section(document, 'video');
-    protectCredentials(setting);
-    final plans = [_plan(_setting, setting), _plan(_video, video)];
+  Future<void> restoreMap(Object? document) =>
+      _restoreLock.synchronized(() async {
+        if (document is! Map) {
+          throw const FormatException('设置备份必须是 JSON 对象');
+        }
+        // 所有分区都在第一次写入之前校验；不完整备份不会先清空另一分区。
+        final setting = _section(document, 'setting')
+          ..remove(_legacyAndroidFullscreenCalibration);
+        final video = _section(document, 'video');
+        protectCredentials(setting);
+        final plans = [_plan(_setting, setting), _plan(_video, video)];
 
-    // 先写入变更，再删除过期键。任一写入失败时不主动删除旧设置。
-    // Hive 没有跨 Box 事务，这里不宣称两个分区可以原子提交。
-    await Future.wait(
-      plans.map((plan) async {
-        if (plan.changes.isNotEmpty) await plan.box.putAll(plan.changes);
-      }),
-    );
-    await Future.wait(
-      plans.map((plan) async {
-        if (plan.removed.isNotEmpty) await plan.box.deleteAll(plan.removed);
-      }),
-    );
-  }
+        // 先写入变更，再删除过期键。任一写入失败时不主动删除旧设置。
+        // Hive 没有跨 Box 事务，这里不宣称两个分区可以原子提交。
+        await Future.wait(
+          plans.map((plan) async {
+            if (plan.changes.isNotEmpty) await plan.box.putAll(plan.changes);
+          }),
+        );
+        await Future.wait(
+          plans.map((plan) async {
+            if (plan.removed.isNotEmpty) await plan.box.deleteAll(plan.removed);
+          }),
+        );
+      });
 
   static void protectCredentials(Map<dynamic, dynamic> settings) {
     const key = SettingBoxKey.webdavPassword;
