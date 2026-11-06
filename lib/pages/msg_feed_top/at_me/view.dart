@@ -12,7 +12,7 @@ import 'package:pili_aurora/http/loading_state.dart';
 import 'package:pili_aurora/models/common/image_type.dart';
 import 'package:pili_aurora/models/remote/msg/msg_at/item.dart';
 import 'package:pili_aurora/pages/msg_feed_top/at_me/controller.dart';
-import 'package:pili_aurora/pages/whisper_settings/view.dart';
+import 'package:pili_aurora/pages/whisper_settings/widgets/reminder_dialog.dart';
 import 'package:pili_aurora/utils/app_scheme.dart';
 import 'package:pili_aurora/utils/date_utils.dart';
 import 'package:pili_aurora/utils/platform_utils.dart';
@@ -38,12 +38,9 @@ class _AtMePageState extends ConsumerState<AtMePage> {
       appBar: AppBar(
         title: const Text('@我的'),
         actions: [
-          IconButton(
-            onPressed: () => Get.to(
-              const WhisperSettingsPage(
-                imSettingType: IMSettingType.SETTING_TYPE_OLD_AT_ME,
-              ),
-            ),
+          MessageReminderButton(
+            type: IMSettingType.SETTING_TYPE_OLD_AT_ME,
+            title: '@我的提醒',
             icon: Icon(
               size: 20,
               Icons.settings,

@@ -13,7 +13,7 @@ import 'package:pili_aurora/http/loading_state.dart';
 import 'package:pili_aurora/models/common/image_type.dart';
 import 'package:pili_aurora/models/remote/msg/msg_like/item.dart';
 import 'package:pili_aurora/pages/msg_feed_top/like_me/controller.dart';
-import 'package:pili_aurora/pages/whisper_settings/view.dart';
+import 'package:pili_aurora/pages/whisper_settings/widgets/reminder_dialog.dart';
 import 'package:pili_aurora/services/messaging/feed.dart';
 import 'package:pili_aurora/utils/app_scheme.dart';
 import 'package:pili_aurora/utils/date_utils.dart';
@@ -40,12 +40,9 @@ class _LikeMePageState extends ConsumerState<LikeMePage> {
       appBar: AppBar(
         title: const Text('收到的赞'),
         actions: [
-          IconButton(
-            onPressed: () => Get.to(
-              const WhisperSettingsPage(
-                imSettingType: IMSettingType.SETTING_TYPE_OLD_RECEIVE_LIKE,
-              ),
-            ),
+          MessageReminderButton(
+            type: IMSettingType.SETTING_TYPE_OLD_RECEIVE_LIKE,
+            title: '收到的赞提醒',
             icon: Icon(
               size: 20,
               Icons.settings,
