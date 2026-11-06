@@ -35,6 +35,7 @@ class ArticleController extends CommonDynController {
   @override
   dynamic get sourceId => commentType == 12 ? 'cv$commentId' : id;
 
+  bool _contentLoading = false;
   final RxBool isLoaded = false.obs;
   DynamicItemModel? opusData; // 标题信息从summary获取, 动态没有favorite
   ArticleViewData? articleData;
@@ -164,18 +165,24 @@ class ArticleController extends CommonDynController {
 
   // 请求动态内容
   Future<void> _queryContent() async {
-    if (type != 'read') {
-      isLoaded.value = await queryOpus(id);
-    } else {
-      commentId = int.parse(id);
-      commentType = 12;
-      isLoaded.value = await queryRead(commentId);
-    }
-    if (isLoaded.value) {
-      queryData();
-      if (Accounts.heartbeat.isLogin && !Pref.historyPause) {
-        VideoHttp.historyReport(aid: commentId, type: 5);
+    if (isClosed || _contentLoading) return;
+    _contentLoading = true;
+    try {
+      if (type != 'read') {
+        isLoaded.value = await queryOpus(id);
+      } else {
+        commentId = int.parse(id);
+        commentType = 12;
+        isLoaded.value = await queryRead(commentId);
       }
+      if (isLoaded.value) {
+        queryData();
+        if (Accounts.heartbeat.isLogin && !Pref.historyPause) {
+          VideoHttp.historyReport(aid: commentId, type: 5);
+        }
+      }
+    } finally {
+      _contentLoading = false;
     }
   }
 
@@ -221,7 +228,8 @@ class ArticleController extends CommonDynController {
   @override
   Future<void> onReload() {
     if (!isLoaded.value) {
-      return Future.syncValue(null);
+      loadingState.value = LoadingState.loading();
+      return _queryContent();
     }
     return super.onReload();
   }
