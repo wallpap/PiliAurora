@@ -16,6 +16,28 @@ class MemberFavoriteCtr
   });
 
   final int mid;
+  int _folderGeneration = 0;
+  Object? _favLoad;
+  Object? _subLoad;
+  bool _foldersReady = true;
+
+  @override
+  Future<void> queryData([bool isRefresh = true]) {
+    if (isRefresh) {
+      _folderGeneration++;
+      _favLoad = _subLoad = null;
+      _foldersReady = false;
+      favPage = subPage = 2;
+    }
+    return super.queryData(isRefresh);
+  }
+
+  @override
+  void onClose() {
+    _folderGeneration++;
+    _foldersReady = false;
+    super.onClose();
+  }
 
   late int favPage = 2;
   bool _favExpand = true;
@@ -62,6 +84,7 @@ class MemberFavoriteCtr
   ) {
     try {
       List<SpaceFavData> res = response.response!;
+      _foldersReady = true;
       favState.value = res.first;
       subState.value = res[1];
 
@@ -79,6 +102,10 @@ class MemberFavoriteCtr
   }
 
   Future<void> userFavFolder() async {
+    if (isClosed || !_foldersReady || _favLoad != null || favEnd.value) return;
+    final operation = _favLoad = Object();
+    final generation = _folderGeneration;
+    final snapshot = favState.value;
     try {
       final res = await Request().get(
         Api.userFavFolder,
@@ -88,6 +115,11 @@ class MemberFavoriteCtr
           'up_mid': mid,
         },
       );
+      if (isClosed ||
+          generation != _folderGeneration ||
+          !identical(snapshot, favState.value)) {
+        return;
+      }
       if (res.data['code'] == 0) {
         favPage++;
         final data = res.data['data'];
@@ -98,7 +130,13 @@ class MemberFavoriteCtr
               .toList();
           if (list != null && list.isNotEmpty) {
             favState
-              ..value.mediaListResponse!.list!.addAll(list)
+              ..value.mediaListResponse!.list!.addAll(
+                list.where(
+                  (item) => !snapshot.mediaListResponse!.list!.any(
+                    (existing) => existing.id == item.id,
+                  ),
+                ),
+              )
               ..refresh();
           } else {
             favEnd.value = true;
@@ -110,11 +148,19 @@ class MemberFavoriteCtr
         SmartDialog.showToast(res.data['message']);
       }
     } catch (e) {
-      SmartDialog.showToast(e.toString());
+      if (!isClosed && generation == _folderGeneration) {
+        SmartDialog.showToast(e.toString());
+      }
+    } finally {
+      if (identical(_favLoad, operation)) _favLoad = null;
     }
   }
 
   Future<void> userSubFolder() async {
+    if (isClosed || !_foldersReady || _subLoad != null || subEnd.value) return;
+    final operation = _subLoad = Object();
+    final generation = _folderGeneration;
+    final snapshot = subState.value;
     try {
       final res = await Request().get(
         Api.userSubFolder,
@@ -125,6 +171,11 @@ class MemberFavoriteCtr
           'platform': 'web',
         },
       );
+      if (isClosed ||
+          generation != _folderGeneration ||
+          !identical(snapshot, subState.value)) {
+        return;
+      }
       if (res.data['code'] == 0) {
         subPage++;
         final data = res.data['data'];
@@ -135,7 +186,13 @@ class MemberFavoriteCtr
               .toList();
           if (list != null && list.isNotEmpty) {
             subState
-              ..value.mediaListResponse!.list!.addAll(list)
+              ..value.mediaListResponse!.list!.addAll(
+                list.where(
+                  (item) => !snapshot.mediaListResponse!.list!.any(
+                    (existing) => existing.id == item.id,
+                  ),
+                ),
+              )
               ..refresh();
           } else {
             subEnd.value = true;
@@ -147,7 +204,11 @@ class MemberFavoriteCtr
         SmartDialog.showToast(res.data['message']);
       }
     } catch (e) {
-      SmartDialog.showToast(e.toString());
+      if (!isClosed && generation == _folderGeneration) {
+        SmartDialog.showToast(e.toString());
+      }
+    } finally {
+      if (identical(_subLoad, operation)) _subLoad = null;
     }
   }
 
