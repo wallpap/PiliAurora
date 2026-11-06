@@ -7,6 +7,11 @@ on:
 permissions:
   contents: read
 
+# 同一 PR 只验证最新提交；手动运行各自保留。
+concurrency:
+  group: checks-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   checks:
     runs-on: ubuntu-latest
@@ -24,7 +29,7 @@ jobs:
         uses: subosito/flutter-action@v2
         with:
           channel: stable
-          flutter-version-file: pubspec.yaml
+          flutter-version-file: .fvmrc
           cache: true
 
       - name: Apply Flutter patches and prepare dependencies

@@ -86,6 +86,10 @@ fvm flutter test
 
 PR 检查由 `.github/workflows/checks.yml` 独立执行，以只读仓库权限运行依赖验收、CI 测试、Android 主机探针、采集器单元测试、呈现引擎身份与 APK 装配回归及 Windows 采样门控主机探针。严格分析范围为 `lib/plugin/pl_player lib/pages/danmaku test tool`；全量分析还应手动运行上述命令，当前 `lib/common/widgets/flutter/` 的上游控件副本存在既存提示。
 
+CI 从 `.fvmrc` 读取 Flutter 固定版本，避免 Windows 为解析 `pubspec.yaml` 额外安装 yq；升级 SDK 时仍须同步 `pubspec.yaml` 的版本约束。同一 PR 有新提交时自动取消旧检查，手动检查与发布构建保留独立运行。Android 发布启用 Gradle 任务缓存，配合现有 Gradle 用户目录缓存复用可缓存的任务输出；Gradle 脚本、属性与 Pub 锁文件参与缓存键。实际命中率和耗时需在后续 GitHub Actions 运行中确认。
+
+Android libmpv 的三个原生 JAR 另缓存 `build/media_kit_libs_android_video/20*/*.jar`，缓存键取插件 Gradle 脚本摘要；这些下载产物位于项目构建目录，未被 Gradle 用户目录缓存覆盖。插件仍在使用前逐个校验 SHA-256，缓存不包含 APK 或签名配置。
+
 ```powershell
 fvm flutter analyze --no-pub lib/plugin/pl_player lib/pages/danmaku test tool
 pwsh -NoProfile -File tool/run-native-probes.ps1

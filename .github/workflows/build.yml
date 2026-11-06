@@ -40,7 +40,7 @@ jobs:
         runs-on: ubuntu-latest
         env:
             # CI 不复用目录监听状态，避免 Linux runner 重复注册同一路径。
-            GRADLE_OPTS: "--enable-native-access=ALL-UNNAMED -Dorg.gradle.vfs.watch=false"
+            GRADLE_OPTS: "--enable-native-access=ALL-UNNAMED -Dorg.gradle.vfs.watch=false -Dorg.gradle.caching=true"
         permissions: write-all
 
         steps:
@@ -56,15 +56,18 @@ jobs:
                   java-version: "25"
                   cache: "gradle"
                   cache-dependency-path: |
-                      android/*.gradle*
+                      android/**/*.gradle*
+                      android/gradle.properties
                       android/**/gradle-wrapper.properties
                       android/gradle/gradle-daemon-jvm.properties
+                      third_party/**/*.gradle*
+                      pubspec.lock
 
             - name: Set up Flutter
               uses: subosito/flutter-action@v2
               with:
                   channel: stable
-                  flutter-version-file: pubspec.yaml
+                  flutter-version-file: .fvmrc
                   cache: true
 
             - name: Apply Flutter patches
@@ -117,6 +120,13 @@ jobs:
               id: android_version
               shell: bash
               run: printf 'version=%s\n' "$version" >> "$GITHUB_OUTPUT"
+
+            # 插件将原生 JAR 下载到项目 build 目录，不在 Gradle 用户缓存内。
+            - name: Cache Android libmpv archives
+              uses: actions/cache@v5
+              with:
+                  path: build/media_kit_libs_android_video/20*/*.jar
+                  key: android-libmpv-${{ hashFiles('third_party/media_kit_libs_android_video/android/build.gradle') }}
 
             - name: Build release APK with verified prebuilt engines
               if: ${{ github.event_name == 'workflow_dispatch' }}
