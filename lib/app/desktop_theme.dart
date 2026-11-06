@@ -6,13 +6,19 @@ import 'package:material_ui/material_ui.dart';
 import 'package:pili_aurora/common/assets.dart';
 import 'package:pili_aurora/services/logger.dart';
 import 'package:pili_aurora/utils/desktop_window_visibility.dart';
+import 'package:pili_aurora/utils/desktop_window_background.dart';
 import 'package:window_manager/window_manager.dart';
 
 /// 根节点同步窗口外观，主窗口和独立播放窗口共用。
 class DesktopWindowTheme extends StatefulWidget {
-  const DesktopWindowTheme({super.key, required this.child});
+  const DesktopWindowTheme({
+    super.key,
+    required this.child,
+    this.backgroundColor,
+  });
 
   final Widget child;
+  final Color? backgroundColor;
 
   @override
   State<DesktopWindowTheme> createState() => _DesktopWindowThemeState();
@@ -24,6 +30,7 @@ class _DesktopWindowThemeState extends State<DesktopWindowTheme>
         WindowListener,
         DesktopWindowVisibilityListener {
   Brightness? _brightness;
+  Color? _backgroundColor;
   bool _windowVisible = true;
   int _windowEvent = 0;
 
@@ -77,11 +84,26 @@ class _DesktopWindowThemeState extends State<DesktopWindowTheme>
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
+    _syncBackground();
     final brightness = Theme.of(context).brightness;
     if (_brightness == brightness) return;
     _brightness = brightness;
     unawaited(windowManager.setBrightness(brightness));
     _syncIcon();
+  }
+
+  @override
+  void didUpdateWidget(DesktopWindowTheme oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    _syncBackground();
+  }
+
+  void _syncBackground() {
+    final color =
+        widget.backgroundColor ?? Theme.of(context).scaffoldBackgroundColor;
+    if (_backgroundColor == color) return;
+    _backgroundColor = color;
+    unawaited(DesktopWindowBackground.setThemeColor(color));
   }
 
   void _syncIcon() {

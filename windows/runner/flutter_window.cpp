@@ -28,6 +28,25 @@ bool FlutterWindow::OnCreate() {
     return false;
   }
   RegisterPlugins(flutter_controller_->engine());
+  background_channel_ =
+      std::make_unique<flutter::MethodChannel<flutter::EncodableValue>>(
+          flutter_controller_->engine()->messenger(),
+          "piliaurora/window_background", &flutter::StandardMethodCodec::GetInstance());
+  background_channel_->SetMethodCallHandler([this](const auto& call, auto result) {
+    if (call.method_name() != "setColor") {
+      result->NotImplemented();
+      return;
+    }
+    const auto value = call.arguments()
+        ? std::get_if<int32_t>(call.arguments()) : nullptr;
+    if (!value || *value < 0 || *value > 0xFFFFFF) {
+      result->Error("invalid_color", "Expected RGB color");
+      return;
+    }
+    SetBackgroundColor(RGB((*value >> 16) & 0xFF,
+                           (*value >> 8) & 0xFF, *value & 0xFF));
+    result->Success();
+  });
   gpu_metrics_ = std::make_unique<GpuMetrics>(flutter_controller_->engine());
   memory_metrics_ = std::make_unique<MemoryMetricsChannel>(flutter_controller_->engine());
 
@@ -47,6 +66,10 @@ bool FlutterWindow::OnCreate() {
 
 void FlutterWindow::OnDestroy() {
   // 先摘除成员指针，避免销毁视图/插件时的重入消息访问半析构控制器。
+  if (background_channel_) {
+    background_channel_->SetMethodCallHandler(nullptr);
+    background_channel_.reset();
+  }
   gpu_metrics_.reset();
   memory_metrics_.reset();
   auto controller = std::move(flutter_controller_);

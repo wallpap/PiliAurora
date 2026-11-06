@@ -3,6 +3,7 @@ import 'dart:io' show Platform;
 
 import 'package:pili_aurora/services/logger.dart';
 import 'package:pili_aurora/utils/device_utils.dart';
+import 'package:pili_aurora/utils/desktop_window_background.dart';
 import 'package:flutter/services.dart'
     show SystemChrome, MethodChannel, SystemUiOverlay, DeviceOrientation;
 
@@ -13,11 +14,13 @@ Future<void> enterDesktopFullScreen({bool inAppFullScreen = false}) async {
   if (!inAppFullScreen && !_isDesktopFullScreen) {
     _isDesktopFullScreen = true;
     try {
+      await DesktopWindowBackground.setFullscreen(true);
       await const MethodChannel(
         'com.alexmercerind/media_kit_video',
       ).invokeMethod('Utils.EnterNativeFullscreen');
     } catch (error, stackTrace) {
       _isDesktopFullScreen = false;
+      await DesktopWindowBackground.setFullscreen(false);
       logger.w(
         '进入原生全屏失败',
         error: error,
@@ -31,11 +34,13 @@ Future<void> enterDesktopFullScreen({bool inAppFullScreen = false}) async {
 Future<void> exitDesktopFullScreen() async {
   if (_isDesktopFullScreen) {
     try {
+      await DesktopWindowBackground.setFullscreen(false);
       await const MethodChannel(
         'com.alexmercerind/media_kit_video',
       ).invokeMethod('Utils.ExitNativeFullscreen');
       _isDesktopFullScreen = false;
     } catch (error, stackTrace) {
+      await DesktopWindowBackground.setFullscreen(true);
       logger.w(
         '退出原生全屏失败',
         error: error,

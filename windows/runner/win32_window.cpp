@@ -135,7 +135,7 @@ bool Win32Window::Create(const std::wstring& title,
   double scale_factor = dpi / 96.0;
 
   HWND window = CreateWindow(
-      window_class, title.c_str(), WS_OVERLAPPEDWINDOW,
+      window_class, title.c_str(), WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN,
       Scale(origin.x, scale_factor), Scale(origin.y, scale_factor),
       Scale(size.width, scale_factor), Scale(size.height, scale_factor),
       nullptr, nullptr, GetModuleHandle(nullptr), this);
@@ -179,6 +179,14 @@ Win32Window::MessageHandler(HWND hwnd,
                             WPARAM const wparam,
                             LPARAM const lparam) noexcept {
   switch (message) {
+    case WM_ERASEBKGND: {
+      // 只填充尚未被 Flutter 覆盖的区域，颜色由应用主题／全屏状态同步。
+      RECT rect = GetClientArea();
+      HBRUSH brush = CreateSolidBrush(background_color_);
+      const auto painted = FillRect(reinterpret_cast<HDC>(wparam), &rect, brush);
+      DeleteObject(brush);
+      return painted ? 1 : 0;
+    }
     case WM_SYSCOMMAND:
       if (wparam == SC_KEYMENU && (lparam >> 16) <= 0) {
         return 0;
@@ -263,6 +271,10 @@ RECT Win32Window::GetClientArea() {
 
 HWND Win32Window::GetHandle() {
   return window_handle_;
+}
+
+void Win32Window::SetBackgroundColor(COLORREF color) {
+  background_color_ = color;
 }
 
 void Win32Window::SetQuitOnClose(bool quit_on_close) {

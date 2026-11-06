@@ -13,6 +13,8 @@ import 'package:pili_aurora/utils/platform_utils.dart';
 import 'package:pili_aurora/utils/storage.dart';
 import 'package:pili_aurora/utils/storage_key.dart';
 import 'package:pili_aurora/utils/storage_pref.dart';
+import 'package:pili_aurora/utils/theme_utils.dart';
+import 'package:pili_aurora/utils/desktop_window_background.dart';
 import 'package:collection/collection.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_displaymode/flutter_displaymode.dart';
@@ -68,6 +70,19 @@ Future<void> initializePlatformWindow() async {
     FocusManager.instance.addEarlyKeyEventHandler(handleAppKeyEvent);
 
     await windowManager.ensureInitialized();
+    if (Platform.isWindows) {
+      final (light, dark) = ThemeUtils.getAllTheme();
+      final isDark =
+          Pref.themeMode == ThemeMode.dark ||
+          (Pref.themeMode == ThemeMode.system &&
+              WidgetsBinding.instance.platformDispatcher.platformBrightness ==
+                  Brightness.dark);
+      await DesktopWindowBackground.setThemeColor(
+        DesktopPlaybackWindows.isPlayerWindow
+            ? Colors.black
+            : (isDark ? dark : light).scaffoldBackgroundColor,
+      );
+    }
     if (DesktopPlaybackWindows.isPlayerWindow) {
       final windows = DesktopPlaybackWindows.instance;
       await windowManager.waitUntilReadyToShow(

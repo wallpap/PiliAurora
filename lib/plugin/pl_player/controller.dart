@@ -61,6 +61,7 @@ import 'package:pili_aurora/utils/android/bindings.g.dart';
 import 'package:pili_aurora/utils/asset_utils.dart';
 import 'package:pili_aurora/utils/device_utils.dart';
 import 'package:pili_aurora/utils/desktop_window_visibility.dart';
+import 'package:pili_aurora/utils/desktop_window_background.dart';
 import 'package:pili_aurora/utils/duration_utils.dart';
 import 'package:pili_aurora/utils/extension/box_ext.dart';
 import 'package:pili_aurora/utils/feed_back.dart';
@@ -2310,6 +2311,7 @@ class PlPlayerController
         await SchedulerBinding.instance.endOfFrame;
       }
       if (isDesktopPip) {
+        await DesktopWindowBackground.setFullscreen(status);
         await windowManager.setFullScreen(status);
       } else if (status) {
         if (PlatformUtils.isMobile) {

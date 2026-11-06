@@ -76,6 +76,7 @@ $ciTests = @(
 if ($IsWindows) {
     $ciTests += @(
         "test/app/desktop_theme_test.dart",
+        "test/utils/desktop_window_background_test.dart",
         "test/app/desktop_playback_launch_test.dart",
         "test/plugin/pl_player/fullscreen_transition_test.dart"
     )

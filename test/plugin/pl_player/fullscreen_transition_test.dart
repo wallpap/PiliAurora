@@ -15,6 +15,20 @@ void main() {
   const channel = MethodChannel('com.alexmercerind/media_kit_video');
 
   testWidgets('Windows 原生窗口放大前已提交全屏布局，保留播放器元素', (tester) async {
+    const backgroundChannel = MethodChannel('piliaurora/window_background');
+    const windowChannel = MethodChannel('window_manager');
+    for (final channel in [backgroundChannel, windowChannel]) {
+      tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        channel,
+        (call) async => null,
+      );
+      addTearDown(
+        () => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+          channel,
+          null,
+        ),
+      );
+    }
     GStorage.setting = await Hive.openBox(
       'fullscreen-setting',
       bytes: Uint8List(0),

@@ -10,6 +10,21 @@
 
 ## Windows 启动与任务栏图标
 
+### 全屏切换出现白帧
+
+Windows 保留 DWM 窗口过渡动画。普通窗口的原生合成背景与 GDI 擦除背景均跟随当前主题的
+`scaffoldBackgroundColor`，全屏播放和独立播放窗口保持黑色。主题切换和全屏切换按顺序
+提交两种背景；全屏期间切换主题，退出时恢复最新主题色，避免浅色主题下固定黑底。
+父窗口使用 `WS_CLIPCHILDREN`，背景绘制跳过 Flutter 子窗口已占用的区域。
+播放器进入全屏前仍先提交隐藏详情面板的布局，保留播放器元素和播放输出。
+
+可运行 `python tool/probes/windows/windows_fullscreen_transition_probe.py`（需要 MinGW `g++`）
+编译实际 runner，检查浅色、深色、全屏背景擦除像素、子窗口裁剪开启、DWM 动画未被禁用，
+并执行十次原生尺寸／样式往返；
+`fvm flutter test --no-pub test/utils/desktop_window_background_test.dart test/plugin/pl_player/fullscreen_transition_test.dart`
+核对主题／全屏背景同步、Flutter 布局交接与播放器元素保留。这些检查不验证屏幕呈现像素；白帧是否消失仍需在目标设备
+分别从普通窗口、最大化窗口和独立播放窗口进入／退出全屏，并逐帧查看录屏。
+
 ### 启动时数据文件拒绝访问
 
 Windows 构建完成后若没有可见窗口，并出现 Hive 文件或其他本地数据文件的 `PathAccessException`、`errno = 5`，可先检查完整性标签。在仓库根目录执行：

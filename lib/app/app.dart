@@ -66,7 +66,7 @@ class PiliAuroraApp extends StatelessWidget {
     );
   }
 
-  static Widget _builder(BuildContext context, Widget? child) {
+  Widget _builder(BuildContext context, Widget? child) {
     final viewport = AppViewport(
       uiScale: Pref.uiScale,
       textScale: Pref.defaultTextScale,
@@ -74,6 +74,7 @@ class PiliAuroraApp extends StatelessWidget {
     );
     return PlatformUtils.isDesktop
         ? DesktopWindowTheme(
+            backgroundColor: playbackRequest == null ? null : Colors.black,
             child: BackDetector(onBack: handleAppBack, child: viewport),
           )
         : viewport;

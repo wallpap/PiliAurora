@@ -102,7 +102,7 @@ uv run --locked python -m unittest discover -s tool/probes/android -p '*_test.py
 pwsh -NoProfile -File tool/run-ci-tests.ps1
 ```
 
-`tool/run-ci-tests.ps1` 默认调用 `fvm flutter test --no-pub`，两端共用会话、消息、设置和弹幕等逻辑回归。Windows 主机另运行桌面主题、小窗启动和原生全屏布局测试；Linux 主机另运行 `test/plugin/pl_player/android/` 中选定的模拟平台通道测试。共享文件内少量依赖 Windows 的用例保留主机跳过条件。脚本不会运行 `pub get`、修改 Flutter SDK、应用补丁或构建应用。运行前需准备好依赖；依赖来源检查和补丁由 GitHub Actions 的独立步骤执行。
+`tool/run-ci-tests.ps1` 默认调用 `fvm flutter test --no-pub`，两端共用会话、消息、设置和弹幕等逻辑回归。Windows 主机另运行桌面主题、浅深色窗口背景交接、小窗启动和原生全屏布局测试；Linux 主机另运行 `test/plugin/pl_player/android/` 中选定的模拟平台通道测试。共享文件内少量依赖 Windows 的用例保留主机跳过条件。脚本不会运行 `pub get`、修改 Flutter SDK、应用补丁或构建应用。运行前需准备好依赖；依赖来源检查和补丁由 GitHub Actions 的独立步骤执行。
 
 定位单个功能时，可将相关测试文件或目录传给 `fvm flutter test`。测试按业务领域放在 `test/` 下，目录索引见 [`test/README.md`](../../test/README.md)。
 
