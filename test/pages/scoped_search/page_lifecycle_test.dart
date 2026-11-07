@@ -74,10 +74,9 @@ void main() {
       }
 
       await mount(first);
-      final position = tester
-          .state<ScrollableState>(find.byType(Scrollable))
-          .position;
-      position.jumpTo(900);
+      final position =
+          tester.state<ScrollableState>(find.byType(Scrollable)).position
+            ..jumpTo(900);
       await tester.pumpAndSettle();
       await mount(first);
       expect(position.pixels, 900);
