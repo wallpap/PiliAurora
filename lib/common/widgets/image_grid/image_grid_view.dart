@@ -177,10 +177,7 @@ class ImageGridView extends StatelessWidget {
           AppPopupMenuItem(
             height: 42,
             onTap: () => ImageUtils.downloadLivePhoto(
-              url: item.url,
               liveUrl: item.liveUrl!,
-              width: item.width.toInt(),
-              height: item.height.toInt(),
             ),
             child: const Text(
               '保存视频',

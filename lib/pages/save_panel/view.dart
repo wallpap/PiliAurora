@@ -19,7 +19,6 @@ import 'package:pili_aurora/utils/extension/num_ext.dart';
 import 'package:pili_aurora/utils/extension/theme_ext.dart';
 import 'package:pili_aurora/utils/image_utils.dart';
 import 'package:pili_aurora/utils/platform_utils.dart';
-import 'package:pili_aurora/utils/share_utils.dart';
 import 'package:pili_aurora/utils/utils.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
@@ -305,7 +304,7 @@ class _SavePanelState extends State<SavePanel> {
       if (isShare) {
         Get.back();
         SmartDialog.dismiss();
-        SharePlus.instance.share(
+        await SharePlus.instance.share(
           ShareParams(
             files: [
               XFile.fromData(
@@ -314,7 +313,6 @@ class _SavePanelState extends State<SavePanel> {
                 mimeType: 'image/png',
               ),
             ],
-            sharePositionOrigin: await ShareUtils.sharePositionOrigin,
           ),
         );
       } else {
@@ -322,15 +320,12 @@ class _SavePanelState extends State<SavePanel> {
           bytes: pngBytes,
           fileName: picName,
         );
-        if (result != null) {
-          if (result.isSuccess) {
-            Get.back();
-          }
-        }
+        if (result?.isSuccess == true) Get.back();
       }
     } catch (e, stackTrace) {
       logger.w('on save/share reply: $e', error: e, stackTrace: stackTrace);
-      SmartDialog.dismiss();
+    } finally {
+      SmartDialog.dismiss(status: .loading);
     }
   }
 

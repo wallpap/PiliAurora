@@ -588,10 +588,7 @@ class _GalleryViewerState extends State<GalleryViewer>
               onPressed: () {
                 Get.back();
                 ImageUtils.downloadLivePhoto(
-                  url: item.url,
                   liveUrl: item.liveUrl!,
-                  width: item.width!,
-                  height: item.height!,
                 );
               },
               child: const Text(
@@ -638,10 +635,7 @@ class _GalleryViewerState extends State<GalleryViewer>
           AppPopupMenuItem(
             height: 42,
             onTap: () => ImageUtils.downloadLivePhoto(
-              url: item.url,
               liveUrl: item.liveUrl!,
-              width: item.width!,
-              height: item.height!,
             ),
             child: const Text('保存视频', style: TextStyle(fontSize: 14)),
           ),

@@ -13,7 +13,6 @@ import 'package:pili_aurora/utils/global_data.dart';
 import 'package:pili_aurora/utils/path_utils.dart';
 import 'package:pili_aurora/utils/permission_handler.dart';
 import 'package:pili_aurora/utils/platform_utils.dart';
-import 'package:pili_aurora/utils/share_utils.dart';
 import 'package:pili_aurora/utils/storage_pref.dart';
 import 'package:pili_aurora/utils/utils.dart';
 import 'package:file_picker/file_picker.dart';
@@ -40,11 +39,12 @@ abstract final class ImageUtils {
       await SharePlus.instance.share(
         ShareParams(
           files: [XFile(res.path)],
-          sharePositionOrigin: await ShareUtils.sharePositionOrigin,
         ),
       );
     } catch (e) {
       SmartDialog.showToast(e.toString());
+    } finally {
+      SmartDialog.dismiss(status: .loading);
     }
   }
 
@@ -71,27 +71,17 @@ abstract final class ImageUtils {
         ),
       );
       return false;
-    } else {
-      return true;
     }
+    return true;
   }
 
   static FutureOr<bool> checkPermissionDependOnSdkInt() {
-    if (Platform.isAndroid) {
-      if (DeviceUtils.sdkInt < 29) {
-        return requestPer();
-      } else {
-        return true;
-      }
-    }
+    if (Platform.isAndroid && DeviceUtils.sdkInt >= 29) return true;
     return requestPer();
   }
 
   static Future<bool> downloadLivePhoto({
-    required String url,
     required String liveUrl,
-    required int width,
-    required int height,
   }) async {
     try {
       if (PlatformUtils.isMobile && !await checkPermissionDependOnSdkInt()) {
@@ -133,30 +123,18 @@ abstract final class ImageUtils {
       final file = await CacheManager.manager.getSingleFile(url.http2https);
       return (file, name);
     });
-    final List<(File, String)> result;
     try {
-      try {
-        result = await Future.wait(
-          futures,
-          eagerError: true,
-          cleanUp: (successValue) => successValue.$1.tryDel(),
-        );
-      } catch (e) {
-        SmartDialog.showToast('保存失败');
-        return false;
-      }
+      // 下载结果属于共享缓存，部分失败时不删除已成功的文件。
+      final result = await Future.wait(futures, eagerError: true);
       if (PlatformUtils.isMobile) {
-        final saveList = <SaveFileData>[];
-        for (final i in result) {
-          saveList.add(
+        await SaverGallery.saveFiles([
+          for (final (file, name) in result)
             SaveFileData(
-              filePath: i.$1.path,
-              fileName: i.$2,
+              filePath: file.path,
+              fileName: name,
               albumPath: _albumPath,
             ),
-          );
-        }
-        await SaverGallery.saveFiles(saveList, skipIfExists: false);
+        ], skipIfExists: false);
       } else {
         final dst = await FilePicker.getDirectoryPath();
         if (dst == null) {
@@ -170,6 +148,9 @@ abstract final class ImageUtils {
       }
       SmartDialog.showToast(' 已保存 ');
       return true;
+    } catch (_) {
+      SmartDialog.showToast('保存失败');
+      return false;
     } finally {
       if (!silentDownImg) SmartDialog.dismiss(status: .loading);
     }
