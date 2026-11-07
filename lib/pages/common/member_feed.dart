@@ -1,3 +1,4 @@
+import 'package:pili_aurora/models/common/member/contribute_type.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pili_aurora/http/member.dart';
 import 'package:pili_aurora/models/remote/member_guard/guard_top_list.dart';
@@ -6,7 +7,17 @@ import 'package:pili_aurora/services/account_providers.dart';
 import 'package:pili_aurora/utils/accounts.dart';
 import 'package:pili_aurora/utils/accounts/account.dart';
 
-enum MemberFeedKind { article, audio, coin, like, shop, guard }
+enum MemberFeedKind {
+  article,
+  audio,
+  coin,
+  like,
+  shop,
+  guard,
+  cheese,
+  comic,
+  series,
+}
 
 typedef MemberFeedQuery = ({MemberFeedKind kind, String mid, Object owner});
 final memberFeedProvider = AsyncNotifierProvider.autoDispose
@@ -108,6 +119,38 @@ class MemberFeedNotifier extends AsyncNotifier<MemberFeedState> {
         more =
             rows.isNotEmpty &&
             (total == null ? rows.length >= 20 : page * 20 < total);
+      case MemberFeedKind.cheese:
+        final data = (await MemberHttp.spaceCheese(
+          account: account,
+          mid: mid,
+          page: page,
+        )).data;
+        rows = data.items ?? [];
+        more = rows.isNotEmpty && (data.page?.next ?? rows.length >= 30);
+      case MemberFeedKind.comic:
+        final data = (await MemberHttp.spaceArchive(
+          account: account,
+          type: ContributeType.comic,
+          mid: mid,
+          pn: page,
+        )).data;
+        rows = data.item ?? [];
+        total = data.count;
+        more =
+            rows.isNotEmpty &&
+            (data.hasNext ??
+                (total == null ? rows.length >= 20 : page * 20 < total));
+      case MemberFeedKind.series:
+        final data = (await MemberHttp.seasonSeriesList(
+          account: account,
+          mid: mid,
+          pn: page,
+        )).data;
+        rows = [...?data.seasonsList, ...?data.seriesList];
+        total = data.page?.total;
+        more =
+            rows.isNotEmpty &&
+            (total == null ? rows.length >= 10 : page * 10 < total);
       case MemberFeedKind.shop:
         // 商品接口没有可用的后续游标，完整商品入口由服务端 clickUrl 提供。
         shop = (await MemberHttp.spaceShop(account: account, mid: mid)).data;
@@ -132,6 +175,14 @@ class MemberFeedNotifier extends AsyncNotifier<MemberFeedState> {
       MemberFeedKind.coin || MemberFeedKind.like => row.param ?? row.uri ?? row,
       MemberFeedKind.shop => row.cardUrl ?? row,
       MemberFeedKind.guard => row.uid,
+      MemberFeedKind.cheese => row.seasonId ?? row,
+      MemberFeedKind.comic => row.param ?? row.uri ?? row,
+      MemberFeedKind.series =>
+        row.meta?.seasonId != null
+            ? ('season', row.meta.seasonId)
+            : row.meta?.seriesId != null
+            ? ('series', row.meta.seriesId)
+            : row,
     };
     final seen = <Object>{for (final item in tops) item.uid};
     final items = [

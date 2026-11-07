@@ -1,3 +1,6 @@
+import 'package:pili_aurora/pages/member_upower_rank/controller.dart';
+import 'package:pili_aurora/models/common/member/contribute_type.dart';
+
 import 'dart:async';
 
 import 'package:dio/dio.dart';
@@ -78,6 +81,32 @@ void main() {
             {'param': '$id', 'uri': 'video/$id', 'title': 'video$id'},
         ],
       },
+      MemberFeedKind.cheese => {
+        'items': [
+          for (final id in ids) {'season_id': id, 'title': 'course$id'},
+        ],
+        'page': {'next': more},
+      },
+      MemberFeedKind.comic => {
+        'item': [
+          for (final id in ids)
+            {'param': '$id', 'uri': 'comic/$id', 'title': 'comic$id'},
+        ],
+        'count': total,
+        'has_next': more,
+      },
+      MemberFeedKind.series => {
+        'items_lists': {
+          'seasons_list': [
+            for (final id in ids)
+              {
+                'meta': {'season_id': id, 'name': 'series$id'},
+              },
+          ],
+          'series_list': [],
+          'page': {'total': total},
+        },
+      },
       MemberFeedKind.shop => {
         'data': [
           for (final id in ids) {'cardUrl': 'shop/$id', 'title': 'shop$id'},
@@ -151,12 +180,12 @@ void main() {
   });
   tearDownAll(() => Request.dio.close(force: true));
 
-  test('六类列表固定账号、目标与入口，列表快照不可变', () async {
+  test('九类列表固定账号、目标与入口，列表快照不可变', () async {
     final subscriptions = [
       for (final kind in MemberFeedKind.values)
         container.listen(memberFeedProvider(query(kind)), (_, _) {}),
     ];
-    await dispatched(6);
+    await dispatched(9);
     final paths = {
       Api.spaceArticle: MemberFeedKind.article,
       Api.spaceAudio: MemberFeedKind.audio,
@@ -164,6 +193,9 @@ void main() {
       Api.likeArc: MemberFeedKind.like,
       Api.spaceShop: MemberFeedKind.shop,
       Api.memberGuard: MemberFeedKind.guard,
+      Api.spaceCheese: MemberFeedKind.cheese,
+      ContributeType.comic.api: MemberFeedKind.comic,
+      Api.seasonSeries: MemberFeedKind.series,
     };
     for (final request in requests) {
       expect(request.options.extra['account'], same(account));
@@ -290,6 +322,74 @@ void main() {
     expect(
       () => container.read(provider).requireValue.articles.clear(),
       throwsUnsupportedError,
+    );
+  });
+
+  test('充电排行按等级、目标与页面隔离，账号变化不接收旧排行', () async {
+    final owner = Object();
+    final all = (mid: '200', privilege: null as int?, owner: owner);
+    final level = (mid: '200', privilege: 1 as int?, owner: owner);
+    container
+      ..listen(upowerRankingProvider(all), (_, _) {})
+      ..listen(upowerRankingProvider(level), (_, _) {});
+    await dispatched(2);
+    for (final request in requests) {
+      expect(request.options.path, Api.upowerRank);
+      expect(request.options.extra['account'], same(account));
+      expect(request.options.queryParameters['csrf'], 'old');
+      expect(request.options.queryParameters['up_mid'], '200');
+      request.reply.complete({
+        'code': 0,
+        'data': {
+          'rank_info': [
+            {
+              'mid': request.options.queryParameters['privilege_type'] == null
+                  ? 1
+                  : 2,
+              'nickname': 'rank',
+              'day': 3,
+            },
+          ],
+          'level_info': [
+            {'privilege_type': 0, 'name': 'all'},
+            {'privilege_type': 1, 'name': 'one'},
+          ],
+        },
+      });
+    }
+    final before = await container.read(upowerRankingProvider(all).future);
+    final filtered = await container.read(upowerRankingProvider(level).future);
+    expect(before.ranks.single.mid, 1);
+    expect(filtered.ranks.single.mid, 2);
+    expect(before.levels, hasLength(2));
+    expect(before.ranks.clear, throwsUnsupportedError);
+    container.invalidate(upowerRankingProvider(all));
+    await container.pump();
+    await dispatched(3);
+    Accounts.accountMode[AccountType.main.index] = login('new');
+    await Accounts.refresh();
+    await container.pump();
+    await dispatched(5);
+    for (final request in requests.skip(3)) {
+      request.reply.complete({
+        'code': 0,
+        'data': {'rank_info': [], 'level_info': []},
+      });
+    }
+    await container.read(upowerRankingProvider(all).future);
+    requests[2].reply.complete({
+      'code': 0,
+      'data': {
+        'rank_info': [
+          {'mid': 9},
+        ],
+        'level_info': [],
+      },
+    });
+    await Future<void>.delayed(Duration.zero);
+    expect(
+      container.read(upowerRankingProvider(all)).requireValue.ranks,
+      isEmpty,
     );
   });
 

@@ -1,44 +1,27 @@
-import 'package:pili_aurora/http/loading_state.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pili_aurora/http/member.dart';
-import 'package:pili_aurora/models/remote/upower_rank/data.dart';
 import 'package:pili_aurora/models/remote/upower_rank/level_info.dart';
 import 'package:pili_aurora/models/remote/upower_rank/rank_info.dart';
-import 'package:pili_aurora/pages/common/common_list_controller.dart';
-import 'package:get/get.dart';
+import 'package:pili_aurora/services/account_providers.dart';
 
-class UpowerRankController
-    extends CommonListController<UpowerRankData, UpowerRankInfo> {
-  UpowerRankController({
-    this.privilegeType,
-    required this.upMid,
-  });
+typedef UpowerRankQuery = ({String mid, int? privilege, Object owner});
 
-  final String upMid;
-  final int? privilegeType;
-
-  late final Rx<List<LevelInfo>?> tabs = Rx<List<LevelInfo>?>(null);
-
-  @override
-  void onInit() {
-    super.onInit();
-    queryData();
-  }
-
-  @override
-  List<UpowerRankInfo>? getDataList(UpowerRankData response) {
-    isEnd = true;
-    if (privilegeType == null &&
-        response.levelInfo != null &&
-        response.levelInfo!.length > 1) {
-      tabs.value = response.levelInfo;
-    }
-    return response.rankInfo;
-  }
-
-  @override
-  Future<LoadingState<UpowerRankData>> customGetData() => MemberHttp.upowerRank(
-    upMid: upMid,
-    page: page,
-    privilegeType: privilegeType,
-  );
+class UpowerRanking {
+  UpowerRanking(Iterable<UpowerRankInfo> ranks, Iterable<LevelInfo> levels)
+    : ranks = List.unmodifiable(ranks),
+      levels = List.unmodifiable(levels);
+  final List<UpowerRankInfo> ranks;
+  final List<LevelInfo> levels;
 }
+
+final upowerRankingProvider = FutureProvider.autoDispose
+    .family<UpowerRanking, UpowerRankQuery>((ref, query) async {
+      final account = ref.watch(mainAccountProvider);
+      final data = (await MemberHttp.upowerRank(
+        account: account,
+        upMid: query.mid,
+        page: 1,
+        privilegeType: query.privilege,
+      )).data;
+      return UpowerRanking(data.rankInfo ?? [], data.levelInfo ?? []);
+    }, retry: (_, _) => null);

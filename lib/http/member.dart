@@ -99,11 +99,13 @@ abstract final class MemberHttp {
   }
 
   static Future<LoadingState<SpaceSsData>> seasonSeriesList({
+    required Account account,
     required int? mid,
     required int pn,
   }) async {
     final res = await Request().get(
       Api.seasonSeries,
+      options: Options(extra: {'account': account}),
       queryParameters: {
         'mid': mid,
         'page_num': pn,
@@ -120,6 +122,7 @@ abstract final class MemberHttp {
   }
 
   static Future<LoadingState<SpaceArchiveData>> spaceArchive({
+    Account? account,
     required ContributeType type,
     required int? mid,
     String? aid,
@@ -131,6 +134,7 @@ abstract final class MemberHttp {
     int? seriesId,
     bool? includeCursor,
   }) async {
+    account ??= Accounts.main;
     final params = {
       'aid': ?aid,
       'build': 8430300,
@@ -156,6 +160,7 @@ abstract final class MemberHttp {
       type.api,
       queryParameters: params,
       options: Options(
+        extra: {'account': account},
         headers: {
           'bili-http-engine': 'cronet',
           'user-agent': Constants.userAgentApp,
@@ -193,11 +198,13 @@ abstract final class MemberHttp {
   }
 
   static Future<LoadingState<SpaceCheeseData>> spaceCheese({
+    required Account account,
     required int page,
     required mid,
   }) async {
     final res = await Request().get(
       Api.spaceCheese,
+      options: Options(extra: {'account': account}),
       queryParameters: {
         'pn': page,
         'ps': 30,
@@ -731,12 +738,14 @@ abstract final class MemberHttp {
   }
 
   static Future<LoadingState<UpowerRankData>> upowerRank({
+    required Account account,
     required Object upMid,
     required int page,
     int? privilegeType,
   }) async {
     final res = await Request().get(
       Api.upowerRank,
+      options: Options(extra: {'account': account}),
       queryParameters: {
         'up_mid': upMid,
         'pn': page,
@@ -744,7 +753,7 @@ abstract final class MemberHttp {
         'privilege_type': ?privilegeType,
         'mobi_app': 'web',
         'web_location': 333.1196,
-        if (Accounts.main.isLogin) 'csrf': Accounts.main.csrf,
+        if (account.isLogin) 'csrf': account.csrf,
       },
     );
     if (res.data['code'] == 0) {

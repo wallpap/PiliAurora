@@ -6,14 +6,16 @@ import 'package:pili_aurora/http/loading_state.dart';
 import 'package:pili_aurora/models/common/member/contribute_type.dart';
 import 'package:pili_aurora/models/remote/space/space_season_series/season.dart'
     show SpaceSsModel;
-import 'package:pili_aurora/pages/member_season_series/controller.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:pili_aurora/pages/common/member_feed.dart';
+import 'package:pili_aurora/pages/common/member_feed_view.dart';
 import 'package:pili_aurora/pages/member_season_series/widget/season_series_card.dart';
 import 'package:pili_aurora/pages/member_video/view.dart';
 import 'package:pili_aurora/utils/grid.dart';
 import 'package:get/get.dart';
 import 'package:material_ui/material_ui.dart';
 
-class SeasonSeriesPage extends StatefulWidget {
+class SeasonSeriesPage extends ConsumerStatefulWidget {
   const SeasonSeriesPage({
     super.key,
     required this.mid,
@@ -24,21 +26,18 @@ class SeasonSeriesPage extends StatefulWidget {
   final String? heroTag;
 
   @override
-  State<SeasonSeriesPage> createState() => _SeasonSeriesPageState();
+  ConsumerState<SeasonSeriesPage> createState() => _SeasonSeriesPageState();
 }
 
-class _SeasonSeriesPageState extends State<SeasonSeriesPage>
-    with AutomaticKeepAliveClientMixin, GridMixin {
-  late final SeasonSeriesController _controller;
-
+class _SeasonSeriesPageState extends ConsumerState<SeasonSeriesPage>
+    with
+        AutomaticKeepAliveClientMixin,
+        GridMixin,
+        MemberFeedView<SeasonSeriesPage, SpaceSsModel> {
   @override
-  void initState() {
-    super.initState();
-    _controller = Get.put(
-      SeasonSeriesController(widget.mid),
-      tag: widget.heroTag,
-    );
-  }
+  MemberFeedKind get feedKind => MemberFeedKind.series;
+  @override
+  Object get feedMid => widget.mid;
 
   @override
   bool get wantKeepAlive => true;
@@ -46,18 +45,19 @@ class _SeasonSeriesPageState extends State<SeasonSeriesPage>
   @override
   Widget build(BuildContext context) {
     super.build(context);
-    return CustomScrollView(
-      physics: platformAlwaysClampingPhysics,
-      slivers: [
-        SliverPadding(
-          padding: EdgeInsets.only(
-            bottom: MediaQuery.viewPaddingOf(context).bottom + 100,
+    return paginateFeed(
+      CustomScrollView(
+        physics: platformAlwaysClampingPhysics,
+        slivers: [
+          SliverPadding(
+            padding: EdgeInsets.only(
+              bottom: MediaQuery.viewPaddingOf(context).bottom + 100,
+            ),
+            sliver: watchFeed(_buildBody),
           ),
-          sliver: Obx(
-            () => _buildBody(_controller.loadingState.value),
-          ),
-        ),
-      ],
+          feedFooter,
+        ],
+      ),
     );
   }
 
@@ -69,9 +69,6 @@ class _SeasonSeriesPageState extends State<SeasonSeriesPage>
             ? SliverGrid.builder(
                 gridDelegate: gridDelegate,
                 itemBuilder: (context, index) {
-                  if (index == response.length - 1) {
-                    _controller.onLoadMore();
-                  }
                   SpaceSsModel item = response[index];
                   return SeasonSeriesCard(
                     item: item,
@@ -102,10 +99,10 @@ class _SeasonSeriesPageState extends State<SeasonSeriesPage>
                 },
                 itemCount: response.length,
               )
-            : HttpError(onReload: _controller.onReload),
+            : HttpError(onReload: reloadFeed),
       Error(:final errMsg) => HttpError(
         errMsg: errMsg,
-        onReload: _controller.onReload,
+        onReload: reloadFeed,
       ),
     };
   }
