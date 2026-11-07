@@ -110,24 +110,12 @@ class SessionAdapter {
   Future<LoadingState<void>> clearUnread({
     required Account account,
     required SessionFolder folder,
-  }) async {
-    final result = await ImGrpc.clearUnread(
-      pageType: _pageType(folder),
-      account: account,
-    );
-    return _voidResult(result);
-  }
+  }) => ImGrpc.clearUnread(pageType: _pageType(folder), account: account);
 
   Future<LoadingState<void>> deleteList({
     required Account account,
     required SessionFolder folder,
-  }) async {
-    final result = await ImGrpc.deleteSessionList(
-      pageType: _pageType(folder),
-      account: account,
-    );
-    return _voidResult(result);
-  }
+  }) => ImGrpc.deleteSessionList(pageType: _pageType(folder), account: account);
 
   Future<LoadingState<void>> markRead({
     required Account account,
@@ -145,7 +133,7 @@ class SessionAdapter {
         account: account,
       );
     }
-    return _asVoid(detail);
+    return detail;
   }
 
   static LoadingState<T> _mapResult<R, T>(
@@ -156,20 +144,6 @@ class SessionAdapter {
     Error() => result,
     Loading() => result,
   };
-
-  static LoadingState<void> _voidResult<R>(LoadingState<R> result) =>
-      switch (result) {
-        Success() => const Success(null),
-        Error() => result,
-        Loading() => result,
-      };
-
-  static LoadingState<void> _asVoid<R>(LoadingState<R> result) =>
-      switch (result) {
-        Error() => result,
-        Loading() => result,
-        Success() => const Error('请求未返回阅读位置'),
-      };
 
   static SessionEntry _entryFromProto(pb.Session source) {
     final id = source.id;

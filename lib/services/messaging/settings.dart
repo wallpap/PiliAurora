@@ -102,12 +102,10 @@ class WhisperSettingsHandle {
     try {
       if (previous != null) await previous;
       if (!_isActive) return const Error('账号已切换');
-      final result = await session.run(
-        (account) async => _asVoid(
-          await ImGrpc.setImSettings(
-            settings: {key: desired.deepCopy()},
-            account: account,
-          ),
+      final result = await session.run<void>(
+        (account) => ImGrpc.setImSettings(
+          settings: {key: desired.deepCopy()},
+          account: account,
         ),
       );
       if (!_isActive) return const Error('账号已切换');
@@ -444,18 +442,10 @@ class ConversationSettingsHandle {
     final next = !state.value.isPinned;
     final version = ++_pinWriteVersion;
     _pinGeneration++;
-    final result = await session.run(
-      (account) async => _asVoid(
-        next
-            ? await ImGrpc.pinSession(
-                sessionId: _sessionId,
-                account: account,
-              )
-            : await ImGrpc.unpinSession(
-                sessionId: _sessionId,
-                account: account,
-              ),
-      ),
+    final result = await session.run<void>(
+      (account) => next
+          ? ImGrpc.pinSession(sessionId: _sessionId, account: account)
+          : ImGrpc.unpinSession(sessionId: _sessionId, account: account),
     );
     if (!_isActive) return const Error('账号已切换');
     if (result case Success<void>() when version == _pinWriteVersion) {
@@ -614,9 +604,3 @@ class ConversationSettingsHandle {
     state.dispose();
   }
 }
-
-LoadingState<void> _asVoid<T>(LoadingState<T> result) => switch (result) {
-  Success<T>() => const Success(null),
-  Error(:final errMsg, :final code) => Error(errMsg, code: code),
-  Loading() => LoadingState<void>.loading(),
-};
