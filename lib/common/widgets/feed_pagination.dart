@@ -7,7 +7,9 @@ class FeedPagination extends StatefulWidget {
   const FeedPagination({
     super.key,
     required this.controller,
-    required this.dataChanges,
+    this.dataChanges,
+    this.dataRevision,
+    this.dataSource,
     required this.canLoadMore,
     required this.onLoadMore,
     required this.child,
@@ -15,7 +17,13 @@ class FeedPagination extends StatefulWidget {
   });
 
   final ScrollController controller;
-  final Stream<Object?> dataChanges;
+  final Stream<Object?>? dataChanges;
+
+  /// 由父节点订阅快照的页面通过修订值触发检查，无需再桥接一条 stream。
+  final Object? dataRevision;
+
+  /// 查询所有者变更时释放旧请求的分页占位；比较对象身份。
+  final Object? dataSource;
   final bool Function() canLoadMore;
   final Future<void> Function() onLoadMore;
   final Widget child;
@@ -31,13 +39,13 @@ class _FeedPaginationState extends State<FeedPagination> {
   bool _scheduled = false;
   int _generation = 0;
   int? _loadingGeneration;
-  late StreamSubscription<Object?> _subscription;
+  StreamSubscription<Object?>? _subscription;
 
   @override
   void initState() {
     super.initState();
     widget.controller.addListener(_schedule);
-    _subscription = widget.dataChanges.listen((_) => _schedule());
+    _subscription = widget.dataChanges?.listen((_) => _schedule());
   }
 
   @override
@@ -55,15 +63,16 @@ class _FeedPaginationState extends State<FeedPagination> {
       widget.controller.addListener(_schedule);
     }
     if (widget.dataChanges != oldWidget.dataChanges) {
-      _subscription.cancel();
-      _subscription = widget.dataChanges.listen((_) => _schedule());
+      _subscription?.cancel();
+      _subscription = widget.dataChanges?.listen((_) => _schedule());
     }
-    if (changed) {
-      // 控制器标识列表归属；Rx.stream 可能每次 build 都生成新包装，不能作为代次。
+    if (changed || !identical(widget.dataSource, oldWidget.dataSource)) {
+      // 控制器或显式所有者标识列表归属；Rx.stream 的新包装不能作为代次。
       // 新列表不继承旧请求；旧完成也不能释放新列表的加载标记。
       _generation++;
       _schedule();
     }
+    if (widget.dataRevision != oldWidget.dataRevision) _schedule();
   }
 
   void _schedule() {
@@ -124,7 +133,7 @@ class _FeedPaginationState extends State<FeedPagination> {
 
   @override
   void dispose() {
-    _subscription.cancel();
+    _subscription?.cancel();
     widget.controller.removeListener(_schedule);
     super.dispose();
   }

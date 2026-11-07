@@ -98,6 +98,71 @@ class _FeedState extends State<_Feed> {
 }
 
 void main() {
+  testWidgets('快照修订在滚动范围未变化时重新检查，不需要 stream 桥接', (tester) async {
+    final controller = ScrollController();
+    addTearDown(controller.dispose);
+    var allowed = false;
+    var requests = 0;
+    Widget feed(int revision) => Directionality(
+      textDirection: TextDirection.ltr,
+      child: FeedPagination(
+        controller: controller,
+        dataRevision: revision,
+        canLoadMore: () => allowed,
+        onLoadMore: () async {
+          requests++;
+          allowed = false;
+        },
+        child: ListView(controller: controller),
+      ),
+    );
+    await tester.pumpWidget(feed(0));
+    await tester.pumpAndSettle();
+    expect(requests, 0);
+    allowed = true;
+    await tester.pumpWidget(feed(1));
+    await tester.pumpAndSettle();
+    expect(requests, 1);
+    await tester.pumpWidget(const SizedBox());
+  });
+
+  testWidgets('更换快照所有者后同一滚动控制器不等待旧请求', (tester) async {
+    final controller = ScrollController();
+    addTearDown(controller.dispose);
+    final oldSource = Object(), newSource = Object();
+    final oldRequest = Completer<void>(), newRequest = Completer<void>();
+    var calls = 0;
+    Widget feed(Object source) => Directionality(
+      textDirection: TextDirection.ltr,
+      child: FeedPagination(
+        controller: controller,
+        dataSource: source,
+        canLoadMore: () => true,
+        onLoadMore: () {
+          calls++;
+          return identical(source, oldSource)
+              ? oldRequest.future
+              : newRequest.future;
+        },
+        child: ListView(controller: controller),
+      ),
+    );
+    await tester.pumpWidget(feed(oldSource));
+    await tester.pumpAndSettle();
+    expect(calls, 1);
+    await tester.pumpWidget(feed(newSource));
+    await tester.pumpAndSettle();
+    expect(calls, 2);
+    oldRequest.complete();
+    await tester.pumpAndSettle();
+    await tester.pumpWidget(feed(newSource));
+    await tester.pumpAndSettle();
+    expect(calls, 2);
+    newRequest.complete();
+    await tester.pumpAndSettle();
+    await tester.pumpWidget(const SizedBox());
+  });
+
   Future<_FeedState> mount(
     WidgetTester tester, {
     _Feed feed = const _Feed(),
