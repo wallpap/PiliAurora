@@ -1,3 +1,4 @@
+import 'package:pili_aurora/utils/accounts/account.dart';
 import 'package:pili_aurora/http/api.dart';
 import 'package:pili_aurora/http/init.dart';
 import 'package:pili_aurora/http/loading_state.dart';
@@ -13,6 +14,7 @@ import 'package:dio/dio.dart';
 
 abstract final class PgcHttp {
   static Future<LoadingState<PgcIndexResult>> pgcIndexResult({
+    required Account account,
     required int page,
     required Map<String, dynamic> params,
     seasonType,
@@ -21,6 +23,7 @@ abstract final class PgcHttp {
   }) async {
     final res = await Request().get(
       Api.pgcIndexResult,
+      options: Options(extra: {'account': account}),
       queryParameters: {
         ...params,
         'season_type': ?seasonType,
@@ -38,12 +41,14 @@ abstract final class PgcHttp {
   }
 
   static Future<LoadingState<PgcIndexConditionData>> pgcIndexCondition({
+    required Account account,
     Object? seasonType,
     required Object type,
     Object? indexType,
   }) async {
     final res = await Request().get(
       Api.pgcIndexCondition,
+      options: Options(extra: {'account': account}),
       queryParameters: {
         'season_type': ?seasonType,
         'type': type,

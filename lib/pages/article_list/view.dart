@@ -1,3 +1,4 @@
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pili_aurora/common/widgets/flutter/refresh_indicator.dart';
 import 'package:pili_aurora/common/widgets/image/network_img_layer.dart';
 import 'package:pili_aurora/common/widgets/loading_widget/http_error.dart';
@@ -15,41 +16,58 @@ import 'package:pili_aurora/utils/page_utils.dart';
 import 'package:get/get.dart';
 import 'package:material_ui/material_ui.dart';
 
-class ArticleListPage extends StatefulWidget {
+class ArticleListPage extends ConsumerStatefulWidget {
   const ArticleListPage({super.key});
 
   @override
-  State<ArticleListPage> createState() => _ArticleListPageState();
+  ConsumerState<ArticleListPage> createState() => _ArticleListPageState();
 }
 
-class _ArticleListPageState extends State<ArticleListPage> with GridMixin {
-  final _controller = Get.put(
-    ArticleListController(),
-    tag: Get.parameters['id']!,
-  );
+class _ArticleListPageState extends ConsumerState<ArticleListPage>
+    with GridMixin {
+  late final String _id = Get.parameters['id']!;
+  ArticleCollection? get _data {
+    final snapshot = ref.read(articleCollectionProvider(_id));
+    return !snapshot.isLoading && !snapshot.hasError ? snapshot.value : null;
+  }
+
+  Future<void> _reload() async {
+    ref.invalidate(articleCollectionProvider(_id));
+    try {
+      await ref.read(articleCollectionProvider(_id).future);
+    } catch (_) {
+      /* 页面展示错误。 */
+    }
+  }
 
   late EdgeInsets padding;
 
   @override
   Widget build(BuildContext context) {
+    final snapshot = ref.watch(articleCollectionProvider(_id));
     final ThemeData theme = Theme.of(context);
     padding = MediaQuery.viewPaddingOf(context);
     return Material(
       color: theme.colorScheme.surface,
       child: refreshIndicator(
-        onRefresh: _controller.onRefresh,
+        onRefresh: _reload,
         child: CustomScrollView(
           physics: const AlwaysScrollableScrollPhysics(),
           slivers: [
-            Obx(() => _buildHeader(theme, _controller.list.value)),
+            _buildHeader(theme, _data?.list),
             SliverPadding(
               padding: EdgeInsets.only(
                 left: padding.left,
                 right: padding.right,
                 bottom: padding.bottom + 100,
               ),
-              sliver: Obx(
-                () => _buildBody(theme, _controller.loadingState.value),
+              sliver: snapshot.when(
+                skipLoadingOnRefresh: false,
+                skipLoadingOnReload: false,
+                loading: () => gridSkeleton,
+                error: (error, _) =>
+                    HttpError(errMsg: error.toString(), onReload: _reload),
+                data: (data) => _buildBody(theme, Success(data.articles)),
               ),
             ),
           ],
@@ -80,10 +98,10 @@ class _ArticleListPageState extends State<ArticleListPage> with GridMixin {
                     ArticleListItem(item: response[index]),
                 itemCount: response.length,
               )
-            : HttpError(onReload: _controller.onReload),
+            : HttpError(onReload: _reload),
       Error(:final errMsg) => HttpError(
         errMsg: errMsg,
-        onReload: _controller.onReload,
+        onReload: _reload,
       ),
     };
   }
@@ -135,12 +153,12 @@ class _ArticleListPageState extends State<ArticleListPage> with GridMixin {
                       fontWeight: FontWeight.bold,
                     ),
                   ),
-                  if (_controller.author != null) ...[
+                  if (_data?.author != null) ...[
                     const SizedBox(height: 10),
                     GestureDetector(
                       behavior: HitTestBehavior.opaque,
                       onTap: () =>
-                          Get.toNamed('/member?mid=${_controller.author!.mid}'),
+                          Get.toNamed('/member?mid=${_data?.author!.mid}'),
                       child: Row(
                         spacing: 10,
                         mainAxisSize: MainAxisSize.min,
@@ -148,10 +166,10 @@ class _ArticleListPageState extends State<ArticleListPage> with GridMixin {
                           NetworkImgLayer(
                             width: 30,
                             height: 30,
-                            src: _controller.author!.face,
+                            src: _data?.author!.face,
                             type: ImageType.avatar,
                           ),
-                          Flexible(child: Text(_controller.author!.name!)),
+                          Flexible(child: Text(_data!.author!.name!)),
                         ],
                       ),
                     ),
@@ -194,7 +212,7 @@ class _ArticleListPageState extends State<ArticleListPage> with GridMixin {
         IconButton(
           tooltip: '浏览器打开',
           onPressed: () => PageUtils.inAppWebview(
-            '${HttpString.baseUrl}/read/mobile-readlist/rl${_controller.id}',
+            '${HttpString.baseUrl}/read/mobile-readlist/rl$_id',
           ),
           icon: const Icon(Icons.open_in_browser_outlined, size: 19),
         ),

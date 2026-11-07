@@ -5,7 +5,9 @@ import 'package:pili_aurora/common/widgets/flutter/refresh_indicator.dart';
 import 'package:pili_aurora/common/widgets/loading_widget/http_error.dart';
 import 'package:pili_aurora/http/loading_state.dart';
 import 'package:pili_aurora/models/remote/space/space_shop/item.dart';
-import 'package:pili_aurora/pages/member_shop/controller.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:pili_aurora/pages/common/member_feed.dart';
+import 'package:pili_aurora/pages/common/member_feed_view.dart';
 import 'package:pili_aurora/pages/member_shop/widgets/item.dart';
 import 'package:pili_aurora/utils/grid.dart';
 import 'package:pili_aurora/utils/waterfall.dart';
@@ -14,7 +16,7 @@ import 'package:material_ui/material_ui.dart';
 import 'package:waterfall_flow/waterfall_flow.dart'
     hide SliverWaterfallFlowDelegateWithMaxCrossAxisExtent;
 
-class MemberShop extends StatefulWidget {
+class MemberShop extends ConsumerStatefulWidget {
   const MemberShop({
     super.key,
     required this.heroTag,
@@ -25,41 +27,40 @@ class MemberShop extends StatefulWidget {
   final int mid;
 
   @override
-  State<MemberShop> createState() => _MemberShopState();
+  ConsumerState<MemberShop> createState() => _MemberShopState();
 }
 
-class _MemberShopState extends State<MemberShop>
-    with AutomaticKeepAliveClientMixin {
-  late final MemberShopController _controller;
-
+class _MemberShopState extends ConsumerState<MemberShop>
+    with
+        AutomaticKeepAliveClientMixin,
+        MemberFeedView<MemberShop, SpaceShopItem> {
   @override
-  void initState() {
-    super.initState();
-    _controller = Get.put(
-      MemberShopController(widget.mid),
-      tag: widget.heroTag,
-    );
-  }
+  MemberFeedKind get feedKind => MemberFeedKind.shop;
+  @override
+  Object get feedMid => widget.mid;
 
   @override
   Widget build(BuildContext context) {
     super.build(context);
     return refreshIndicator(
       isClampingScrollPhysics: true,
-      onRefresh: _controller.onRefresh,
-      child: CustomScrollView(
-        physics: const AlwaysScrollableScrollPhysics(),
-        slivers: [
-          SliverPadding(
-            padding: EdgeInsets.only(
-              top: 12,
-              left: Style.safeSpace,
-              right: Style.safeSpace,
-              bottom: MediaQuery.viewPaddingOf(context).bottom + 100,
+      onRefresh: reloadFeed,
+      child: paginateFeed(
+        CustomScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          slivers: [
+            SliverPadding(
+              padding: EdgeInsets.only(
+                top: 12,
+                left: Style.safeSpace,
+                right: Style.safeSpace,
+                bottom: MediaQuery.viewPaddingOf(context).bottom + 100,
+              ),
+              sliver: watchFeed(_buildBody),
             ),
-            sliver: Obx(() => _buildBody(_controller.loadingState.value)),
-          ),
-        ],
+            feedFooter,
+          ],
+        ),
       ),
     );
   }
@@ -85,7 +86,7 @@ class _MemberShopState extends State<MemberShop>
         );
       case Success(:final response):
         if (response == null || response.isEmpty) {
-          return HttpError(onReload: _controller.onReload);
+          return HttpError(onReload: reloadFeed);
         }
         Widget sliver = SliverWaterfallFlow(
           gridDelegate: gridDelegate,
@@ -96,7 +97,7 @@ class _MemberShopState extends State<MemberShop>
             childCount: response.length,
           ),
         );
-        if (_controller.showMoreTab == true) {
+        if (feedData?.shop?.showMoreTab == true) {
           sliver = SliverMainAxisGroup(
             slivers: [
               sliver,
@@ -106,7 +107,7 @@ class _MemberShopState extends State<MemberShop>
                   child: Center(
                     child: FilledButton.tonal(
                       onPressed: () {
-                        if (_controller.clickUrl case final clickUrl?) {
+                        if (feedData?.shop?.clickUrl case final clickUrl?) {
                           final url = Uri.parse(
                             clickUrl,
                           ).queryParameters['url'];
@@ -121,7 +122,7 @@ class _MemberShopState extends State<MemberShop>
                       style: FilledButton.styleFrom(
                         visualDensity: VisualDensity.compact,
                       ),
-                      child: Text(_controller.showMoreDesc ?? ''),
+                      child: Text(feedData?.shop?.showMoreDesc ?? ''),
                     ),
                   ),
                 ),
@@ -133,7 +134,7 @@ class _MemberShopState extends State<MemberShop>
       case Error(:final errMsg):
         return HttpError(
           errMsg: errMsg,
-          onReload: _controller.onReload,
+          onReload: reloadFeed,
         );
     }
   }

@@ -7,7 +7,9 @@ import 'package:pili_aurora/common/widgets/scaffold/simple_scaffold.dart';
 import 'package:pili_aurora/common/widgets/view_sliver_safe_area.dart';
 import 'package:pili_aurora/http/loading_state.dart';
 import 'package:pili_aurora/models/remote/member_guard/guard_top_list.dart';
-import 'package:pili_aurora/pages/member_guard/controller.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:pili_aurora/pages/common/member_feed.dart';
+import 'package:pili_aurora/pages/common/member_feed_view.dart';
 import 'package:pili_aurora/utils/bili_utils.dart';
 import 'package:pili_aurora/utils/color_utils.dart';
 import 'package:pili_aurora/utils/extension/widget_ext.dart';
@@ -15,7 +17,7 @@ import 'package:pili_aurora/utils/platform_utils.dart';
 import 'package:get/get.dart';
 import 'package:material_ui/material_ui.dart' hide ListTile;
 
-class MemberGuard extends StatefulWidget {
+class MemberGuard extends ConsumerStatefulWidget {
   const MemberGuard({super.key}) : ruid = null;
 
   const MemberGuard.panel({super.key, required this.ruid});
@@ -23,7 +25,7 @@ class MemberGuard extends StatefulWidget {
   final Object? ruid;
 
   @override
-  State<MemberGuard> createState() => _MemberGuardState();
+  ConsumerState<MemberGuard> createState() => _MemberGuardState();
 
   static Future<void>? toMemberGuard({
     required Object mid,
@@ -41,10 +43,15 @@ class MemberGuard extends StatefulWidget {
   }
 }
 
-class _MemberGuardState extends State<MemberGuard> {
+class _MemberGuardState extends ConsumerState<MemberGuard>
+    with MemberFeedView<MemberGuard, GuardItem> {
+  @override
+  MemberFeedKind get feedKind => MemberFeedKind.guard;
+  @override
+  Object get feedMid => _ruid;
   late final String _userName;
   late final Object? _count;
-  late final MemberGuardController _controller;
+  late final Object _ruid;
 
   @override
   void initState() {
@@ -52,27 +59,23 @@ class _MemberGuardState extends State<MemberGuard> {
     final args = widget.ruid == null ? Get.arguments : null;
     _userName = widget.ruid == null ? args['name'] : '';
     _count = widget.ruid == null ? args['count'] : null;
-    _controller = MemberGuardController(ruid: widget.ruid ?? args['ruid'])
-      ..onInit();
-  }
-
-  @override
-  void dispose() {
-    _controller.onClose();
-    super.dispose();
+    _ruid = widget.ruid ?? args['ruid'];
   }
 
   @override
   Widget build(BuildContext context) {
     final title = '$_userName的舰队${_count == null ? '' : '($_count)'}';
     final body = refreshIndicator(
-      onRefresh: _controller.onRefresh,
-      child: CustomScrollView(
-        slivers: [
-          ViewSliverSafeArea(
-            sliver: Obx(() => _buildBody(_controller.loadingState.value)),
-          ),
-        ],
+      onRefresh: reloadFeed,
+      child: paginateFeed(
+        CustomScrollView(
+          slivers: [
+            ViewSliverSafeArea(
+              sliver: watchFeed(_buildBody),
+            ),
+            feedFooter,
+          ],
+        ),
       ),
     ).constraintWidth();
     if (widget.ruid != null) return body;
@@ -96,10 +99,6 @@ class _MemberGuardState extends State<MemberGuard> {
                 sliver: SliverList.separated(
                   itemCount: response.length,
                   itemBuilder: (context, index) {
-                    if (index == response.length - 1) {
-                      _controller.onLoadMore();
-                    }
-
                     final item = response[index];
                     return ListTile(
                       safeArea: false,
@@ -112,7 +111,7 @@ class _MemberGuardState extends State<MemberGuard> {
                           SizedBox(
                             width: 32,
                             child: Center(
-                              child: _rank(index + _controller.tops.length + 1),
+                              child: _rank(index + feedData!.tops.length + 1),
                             ),
                           ),
                           _avatar(item.face, 32, item.guardLevel),
@@ -130,7 +129,7 @@ class _MemberGuardState extends State<MemberGuard> {
           ],
         );
       case Error(:final errMsg):
-        return HttpError(errMsg: errMsg, onReload: _controller.onReload);
+        return HttpError(errMsg: errMsg, onReload: reloadFeed);
     }
   }
 
@@ -180,17 +179,17 @@ class _MemberGuardState extends State<MemberGuard> {
     final Widget first;
     final Widget second;
     final Widget third;
-    if (_controller.tops.firstOrNull case final item?) {
+    if (feedData!.tops.firstOrNull case final item?) {
       first = _buildTopItem(item, 50, 1);
     } else {
       first = const SizedBox.shrink();
     }
-    if (_controller.tops.elementAtOrNull(1) case final item?) {
+    if (feedData!.tops.elementAtOrNull(1) case final item?) {
       second = _buildTopItem(item, 42, 2);
     } else {
       second = const SizedBox.shrink();
     }
-    if (_controller.tops.elementAtOrNull(2) case final item?) {
+    if (feedData!.tops.elementAtOrNull(2) case final item?) {
       third = _buildTopItem(item, 42, 3);
     } else {
       third = const SizedBox.shrink();

@@ -6,9 +6,6 @@ import 'package:pili_aurora/common/widgets/button/more_btn.dart';
 import 'package:pili_aurora/common/widgets/flutter/refresh_indicator.dart';
 import 'package:pili_aurora/common/widgets/loading_widget/http_error.dart';
 import 'package:pili_aurora/common/widgets/loading_widget/loading_widget.dart';
-import 'package:pili_aurora/common/widgets/scaffold/simple_scaffold.dart';
-import 'package:pili_aurora/common/widgets/scroll_physics.dart' show tabBarView;
-import 'package:pili_aurora/common/widgets/view_safe_area.dart';
 import 'package:pili_aurora/http/loading_state.dart';
 import 'package:pili_aurora/models/common/fav_type.dart';
 import 'package:pili_aurora/models/common/home_tab_type.dart';
@@ -18,7 +15,6 @@ import 'package:pili_aurora/models/remote/pgc/pgc_timeline/result.dart';
 import 'package:pili_aurora/pages/pgc/controller.dart';
 import 'package:pili_aurora/pages/pgc/widgets/pgc_card_v.dart';
 import 'package:pili_aurora/pages/pgc/widgets/pgc_card_v_timeline.dart';
-import 'package:pili_aurora/pages/pgc_index/controller.dart';
 import 'package:pili_aurora/pages/pgc_index/view.dart';
 import 'package:pili_aurora/pages/pgc_index/widgets/pgc_card_v_pgc_index.dart';
 import 'package:pili_aurora/utils/grid.dart';
@@ -241,57 +237,7 @@ class _PgcPageState extends State<PgcPage> with AutomaticKeepAliveClientMixin {
               if (widget.tabType == HomeTabType.bangumi) {
                 Get.to(const PgcIndexPage());
               } else {
-                List<String> titles = const [
-                  '全部',
-                  '电影',
-                  '电视剧',
-                  '纪录片',
-                  '综艺',
-                ];
-                List<int> types = const [102, 2, 5, 3, 7];
-                Get.to(
-                  SimpleScaffold(
-                    appBar: AppBar(title: const Text('索引')),
-                    body: DefaultTabController(
-                      length: types.length,
-                      child: Builder(
-                        builder: (context) {
-                          return Column(
-                            children: [
-                              ViewSafeArea(
-                                child: TabBar(
-                                  tabs: titles
-                                      .map((title) => Tab(text: title))
-                                      .toList(),
-                                  onTap: (index) {
-                                    try {
-                                      if (!DefaultTabController.of(
-                                        context,
-                                      ).indexIsChanging) {
-                                        Get.find<PgcIndexController>(
-                                          tag: types[index].toString(),
-                                        ).animateToTop();
-                                      }
-                                    } catch (_) {}
-                                  },
-                                ),
-                              ),
-                              Expanded(
-                                child: tabBarView(
-                                  children: types
-                                      .map(
-                                        (type) => PgcIndexPage(indexType: type),
-                                      )
-                                      .toList(),
-                                ),
-                              ),
-                            ],
-                          );
-                        },
-                      ),
-                    ),
-                  ),
-                );
+                Get.to(const PgcIndexTabs());
               }
             },
             color: theme.colorScheme.secondary,

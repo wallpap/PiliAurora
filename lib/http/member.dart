@@ -63,6 +63,7 @@ abstract final class MemberHttp {
   }
 
   static Future<LoadingState<SpaceArticleData>> spaceArticle({
+    required Account account,
     required int mid,
     required int page,
   }) async {
@@ -83,6 +84,7 @@ abstract final class MemberHttp {
       Api.spaceArticle,
       queryParameters: params,
       options: Options(
+        extra: {'account': account},
         headers: {
           'bili-http-engine': 'cronet',
           'user-agent': Constants.userAgentApp,
@@ -168,11 +170,13 @@ abstract final class MemberHttp {
   }
 
   static Future<LoadingState<SpaceAudioData>> spaceAudio({
+    required Account account,
     required int page,
     required mid,
   }) async {
     final res = await Request().get(
       Api.spaceAudio,
+      options: Options(extra: {'account': account}),
       queryParameters: {
         'pn': page,
         'ps': 20,
@@ -751,11 +755,13 @@ abstract final class MemberHttp {
   }
 
   static Future<LoadingState<CoinLikeArcData>> coinArc({
+    required Account account,
     required int mid,
     required int page,
   }) async {
     final res = await Request().get(
       Api.coinArc,
+      options: Options(extra: {'account': account}),
       queryParameters: {
         'pn': page,
         'ps': 20,
@@ -770,11 +776,13 @@ abstract final class MemberHttp {
   }
 
   static Future<LoadingState<CoinLikeArcData>> likeArc({
+    required Account account,
     required int mid,
     required int page,
   }) async {
     final res = await Request().get(
       Api.likeArc,
+      options: Options(extra: {'account': account}),
       queryParameters: {
         'pn': page,
         'ps': 20,
@@ -789,10 +797,11 @@ abstract final class MemberHttp {
   }
 
   static Future<LoadingState<SpaceShopData>> spaceShop({
+    required Account account,
     required int mid,
   }) async {
     final params = {
-      'access_key': ?Accounts.main.accessKey,
+      'access_key': ?account.accessKey,
       'actionKey': 'appkey',
       'build': 8430300,
       'mVersion': 309,
@@ -802,6 +811,7 @@ abstract final class MemberHttp {
     AppSign.appSign(params);
     final res = await Request().post(
       Api.spaceShop,
+      options: Options(extra: {'account': account}),
       queryParameters: params,
       data: {
         "from": "cps_productTab_$mid",
@@ -819,11 +829,13 @@ abstract final class MemberHttp {
   }
 
   static Future<LoadingState<MemberGuardData>> memberGuard({
+    required Account account,
     required Object ruid,
     required int page,
   }) async {
     final res = await Request().get(
       Api.memberGuard,
+      options: Options(extra: {'account': account}),
       queryParameters: {
         'page': page,
         'page_size': 20,

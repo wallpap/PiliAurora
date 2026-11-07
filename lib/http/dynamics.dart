@@ -1,3 +1,5 @@
+import 'package:pili_aurora/utils/accounts/account.dart';
+
 import 'dart:convert';
 
 import 'package:pili_aurora/common/constants.dart';
@@ -484,9 +486,11 @@ abstract final class DynamicsHttp {
 
   static Future<LoadingState<ArticleListData>> articleList({
     required Object id,
+    required Account account,
   }) async {
     final res = await Request().get(
       Api.articleList,
+      options: Options(extra: {'account': account}),
       queryParameters: {
         'id': id,
         'web_location': 333.1400,

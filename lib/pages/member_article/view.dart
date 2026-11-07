@@ -2,13 +2,14 @@ import 'package:pili_aurora/common/widgets/flutter/refresh_indicator.dart';
 import 'package:pili_aurora/common/widgets/loading_widget/http_error.dart';
 import 'package:pili_aurora/http/loading_state.dart';
 import 'package:pili_aurora/models/remote/space/space_article/item.dart';
-import 'package:pili_aurora/pages/member_article/controller.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:pili_aurora/pages/common/member_feed.dart';
+import 'package:pili_aurora/pages/common/member_feed_view.dart';
 import 'package:pili_aurora/pages/member_article/widget/item.dart';
 import 'package:pili_aurora/utils/grid.dart';
-import 'package:get/get.dart';
 import 'package:material_ui/material_ui.dart';
 
-class MemberArticle extends StatefulWidget {
+class MemberArticle extends ConsumerStatefulWidget {
   const MemberArticle({
     super.key,
     required this.heroTag,
@@ -19,42 +20,41 @@ class MemberArticle extends StatefulWidget {
   final int mid;
 
   @override
-  State<MemberArticle> createState() => _MemberArticleState();
+  ConsumerState<MemberArticle> createState() => _MemberArticleState();
 }
 
-class _MemberArticleState extends State<MemberArticle>
-    with AutomaticKeepAliveClientMixin, GridMixin {
+class _MemberArticleState extends ConsumerState<MemberArticle>
+    with
+        AutomaticKeepAliveClientMixin,
+        GridMixin,
+        MemberFeedView<MemberArticle, SpaceArticleItem> {
+  @override
+  MemberFeedKind get feedKind => MemberFeedKind.article;
+  @override
+  Object get feedMid => widget.mid;
   @override
   bool get wantKeepAlive => true;
-
-  late final MemberArticleCtr _controller;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = Get.put(
-      MemberArticleCtr(mid: widget.mid),
-      tag: widget.heroTag,
-    );
-  }
 
   @override
   Widget build(BuildContext context) {
     super.build(context);
     return refreshIndicator(
       isClampingScrollPhysics: true,
-      onRefresh: _controller.onRefresh,
-      child: CustomScrollView(
-        physics: const AlwaysScrollableScrollPhysics(),
-        slivers: [
-          SliverPadding(
-            padding: EdgeInsets.only(
-              top: 7,
-              bottom: MediaQuery.viewPaddingOf(context).bottom + 100,
+      onRefresh: reloadFeed,
+      child: paginateFeed(
+        CustomScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          slivers: [
+            SliverPadding(
+              padding: EdgeInsets.only(
+                top: 7,
+                bottom: MediaQuery.viewPaddingOf(context).bottom + 100,
+              ),
+              sliver: watchFeed(_buildBody),
             ),
-            sliver: Obx(() => _buildBody(_controller.loadingState.value)),
-          ),
-        ],
+            feedFooter,
+          ],
+        ),
       ),
     );
   }
@@ -67,19 +67,16 @@ class _MemberArticleState extends State<MemberArticle>
             ? SliverGrid.builder(
                 gridDelegate: gridDelegate,
                 itemBuilder: (context, index) {
-                  if (index == response.length - 1) {
-                    _controller.onLoadMore();
-                  }
                   return MemberArticleItem(
                     item: response[index],
                   );
                 },
                 itemCount: response.length,
               )
-            : HttpError(onReload: _controller.onReload),
+            : HttpError(onReload: reloadFeed),
       Error(:final errMsg) => HttpError(
         errMsg: errMsg,
-        onReload: _controller.onReload,
+        onReload: reloadFeed,
       ),
     };
   }

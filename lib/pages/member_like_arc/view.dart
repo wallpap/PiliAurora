@@ -7,14 +7,14 @@ import 'package:pili_aurora/common/widgets/scaffold/simple_scaffold.dart';
 import 'package:pili_aurora/http/loading_state.dart';
 import 'package:pili_aurora/models/remote/member/coin_like_arc/item.dart';
 import 'package:pili_aurora/pages/member_coin_arc/widgets/item.dart';
-import 'package:pili_aurora/pages/member_like_arc/controller.dart';
-import 'package:pili_aurora/utils/accounts.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:pili_aurora/pages/common/member_feed.dart';
+import 'package:pili_aurora/pages/common/member_feed_view.dart';
+import 'package:pili_aurora/services/account_providers.dart';
 import 'package:pili_aurora/utils/grid.dart';
-import 'package:pili_aurora/utils/utils.dart';
-import 'package:get/get.dart';
 import 'package:material_ui/material_ui.dart';
 
-class MemberLikeArcPage extends StatefulWidget {
+class MemberLikeArcPage extends ConsumerStatefulWidget {
   const MemberLikeArcPage({
     super.key,
     required this.mid,
@@ -25,21 +25,15 @@ class MemberLikeArcPage extends StatefulWidget {
   final String? name;
 
   @override
-  State<MemberLikeArcPage> createState() => _MemberLikeArcPageState();
+  ConsumerState<MemberLikeArcPage> createState() => _MemberLikeArcPageState();
 }
 
-class _MemberLikeArcPageState extends State<MemberLikeArcPage> {
-  late final mid = Accounts.main.mid;
-  late final MemberLikeArcController _ctr;
-
+class _MemberLikeArcPageState extends ConsumerState<MemberLikeArcPage>
+    with MemberFeedView<MemberLikeArcPage, CoinLikeArcItem> {
   @override
-  void initState() {
-    super.initState();
-    _ctr = Get.put(
-      MemberLikeArcController(mid: widget.mid),
-      tag: Utils.makeHeroTag(widget.mid),
-    );
-  }
+  MemberFeedKind get feedKind => MemberFeedKind.like;
+  @override
+  Object get feedMid => widget.mid;
 
   @override
   Widget build(BuildContext context) {
@@ -47,24 +41,27 @@ class _MemberLikeArcPageState extends State<MemberLikeArcPage> {
     return SimpleScaffold(
       appBar: AppBar(
         title: Text(
-          '${widget.mid == mid ? '我' : '${widget.name}'}的推荐',
+          '${widget.mid.toString() == ref.watch(mainAccountProvider).mid.toString() ? '我' : '${widget.name}'}的推荐',
         ),
       ),
       body: refreshIndicator(
-        onRefresh: _ctr.onRefresh,
-        child: CustomScrollView(
-          physics: const AlwaysScrollableScrollPhysics(),
-          slivers: [
-            SliverPadding(
-              padding: EdgeInsets.only(
-                top: 7,
-                left: Style.safeSpace + padding.left,
-                right: Style.safeSpace + padding.right,
-                bottom: padding.bottom + 100,
+        onRefresh: reloadFeed,
+        child: paginateFeed(
+          CustomScrollView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            slivers: [
+              SliverPadding(
+                padding: EdgeInsets.only(
+                  top: 7,
+                  left: Style.safeSpace + padding.left,
+                  right: Style.safeSpace + padding.right,
+                  bottom: padding.bottom + 100,
+                ),
+                sliver: watchFeed(_buildBody),
               ),
-              sliver: Obx(() => _buildBody(_ctr.loadingState.value)),
-            ),
-          ],
+              feedFooter,
+            ],
+          ),
         ),
       ),
     );
@@ -93,16 +90,13 @@ class _MemberLikeArcPageState extends State<MemberLikeArcPage> {
                 gridDelegate: gridDelegate,
                 itemCount: response.length,
                 itemBuilder: (context, index) {
-                  if (index == response.length - 1) {
-                    _ctr.onLoadMore();
-                  }
                   return MemberCoinLikeItem(item: response[index]);
                 },
               )
-            : HttpError(onReload: _ctr.onReload),
+            : HttpError(onReload: reloadFeed),
       Error(:final errMsg) => HttpError(
         errMsg: errMsg,
-        onReload: _ctr.onReload,
+        onReload: reloadFeed,
       ),
     };
   }

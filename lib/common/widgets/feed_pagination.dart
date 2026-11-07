@@ -16,7 +16,19 @@ class FeedPagination extends StatefulWidget {
     this.prefetchExtent,
   });
 
-  final ScrollController controller;
+  /// 嵌套滚动沿用父级 PrimaryScrollController，通过本列表通知取得滚动范围。
+  const FeedPagination.notifications({
+    super.key,
+    this.dataRevision,
+    this.dataSource,
+    required this.canLoadMore,
+    required this.onLoadMore,
+    required this.child,
+    this.prefetchExtent,
+  }) : controller = null,
+       dataChanges = null;
+
+  final ScrollController? controller;
   final Stream<Object?>? dataChanges;
 
   /// 由父节点订阅快照的页面通过修订值触发检查，无需再桥接一条 stream。
@@ -40,11 +52,12 @@ class _FeedPaginationState extends State<FeedPagination> {
   int _generation = 0;
   int? _loadingGeneration;
   StreamSubscription<Object?>? _subscription;
+  ScrollMetrics? _metrics;
 
   @override
   void initState() {
     super.initState();
-    widget.controller.addListener(_schedule);
+    widget.controller?.addListener(_schedule);
     _subscription = widget.dataChanges?.listen((_) => _schedule());
   }
 
@@ -59,8 +72,8 @@ class _FeedPaginationState extends State<FeedPagination> {
     super.didUpdateWidget(oldWidget);
     final changed = widget.controller != oldWidget.controller;
     if (widget.controller != oldWidget.controller) {
-      oldWidget.controller.removeListener(_schedule);
-      widget.controller.addListener(_schedule);
+      oldWidget.controller?.removeListener(_schedule);
+      widget.controller?.addListener(_schedule);
     }
     if (widget.dataChanges != oldWidget.dataChanges) {
       _subscription?.cancel();
@@ -87,12 +100,18 @@ class _FeedPaginationState extends State<FeedPagination> {
   Future<void> _check() async {
     if (_loadingGeneration == _generation ||
         !TickerMode.valuesOf(context).enabled ||
-        widget.controller.positions.length != 1 ||
         !widget.canLoadMore()) {
       return;
     }
-    final position = widget.controller.position;
-    if (!position.hasContentDimensions || position.viewportDimension <= 0) {
+    final controller = widget.controller;
+    final position = controller == null
+        ? _metrics
+        : controller.positions.length == 1
+        ? controller.position
+        : null;
+    if (position == null ||
+        !position.hasContentDimensions ||
+        position.viewportDimension <= 0) {
       return;
     }
     // 首屏补足可视区；滚动时按页面指定的余量预取，留出网络加载时间。
@@ -112,29 +131,43 @@ class _FeedPaginationState extends State<FeedPagination> {
     if (mounted &&
         generation == _generation &&
         position.hasPixels &&
-        position.maxScrollExtent != extent) {
+        (controller == null
+                ? _metrics?.maxScrollExtent
+                : position.maxScrollExtent) !=
+            extent) {
       _schedule();
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    return NotificationListener<ScrollMetricsNotification>(
+    return NotificationListener<ScrollNotification>(
       onNotification: (notification) {
         if (notification.depth == 0 &&
             notification.metrics.axis == Axis.vertical) {
+          _metrics = notification.metrics;
           _schedule();
         }
         return false;
       },
-      child: widget.child,
+      child: NotificationListener<ScrollMetricsNotification>(
+        onNotification: (notification) {
+          if (notification.depth == 0 &&
+              notification.metrics.axis == Axis.vertical) {
+            _metrics = notification.metrics;
+            _schedule();
+          }
+          return false;
+        },
+        child: widget.child,
+      ),
     );
   }
 
   @override
   void dispose() {
     _subscription?.cancel();
-    widget.controller.removeListener(_schedule);
+    widget.controller?.removeListener(_schedule);
     super.dispose();
   }
 }

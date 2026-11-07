@@ -1,64 +1,120 @@
-import 'package:pili_aurora/http/loading_state.dart';
+import 'dart:convert';
+
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pili_aurora/http/pgc.dart';
 import 'package:pili_aurora/models/remote/pgc/pgc_index_condition/data.dart';
-import 'package:pili_aurora/models/remote/pgc/pgc_index_condition/sort.dart';
-import 'package:pili_aurora/models/remote/pgc/pgc_index_result/data.dart';
 import 'package:pili_aurora/models/remote/pgc/pgc_index_result/list.dart';
-import 'package:pili_aurora/pages/common/common_list_controller.dart';
-import 'package:get/get.dart';
+import 'package:pili_aurora/services/account_providers.dart';
+import 'package:pili_aurora/utils/accounts.dart';
+import 'package:pili_aurora/models/common/account_type.dart';
+import 'package:pili_aurora/utils/accounts/account.dart';
 
-class PgcIndexController
-    extends CommonListController<PgcIndexResult, PgcIndexItem> {
-  PgcIndexController(this.indexType);
-  int? indexType;
-  Rx<LoadingState<PgcIndexConditionData>> conditionState =
-      LoadingState<PgcIndexConditionData>.loading().obs;
-
-  late final RxBool isExpand = false.obs;
-
-  RxMap<String, dynamic> indexParams = <String, dynamic>{}.obs;
-
-  @override
-  void onInit() {
-    super.onInit();
-    getPgcIndexCondition();
-  }
-
-  Future<void> getPgcIndexCondition() async {
-    final res = await PgcHttp.pgcIndexCondition(
-      seasonType: indexType == null ? 1 : null,
-      type: 0,
-      indexType: indexType,
-    );
-    if (res case Success(:final response)) {
-      if (response.order?.isNotEmpty == true) {
-        indexParams['order'] = response.order!.first.field;
-      }
-      if (response.filter?.isNotEmpty == true) {
-        for (PgcConditionFilter item in response.filter!) {
-          indexParams['${item.field}'] = item.values?.firstOrNull?.keyword;
-        }
-      }
-      queryData();
-    }
-    conditionState.value = res;
-  }
-
-  @override
-  Future<LoadingState<PgcIndexResult>> customGetData() =>
-      PgcHttp.pgcIndexResult(
-        page: page,
-        params: indexParams,
+typedef PgcIndexQuery = ({int? indexType, String filters, Object owner});
+final pgcConditionsProvider = FutureProvider.autoDispose
+    .family<PgcIndexConditionData, int?>((ref, indexType) async {
+      final account = ref.watch(mainAccountProvider);
+      return (await PgcHttp.pgcIndexCondition(
+        account: account,
         seasonType: indexType == null ? 1 : null,
         type: 0,
         indexType: indexType,
-      );
+      )).data;
+    }, retry: (_, _) => null);
+final pgcResultsProvider = AsyncNotifierProvider.autoDispose
+    .family<PgcResultsNotifier, PgcResultsState, PgcIndexQuery>(
+      PgcResultsNotifier.new,
+      retry: (_, _) => null,
+    );
 
+class PgcResultsState {
+  PgcResultsState({
+    required Iterable<PgcIndexItem> items,
+    required this.nextPage,
+    required this.hasMore,
+    this.loadingMore = false,
+    this.error,
+    Object? source,
+  }) : items = List.unmodifiable(items),
+       source = source ?? Object();
+  final List<PgcIndexItem> items;
+  final int nextPage;
+  final bool hasMore;
+  final bool loadingMore;
+  final String? error;
+  final Object source;
+  bool get canLoadMore => hasMore && !loadingMore && error == null;
+  PgcResultsState operation({bool loadingMore = false, String? error}) =>
+      PgcResultsState(
+        items: items,
+        nextPage: nextPage,
+        hasMore: hasMore,
+        loadingMore: loadingMore,
+        error: error,
+        source: source,
+      );
+}
+
+class PgcResultsNotifier extends AsyncNotifier<PgcResultsState> {
+  PgcResultsNotifier(this.query);
+  final PgcIndexQuery query;
   @override
-  List<PgcIndexItem>? getDataList(PgcIndexResult response) {
-    if (response.hasNext == null || response.hasNext == 0) {
-      isEnd = true;
+  Future<PgcResultsState> build() =>
+      _page(ref.watch(mainAccountProvider), null);
+  Future<PgcResultsState> _page(
+    Account account,
+    PgcResultsState? before,
+  ) async {
+    final page = before?.nextPage ?? 1;
+    final data = (await PgcHttp.pgcIndexResult(
+      account: account,
+      page: page,
+      params: Map<String, dynamic>.from(jsonDecode(query.filters) as Map),
+      seasonType: query.indexType == null ? 1 : null,
+      type: 0,
+      indexType: query.indexType,
+    )).data;
+    final seen = <Object>{};
+    final rows = data.list ?? <PgcIndexItem>[];
+    final items = [
+      for (final item in [...?before?.items, ...rows])
+        if (seen.add(item.seasonId ?? item)) item,
+    ];
+    return PgcResultsState(
+      items: items,
+      nextPage: page + 1,
+      hasMore:
+          data.hasNext == 1 &&
+          rows.isNotEmpty &&
+          (before == null || items.length > before.items.length),
+      source: before?.source,
+    );
+  }
+
+  Future<void> loadMore({bool retry = false}) async {
+    final before = state.value;
+    if (state.isLoading ||
+        state.hasError ||
+        before == null ||
+        !before.hasMore ||
+        before.loadingMore ||
+        (!retry && before.error != null)) {
+      return;
     }
-    return response.list;
+    final owner = ref;
+    final account = owner.read(recommendAccountProvider);
+    if (!identical(account, Accounts.get(AccountType.recommend))) return;
+    state = AsyncData(before.operation(loadingMore: true));
+    try {
+      final result = await _page(account, before);
+      if (owner.mounted &&
+          identical(account, Accounts.get(AccountType.recommend))) {
+        state = AsyncData(result);
+      }
+    } catch (_) {
+      if (owner.mounted &&
+          identical(account, Accounts.get(AccountType.recommend))) {
+        state = AsyncData(before.operation(error: '加载失败，点击重试'));
+      }
+    }
   }
 }

@@ -6,15 +6,15 @@ import 'package:pili_aurora/common/widgets/loading_widget/http_error.dart';
 import 'package:pili_aurora/common/widgets/scaffold/simple_scaffold.dart';
 import 'package:pili_aurora/http/loading_state.dart';
 import 'package:pili_aurora/models/remote/member/coin_like_arc/item.dart';
-import 'package:pili_aurora/pages/member_coin_arc/controller.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:pili_aurora/pages/common/member_feed.dart';
+import 'package:pili_aurora/pages/common/member_feed_view.dart';
 import 'package:pili_aurora/pages/member_coin_arc/widgets/item.dart';
-import 'package:pili_aurora/utils/accounts.dart';
+import 'package:pili_aurora/services/account_providers.dart';
 import 'package:pili_aurora/utils/grid.dart';
-import 'package:pili_aurora/utils/utils.dart';
-import 'package:get/get.dart';
 import 'package:material_ui/material_ui.dart';
 
-class MemberCoinArcPage extends StatefulWidget {
+class MemberCoinArcPage extends ConsumerStatefulWidget {
   const MemberCoinArcPage({
     super.key,
     required this.mid,
@@ -25,21 +25,15 @@ class MemberCoinArcPage extends StatefulWidget {
   final String? name;
 
   @override
-  State<MemberCoinArcPage> createState() => _MemberCoinArcPageState();
+  ConsumerState<MemberCoinArcPage> createState() => _MemberCoinArcPageState();
 }
 
-class _MemberCoinArcPageState extends State<MemberCoinArcPage> {
-  late final mid = Accounts.main.mid;
-  late final MemberCoinArcController _ctr;
-
+class _MemberCoinArcPageState extends ConsumerState<MemberCoinArcPage>
+    with MemberFeedView<MemberCoinArcPage, CoinLikeArcItem> {
   @override
-  void initState() {
-    super.initState();
-    _ctr = Get.put(
-      MemberCoinArcController(mid: widget.mid),
-      tag: Utils.makeHeroTag(widget.mid),
-    );
-  }
+  MemberFeedKind get feedKind => MemberFeedKind.coin;
+  @override
+  Object get feedMid => widget.mid;
 
   @override
   Widget build(BuildContext context) {
@@ -47,24 +41,27 @@ class _MemberCoinArcPageState extends State<MemberCoinArcPage> {
     return SimpleScaffold(
       appBar: AppBar(
         title: Text(
-          '${widget.mid == mid ? '我' : '${widget.name}'}的最近投币',
+          '${widget.mid.toString() == ref.watch(mainAccountProvider).mid.toString() ? '我' : '${widget.name}'}的最近投币',
         ),
       ),
       body: refreshIndicator(
-        onRefresh: _ctr.onRefresh,
-        child: CustomScrollView(
-          physics: const AlwaysScrollableScrollPhysics(),
-          slivers: [
-            SliverPadding(
-              padding: EdgeInsets.only(
-                top: 7,
-                left: Style.safeSpace + padding.left,
-                right: Style.safeSpace + padding.right,
-                bottom: padding.bottom + 100,
+        onRefresh: reloadFeed,
+        child: paginateFeed(
+          CustomScrollView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            slivers: [
+              SliverPadding(
+                padding: EdgeInsets.only(
+                  top: 7,
+                  left: Style.safeSpace + padding.left,
+                  right: Style.safeSpace + padding.right,
+                  bottom: padding.bottom + 100,
+                ),
+                sliver: watchFeed(_buildBody),
               ),
-              sliver: Obx(() => _buildBody(_ctr.loadingState.value)),
-            ),
-          ],
+              feedFooter,
+            ],
+          ),
         ),
       ),
     );
@@ -93,16 +90,13 @@ class _MemberCoinArcPageState extends State<MemberCoinArcPage> {
                 gridDelegate: gridDelegate,
                 itemCount: response.length,
                 itemBuilder: (context, index) {
-                  if (index == response.length - 1) {
-                    _ctr.onLoadMore();
-                  }
                   return MemberCoinLikeItem(item: response[index]);
                 },
               )
-            : HttpError(onReload: _ctr.onReload),
+            : HttpError(onReload: reloadFeed),
       Error(:final errMsg) => HttpError(
         errMsg: errMsg,
-        onReload: _ctr.onReload,
+        onReload: reloadFeed,
       ),
     };
   }

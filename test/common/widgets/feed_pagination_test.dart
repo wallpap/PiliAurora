@@ -98,6 +98,41 @@ class _FeedState extends State<_Feed> {
 }
 
 void main() {
+  testWidgets('通知模式沿用嵌套滚动控制器，按真实范围分页', (tester) async {
+    final controller = ScrollController();
+    addTearDown(controller.dispose);
+    var calls = 0;
+    var allowed = false;
+    Widget feed(int revision) => Directionality(
+      textDirection: TextDirection.ltr,
+      child: PrimaryScrollController(
+        controller: controller,
+        child: FeedPagination.notifications(
+          dataRevision: revision,
+          canLoadMore: () => allowed,
+          onLoadMore: () async {
+            calls++;
+            allowed = false;
+          },
+          child: ListView(
+            primary: true,
+            children: const [SizedBox(height: 1500)],
+          ),
+        ),
+      ),
+    );
+    await tester.pumpWidget(feed(0));
+    await tester.pumpAndSettle();
+    allowed = true;
+    await tester.pumpWidget(feed(1));
+    await tester.pumpAndSettle();
+    expect(calls, 0);
+    controller.jumpTo(controller.position.maxScrollExtent);
+    await tester.pumpAndSettle();
+    expect(calls, 1);
+    await tester.pumpWidget(const SizedBox());
+  });
+
   testWidgets('快照修订在滚动范围未变化时重新检查，不需要 stream 桥接', (tester) async {
     final controller = ScrollController();
     addTearDown(controller.dispose);
