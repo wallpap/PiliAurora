@@ -176,25 +176,24 @@ void main() {
     expectIssue('来源名称重复');
   });
 
-  test('accepts a consistent second local revision', () {
-    const revision = '1.2.3+piliaurora.2';
-    fixture.root['dependencies'] = {'local_package': revision};
-    fixture.local['version'] = revision;
-    fixture.record['version'] = revision;
-    fixture.locked['version'] = revision;
-    fixture.save();
-    expect(fixture.check(), isEmpty);
-  });
-
-  test('rejects invalid local revision piliaurora.01', () {
-    const revision = '1.2.3+piliaurora.01';
-    fixture.root['dependencies'] = {'local_package': revision};
-    fixture.local['version'] = revision;
-    fixture.record['version'] = revision;
-    fixture.locked['version'] = revision;
-    fixture.save();
-    expectIssue('登记版本必须为 upstream_version 加 +piliaurora.N');
-  });
+  test(
+    'local revisions accept positive integers and reject leading zeroes',
+    () {
+      for (final suffix in ['2', '01']) {
+        final revision = '1.2.3+piliaurora.$suffix';
+        fixture.root['dependencies'] = {'local_package': revision};
+        fixture.local['version'] = revision;
+        fixture.record['version'] = revision;
+        fixture.locked['version'] = revision;
+        fixture.save();
+        if (suffix == '2') {
+          expect(fixture.check(), isEmpty);
+        } else {
+          expectIssue('登记版本必须为 upstream_version 加 +piliaurora.N');
+        }
+      }
+    },
+  );
 
   test(
     'rejects caret and range constraints even when local versions match',
@@ -352,25 +351,23 @@ void main() {
     'dev_dependencies',
     'dependency_overrides',
   ]) {
-    test('accepts exact hosted version in $section', () {
-      fixture.root[section] = {
-        ...fixture.root[section] as Map? ?? {},
-        'hosted_package': '1.0.0',
-      };
-      fixture.save();
-      expect(fixture.check(), isEmpty);
-    });
-
-    for (final constraint in ['^1.0.0', 'bad']) {
-      test('rejects floating hosted $constraint in $section', () {
-        fixture.root[section] = {
-          ...fixture.root[section] as Map? ?? {},
-          'hosted_package': constraint,
-        };
-        fixture.save();
-        expectIssue('$section.hosted_package：必须声明精确版本号');
-      });
-    }
+    test(
+      '$section accepts exact hosted versions and rejects floating versions',
+      () {
+        for (final constraint in ['1.0.0', '^1.0.0', 'bad']) {
+          fixture.root[section] = {
+            ...fixture.root[section] as Map? ?? {},
+            'hosted_package': constraint,
+          };
+          fixture.save();
+          if (constraint == '1.0.0') {
+            expect(fixture.check(), isEmpty);
+          } else {
+            expectIssue('$section.hosted_package：必须声明精确版本号');
+          }
+        }
+      },
+    );
   }
 
   test('accepts hosted mapping including prerelease and build version', () {
