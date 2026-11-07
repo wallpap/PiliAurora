@@ -153,6 +153,15 @@ User guides, developer guides, and release notes are listed in the [documentatio
 
 Bug reports through GitHub Issues and pull requests are welcome. Before changing playback, danmaku, or platform code, read [Maintenance and troubleshooting](doc/maintenance/troubleshooting.md) and [Build and test](doc/development/build-and-test.md). When changing third-party dependencies, record their sources and licenses following the [dependency maintenance guide](third_party/README.md).
 
+## Support the project
+
+PiliAurora is free and open source, and sponsorship is entirely optional. If you enjoy the project and can afford to contribute, you can support its development and maintenance through Alipay or WeChat Pay. Thank you for your support!
+
+<p align="center">
+  <img src="assets/sponsor/alipay.jpg" alt="Alipay payment QR code" width="240">
+  <img src="assets/sponsor/wechat.png" alt="WeChat Pay payment QR code" width="240">
+</p>
+
 ## Reporting issues
 
 Open a [GitHub issue](https://github.com/wallpap/PiliAurora/issues) with your operating system, device, app version, reproduction steps, and affected page. For playback issues, also include the video codec, quality, danmaku settings, and hardware-decoding state. Remove cookies, tokens, QR-code login information, and other account data before sharing logs.

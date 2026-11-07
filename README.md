@@ -155,6 +155,15 @@ pwsh -File tool/build.ps1 -Platform android -Mode debug
 
 欢迎通过 GitHub Issues 报告问题或提交 Pull Request。修改播放器、弹幕或平台代码前，请阅读[维护与排障](doc/maintenance/troubleshooting.md)和[构建与测试](doc/development/build-and-test.md)；修改第三方依赖时，请按[依赖维护说明](third_party/README.md)登记来源和许可证。
 
+## 赞助支持
+
+PiliAurora 完全免费开源，赞助完全自愿。如果你喜欢这个项目，并且有余力，欢迎通过支付宝或微信支付支持开发与维护。感谢你的支持！
+
+<p align="center">
+  <img src="assets/sponsor/alipay.jpg" alt="支付宝收款码" width="240">
+  <img src="assets/sponsor/wechat.png" alt="微信支付收款码" width="240">
+</p>
+
 ## 问题反馈
 
 请在 [GitHub Issues](https://github.com/wallpap/PiliAurora/issues) 提交问题，并附上系统、设备、应用版本、复现步骤和相关页面。播放问题请补充视频编码、清晰度、弹幕设置和硬件解码状态。分享日志前，请移除 Cookie、Token、二维码登录信息和其他账号数据。
