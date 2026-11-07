@@ -2,7 +2,6 @@ import 'package:pili_aurora/common/widgets/scaffold/simple_scaffold.dart';
 import 'package:pili_aurora/common/widgets/scroll_physics.dart' show tabBarView;
 import 'package:pili_aurora/common/widgets/view_safe_area.dart';
 import 'package:pili_aurora/models/common/search/search_type.dart';
-import 'package:pili_aurora/pages/search/controller.dart';
 import 'package:pili_aurora/pages/search_panel/all/view.dart';
 import 'package:pili_aurora/pages/search_panel/article/view.dart';
 import 'package:pili_aurora/pages/search_panel/live/view.dart';
@@ -26,7 +25,7 @@ class _SearchResultPageState extends State<SearchResultPage>
   late TabController _tabController;
   final String _tag = DateTime.now().millisecondsSinceEpoch.toString();
   final bool _isFromSearch = Get.arguments?['fromSearch'] ?? false;
-  SSearchController? sSearchController;
+  final void Function(int)? _onIndexChanged = Get.arguments?['onIndexChanged'];
 
   @override
   void initState() {
@@ -42,19 +41,10 @@ class _SearchResultPageState extends State<SearchResultPage>
       length: SearchType.values.length,
     );
 
-    if (_isFromSearch) {
-      try {
-        sSearchController = Get.find<SSearchController>(
-          tag: Get.parameters['tag'],
-        );
-        _tabController.addListener(listener);
-      } catch (_) {}
-    }
+    if (_isFromSearch) _tabController.addListener(listener);
   }
 
-  void listener() {
-    sSearchController?.initIndex = _tabController.index;
-  }
+  void listener() => _onIndexChanged?.call(_tabController.index);
 
   @override
   void dispose() {

@@ -1,5 +1,7 @@
 import 'dart:math';
 
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
 import 'package:pili_aurora/common/assets.dart';
 import 'package:pili_aurora/common/widgets/flutter/list_tile.dart';
 import 'package:pili_aurora/common/widgets/flutter/refresh_indicator.dart';
@@ -8,11 +10,10 @@ import 'package:pili_aurora/common/widgets/loading_widget/http_error.dart';
 import 'package:pili_aurora/common/widgets/loading_widget/loading_widget.dart';
 import 'package:pili_aurora/common/widgets/sliver/trending_header.dart';
 import 'package:pili_aurora/http/loading_state.dart';
-import 'package:pili_aurora/models/remote/search/search_trending/list.dart';
+import 'package:pili_aurora/models/remote/search/search_trending/data.dart';
 import 'package:pili_aurora/pages/search_trending/controller.dart';
 import 'package:pili_aurora/utils/color_utils.dart';
 import 'package:pili_aurora/utils/extension/context_ext.dart';
-import 'package:pili_aurora/utils/extension/get_ext.dart';
 import 'package:pili_aurora/utils/extension/num_ext.dart';
 import 'package:pili_aurora/utils/extension/size_ext.dart';
 import 'package:pili_aurora/utils/image_utils.dart';
@@ -20,18 +21,25 @@ import 'package:flutter/services.dart' show SystemUiOverlayStyle;
 import 'package:get/get.dart';
 import 'package:material_ui/material_ui.dart' hide ListTile;
 
-class SearchTrendingPage extends StatefulWidget {
+class SearchTrendingPage extends ConsumerStatefulWidget {
   const SearchTrendingPage({super.key});
 
   @override
-  State<SearchTrendingPage> createState() => _SearchTrendingPageState();
+  ConsumerState<SearchTrendingPage> createState() => _SearchTrendingPageState();
 }
 
-class _SearchTrendingPageState extends State<SearchTrendingPage> {
-  final _controller = Get.putOrFind(SearchTrendingController.new);
+class _SearchTrendingPageState extends ConsumerState<SearchTrendingPage> {
+  SearchTrendingNotifier get _controller =>
+      ref.read(searchTrendingProvider.notifier);
 
   late double _offset;
-  final RxDouble _scrollRatio = 0.0.obs;
+  final _scrollRatio = ValueNotifier(0.0);
+
+  @override
+  void dispose() {
+    _scrollRatio.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -67,13 +75,15 @@ class _SearchTrendingPageState extends State<SearchTrendingPage> {
               child: SizedBox(
                 width: width,
                 child: refreshIndicator(
-                  onRefresh: _controller.onRefresh,
+                  onRefresh: _controller.refresh,
                   child: CustomScrollView(
                     physics: const AlwaysScrollableScrollPhysics(),
                     slivers: [
                       TrendingHeader(
                         offset: _offset,
-                        onScrollRatioChanged: _scrollRatio.call,
+                        onScrollRatioChanged: (value) {
+                          if (mounted) _scrollRatio.value = value;
+                        },
                         child: SizedBox(
                           width: width,
                           height: height,
@@ -105,9 +115,9 @@ class _SearchTrendingPageState extends State<SearchTrendingPage> {
                       ),
                       SliverPadding(
                         padding: .only(bottom: padding.bottom + 100),
-                        sliver: Obx(
-                          () =>
-                              _buildBody(theme, _controller.loadingState.value),
+                        sliver: _buildBody(
+                          theme,
+                          ref.watch(searchTrendingProvider),
                         ),
                       ),
                     ],
@@ -120,9 +130,9 @@ class _SearchTrendingPageState extends State<SearchTrendingPage> {
             left: 0,
             top: 0,
             right: 0,
-            child: Obx(
-              () {
-                final scrollRatio = _scrollRatio.value;
+            child: ValueListenableBuilder<double>(
+              valueListenable: _scrollRatio,
+              builder: (context, scrollRatio, child) {
                 final flag = maxWidth > width || scrollRatio >= 0.5;
                 return AppBar(
                   title: Opacity(
@@ -164,40 +174,41 @@ class _SearchTrendingPageState extends State<SearchTrendingPage> {
 
   Widget _buildBody(
     ThemeData theme,
-    LoadingState<List<SearchTrendingItemModel>?> loadingState,
+    LoadingState<SearchTrendingData> loadingState,
   ) {
     switch (loadingState) {
       case Loading():
         return linearLoading;
       case Success(:final response):
-        if (response != null && response.isNotEmpty) {
+        final items = response.list;
+        if (items != null && items.isNotEmpty) {
           final divider = Divider(
             height: 1,
             indent: 48,
             color: theme.colorScheme.outline.withValues(alpha: 0.1),
           );
           return SliverList.separated(
-            itemCount: response.length,
+            itemCount: items.length,
             itemBuilder: (context, index) {
-              final item = response[index];
+              final item = items[index];
               return ListTile(
                 dense: true,
                 onTap: () => Get.toNamed(
                   '/searchResult',
                   parameters: {'keyword': item.keyword},
                 ),
-                leading: index < _controller.topCount
+                leading: index < response.topCount
                     ? const Icon(
                         size: 17,
                         Icons.vertical_align_top_outlined,
                         color: Color(0xFFd1403e),
                       )
                     : Text(
-                        '${index + 1 - _controller.topCount}',
+                        '${index + 1 - response.topCount}',
                         style: TextStyle(
                           fontWeight: .bold,
                           color: ColourUtils.index2Color(
-                            index - _controller.topCount,
+                            index - response.topCount,
                             theme.colorScheme.outline,
                           ),
                           fontSize: 17,
@@ -239,11 +250,11 @@ class _SearchTrendingPageState extends State<SearchTrendingPage> {
             separatorBuilder: (context, index) => divider,
           );
         }
-        return HttpError(onReload: _controller.onReload);
+        return HttpError(onReload: _controller.refresh);
       case Error(:final errMsg):
         return HttpError(
           errMsg: errMsg,
-          onReload: _controller.onReload,
+          onReload: _controller.refresh,
         );
     }
   }

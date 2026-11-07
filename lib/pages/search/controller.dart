@@ -1,221 +1,168 @@
-import 'package:pili_aurora/common/widgets/debounced_state.dart';
-import 'package:pili_aurora/common/widgets/dialog/dialog.dart';
+import 'dart:async';
+
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pili_aurora/http/loading_state.dart';
 import 'package:pili_aurora/http/search.dart';
 import 'package:pili_aurora/models/search/suggest.dart';
 import 'package:pili_aurora/models/remote/search/search_rcmd/data.dart';
 import 'package:pili_aurora/models/remote/search/search_trending/data.dart';
-import 'package:pili_aurora/utils/app_scheme.dart';
-import 'package:pili_aurora/utils/extension/get_ext.dart';
-import 'package:pili_aurora/utils/extension/string_ext.dart';
-import 'package:pili_aurora/utils/id_utils.dart';
 import 'package:pili_aurora/utils/storage.dart';
+import 'package:pili_aurora/utils/storage_key.dart';
 import 'package:pili_aurora/utils/storage_pref.dart';
-import 'package:get/get.dart';
-import 'package:material_ui/material_ui.dart';
 
-class BaseSearchController extends GetxController {
-  final historyList = List<String>.from(
-    GStorage.historyWord.get('cacheList') ?? const <String>[],
-  ).obs;
+final searchHistoryProvider = NotifierProvider<SearchHistory, List<String>>(
+  SearchHistory.new,
+);
 
-  late final Rx<LoadingState<SearchTrendingData>> trendingState;
-
-  final recordSearchHistory = Pref.recordSearchHistory.obs;
-  final searchSuggestion = Pref.searchSuggestion;
-  final enableTrending = Pref.enableTrending;
-  final enableSearchRcmd = Pref.enableSearchRcmd;
-
+class SearchHistory extends Notifier<List<String>> {
   @override
-  void onInit() {
-    super.onInit();
-
-    if (enableTrending) {
-      trendingState = LoadingState<SearchTrendingData>.loading().obs;
-      queryTrendingList();
-    }
+  List<String> build() => List.unmodifiable(
+    List<String>.from(
+      GStorage.historyWord.get('cacheList') ?? const <String>[],
+    ),
+  );
+  void replace(List<String> words) {
+    state = List.unmodifiable(words);
+    GStorage.historyWord.put('cacheList', state);
   }
 
-  // 获取热搜关键词
-  Future<void> queryTrendingList() async {
-    trendingState.value = await SearchHttp.searchTrending(limit: 10);
+  void add(String word) =>
+      replace([word, ...state.where((item) => item != word)]);
+  void remove(String word) =>
+      replace(state.where((item) => item != word).toList());
+  void clear() {
+    state = const [];
+    GStorage.historyWord.delete('cacheList');
   }
 }
 
-class SSearchController extends GetxController
-    with DebounceStreamMixin<String> {
-  SSearchController(this.tag);
-  final String tag;
+final recordSearchHistoryProvider = NotifierProvider<RecordSearchHistory, bool>(
+  RecordSearchHistory.new,
+);
 
-  final searchFocusNode = FocusNode();
-  final controller = TextEditingController();
-  final _baseCtr = Get.putOrFind(BaseSearchController.new);
-
-  String? hintText;
-
-  int initIndex = 0;
-
-  // uid
-  final RxBool showUidBtn = false.obs;
-
-  // history
-  RxBool get recordSearchHistory => _baseCtr.recordSearchHistory;
-  RxList<String> get historyList => _baseCtr.historyList;
-
-  // suggestion
-  bool get searchSuggestion => _baseCtr.searchSuggestion;
-  late final RxList<SearchSuggestItem> searchSuggestList;
-  int _suggestionVersion = 0;
-
-  // trending
-  bool get enableTrending => _baseCtr.enableTrending;
-  Rx<LoadingState<SearchTrendingData>> get trendingState =>
-      _baseCtr.trendingState;
-
-  // rcmd
-  bool get enableSearchRcmd => _baseCtr.enableSearchRcmd;
-  late final Rx<LoadingState<SearchRcmdData>> recommendData;
-
-  Future<void> Function() get queryTrendingList => _baseCtr.queryTrendingList;
-
+class RecordSearchHistory extends Notifier<bool> {
   @override
-  void onInit() {
-    super.onInit();
-    final params = Get.parameters;
-    hintText = params['hintText'];
-    final text = params['text'];
-    if (text != null) {
-      controller.text = text;
-    }
-
-    if (searchSuggestion) {
-      subInit();
-      searchSuggestList = <SearchSuggestItem>[].obs;
-      if (text != null) onValueChanged(text);
-    }
-
-    if (enableSearchRcmd) {
-      recommendData = LoadingState<SearchRcmdData>.loading().obs;
-      queryRecommendList();
-    }
+  bool build() {
+    final subscription = GStorage.setting
+        .watch(key: SettingBoxKey.recordSearchHistory)
+        .listen((_) => state = Pref.recordSearchHistory);
+    ref.onDispose(subscription.cancel);
+    return Pref.recordSearchHistory;
   }
 
-  void validateUid() {
-    showUidBtn.value = IdUtils.digitOnlyRegExp.hasMatch(controller.text);
+  void set(bool value) {
+    state = value;
+    GStorage.setting.put(SettingBoxKey.recordSearchHistory, value);
   }
+}
 
-  void onChange(String value) {
-    _suggestionVersion++;
-    validateUid();
-    if (searchSuggestion) {
-      if (value.isEmpty) {
-        searchSuggestList.clear();
-      } else {
-        ctr!.add(value);
-      }
-    }
-  }
+class SearchState {
+  const SearchState({
+    this.suggestions = const [],
+    required this.trending,
+    required this.recommend,
+  });
+  final List<SearchSuggestItem> suggestions;
+  final LoadingState<SearchTrendingData> trending;
+  final LoadingState<SearchRcmdData> recommend;
+  SearchState copyWith({
+    List<SearchSuggestItem>? suggestions,
+    LoadingState<SearchTrendingData>? trending,
+    LoadingState<SearchRcmdData>? recommend,
+  }) => SearchState(
+    suggestions: suggestions ?? this.suggestions,
+    trending: trending ?? this.trending,
+    recommend: recommend ?? this.recommend,
+  );
+}
 
-  void onClear() {
-    _suggestionVersion++;
-    if (controller.value.text != '') {
-      controller.clear();
-      if (searchSuggestion) searchSuggestList.clear();
-      searchFocusNode.requestFocus();
-      showUidBtn.value = false;
-    } else {
-      Get.back();
-    }
-  }
+final searchProvider =
+    NotifierProvider.family<SearchNotifier, SearchState, Object>(
+      SearchNotifier.new,
+      isAutoDispose: true,
+    );
 
-  // 搜索
-  Future<void> submit() async {
-    if (controller.text.isEmpty) {
-      if (hintText.isNullOrEmpty) return;
-      controller.text = hintText!;
-      validateUid();
-    }
-
-    final text = controller.text;
-
-    if (await PiliScheme.routePushFromUrl(text, selfHandle: true)) {
-      return;
-    }
-
-    if (recordSearchHistory.value) {
-      final index = historyList.indexOf(text);
-      if (index != 0) {
-        if (index != -1) historyList.removeAt(index);
-        historyList.insert(0, text);
-        GStorage.historyWord.put('cacheList', historyList);
-      }
-    }
-
-    searchFocusNode.unfocus();
-    Get.toNamed(
-      '/searchResult',
-      parameters: {'tag': tag, 'keyword': text},
-      arguments: {'initIndex': initIndex, 'fromSearch': true},
-    )?.then((val) {
-      searchFocusNode.requestFocus();
-      if (val is bool && val) {
-        onValueChanged(text);
-      }
+class SearchNotifier extends Notifier<SearchState> {
+  SearchNotifier(this.key);
+  final Object key;
+  Timer? _timer;
+  int _suggestVersion = 0, _trendingVersion = 0, _recommendVersion = 0;
+  bool _alive = true;
+  @override
+  SearchState build() {
+    _alive = true;
+    ref.onDispose(() {
+      _alive = false;
+      _timer?.cancel();
     });
-  }
-
-  Future<void> queryRecommendList() async {
-    recommendData.value = await SearchHttp.searchRecommend();
-  }
-
-  void onClickKeyword(String keyword, {bool clearSuggest = true}) {
-    controller.text = keyword;
-    validateUid();
-
-    if (searchSuggestion && clearSuggest) searchSuggestList.clear();
-    submit();
-  }
-
-  @override
-  Future<void> onValueChanged(String value) async {
-    if (isClosed ||
-        !searchSuggestion ||
-        value.isEmpty ||
-        controller.text != value) {
-      return;
-    }
-    final version = ++_suggestionVersion;
-    final res = await SearchHttp.searchSuggest(term: value);
-    // 防抖只限制发起频率，输入变化后仍须使此前在途的结果失效。
-    if (isClosed || version != _suggestionVersion || controller.text != value) {
-      return;
-    }
-    if (res case Success(:final response)) {
-      searchSuggestList.value = response.tag ?? const [];
-    }
-  }
-
-  void onLongSelect(String word) {
-    historyList.remove(word);
-    GStorage.historyWord.put('cacheList', historyList);
-  }
-
-  void onClearHistory() {
-    showConfirmDialog(
-      context: Get.context!,
-      title: const Text('确定清空搜索历史？'),
-      onConfirm: () {
-        historyList.clear();
-        GStorage.historyWord.delete('cacheList');
-      },
+    if (Pref.enableTrending) unawaited(refreshTrending());
+    if (Pref.enableSearchRcmd) unawaited(refreshRecommend());
+    return SearchState(
+      trending: LoadingState.loading(),
+      recommend: LoadingState.loading(),
     );
   }
 
-  @override
-  void onClose() {
-    subDispose();
-    searchFocusNode.dispose();
-    controller.dispose();
-    super.onClose();
+  void input(String text, {bool immediate = false}) {
+    final version = ++_suggestVersion;
+    _timer?.cancel();
+    if (!Pref.searchSuggestion || text.isEmpty) {
+      state = state.copyWith(suggestions: const []);
+      return;
+    }
+    if (immediate) {
+      unawaited(_suggest(text, version));
+    } else {
+      _timer = Timer(
+        const Duration(milliseconds: 200),
+        () => _suggest(text, version),
+      );
+    }
+  }
+
+  void clearSuggestions() {
+    ++_suggestVersion;
+    _timer?.cancel();
+    state = state.copyWith(suggestions: const []);
+  }
+
+  Future<void> _suggest(String text, int version) async {
+    try {
+      final result = await SearchHttp.searchSuggest(term: text);
+      if (!_alive || version != _suggestVersion) return;
+      if (result case Success(:final response)) {
+        state = state.copyWith(
+          suggestions: List.unmodifiable(response.tag ?? const []),
+        );
+      }
+    } catch (_) {
+      // 联想失败时保留现有内容，不影响搜索提交。
+    }
+  }
+
+  Future<void> refreshTrending() async {
+    final version = ++_trendingVersion;
+    LoadingState<SearchTrendingData> result;
+    try {
+      result = await SearchHttp.searchTrending(limit: 10);
+    } catch (_) {
+      result = const Error('加载失败，请重试');
+    }
+    if (_alive && version == _trendingVersion) {
+      state = state.copyWith(trending: result);
+    }
+  }
+
+  Future<void> refreshRecommend() async {
+    final version = ++_recommendVersion;
+    LoadingState<SearchRcmdData> result;
+    try {
+      result = await SearchHttp.searchRecommend();
+    } catch (_) {
+      result = const Error('加载失败，请重试');
+    }
+    if (_alive && version == _recommendVersion) {
+      state = state.copyWith(recommend: result);
+    }
   }
 }
