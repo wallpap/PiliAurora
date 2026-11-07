@@ -109,3 +109,16 @@ pwsh -NoProfile -File tool/run-native-probes.ps1
 
 虚拟时钟回归覆盖调度语义，最终呈现结论来自目标设备采集。Windows点播使用合成媒体时钟；
 Android点播使用生产worker媒体时钟采样；两者均未覆盖完整业务页面的网络、音频、超分及长期功耗。
+
+## Windows 真实素材密度探针
+
+`tool/probes/windows/danmaku_density.dart` 在独立窗口静音播放本地视频，以protobuf范围驱动生产协调器和渲染器。它记录 Flutter FrameTiming、各权重视口内可见分布、可见面积时长、准备前沿、工作集及进程峰值RSS，并在10秒时导出本地PNG。普通弹幕默认不合并。探针时钟以 `play` 时刻为锚，独立于业务播放器的原生时钟；报告不含PresentMon最终呈现数据，端到端帧节奏需另外采集。
+
+```powershell
+pwsh -NoProfile -File tool/build.ps1 -Platform windows -Mode profile `
+  -Target tool/probes/windows/danmaku_density.dart -SkipPubGet
+& build/windows/x64/runner/Profile/PiliAurora.exe `
+  '<本地输出目录>' '<video.m4s>' '<danmaku.pb>' 33000 12 8
+```
+
+数字参数为起点毫秒、每桶候选上限、逐帧准备条数，末尾可加 `merge` 开启后台合并。输入仅保留30秒，测量后追加8秒空白尾部。10秒PNG用于视觉检查；包围盒拥挤在结束后离线计算。保持窗口可见；不要同时运行基准测试或构建，以免影响耗时。视频和弹幕原文件均不改写，输出目录应位于 `build/` 或本地 `doc/dev/`。探针结束后按上面的恢复步骤重建普通入口。
