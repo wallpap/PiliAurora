@@ -62,7 +62,7 @@ flowchart LR
 
 部分页面 controller 直接调用 `http/`，另一些经由 `services/`。`models/` 同时包含远端响应和页面间共享对象，用途比数据库实体更宽。
 
-消息、搜索入口、完整热搜榜和弹幕屏蔽规则使用 Riverpod。状态所有权、账号切换和异步失效约定见[状态管理](state-management.md)。
+消息、搜索入口、完整热搜榜、弹幕屏蔽规则、黑名单和账号查询页使用 Riverpod。状态所有权、账号切换和异步失效约定见[状态管理](state-management.md)。
 
 ## 播放统一架构
 
