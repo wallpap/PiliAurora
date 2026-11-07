@@ -267,14 +267,6 @@ class _SavePanelState extends State<SavePanel> {
           uri = 'bilibili://medialist/detail/$mediaId';
           break;
 
-        // 纯文字动态查看
-        // case 'DYNAMIC_TYPE_WORD':
-        // # 装扮/剧集点评/普通分享
-        // case 'DYNAMIC_TYPE_COMMON_SQUARE':
-        // 转发的动态
-        // case 'DYNAMIC_TYPE_FORWARD':
-        // 图文动态查看
-        // case 'DYNAMIC_TYPE_DRAW':
         default:
           itemType = '动态';
           uri = 'bilibili://following/detail/${item.idStr}';

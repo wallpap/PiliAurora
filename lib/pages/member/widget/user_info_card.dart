@@ -249,14 +249,6 @@ class UserInfoCard extends StatelessWidget {
                 ),
               ),
             ),
-          // if (card.nameplate?.imageSmall?.isNotEmpty ?? false)
-          //   CachedImage(
-          //     imageUrl: ImageUtils.thumbnailUrl(card.nameplate!.imageSmall!),
-          //     height: 20,
-          //     placeholder: (context, url) {
-          //       return const SizedBox.shrink();
-          //     },
-          //   ),
           ?liveMedal,
         ],
       ),

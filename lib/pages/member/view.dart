@@ -398,38 +398,6 @@ class _MemberPageState extends State<MemberPage> {
               ],
             ),
           ),
-        // if (_userController.hasCharge)
-        //   PopupMenuItem(
-        //     onTap: () => UpowerRankPage.toUpowerRank(
-        //       mid: _userController.mid,
-        //       name: _userController.username ?? '',
-        //       count: _userController.chargeCount,
-        //     ),
-        //     child: const Row(
-        //       mainAxisSize: MainAxisSize.min,
-        //       children: [
-        //         Icon(Icons.electric_bolt, size: 19),
-        //         SizedBox(width: 10),
-        //         Text('充电排行榜'),
-        //       ],
-        //     ),
-        //   ),
-        // if (_userController.hasGuard)
-        //   PopupMenuItem(
-        //     onTap: () => MemberGuard.toMemberGuard(
-        //       mid: _userController.mid,
-        //       name: _userController.username ?? '',
-        //       count: _userController.guardCount,
-        //     ),
-        //     child: const Row(
-        //       mainAxisSize: MainAxisSize.min,
-        //       children: [
-        //         Icon(Icons.anchor, size: 19),
-        //         SizedBox(width: 10),
-        //         Text('大航海舰队'),
-        //       ],
-        //     ),
-        //   ),
         if (Get.isRegistered<MemberContributeCtr>(tag: _heroTag))
           AppPopupMenuItem(
             onTap: _toWebArchive,

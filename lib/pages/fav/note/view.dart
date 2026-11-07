@@ -83,28 +83,6 @@ class _FavNotePageState extends State<FavNotePage>
                 },
               ),
             ),
-            // TextButton(
-            //   style: TextButton.styleFrom(
-            //     foregroundColor: theme.colorScheme.onSurfaceVariant,
-            //     visualDensity: VisualDensity.compact,
-            //     tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-            //   ),
-            //   onPressed: () async {
-            //     final favNoteController = Get.find<FavNoteController>(
-            //         tag: _tabController.index == 0 ? 'false' : 'true');
-            //     if (favNoteController.enableMultiSelect.value) {
-            //       favNoteController.onDisable();
-            //     } else {
-            //       if (favNoteController.loadingState.value.isSuccess &&
-            //           favNoteController.loadingState.value.data?.isNotEmpty ==
-            //               true) {
-            //         favNoteController.enableMultiSelect.value = true;
-            //       }
-            //     }
-            //   },
-            //   child: const Text('管理'),
-            // ),
-            // const SizedBox(width: 12),
           ],
         ),
         Expanded(

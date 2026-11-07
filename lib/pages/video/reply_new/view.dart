@@ -301,20 +301,6 @@ class _ReplyPageState extends CommonRichTextPubPageState<ReplyPage> {
             title: '插入内容',
           ),
           if (heroTag != null) ...[
-            // if (isRoot)
-            //   item(
-            //     onTap: () {
-            //       Get.back();
-            //       try {
-            //         Get.find<VideoDetailController>(tag: heroTag)
-            //             .showNoteList(context);
-            //       } catch (e) {
-            //         debugPrint(e.toString());
-            //       }
-            //     },
-            //     icon: Icon(Icons.edit_note, size: 28, color: color),
-            //     title: '笔记',
-            //   ),
             item(
               onTap: () {
                 try {

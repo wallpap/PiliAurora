@@ -87,17 +87,6 @@ class _FavPgcPageState extends State<FavPgcPage>
                 },
               ),
             ),
-            // TextButton(
-            //   style: TextButton.styleFrom(
-            //     foregroundColor: theme.colorScheme.onSurfaceVariant,
-            //     visualDensity:
-            //         const VisualDensity(horizontal: -2, vertical: -2),
-            //     tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-            //   ),
-            //   onPressed: () {},
-            //   child: const Text('管理'),
-            // ),
-            // const SizedBox(width: 12),
           ],
         ),
         Expanded(

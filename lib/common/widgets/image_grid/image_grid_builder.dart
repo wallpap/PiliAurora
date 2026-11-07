@@ -291,43 +291,6 @@ class ImageGridRenderObjectElement extends RenderObjectElement {
   // repeatedly to remove children.
   final Set<Element> _forgottenChildren = HashSet<Element>();
 
-  // @override
-  // BuildScope get buildScope => _buildScope;
-
-  // late final BuildScope _buildScope = BuildScope(
-  //   scheduleRebuild: _scheduleRebuild,
-  // );
-
-  // bool _deferredCallbackScheduled = false;
-  // void _scheduleRebuild() {
-  //   if (_deferredCallbackScheduled) {
-  //     return;
-  //   }
-
-  //   final bool deferMarkNeedsLayout =
-  //       switch (SchedulerBinding.instance.schedulerPhase) {
-  //         SchedulerPhase.idle || SchedulerPhase.postFrameCallbacks => true,
-  //         SchedulerPhase.transientCallbacks ||
-  //         SchedulerPhase.midFrameMicrotasks ||
-  //         SchedulerPhase.persistentCallbacks => false,
-  //       };
-  //   if (!deferMarkNeedsLayout) {
-  //     renderObject.scheduleLayoutCallback();
-  //     return;
-  //   }
-  //   _deferredCallbackScheduled = true;
-  //   SchedulerBinding.instance.scheduleFrameCallback(_frameCallback);
-  // }
-
-  // void _frameCallback(Duration timestamp) {
-  //   _deferredCallbackScheduled = false;
-  //   // This method is only called when the render tree is stable, if the Element
-  //   // is deactivated it will never be reincorporated back to the tree.
-  //   if (mounted) {
-  //     renderObject.scheduleLayoutCallback();
-  //   }
-  // }
-
   @override
   void insertRenderObjectChild(RenderObject child, IndexedSlot<Element?> slot) {
     final ContainerRenderObjectMixin<
@@ -424,21 +387,6 @@ class ImageGridRenderObjectElement extends RenderObjectElement {
   void mount(Element? parent, Object? newSlot) {
     super.mount(parent, newSlot);
     renderObject._updateCallback(_rebuildWithConstraints);
-    // final multiChildRenderObjectWidget = widget as MultiChildRenderObjectWidget;
-    // final children = List<Element>.filled(
-    //   multiChildRenderObjectWidget.children.length,
-    //   _NullElement.instance,
-    // );
-    // Element? previousChild;
-    // for (var i = 0; i < children.length; i += 1) {
-    //   final Element newChild = inflateWidget(
-    //     multiChildRenderObjectWidget.children[i],
-    //     IndexedSlot<Element?>(i, previousChild),
-    //   );
-    //   children[i] = newChild;
-    //   previousChild = newChild;
-    // }
-    // _children = children;
   }
 
   @override

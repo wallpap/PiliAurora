@@ -1493,37 +1493,6 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
             ),
           ),
 
-        // for debug
-        // Positioned(
-        //   right: 16,
-        //   bottom: 75,
-        //   child: FilledButton.tonal(
-        //     onPressed: () {
-        //       videoDetailController.onAddItem(
-        //         SegmentModel(
-        //           UUID: '',
-        //           segmentType:
-        //               SegmentType.values[Utils.random.nextInt(
-        //                 SegmentType.values.length,
-        //               )],
-        //           segment: Pair(first: 0, second: 0),
-        //           skipType: SkipType.alwaysSkip,
-        //         ),
-        //       );
-        //     },
-        //     child: const Text('skip'),
-        //   ),
-        // ),
-        // Positioned(
-        //   right: 16,
-        //   bottom: 120,
-        //   child: FilledButton.tonal(
-        //     onPressed: () {
-        //       videoDetailController.onAddItem(2);
-        //     },
-        //     child: const Text('index'),
-        //   ),
-        // ),
         Obx(
           () {
             if (videoDetailController.showSteinEdgeInfo.value) {

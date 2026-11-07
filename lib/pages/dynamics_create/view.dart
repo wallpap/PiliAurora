@@ -571,12 +571,6 @@ class _CreateDynPanelState extends CommonRichTextPubPageState<CreateDynPanel> {
           voteBtn,
           moreBtn,
         ],
-        // if (kDebugMode)
-        //   ToolbarIconButton(
-        //     onPressed: editController.clear,
-        //     icon: const Icon(Icons.clear, size: 22),
-        //     selected: false,
-        //   ),
       ],
     ),
   );

@@ -272,30 +272,6 @@ class _MusicDetailPageState extends CommonDynPageState<MusicDetailPage> {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceAround,
               children: [
-                // TODO
-                // Expanded(
-                //   child: textIconButton(
-                //     icon: FontAwesomeIcons.shareFromSquare.data,
-                //     text: '转发',
-                //     count: item.musicShares,
-                //     onPressed: () {
-                //       final data = controller.infoState.value.dataOrNull;
-                //       if (data != null) {
-                //         showModalBottomSheet(
-                //           context: context,
-                //           isScrollControlled: true,
-                //           useSafeArea: true,
-                //           builder: (context) => RepostPanel(
-                //             rid: controller.oid,
-                //             dynType: null,
-                //             pic: data.mvCover,
-                //             title: data.musicTitle,
-                //           ),
-                //         );
-                //       }
-                //     },
-                //   ),
-                // ),
                 Expanded(
                   child: textIconButton(
                     icon: CustomIcons.share_node,

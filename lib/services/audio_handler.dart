@@ -113,12 +113,6 @@ class VideoPlayerServiceHandler extends BaseAudioHandler with SeekHandler {
   void setMediaItem(MediaItem newMediaItem) {
     if (!enableBackgroundPlay) return;
     _retainPlaybackLease();
-    // if (kDebugMode) {
-    //   debugPrint("此时调用栈为：");
-    //   debugPrint(newMediaItem);
-    //   debugPrint(newMediaItem.title);
-    //   debugPrint(StackTrace.current.toString());
-    // }
     if (!mediaItem.isClosed) mediaItem.add(newMediaItem);
   }
 
@@ -237,10 +231,6 @@ class VideoPlayerServiceHandler extends BaseAudioHandler with SeekHandler {
     String? artist,
     String? cover,
   }) {
-    // if (kDebugMode) {
-    //   debugPrint('当前调用栈为：');
-    //   debugPrint(StackTrace.current);
-    // }
     if (data == null) return;
 
     Uri getUri(String? cover) => Uri.parse(ImageUtils.safeThumbnailUrl(cover));

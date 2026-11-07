@@ -475,15 +475,6 @@ class _GalleryViewerState extends State<GalleryViewer>
                       _horizontalDragGestureRecognizer,
                   onChangePage: _onChangePage,
                 );
-                // final isLongPic = item.isLongPic;
-                // return CachedImage(
-                //   fadeInDuration: Duration.zero,
-                //   fadeOutDuration: Duration.zero,
-                //   // fit: isLongPic ? .fitWidth : null,
-                //   // alignment: isLongPic ? .topCenter : .center,
-                //   imageUrl: ImageUtils.thumbnailUrl(item.url, widget.quality),
-                //   placeholder: (_, _) => const SizedBox.expand(),
-                // );
               }
             }
             return child;

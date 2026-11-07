@@ -105,11 +105,6 @@ abstract final class LoginUtils {
   //   return const Uuid().v4().replaceAll('-', '');
   // }
 
-  // static String generateBuvid() {
-  //   String uuid = getUUID() + getUUID();
-  //   return 'XY${uuid.substring(0, 35).toUpperCase()}';
-  // }
-
   static String genDeviceId() {
     // https://github.com/bilive/bilive_client/blob/2873de0532c54832f5464a4c57325ad9af8b8698/bilive/lib/app_client.ts#L62
     final time = DateTime.now();
