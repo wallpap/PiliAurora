@@ -124,3 +124,5 @@ Windows 保活页面内存回归：先执行 `pwsh -File lib/scripts/patch.ps1 w
 `pages/member_feed/controller_test.dart` 覆盖九类空间列表的账号与入口隔离、分页失败重试及去重、舰队前三名、迟到分页、专栏文集快照、充电排行和 PGC 筛选；`common/widgets/feed_pagination_test.dart` 另检查通知模式沿用父级滚动控制器。
 
 `pages/search_results/controller_test.dart` 覆盖综合搜索分类与筛选隔离、推荐及主账号角色、综合卡片、串行分页、去重与移除、验证后原页重查、验证注册及提交的账号绑定与过期隔离、屏蔽过滤补页、离页以及分类回调。验证服务弹窗和真实视频跳转需登录后人工验收。
+
+`services/account_providers_test.dart` 通过真实的账号切换、删除、凭据替换、刷新和清空入口，检查主账号与推荐账号通知隔离，以及最后一个订阅释放后的清理。列表测试另检查 PGC 首页与分页使用同一推荐账号、分组刷新后拒绝旧草稿、面板内新建后继续保存，以及搜索分页失败时保留已移除项。

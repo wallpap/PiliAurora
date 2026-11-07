@@ -13,6 +13,7 @@ import 'package:pili_aurora/http/init.dart';
 import 'package:pili_aurora/models/common/account_type.dart';
 import 'package:pili_aurora/pages/search_panel/controller.dart';
 import 'package:pili_aurora/pages/search_panel/video/view.dart';
+import 'package:pili_aurora/pages/search_panel/all/view.dart';
 import 'package:pili_aurora/pages/search_result/view.dart';
 import 'package:pili_aurora/models/common/search/search_type.dart';
 import 'package:pili_aurora/http/search.dart';
@@ -288,6 +289,38 @@ void main() {
     );
   });
 
+  test('分页失败和重试保留请求期间移除的卡片', () async {
+    final provider = searchResultsProvider(query());
+    container.listen(provider, (_, _) {});
+    await dispatched(1);
+    requests.single.reply.complete(page(range(1, 20)));
+    await container.read(provider.future);
+    final notifier = container.read(provider.notifier);
+    final more = notifier.loadMore();
+    await dispatched(2);
+    notifier.remove(container.read(provider).requireValue.items.first);
+    requests.last.reply.complete({'code': -1, 'message': 'failed'});
+    await more;
+    final failed = container.read(provider).requireValue;
+    expect(failed.items, hasLength(19));
+    expect(failed.items.any((dynamic e) => e.aid == 1), isFalse);
+    expect(failed.nextPage, 2);
+    expect(failed.loadingMore, isFalse);
+    expect(failed.error, isNotNull);
+    final retry = notifier.loadMore(retry: true);
+    await dispatched(3);
+    requests.last.reply.complete(page(range(20, 20)));
+    await retry;
+    expect(
+      container
+          .read(provider)
+          .requireValue
+          .items
+          .any((dynamic e) => e.aid == 1),
+      isFalse,
+    );
+  });
+
   test('同 UID 新凭据切换和刷新丢弃旧分页，错误态保留值禁止分页', () async {
     final q = query();
     final provider = searchResultsProvider(q);
@@ -469,6 +502,50 @@ void main() {
     requests.single.reply.complete(page([1]));
     await Future<void>.delayed(Duration.zero);
     expect(requests, hasLength(1));
+  });
+
+  testWidgets('综合搜索缺少影视卡片时不保留影视区域高度', (tester) async {
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: const MaterialApp(
+          home: SearchAllPanel(
+            keyword: 'test',
+            searchType: SearchType.all,
+            tag: Object(),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+    await tester.runAsync(() async {
+      await dispatched(1);
+      requests.single.reply.complete({
+        'code': 0,
+        'data': {
+          'numResults': 1,
+          'result': [
+            {
+              'result_type': 'video',
+              'data': [
+                {...video(1), 'pubdate': 1},
+              ],
+            },
+          ],
+        },
+      });
+      await Future<void>.delayed(Duration.zero);
+    });
+    await tester.pumpAndSettle();
+    expect(find.text('video1'), findsOneWidget);
+    expect(
+      find.byWidgetPredicate(
+        (widget) => widget is SizedBox && widget.height == 158,
+      ),
+      findsNothing,
+    );
+    await tester.pumpWidget(const SizedBox());
   });
 
   testWidgets('视频筛选建立新查询，分类计数从有效快照回传', (tester) async {

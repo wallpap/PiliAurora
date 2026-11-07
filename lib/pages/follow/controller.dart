@@ -219,6 +219,7 @@ class FollowTagsNotifier extends AsyncNotifier<FollowTagsState> {
     Future<LoadingState<T>> Function(Account) send,
     List<FollowTag> Function(List<FollowTag>, T) apply, {
     bool reloadLists = false,
+    Object? nextSource,
   }) async {
     final before = state.value;
     final owner = ref;
@@ -241,7 +242,9 @@ class FollowTagsNotifier extends AsyncNotifier<FollowTagsState> {
         return const Error('账号已切换或页面已关闭');
       }
       if (result case Success(:final response)) {
-        state = AsyncData(FollowTagsState(apply(before.tags, response)));
+        state = AsyncData(
+          FollowTagsState(apply(before.tags, response), source: nextSource),
+        );
         if (reloadLists) owner.invalidate(followingProvider);
       } else {
         state = AsyncData(before);
@@ -255,16 +258,26 @@ class FollowTagsNotifier extends AsyncNotifier<FollowTagsState> {
     }
   }
 
-  Future<LoadingState<int>> create(String name, Object source) {
+  Future<LoadingState<({int id, Object source})>> create(
+    String name,
+    Object source,
+  ) async {
     name = name.trim();
     if (name.isEmpty || name.runes.length > 16) {
-      return Future.value(const Error('分组名称须为 1–16 个字符'));
+      return const Error('分组名称须为 1–16 个字符');
     }
-    return _write(
+    final nextSource = Object();
+    final result = await _write(
       source,
       (account) => MemberHttp.createFollowTag(name, account: account),
       (tags, id) => [...tags, FollowTag(id: id, name: name, count: 0)],
+      nextSource: nextSource,
     );
+    return switch (result) {
+      Success(:final response) => Success((id: response, source: nextSource)),
+      Error() => result,
+      _ => const Error('创建未完成'),
+    };
   }
 
   Future<LoadingState<void>> rename(int id, String name, Object source) {

@@ -79,7 +79,7 @@ class DanmakuPriorityRetention {
     var bytes = estimatedBytes + entry.bytes + (bucket == null ? 128 : 0);
     if (bucket != null && bucket.length >= maxPerBucket) {
       final worst = bucket.first;
-      if (compareDanmakuPriority(element, worst.element) >= 0) return;
+      if (_compare(entry, worst) <= 0) return;
       victims.add(worst);
       bytes -= worst.bytes;
     }
@@ -88,7 +88,7 @@ class DanmakuPriorityRetention {
         break;
       }
       if (victims.contains(worst)) continue;
-      if (compareDanmakuPriority(element, worst.element) >= 0) return;
+      if (_compare(entry, worst) <= 0) return;
       victims.add(worst);
       bytes -= worst.bytes;
       // 空桶回收的索引字节在提交时核算；预检保守计费。
@@ -114,18 +114,8 @@ class DanmakuPriorityRetention {
     add(index, element);
   }
 
-  void update(int index, {int? count, int? weight}) {
-    final entry = _byIndex[index];
-    if (entry == null) return;
-    if (count != null) entry.element.count = count;
-    if (weight == null || weight == entry.element.weight) return;
-    // 比较键变化前移出两棵树，避免有序索引失效。
-    _all.remove(entry);
-    _buckets[entry.bucket]!.remove(entry);
-    entry.element.weight = weight;
-    _all.add(entry);
-    _buckets[entry.bucket]!.add(entry);
-  }
+  void updateCount(int index, int count) =>
+      _byIndex[index]?.element.count = count;
 
   void _remove(_RetainedElement entry) {
     _all.remove(entry);

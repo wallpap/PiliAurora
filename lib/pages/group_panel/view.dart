@@ -28,6 +28,7 @@ class _GroupPanelState extends ConsumerState<GroupPanel> {
   late final _account = widget.account ?? ref.read(mainAccountProvider);
   late final _initial = Set<int>.from(widget.tags ?? const <int>[])..remove(0);
   late final _selected = Set<int>.of(_initial);
+  Object? _source;
   bool get _current => identical(_account, ref.read(mainAccountProvider));
   Future<void> _create() async {
     final before = ref.read(followTagsProvider);
@@ -35,7 +36,8 @@ class _GroupPanelState extends ConsumerState<GroupPanel> {
         before.isLoading ||
         before.hasError ||
         before.value == null ||
-        before.value!.isSaving) {
+        before.value!.isSaving ||
+        !identical(_source, before.value!.source)) {
       return;
     }
     final name = await showFollowTagNameDialog(context);
@@ -45,7 +47,17 @@ class _GroupPanelState extends ConsumerState<GroupPanel> {
         .create(name, before.requireValue.source);
     if (!mounted || !_current) return;
     if (result.isSuccess) {
-      setState(() => _selected.add(result.data));
+      final created = result.data;
+      if (!identical(
+        ref.read(followTagsProvider).value?.source,
+        created.source,
+      )) {
+        return;
+      }
+      setState(() {
+        _source = created.source;
+        _selected.add(created.id);
+      });
       SmartDialog.showToast('创建成功');
     } else {
       result.toast();
@@ -58,12 +70,13 @@ class _GroupPanelState extends ConsumerState<GroupPanel> {
         before.isLoading ||
         before.hasError ||
         before.value == null ||
-        before.value!.isSaving) {
+        before.value!.isSaving ||
+        !identical(_source, before.value!.source)) {
       return;
     }
     final result = await ref
         .read(followTagsProvider.notifier)
-        .assign(widget.mid, _selected, before.requireValue.source);
+        .assign(widget.mid, _selected, _source!);
     if (!mounted || !_current) return;
     if (result.isSuccess) {
       SmartDialog.showToast('保存成功');
@@ -78,8 +91,17 @@ class _GroupPanelState extends ConsumerState<GroupPanel> {
     final account = ref.watch(mainAccountProvider);
     final snapshot = ref.watch(followTagsProvider);
     final current = identical(account, _account);
+    if (current && !snapshot.isLoading && !snapshot.hasError) {
+      _source ??= snapshot.value?.source;
+    }
+    final stale =
+        _source != null &&
+        !snapshot.isLoading &&
+        !snapshot.hasError &&
+        !identical(_source, snapshot.value?.source);
     final ready =
         current &&
+        !stale &&
         !snapshot.isLoading &&
         !snapshot.hasError &&
         snapshot.value?.isSaving == false;
@@ -106,6 +128,8 @@ class _GroupPanelState extends ConsumerState<GroupPanel> {
         Expanded(
           child: !current
               ? const Center(child: Text('账号已切换，请重新打开'))
+              : stale
+              ? const Center(child: Text('分组已更新，请重新打开'))
               : snapshot.when(
                   skipLoadingOnRefresh: false,
                   skipLoadingOnReload: false,

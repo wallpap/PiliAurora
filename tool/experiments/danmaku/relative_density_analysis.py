@@ -54,7 +54,10 @@ def summarize(root: Path) -> dict:
             "name": name, "merge": merge, "cap": cap,
             "windows": sorted(windows[key]),
             "displayed": int(values["displayed"]),
-            "bucketTopNMissingRate": values["missingSlots"] / values["displayed"],
+            "bucketTopNMissingRate": (
+                values["missingSlots"] / values["displayed"]
+                if values["displayed"] else 0
+            ),
             "weights": {
                 str(w): {
                     "input": int(values[f"{w}:input"]),

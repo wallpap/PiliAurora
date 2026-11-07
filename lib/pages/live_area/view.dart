@@ -22,50 +22,60 @@ class LiveAreaPage extends ConsumerStatefulWidget {
   ConsumerState<LiveAreaPage> createState() => _LiveAreaPageState();
 }
 
+enum _DraftPhase { editing, saving }
+
+class _LiveAreaDraft {
+  _LiveAreaDraft(this.source, this.items, this.phase);
+  final Object source;
+  final List<AreaItem> items;
+  final _DraftPhase phase;
+}
+
 class _LiveAreaPageState extends ConsumerState<LiveAreaPage> {
-  Object? _source;
-  List<AreaItem>? _draft;
-  Object? _savingSource;
+  _LiveAreaDraft? _draft;
   bool _saving(LiveAreaPreferences? data) =>
-      data != null && identical(_savingSource, data.source);
+      _editing(data) && _draft!.phase == _DraftPhase.saving;
   bool _editing(LiveAreaPreferences? data) =>
-      data != null && identical(_source, data.source) && _draft != null;
+      data != null && identical(_draft?.source, data.source);
   Future<void> _edit(LiveAreaPreferences data) async {
     if (_saving(data)) return;
     if (!_editing(data)) {
       setState(() {
-        _source = data.source;
-        _draft = [...data.items];
+        _draft = _LiveAreaDraft(data.source, [
+          ...data.items,
+        ], _DraftPhase.editing);
       });
       return;
     }
     final account = ref.read(mainAccountProvider);
-    setState(() => _savingSource = data.source);
+    final saving = _LiveAreaDraft(
+      data.source,
+      _draft!.items,
+      _DraftPhase.saving,
+    );
+    setState(() => _draft = saving);
     final result = await ref
         .read(liveAreaPreferencesProvider.notifier)
-        .save(data.source, _draft!);
-    if (!mounted || !identical(_savingSource, data.source)) return;
-    if (!identical(ref.read(mainAccountProvider), account) ||
-        !identical(_source, data.source)) {
+        .save(data.source, saving.items);
+    if (!mounted || !identical(_draft, saving)) return;
+    if (!identical(ref.read(mainAccountProvider), account)) {
       return;
     }
     setState(() {
-      _savingSource = null;
-      if (result.isSuccess) {
-        _source = null;
-        _draft = null;
-      }
+      _draft = result.isSuccess
+          ? null
+          : _LiveAreaDraft(saving.source, saving.items, _DraftPhase.editing);
     });
     if (!result.isSuccess) result.toast();
   }
 
   void _toggle(AreaItem item) {
-    if ((_savingSource != null && identical(_savingSource, _source)) ||
-        item.id == 0) {
+    final draft = _draft;
+    if (draft == null || draft.phase != _DraftPhase.editing || item.id == 0) {
       return;
     }
     setState(() {
-      if (!_draft!.remove(item)) _draft!.add(item);
+      if (!draft.items.remove(item)) draft.items.add(item);
     });
   }
 
@@ -87,7 +97,7 @@ class _LiveAreaPageState extends ConsumerState<LiveAreaPage> {
         ? prefs.value
         : null;
     final editing = _editing(data);
-    final items = editing ? _draft! : data?.items ?? <AreaItem>[];
+    final items = editing ? _draft!.items : data?.items ?? <AreaItem>[];
     final padding = MediaQuery.viewPaddingOf(context);
     final theme = Theme.of(context);
     return SimpleScaffold(
@@ -135,8 +145,11 @@ class _LiveAreaPageState extends ConsumerState<LiveAreaPage> {
                           if (_saving(data) || data.saving) return;
                           if (!editing) {
                             setState(() {
-                              _source = data.source;
-                              _draft = [...data.items];
+                              _draft = _LiveAreaDraft(
+                                data.source,
+                                [...data.items],
+                                _DraftPhase.editing,
+                              );
                             });
                           }
                         },
@@ -145,9 +158,9 @@ class _LiveAreaPageState extends ConsumerState<LiveAreaPage> {
                             return;
                           }
                           setState(
-                            () => _draft!.insert(
+                            () => _draft!.items.insert(
                               newIndex,
-                              _draft!.removeAt(oldIndex),
+                              _draft!.items.removeAt(oldIndex),
                             ),
                           );
                         },

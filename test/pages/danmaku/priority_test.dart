@@ -18,6 +18,21 @@ DanmakuElem _dm(
 );
 
 void main() {
+  test('promoted earlier representatives win equal-weight ties', () {
+    for (final sameBucket in [true, false]) {
+      final retained =
+          DanmakuPriorityRetention(
+              maxElements: sameBucket ? 10 : 1,
+              maxPerBucket: 1,
+              maxBytes: 10000,
+            )
+            ..add(0, _dm(0))
+            ..add(1, _dm(1, weight: 9, progress: sameBucket ? 0 : 100))
+            ..promote(0, _dm(0, weight: 9));
+      expect(retained.buckets.values.expand((e) => e).single.content, '0');
+    }
+  });
+
   test('bounded selection matches stable priority sort on shuffled inputs', () {
     final random = Random(8);
     for (var trial = 0; trial < 50; trial++) {
@@ -101,9 +116,9 @@ void main() {
             ..promote(0, _dm(0, weight: 11)..count = 8);
       expect(retained.buckets[0]!.single.content, '0');
       expect(retained.buckets[0]!.single.count, 8);
-      retained
-        ..update(0, weight: 10, count: 9)
-        ..add(2, _dm(2, weight: 11));
+      retained.updateCount(0, 9);
+      expect(retained.buckets[0]!.single.count, 9);
+      retained.add(2, _dm(2, weight: 12));
       expect(retained.buckets[0]!.single.content, '2');
     },
   );

@@ -64,7 +64,7 @@ class _SearchAllPanelState
             child: SearchAllUserItem(item: e),
           );
         }),
-        if (controller.searchMedia != null) ...[
+        if (controller.searchMedia?.isNotEmpty == true) ...[
           _buildPgc(controller.searchMedia!),
           SliverToBoxAdapter(
             child: Divider(
@@ -100,9 +100,4 @@ class _SearchAllPanelState
     }
     return SliverToBoxAdapter(child: SizedBox(height: 158, child: child));
   }
-
-  late final pgcGridDelegate = SliverGridDelegateWithMaxCrossAxisExtent(
-    maxCrossAxisExtent: Grid.smallCardWidth * 2,
-    mainAxisExtent: 160,
-  );
 }

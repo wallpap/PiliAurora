@@ -602,7 +602,7 @@ class PlDanmakuController implements DanmakuTimelineSource {
           }
         }
         for (final update in delta.counts.entries) {
-          retained.update(update.key, count: update.value);
+          retained.updateCount(update.key, update.value);
         }
       },
     );

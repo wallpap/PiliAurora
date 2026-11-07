@@ -59,7 +59,7 @@ class PgcResultsNotifier extends AsyncNotifier<PgcResultsState> {
   final PgcIndexQuery query;
   @override
   Future<PgcResultsState> build() =>
-      _page(ref.watch(mainAccountProvider), null);
+      _page(ref.watch(recommendAccountProvider), null);
   Future<PgcResultsState> _page(
     Account account,
     PgcResultsState? before,

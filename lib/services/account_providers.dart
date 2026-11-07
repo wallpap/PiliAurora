@@ -1,4 +1,5 @@
 import 'package:pili_aurora/models/common/account_type.dart';
+import 'package:flutter/foundation.dart' show ValueListenable;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pili_aurora/utils/accounts.dart';
 import 'package:pili_aurora/utils/accounts/account.dart';
@@ -11,9 +12,10 @@ final mainAccountProvider = NotifierProvider<MainAccountNotifier, Account>(
 
 class MainAccountNotifier extends Notifier<Account> {
   Account get currentAccount => Accounts.main;
+  ValueListenable<int> get accountChanges => Accounts.mainChanges;
   @override
   Account build() {
-    final accounts = Accounts.mainChanges;
+    final accounts = accountChanges;
     void changed() => state = currentAccount;
     accounts.addListener(changed);
     ref.onDispose(() => accounts.removeListener(changed));
@@ -35,4 +37,6 @@ final recommendAccountProvider =
 class RecommendAccountNotifier extends MainAccountNotifier {
   @override
   Account get currentAccount => Accounts.get(AccountType.recommend);
+  @override
+  ValueListenable<int> get accountChanges => Accounts.recommendChanges;
 }

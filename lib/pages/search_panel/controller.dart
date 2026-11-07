@@ -235,7 +235,7 @@ class SearchResultsNotifier extends AsyncNotifier<SearchResultsState> {
       if (_current(owner, account, main)) {
         state = before == null
             ? AsyncError(error, stack)
-            : AsyncData(before.operation(error: error));
+            : AsyncData(state.requireValue.operation(error: error));
       }
     }
   }

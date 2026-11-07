@@ -393,6 +393,45 @@ void main() {
     );
   });
 
+  test('PGC 首页和分页跟随推荐账号，切号丢弃旧分页', () async {
+    final recommended = login('recommend');
+    Accounts.accountMode[AccountType.recommend.index] = recommended;
+    final provider = pgcResultsProvider((
+      indexType: null,
+      filters: '{}',
+      owner: Object(),
+    ));
+    container.listen(provider, (_, _) {});
+    await dispatched(1);
+    expect(requests.single.options.extra['account'], same(recommended));
+    Map<String, dynamic> results(int id) => {
+      'code': 0,
+      'data': {
+        'list': [
+          {'season_id': id},
+        ],
+        'has_next': 1,
+      },
+    };
+    requests.single.reply.complete(results(1));
+    await container.read(provider.future);
+    final more = container.read(provider.notifier).loadMore();
+    await dispatched(2);
+    expect(requests.last.options.extra['account'], same(recommended));
+    final next = login('next');
+    Accounts.accountMode[AccountType.recommend.index] = next;
+    await Accounts.refresh();
+    await container.pump();
+    await dispatched(3);
+    expect(requests.last.options.extra['account'], same(next));
+    expect(requests.last.options.queryParameters['page'], 1);
+    requests.last.reply.complete(results(99));
+    await container.read(provider.future);
+    requests[1].reply.complete(results(2));
+    await more;
+    expect(container.read(provider).requireValue.items.single.seasonId, 99);
+  });
+
   test('PGC 条件与筛选查询隔离，分页失败重试保持筛选及账号', () async {
     container.listen(pgcConditionsProvider(null), (_, _) {});
     await dispatched(1);

@@ -73,6 +73,7 @@ fvm flutter test --no-pub tool/experiments/danmaku/render_density_test.dart
 ```powershell
 fvm flutter test --no-pub tool/experiments/danmaku/density_metrics_test.dart tool/experiments/danmaku/retention_budget_test.dart
 python tool/experiments/danmaku/relative_density_analysis.py build/danmaku-relative-20261107
+python -m unittest discover -s tool/experiments/danmaku -p relative_density_analysis_test.py
 ```
 
 ### 2026-11-07 配置选择

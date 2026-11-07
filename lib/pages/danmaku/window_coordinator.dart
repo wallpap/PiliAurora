@@ -47,13 +47,9 @@ class DanmakuWindowCoordinator<T> {
   int _generation = -1;
   int _nextBucketUs = 0;
   int? _dirtyUs;
-  List<DanmakuWindowContent<T>>? _pending;
-  int _offset = 0;
-  List<int> _pendingFrontiers = const [];
-  bool _pendingLoaded = false;
+  _PreparationBatch<T>? _pending;
   bool _requesting = false;
-  bool _refilling = false;
-  int _targetUntilUs = 0;
+  int? _refillUntilUs;
   int? _lastRequestUs;
   bool _disposed = false;
   final _invalidations = <({int start, int? end, int revision})>[];
@@ -61,7 +57,7 @@ class DanmakuWindowCoordinator<T> {
   bool _needsPreparation = false;
   bool get needsPreparation => !_disposed && _needsPreparation;
   double _effectiveRate = 1;
-  int? get nextPreparationUs => _disposed || _refilling
+  int? get nextPreparationUs => _disposed || _refillUntilUs != null
       ? null
       : _nextBucketUs -
             (refillUs * _effectiveRate).clamp(1, 30000000).ceil() +
@@ -177,7 +173,7 @@ class DanmakuWindowCoordinator<T> {
         .ceil();
     if (_effectiveRate != effectiveRate) {
       _effectiveRate = effectiveRate;
-      _refilling = false;
+      _refillUntilUs = null;
     }
     _needsPreparation = false;
     if (_lastMediaUs != null &&
@@ -191,7 +187,7 @@ class DanmakuWindowCoordinator<T> {
       _nextBucketUs = renderer.validFromUs ~/ _bucketUs * _bucketUs;
       _pending = null;
       _dirtyUs = null;
-      _refilling = false;
+      _refillUntilUs = null;
       if (!_requesting) _lastRequestUs = null;
     }
     final cutoff = math.min(
@@ -206,21 +202,19 @@ class DanmakuWindowCoordinator<T> {
       _nextBucketUs = math.min(_nextBucketUs, _dirtyUs!);
       _dirtyUs = null;
       _pending = null;
-      _refilling = true;
-      _targetUntilUs = math.max(_targetUntilUs, mediaUs + mediaAheadUs);
+      _refillUntilUs = math.max(_refillUntilUs ?? 0, mediaUs + mediaAheadUs);
     }
-    if (!_refilling) {
+    if (_refillUntilUs == null) {
       if (_pending == null && _nextBucketUs - mediaUs >= mediaRefillUs) return;
-      _refilling = true;
-      _targetUntilUs = mediaUs + mediaAheadUs;
+      _refillUntilUs = mediaUs + mediaAheadUs;
     }
     if (!_requesting &&
         (_lastRequestUs == null ||
             (mediaUs - _lastRequestUs!).abs() >= _bucketUs)) {
       _lastRequestUs = mediaUs;
-      unawaited(_request(mediaUs, _targetUntilUs));
+      unawaited(_request(mediaUs, _refillUntilUs!));
     }
-    final untilUs = _targetUntilUs;
+    final untilUs = _refillUntilUs!;
     var remaining = preparePerFrame;
     var buckets = 0;
     while (remaining > 0 && _nextBucketUs < untilUs && buckets++ < 4) {
@@ -237,7 +231,6 @@ class DanmakuWindowCoordinator<T> {
           maxEntriesPerBucket: maxCandidatesPerBucket,
         );
         if (!range.isLoaded && range.entries.isEmpty) return;
-        _pendingLoaded = range.isLoaded && !blocked;
         final occurrences = <Object, int>{};
         final eligible = range.entries
             .where(
@@ -296,23 +289,19 @@ class DanmakuWindowCoordinator<T> {
             );
           }
         }
-        _pending = candidates;
-        _pendingFrontiers = List.filled(candidates.length + 1, endUs);
-        for (var i = candidates.length - 1; i >= 0; i--) {
-          _pendingFrontiers[i] = math.min(
-            candidates[i].sourceUs,
-            _pendingFrontiers[i + 1],
-          );
-        }
-        _offset = 0;
+        _pending = _PreparationBatch(
+          candidates,
+          endUs: endUs,
+          loaded: range.isLoaded && !blocked,
+        );
       }
       final pending = _pending!;
-      final end = math.min(_offset + remaining, pending.length);
-      final complete = end == pending.length;
+      final end = math.min(pending.offset + remaining, pending.items.length);
+      final complete = end == pending.items.length;
       final frontier = complete
-          ? (_pendingLoaded ? endUs : renderer.validUntilUs)
-          : _pendingFrontiers[end];
-      final batch = pending.sublist(_offset, end).indexed.toList()
+          ? (pending.loaded ? endUs : renderer.validUntilUs)
+          : pending.frontiers[end];
+      final batch = pending.items.sublist(pending.offset, end).indexed.toList()
         ..sort((a, b) {
           final time = a.$2.sourceUs.compareTo(b.$2.sourceUs);
           return time != 0 ? time : a.$1.compareTo(b.$1);
@@ -326,18 +315,18 @@ class DanmakuWindowCoordinator<T> {
       )) {
         return;
       }
-      remaining -= end - _offset;
-      _offset = end;
+      remaining -= end - pending.offset;
+      pending.offset = end;
       if (!complete) {
         _needsPreparation = true;
         return;
       }
       _pending = null;
-      if (!_pendingLoaded) return;
+      if (!pending.loaded) return;
       _nextBucketUs = endUs;
     }
-    if (_nextBucketUs >= untilUs && _pending == null) _refilling = false;
-    _needsPreparation = _refilling;
+    if (_nextBucketUs >= untilUs && _pending == null) _refillUntilUs = null;
+    _needsPreparation = _refillUntilUs != null;
   }
 
   void dispose() {
@@ -346,4 +335,19 @@ class DanmakuWindowCoordinator<T> {
     unawaited(_subscription.cancel());
     unawaited(_updates.close());
   }
+}
+
+/// 候选、完整覆盖和消费位置属于同一批次，失效时一起丢弃。
+class _PreparationBatch<T> {
+  _PreparationBatch(this.items, {required int endUs, required this.loaded})
+    : frontiers = List.filled(items.length + 1, endUs) {
+    for (var i = items.length - 1; i >= 0; i--) {
+      frontiers[i] = math.min(items[i].sourceUs, frontiers[i + 1]);
+    }
+  }
+
+  final List<DanmakuWindowContent<T>> items;
+  final List<int> frontiers;
+  final bool loaded;
+  int offset = 0;
 }

@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:get/get.dart';
 import 'package:hive_ce/hive.dart';
 import 'package:material_ui/material_ui.dart';
@@ -317,7 +318,9 @@ void main() {
       'code': 0,
       'data': {'tagid': 12},
     });
-    expect((await create).data, 12);
+    final created = (await create).data;
+    expect(created.id, 12);
+    expect(created.source, same(groups().source));
     expect(original.tags, hasLength(4));
     expect(groups().tags, hasLength(5));
     final rename = notifier.rename(12, '新名称', groups().source);
@@ -592,6 +595,110 @@ void main() {
       tester.widget<FilledButton>(find.byType(FilledButton)).onPressed,
       isNull,
     );
+    await tester.pumpWidget(const SizedBox());
+  });
+
+  testWidgets('分组面板刷新后拒绝旧草稿，迟到点击也不发送保存', (tester) async {
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: MaterialApp(
+          home: Scaffold(
+            body: GroupPanel(mid: 1, tags: const [10], account: account),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+    await tester.runAsync(() async {
+      await dispatched(1);
+      requests.single.reply.complete(tags());
+      await Future<void>.delayed(Duration.zero);
+    });
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('分组10 (20)'));
+    await tester.pumpAndSettle();
+    final save = tester
+        .widget<FilledButton>(find.byType(FilledButton))
+        .onPressed!;
+    container.invalidate(followTagsProvider);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+    await tester.runAsync(() async {
+      await dispatched(2);
+      requests.last.reply.complete(tags());
+      await Future<void>.delayed(Duration.zero);
+    });
+    await tester.pumpAndSettle();
+    await tester.runAsync(() async {
+      save();
+      await Future<void>.delayed(Duration.zero);
+    });
+    await tester.pumpAndSettle();
+    expect(find.text('分组已更新，请重新打开'), findsOneWidget);
+    expect(
+      tester.widget<FilledButton>(find.byType(FilledButton)).onPressed,
+      isNull,
+    );
+    expect(requests, hasLength(2));
+    await tester.pumpWidget(const SizedBox());
+  });
+
+  testWidgets('分组面板可沿自身创建结果继续编辑和保存', (tester) async {
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: GetMaterialApp(
+          builder: FlutterSmartDialog.init(),
+          home: Scaffold(
+            body: GroupPanel(mid: 1, tags: const [10], account: account),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+    await tester.runAsync(() async {
+      await dispatched(1);
+      requests.single.reply.complete(tags());
+      await Future<void>.delayed(Duration.zero);
+    });
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('新建分组'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextFormField), '新分组');
+    await tester.tap(find.text('确认'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+    await tester.runAsync(() async {
+      await dispatched(2);
+      requests.last.reply.complete({
+        'code': 0,
+        'data': {'tagid': 12},
+      });
+      await Future<void>.delayed(Duration.zero);
+    });
+    await tester.pumpAndSettle();
+    expect(find.text('分组已更新，请重新打开'), findsNothing);
+    expect(find.text('新分组 (1)'), findsOneWidget);
+    expect(
+      tester.widget<FilledButton>(find.byType(FilledButton)).onPressed,
+      isNotNull,
+    );
+    await tester.tap(find.widgetWithText(FilledButton, '保存'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+    await tester.runAsync(() async {
+      await dispatched(3);
+      expect((requests.last.options.data as Map)['tagids'], '10,12');
+      requests.last.reply.complete({'code': -1, 'message': 'failed'});
+      await Future<void>.delayed(Duration.zero);
+    });
+    await tester.pumpAndSettle();
+    final dismissal = SmartDialog.dismiss(status: SmartStatus.allToast);
+    await tester.pumpAndSettle();
+    await dismissal;
     await tester.pumpWidget(const SizedBox());
   });
 
