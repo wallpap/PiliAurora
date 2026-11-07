@@ -7,6 +7,8 @@ class LiveFollowData {
   List<LiveFollowItem>? list;
   int? count;
   int? liveCount;
+  // 分页按原始响应推进，离线条目过滤后空页不代表远端已经结束。
+  int? sourceCount;
 
   LiveFollowData({
     this.title,
@@ -15,13 +17,16 @@ class LiveFollowData {
     this.list,
     this.count,
     this.liveCount,
+    this.sourceCount,
   });
 
   LiveFollowData.fromJson(Map<String, dynamic> json) {
     title = json['title'] as String?;
     pageSize = json['pageSize'] as int?;
     totalPage = json['totalPage'] as int?;
-    list = (json['list'] as List<dynamic>?)
+    final source = json['list'] as List<dynamic>?;
+    sourceCount = source?.length ?? 0;
+    list = source
         ?.cast<Map<String, dynamic>>()
         .where((i) => i['live_status'] == 1)
         .map(LiveFollowItem.fromJson)

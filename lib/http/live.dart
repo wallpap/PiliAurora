@@ -247,7 +247,10 @@ abstract final class LiveHttp {
     }
   }
 
-  static Future<LoadingState<LiveFollowData>> liveFollow(int page) async {
+  static Future<LoadingState<LiveFollowData>> liveFollow(
+    int page, {
+    required Account account,
+  }) async {
     final res = await Request().get(
       Api.liveFollow,
       queryParameters: {
@@ -256,6 +259,7 @@ abstract final class LiveHttp {
         'ignoreRecord': 1,
         'hit_ab': true,
       },
+      options: Options(extra: {'account': account}),
     );
     if (res.data['code'] == 0) {
       return Success(LiveFollowData.fromJson(res.data['data']));

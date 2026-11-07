@@ -1,53 +1,90 @@
 import 'package:pili_aurora/common/skeleton/video_card_v.dart';
 import 'package:pili_aurora/common/sliver_single_child_delegate.dart';
 import 'package:pili_aurora/common/style.dart';
+import 'package:pili_aurora/common/widgets/feed_pagination.dart';
 import 'package:pili_aurora/common/widgets/flutter/refresh_indicator.dart';
 import 'package:pili_aurora/common/widgets/loading_widget/http_error.dart';
 import 'package:pili_aurora/common/widgets/scaffold/simple_scaffold.dart';
-import 'package:pili_aurora/http/loading_state.dart';
-import 'package:pili_aurora/models/remote/live/live_follow/item.dart';
+import 'package:pili_aurora/http/loading_state.dart' show Error;
 import 'package:pili_aurora/pages/live_follow/controller.dart';
 import 'package:pili_aurora/pages/live_follow/widgets/live_item_follow.dart';
 import 'package:pili_aurora/utils/grid.dart';
-import 'package:get/get.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:material_ui/material_ui.dart';
 
-class LiveFollowPage extends StatefulWidget {
+class LiveFollowPage extends ConsumerStatefulWidget {
   const LiveFollowPage({super.key});
 
   @override
-  State<LiveFollowPage> createState() => _LiveFollowPageState();
+  ConsumerState<LiveFollowPage> createState() => _LiveFollowPageState();
 }
 
-class _LiveFollowPageState extends State<LiveFollowPage> {
-  final _controller = Get.put(LiveFollowController());
+class _LiveFollowPageState extends ConsumerState<LiveFollowPage> {
+  final _scrollController = ScrollController();
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _reload() async {
+    await AsyncValue.guard(() => ref.refresh(liveFollowProvider.future));
+  }
 
   @override
   Widget build(BuildContext context) {
     final padding = MediaQuery.viewPaddingOf(context);
+    final snapshot = ref.watch(liveFollowProvider);
+    final count = snapshot.isLoading || snapshot.hasError
+        ? null
+        : snapshot.value?.liveCount;
     return SimpleScaffold(
       appBar: AppBar(
-        title: Obx(
-          () {
-            final count = _controller.count.value;
-            return Text(count != null ? '$count人正在直播' : '关注直播');
-          },
-        ),
+        title: Text(count != null ? '$count人正在直播' : '关注直播'),
       ),
-      body: refreshIndicator(
-        onRefresh: _controller.onRefresh,
-        child: CustomScrollView(
-          physics: const AlwaysScrollableScrollPhysics(),
-          slivers: [
-            SliverPadding(
-              padding: EdgeInsets.only(
-                left: Style.safeSpace + padding.left,
-                right: Style.safeSpace + padding.right,
-                bottom: padding.bottom + 100,
+      body: FeedPagination(
+        controller: _scrollController,
+        dataRevision: snapshot,
+        dataSource: snapshot.value?.source,
+        canLoadMore: () {
+          final current = ref.read(liveFollowProvider);
+          return !current.isLoading &&
+              !current.hasError &&
+              (current.value?.canLoadMore ?? false);
+        },
+        onLoadMore: ref.read(liveFollowProvider.notifier).loadMore,
+        child: refreshIndicator(
+          onRefresh: _reload,
+          child: CustomScrollView(
+            controller: _scrollController,
+            physics: const AlwaysScrollableScrollPhysics(),
+            slivers: [
+              SliverPadding(
+                padding: EdgeInsets.only(
+                  left: Style.safeSpace + padding.left,
+                  right: Style.safeSpace + padding.right,
+                  bottom: padding.bottom + 100,
+                ),
+                sliver: snapshot.when(
+                  skipLoadingOnRefresh: false,
+                  skipLoadingOnReload: false,
+                  loading: () => SliverGrid(
+                    gridDelegate: gridDelegate,
+                    delegate: const SliverSingleChildDelegate(
+                      count: 10,
+                      child: VideoCardVSkeleton(),
+                    ),
+                  ),
+                  error: (error, _) => HttpError(
+                    errMsg: error is Error ? error.toString() : '加载失败，请重试',
+                    onReload: _reload,
+                  ),
+                  data: _buildBody,
+                ),
               ),
-              sliver: Obx(() => _buildBody(_controller.loadingState.value)),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -61,34 +98,32 @@ class _LiveFollowPageState extends State<LiveFollowPage> {
     mainAxisExtent: MediaQuery.textScalerOf(context).scale(90),
   );
 
-  Widget _buildBody(LoadingState<List<LiveFollowItem>?> loadingState) {
-    return switch (loadingState) {
-      Loading() => SliverGrid(
-        gridDelegate: gridDelegate,
-        delegate: const SliverSingleChildDelegate(
-          count: 10,
-          child: VideoCardVSkeleton(),
+  Widget _buildBody(LiveFollowState snapshot) => SliverMainAxisGroup(
+    slivers: [
+      if (snapshot.items.isNotEmpty)
+        SliverGrid.builder(
+          gridDelegate: gridDelegate,
+          itemBuilder: (context, index) =>
+              LiveCardVFollow(liveItem: snapshot.items[index]),
+          itemCount: snapshot.items.length,
+        )
+      else if (!snapshot.hasMore && snapshot.pageError == null)
+        HttpError(onReload: _reload),
+      if (snapshot.isLoadingMore ||
+          (snapshot.items.isEmpty &&
+              snapshot.hasMore &&
+              snapshot.pageError == null))
+        const SliverToBoxAdapter(child: LinearProgressIndicator()),
+      if (snapshot.pageError != null)
+        SliverToBoxAdapter(
+          child: Center(
+            child: TextButton(
+              onPressed: () =>
+                  ref.read(liveFollowProvider.notifier).loadMore(retry: true),
+              child: Text(snapshot.pageError!),
+            ),
+          ),
         ),
-      ),
-      Success(:final response) =>
-        response != null && response.isNotEmpty
-            ? SliverGrid.builder(
-                gridDelegate: gridDelegate,
-                itemBuilder: (context, index) {
-                  if (index == response.length - 1) {
-                    _controller.onLoadMore();
-                  }
-                  return LiveCardVFollow(
-                    liveItem: response[index],
-                  );
-                },
-                itemCount: response.length,
-              )
-            : HttpError(onReload: _controller.onReload),
-      Error(:final errMsg) => HttpError(
-        errMsg: errMsg,
-        onReload: _controller.onReload,
-      ),
-    };
-  }
+    ],
+  );
 }
