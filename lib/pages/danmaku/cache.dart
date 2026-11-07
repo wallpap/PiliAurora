@@ -5,6 +5,7 @@ import 'package:pili_aurora/pages/danmaku/priority.dart';
 
 import 'package:pili_aurora/grpc/bilibili/community/service/dm/v1.pb.dart';
 import 'package:pili_aurora/utils/danmaku_utils.dart';
+import 'package:pili_aurora/utils/extension/iterable_ext.dart';
 import 'package:pili_aurora/pages/danmaku/timeline_range.dart';
 import 'package:pili_aurora/pages/danmaku/element_size.dart';
 
@@ -75,8 +76,14 @@ class DanmakuCache {
     var bucket = _buckets.firstKeyAfter(startUs ~/ 100000 - 1);
     while (bucket != null && bucket * 100000 < endUs) {
       final items = _buckets[bucket]!;
-      final lower = _lowerBound(items, startUs);
-      final upper = _lowerBound(items, endUs);
+      final lower = items.lowerBoundByKey(
+        (item) => item.progress * 1000,
+        startUs,
+      );
+      final upper = items.lowerBoundByKey(
+        (item) => item.progress * 1000,
+        endUs,
+      );
       final selected = selectDanmakuPriority(
         items.sublist(lower, upper),
         maxEntriesPerBucket ?? upper - lower,
@@ -93,20 +100,6 @@ class DanmakuCache {
       entries: entries,
       coverage: coverage,
     );
-  }
-
-  static int _lowerBound(List<DanmakuElem> items, int mediaUs) {
-    var lower = 0;
-    var upper = items.length;
-    while (lower < upper) {
-      final middle = (lower + upper) >> 1;
-      if (items[middle].progress * 1000 < mediaUs) {
-        lower = middle + 1;
-      } else {
-        upper = middle;
-      }
-    }
-    return lower;
   }
 
   static List<DanmakuElem> _ordered(List<DanmakuElem> items) {
