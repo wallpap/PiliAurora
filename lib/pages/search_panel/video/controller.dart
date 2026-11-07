@@ -1,16 +1,15 @@
 import 'dart:math';
 
-import 'package:pili_aurora/http/loading_state.dart';
 import 'package:pili_aurora/models/common/search/video_search_type.dart';
 import 'package:pili_aurora/models/search/result.dart';
 import 'package:pili_aurora/pages/search/widgets/search_text.dart';
+import 'package:pili_aurora/pages/search_panel/filter_controller.dart';
 import 'package:pili_aurora/pages/search_panel/controller.dart';
 import 'package:pili_aurora/utils/app_scheme.dart';
 import 'package:pili_aurora/utils/date_utils.dart';
 import 'package:pili_aurora/utils/extension/context_ext.dart';
 import 'package:pili_aurora/utils/id_utils.dart';
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
-import 'package:get/get.dart';
 import 'package:material_ui/material_ui.dart';
 
 mixin SearchVideoMixin on SearchVideoController {
@@ -19,25 +18,20 @@ mixin SearchVideoMixin on SearchVideoController {
   @override
   void onInit() {
     super.onInit();
-    _jump2Video();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!isClosed) _jump2Video();
+    });
   }
 
   @override
-  bool customHandleResponse(bool isRefresh, Success<SearchVideoData> response) {
-    if (isRefresh && !_hasJump2Video) {
+  void onResults(SearchResultsState data) {
+    if (!_hasJump2Video) {
       _hasJump2Video = true;
-      _onPushDetail(response.response.list);
-    }
-    return super.customHandleResponse(isRefresh, response);
-  }
-
-  void _onPushDetail(List<SearchVideoItemModel>? resultList) {
-    try {
       final aid = int.tryParse(keyword);
-      if (aid != null && resultList?.firstOrNull?.aid == aid) {
+      if (aid != null && data.firstAid == aid) {
         PiliScheme.videoPush(aid, null, showDialog: false);
       }
-    } catch (_) {}
+    }
   }
 
   void _jump2Video() {
@@ -73,12 +67,7 @@ class SearchVideoController
     pubEndDate = DateTime(now.year, now.month, now.day, 23, 59, 59);
   }
 
-  @override
-  List<SearchVideoItemModel>? getDataList(SearchVideoData response) {
-    return response.list;
-  }
-
-  final Rx<ArchiveFilterType> selectedType = ArchiveFilterType.totalrank.obs;
+  ArchiveFilterType selectedType = ArchiveFilterType.totalrank;
   VideoPubTimeType? pubTimeType = VideoPubTimeType.all;
   late DateTime pubBeginDate;
   late DateTime pubEndDate;
@@ -112,7 +101,7 @@ class SearchVideoController
                   firstDate: isFirst ? DateTime(2009, 6, 26) : pubBeginDate,
                   lastDate: isFirst ? pubEndDate : DateTime.now(),
                 ).then((selectedDate) {
-                  if (selectedDate != null) {
+                  if (!isClosed && context.mounted && selectedDate != null) {
                     if (isFirst) {
                       customPubBeginDate = true;
                       pubBeginDate = selectedDate;

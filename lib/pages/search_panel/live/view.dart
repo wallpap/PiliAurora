@@ -1,12 +1,12 @@
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pili_aurora/common/skeleton/video_card_v.dart';
 import 'package:pili_aurora/common/sliver_single_child_delegate.dart';
 import 'package:pili_aurora/common/style.dart';
 import 'package:pili_aurora/models/search/result.dart';
-import 'package:pili_aurora/pages/search_panel/controller.dart';
+import 'package:pili_aurora/pages/search_panel/filter_controller.dart';
 import 'package:pili_aurora/pages/search_panel/live/widgets/item.dart';
 import 'package:pili_aurora/pages/search_panel/view.dart';
 import 'package:pili_aurora/utils/grid.dart';
-import 'package:get/get.dart';
 import 'package:material_ui/material_ui.dart';
 
 class SearchLivePanel extends CommonSearchPanel {
@@ -15,10 +15,12 @@ class SearchLivePanel extends CommonSearchPanel {
     required super.keyword,
     required super.tag,
     required super.searchType,
+    super.toTop,
+    super.onCount,
   });
 
   @override
-  State<SearchLivePanel> createState() => _SearchLivePanelState();
+  ConsumerState<SearchLivePanel> createState() => _SearchLivePanelState();
 }
 
 class _SearchLivePanelState
@@ -30,20 +32,11 @@ class _SearchLivePanelState
         > {
   @override
   late final SearchPanelController<SearchLiveData, SearchLiveItemModel>
-  controller;
-
-  @override
-  void initState() {
-    super.initState();
-    controller = Get.put(
-      SearchPanelController<SearchLiveData, SearchLiveItemModel>(
-        keyword: widget.keyword,
-        searchType: widget.searchType,
-        tag: widget.tag,
-      ),
-      tag: widget.searchType.name + widget.tag,
-    );
-  }
+  controller = SearchPanelController<SearchLiveData, SearchLiveItemModel>(
+    keyword: widget.keyword,
+    searchType: widget.searchType,
+    tag: widget.tag,
+  );
 
   late final gridDelegate = SliverGridDelegateWithExtentAndRatio(
     maxCrossAxisExtent: Grid.smallCardWidth,
@@ -60,9 +53,6 @@ class _SearchLivePanelState
       sliver: SliverGrid.builder(
         gridDelegate: gridDelegate,
         itemBuilder: (context, index) {
-          if (index == list.length - 1) {
-            controller.onLoadMore();
-          }
           return LiveItem(liveItem: list[index]);
         },
         itemCount: list.length,

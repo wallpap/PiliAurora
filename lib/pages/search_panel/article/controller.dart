@@ -3,7 +3,7 @@ import 'dart:math';
 import 'package:pili_aurora/models/common/search/article_search_type.dart';
 import 'package:pili_aurora/models/search/result.dart';
 import 'package:pili_aurora/pages/search/widgets/search_text.dart';
-import 'package:pili_aurora/pages/search_panel/controller.dart';
+import 'package:pili_aurora/pages/search_panel/filter_controller.dart';
 import 'package:pili_aurora/utils/extension/context_ext.dart';
 import 'package:get/get.dart';
 import 'package:material_ui/material_ui.dart';
@@ -19,7 +19,7 @@ class SearchArticleController
   @override
   void onInit() {
     super.onInit();
-    articleZoneType = ArticleZoneType.all.obs;
+    articleZoneType = ArticleZoneType.all;
     jump2Article();
   }
 
@@ -30,6 +30,7 @@ class SearchArticleController
     ).matchAsPrefix(keyword)?.group(2);
     if (cvid != null) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (isClosed) return;
         Get.toNamed(
           '/articlePage',
           parameters: {
@@ -41,7 +42,7 @@ class SearchArticleController
     }
   }
 
-  Rx<ArticleOrderType> articleOrderType = ArticleOrderType.totalrank.obs;
+  ArticleOrderType articleOrderType = ArticleOrderType.totalrank;
 
   void onShowFilterDialog(BuildContext context) {
     showModalBottomSheet(
@@ -72,11 +73,11 @@ class SearchArticleController
                 runSpacing: 8,
                 children: ArticleOrderType.values.map(
                   (e) {
-                    final isCurr = e == articleOrderType.value;
+                    final isCurr = e == articleOrderType;
                     return SearchText(
                       text: e.label,
                       onTap: (_) {
-                        articleOrderType.value = e;
+                        articleOrderType = e;
                         order = e.order;
                         onSortSearch(label: e.label);
                       },
@@ -98,11 +99,11 @@ class SearchArticleController
                 runSpacing: 8,
                 children: ArticleZoneType.values.map(
                   (e) {
-                    final isCurr = e == articleZoneType!.value;
+                    final isCurr = e == articleZoneType!;
                     return SearchText(
                       text: e.label,
                       onTap: (_) {
-                        articleZoneType!.value = e;
+                        articleZoneType = e;
                         onSortSearch(label: e.label);
                       },
                       bgColor: isCurr

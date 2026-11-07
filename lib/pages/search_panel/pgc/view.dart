@@ -1,11 +1,11 @@
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pili_aurora/common/skeleton/media_bangumi.dart';
 import 'package:pili_aurora/common/sliver_single_child_delegate.dart';
 import 'package:pili_aurora/models/search/result.dart';
-import 'package:pili_aurora/pages/search_panel/controller.dart';
+import 'package:pili_aurora/pages/search_panel/filter_controller.dart';
 import 'package:pili_aurora/pages/search_panel/pgc/widgets/item.dart';
 import 'package:pili_aurora/pages/search_panel/view.dart';
 import 'package:pili_aurora/utils/grid.dart';
-import 'package:get/get.dart';
 import 'package:material_ui/material_ui.dart'
     hide SliverGridDelegateWithMaxCrossAxisExtent;
 
@@ -15,10 +15,12 @@ class SearchPgcPanel extends CommonSearchPanel {
     required super.keyword,
     required super.tag,
     required super.searchType,
+    super.toTop,
+    super.onCount,
   });
 
   @override
-  State<SearchPgcPanel> createState() => _SearchPgcPanelState();
+  ConsumerState<SearchPgcPanel> createState() => _SearchPgcPanelState();
 }
 
 class _SearchPgcPanelState
@@ -30,20 +32,11 @@ class _SearchPgcPanelState
         > {
   @override
   late final SearchPanelController<SearchPgcData, SearchPgcItemModel>
-  controller;
-
-  @override
-  void initState() {
-    super.initState();
-    controller = Get.put(
-      SearchPanelController<SearchPgcData, SearchPgcItemModel>(
-        keyword: widget.keyword,
-        searchType: widget.searchType,
-        tag: widget.tag,
-      ),
-      tag: widget.searchType.name + widget.tag,
-    );
-  }
+  controller = SearchPanelController<SearchPgcData, SearchPgcItemModel>(
+    keyword: widget.keyword,
+    searchType: widget.searchType,
+    tag: widget.tag,
+  );
 
   late final gridDelegate = SliverGridDelegateWithMaxCrossAxisExtent(
     maxCrossAxisExtent: Grid.smallCardWidth * 2,
@@ -55,9 +48,6 @@ class _SearchPgcPanelState
     return SliverGrid.builder(
       gridDelegate: gridDelegate,
       itemBuilder: (BuildContext context, int index) {
-        if (index == list.length - 1) {
-          controller.onLoadMore();
-        }
         return SearchPgcItem(item: list[index]);
       },
       itemCount: list.length,

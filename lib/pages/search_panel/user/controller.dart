@@ -3,9 +3,8 @@ import 'dart:math';
 import 'package:pili_aurora/models/common/search/user_search_type.dart';
 import 'package:pili_aurora/models/search/result.dart';
 import 'package:pili_aurora/pages/search/widgets/search_text.dart';
-import 'package:pili_aurora/pages/search_panel/controller.dart';
+import 'package:pili_aurora/pages/search_panel/filter_controller.dart';
 import 'package:pili_aurora/utils/extension/context_ext.dart';
-import 'package:get/get.dart';
 import 'package:material_ui/material_ui.dart';
 
 class SearchUserController
@@ -19,8 +18,8 @@ class SearchUserController
   @override
   void onInit() {
     super.onInit();
-    userType = UserType.all.obs;
-    userOrderType = UserOrderType.def.obs;
+    userType = UserType.all;
+    userOrderType = UserOrderType.def;
   }
 
   void onShowFilterDialog(BuildContext context) {
@@ -52,11 +51,11 @@ class SearchUserController
                 runSpacing: 8,
                 children: UserOrderType.values.map(
                   (e) {
-                    final isCurr = e == userOrderType!.value;
+                    final isCurr = e == userOrderType!;
                     return SearchText(
                       text: e.label,
                       onTap: (_) {
-                        userOrderType!.value = e;
+                        userOrderType = e;
                         order = e.order;
                         onSortSearch(label: e.label);
                       },
@@ -78,11 +77,11 @@ class SearchUserController
                 runSpacing: 8,
                 children: UserType.values.map(
                   (e) {
-                    final isCurr = e == userType!.value;
+                    final isCurr = e == userType!;
                     return SearchText(
                       text: e.label,
                       onTap: (_) {
-                        userType!.value = e;
+                        userType = e;
                         onSortSearch(label: e.label);
                       },
                       bgColor: isCurr

@@ -8,7 +8,6 @@ import 'package:pili_aurora/pages/search_panel/live/view.dart';
 import 'package:pili_aurora/pages/search_panel/pgc/view.dart';
 import 'package:pili_aurora/pages/search_panel/user/view.dart';
 import 'package:pili_aurora/pages/search_panel/video/view.dart';
-import 'package:pili_aurora/pages/search_result/controller.dart';
 import 'package:get/get.dart';
 import 'package:material_ui/material_ui.dart';
 
@@ -21,20 +20,20 @@ class SearchResultPage extends StatefulWidget {
 
 class _SearchResultPageState extends State<SearchResultPage>
     with SingleTickerProviderStateMixin {
-  late SearchResultController _searchResultController;
+  final String _keyword = Get.parameters['keyword'] ?? '';
+  final _counts = List<int?>.filled(SearchType.values.length, null);
+  final _topSignals = List.generate(
+    SearchType.values.length,
+    (_) => ValueNotifier(0),
+  );
   late TabController _tabController;
-  final String _tag = DateTime.now().millisecondsSinceEpoch.toString();
+  final Object _tag = Object();
   final bool _isFromSearch = Get.arguments?['fromSearch'] ?? false;
   final void Function(int)? _onIndexChanged = Get.arguments?['onIndexChanged'];
 
   @override
   void initState() {
     super.initState();
-    _searchResultController = Get.put(
-      SearchResultController(),
-      tag: _tag,
-    );
-
     _tabController = TabController(
       vsync: this,
       initialIndex: Get.arguments?['initIndex'] ?? 0,
@@ -51,6 +50,9 @@ class _SearchResultPageState extends State<SearchResultPage>
     _tabController
       ..removeListener(listener)
       ..dispose();
+    for (final signal in _topSignals) {
+      signal.dispose();
+    }
     super.dispose();
   }
 
@@ -72,7 +74,7 @@ class _SearchResultPageState extends State<SearchResultPage>
             } else {
               Get.offNamed(
                 '/search',
-                parameters: {'text': _searchResultController.keyword},
+                parameters: {'text': _keyword},
               );
             }
           },
@@ -80,7 +82,7 @@ class _SearchResultPageState extends State<SearchResultPage>
           child: SizedBox(
             width: double.infinity,
             child: Text(
-              _searchResultController.keyword,
+              _keyword,
               style: theme.textTheme.titleMedium,
               maxLines: 1,
             ),
@@ -96,19 +98,13 @@ class _SearchResultPageState extends State<SearchResultPage>
               splashFactory: NoSplash.splashFactory,
               padding: const EdgeInsets.only(top: 4, left: 8, right: 8),
               controller: _tabController,
-              tabs: SearchType.values
-                  .map(
-                    (item) => Obx(
-                      () {
-                        int count = _searchResultController.count[item.index];
-                        return Tab(
-                          text:
-                              '${item.label}${count != -1 ? ' ${count > 99 ? '99+' : count}' : ''}',
-                        );
-                      },
-                    ),
-                  )
-                  .toList(),
+              tabs: [
+                for (final item in SearchType.values)
+                  Tab(
+                    text:
+                        '${item.label}${_counts[item.index] == null ? '' : ' ${_counts[item.index]! > 99 ? '99+' : _counts[item.index]}'}',
+                  ),
+              ],
               isScrollable: true,
               indicatorWeight: 0,
               indicatorPadding: const EdgeInsets.symmetric(
@@ -132,11 +128,7 @@ class _SearchResultPageState extends State<SearchResultPage>
               tabAlignment: TabAlignment.start,
               onTap: (index) {
                 if (!_tabController.indexIsChanging) {
-                  if (_searchResultController.toTopIndex.value == index) {
-                    _searchResultController.toTopIndex.refresh();
-                  } else {
-                    _searchResultController.toTopIndex.value = index;
-                  }
+                  _topSignals[index].value++;
                 }
               },
             ),
@@ -148,33 +140,69 @@ class _SearchResultPageState extends State<SearchResultPage>
                       (item) => switch (item) {
                         .all => SearchAllPanel(
                           tag: _tag,
+                          toTop: _topSignals[item.index],
+                          onCount: (count) {
+                            if (mounted && _counts[item.index] != count) {
+                              setState(() => _counts[item.index] = count);
+                            }
+                          },
                           searchType: item,
-                          keyword: _searchResultController.keyword,
+                          keyword: _keyword,
                         ),
                         .video => SearchVideoPanel(
                           tag: _tag,
+                          toTop: _topSignals[item.index],
+                          onCount: (count) {
+                            if (mounted && _counts[item.index] != count) {
+                              setState(() => _counts[item.index] = count);
+                            }
+                          },
                           searchType: item,
-                          keyword: _searchResultController.keyword,
+                          keyword: _keyword,
                         ),
                         .media_bangumi || .media_ft => SearchPgcPanel(
                           tag: _tag,
+                          toTop: _topSignals[item.index],
+                          onCount: (count) {
+                            if (mounted && _counts[item.index] != count) {
+                              setState(() => _counts[item.index] = count);
+                            }
+                          },
                           searchType: item,
-                          keyword: _searchResultController.keyword,
+                          keyword: _keyword,
                         ),
                         .live_room => SearchLivePanel(
                           tag: _tag,
+                          toTop: _topSignals[item.index],
+                          onCount: (count) {
+                            if (mounted && _counts[item.index] != count) {
+                              setState(() => _counts[item.index] = count);
+                            }
+                          },
                           searchType: item,
-                          keyword: _searchResultController.keyword,
+                          keyword: _keyword,
                         ),
                         .bili_user => SearchUserPanel(
                           tag: _tag,
+                          toTop: _topSignals[item.index],
+                          onCount: (count) {
+                            if (mounted && _counts[item.index] != count) {
+                              setState(() => _counts[item.index] = count);
+                            }
+                          },
                           searchType: item,
-                          keyword: _searchResultController.keyword,
+                          keyword: _keyword,
                         ),
                         .article => SearchArticlePanel(
                           tag: _tag,
+                          toTop: _topSignals[item.index],
+                          onCount: (count) {
+                            if (mounted && _counts[item.index] != count) {
+                              setState(() => _counts[item.index] = count);
+                            }
+                          },
                           searchType: item,
-                          keyword: _searchResultController.keyword,
+                          keyword: _keyword,
                         ),
                       },
                     )

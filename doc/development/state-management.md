@@ -1,6 +1,6 @@
 # Riverpod 状态管理
 
-应用根节点在 `lib/app/app.dart` 提供 `ProviderScope`。消息、搜索入口、完整热搜榜、直播及空间搜索、弹幕屏蔽规则、黑名单、账号查询、关注及分组、关注搜索、粉丝与关系查询、关注直播页、空间隐私设置、直播分区偏好与直播屏蔽规则、独立空间列表、专栏文集与 PGC 索引已使用 Riverpod；路由及其他页面沿用现有实现。迁移按功能入口推进，先明确状态所有权，再移除对应的 GetX 状态注册。
+应用根节点在 `lib/app/app.dart` 提供 `ProviderScope`。消息、搜索入口、完整热搜榜、直播及空间搜索、弹幕屏蔽规则、黑名单、账号查询、关注及分组、关注搜索、粉丝与关系查询、关注直播页、空间隐私设置、直播分区偏好与直播屏蔽规则、独立空间列表、专栏文集与 PGC 索引、充电排行与综合搜索结果已使用 Riverpod；路由及其他页面沿用现有实现。迁移按功能入口推进，先明确状态所有权，再移除对应的 GetX 状态注册。
 
 ## 所有权
 
@@ -18,7 +18,9 @@
 | 全部关注、分组成员和关注搜索 | autoDispose family 按目标 UID、分组和已提交关键词隔离；账号或列表排序变化使旧请求失效 | `lib/pages/follow/controller.dart` |
 | 关注分组与成员分配 | 账号绑定的 autoDispose AsyncNotifier；列表、排序页与分组面板共享已确认快照，编辑草稿由 Widget 持有 | `followTagsProvider` |
 | 直播房间／主播搜索、空间视频／动态搜索 | autoDispose family 按页面实例、提交关键词、分类与目标 UID 隔离；直播依赖推荐账号，空间搜索依赖主账号 | `lib/pages/common/search/scoped_search.dart` |
-| 空间专栏、音频、投币、点赞、商品与舰队 | family 按页面实例、类型和目标 UID 隔离，跟随主账号 | `lib/pages/common/member_feed.dart` |
+| 空间专栏、音频、课堂、漫画、合集、投币、点赞、商品与舰队 | family 按页面实例、类型和目标 UID 隔离，跟随主账号 | `lib/pages/common/member_feed.dart` |
+| 充电排行 | 页面与等级 family 绑定主账号；排行和等级来自同一快照，Tab 与滚动留在 Widget | `lib/pages/member_upower_rank/controller.dart` |
+| 综合搜索结果 | family 按页面实例、分类、关键词和已提交筛选隔离；请求跟随推荐账号，屏蔽过滤跟随主账号 | `lib/pages/search_panel/controller.dart` |
 | 专栏文集 | 文集 ID family，元数据与文章同一快照，跟随主账号 | `lib/pages/article_list/controller.dart` |
 | PGC 索引 | 条件跟随主账号；结果按筛选与页面实例隔离，跟随推荐账号 | `lib/pages/pgc_index/controller.dart` |
 | 空间隐私设置 | 账号绑定的 autoDispose AsyncNotifier；页面修改不可变草稿，保存成功后确认 | `lib/pages/space_setting/controller.dart` |
@@ -56,6 +58,10 @@ FocusNode、TextEditingController、TabController 和滚动装饰状态由 Widge
 - 独立空间列表保留原有布局与父级嵌套滚动，使用 FeedPagination 的通知模式按当前列表实际滚动范围加载，失败保留页码并显式重试；刷新、切号与释放后的迟到分页失效。舰队前三名单独保留，分页按 UID 去重；商品接口没有可用后续游标，保留服务端查看更多入口。音频播放入口由 Widget 持有。
 - 专栏文集的作者、头部与文章来自同一查询，加载或失败时不混用旧元数据。PGC 的筛选与展开留在 Widget，结果 family 使用筛选快照，新筛选不会接收旧响应；分类 Tab 与回顶信号由 Widget 持有，不跨页面 Get.find 控制器。
 
+- 综合搜索保留首屏的用户、影视、活动和赛事卡片，后续页沿视频查询；筛选后直接查视频。按原始页推进并过滤、去重，过滤空页最多连续补五页；分页失败保留内容及原页码。分页期间移除的卡片不会被迟到结果恢复。
+- 搜索筛选表单由页面持有的普通编辑对象管理，不注册 GetX；每次提交生成独立查询。分类计数从有效快照通过回调投影给父 Widget，回顶使用窄信号。HTTP 只返回验证需求，页面发起验证并管理延迟任务；Notifier 校验挑战身份与查询归属后重试原页，验证注册与提交绑定发起账号和 CSRF，并在每次异步返回后检查查询归属；切号、刷新、筛选替换或离页使旧回调失效。
+- 充电排行保留服务端首页最多 100 条与等级 Tab 的现有语义；子 Tab 显式接收目标 UID，回顶由页面持有的滚动控制器处理，不通过 Get.find 查找状态。课堂、漫画与合集目录使用独立列表 family；漫画分页显式携带页码，合集按类型与 ID 去重。
+
 新增迁移优先使用领域内的直接 Notifier 和不可变状态。公共抽象应由实际重复行为驱动；复用已有 HTTP 和模型，避免为一次调用增加转发层。消息仍使用其既有 Session 资源协议。
 
 ## 验证
@@ -67,8 +73,13 @@ fvm flutter test --no-pub test/pages/follow_type/ test/pages/live_follow/
 fvm flutter test --no-pub test/pages/follow/ test/pages/scoped_search/
 fvm flutter test --no-pub test/pages/space_setting/ test/pages/live_settings/
 fvm flutter test --no-pub test/pages/member_feed/ test/common/widgets/feed_pagination_test.dart
+fvm flutter test --no-pub test/pages/search_results/
 fvm flutter test --no-pub test/services/messaging/
 fvm flutter analyze --no-pub lib test tool
 ```
 
 搜索测试包含搜索页路由回传；规则、黑名单、账号、粉丝与关系查询及关注直播通过 provider 与模拟 HTTP 验证刷新、分页、写入失败、账号切换和订阅释放。分享选人、错误态旧数据隐藏与直播空页补足另有组件测试。真实服务、分享选择及播放器显示行为仍需在 Android、Windows 登录后验收。
+
+## 迁移边界
+
+本批选定的独立查询与偏好入口已迁移。个人空间主页面及视频／动态／PGC 子页面仍共享父控制器、嵌套滚动与内容操作，需先单独设计页面协调边界；收藏、历史和订阅涉及跨入口写入与列表一致性。推荐、首页、动态、登录与全局账号，以及播放、下载和直播连接核心应分别评估生命周期、缓存和平台验证范围，再独立推进。

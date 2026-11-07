@@ -1,3 +1,4 @@
+import 'package:pili_aurora/utils/accounts/account.dart';
 import 'package:pili_aurora/http/api.dart';
 import 'package:pili_aurora/http/init.dart';
 import 'package:pili_aurora/http/loading_state.dart';
@@ -10,12 +11,15 @@ import 'package:pili_aurora/models/remote/pgc/pgc_info_model/result.dart';
 import 'package:pili_aurora/models/remote/search/search_rcmd/data.dart';
 import 'package:pili_aurora/models/remote/search/search_trending/data.dart';
 import 'package:pili_aurora/utils/extension/iterable_ext.dart';
-import 'package:pili_aurora/utils/request_utils.dart';
 import 'package:pili_aurora/utils/wbi_sign.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
-import 'package:material_ui/material_ui.dart';
+
+class SearchVerificationRequired extends Error {
+  const SearchVerificationRequired(this.voucher) : super('触发风控，请完成验证');
+  final String voucher;
+}
 
 abstract final class SearchHttp {
   // 获取搜索建议
@@ -47,6 +51,7 @@ abstract final class SearchHttp {
   @pragma('vm:notify-debugger-on-exception')
   static Future<LoadingState<R>> searchByType<R extends SearchNumData>({
     required SearchType searchType,
+    required Account account,
     required String keyword,
     required page,
     String? order,
@@ -58,7 +63,6 @@ abstract final class SearchHttp {
     int? pubBegin,
     int? pubEnd,
     String? gaiaVtoken,
-    required ValueChanged<String> onSuccess,
   }) async {
     final params = await WbiSign.makSign({
       'search_type': searchType.name,
@@ -81,6 +85,7 @@ abstract final class SearchHttp {
       searchType.api,
       queryParameters: params,
       options: Options(
+        extra: {'account': account},
         headers: {
           if (gaiaVtoken != null) 'cookie': 'x-bili-gaia-vtoken=$gaiaVtoken',
           'origin': 'https://search.bilibili.com',
@@ -95,8 +100,7 @@ abstract final class SearchHttp {
         final Map<String, dynamic> dataData = resData['data'];
         final vVoucher = dataData['v_voucher'];
         if (vVoucher != null) {
-          RequestUtils.validate(vVoucher, onSuccess);
-          return const Error('触发风控');
+          return SearchVerificationRequired(vVoucher.toString());
         }
         try {
           return Success(

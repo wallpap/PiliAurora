@@ -1,3 +1,4 @@
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pili_aurora/common/skeleton/msg_feed_top.dart';
 import 'package:pili_aurora/common/sliver_single_child_delegate.dart';
 import 'package:pili_aurora/common/widgets/sliver/sliver_floating_header.dart';
@@ -6,7 +7,6 @@ import 'package:pili_aurora/pages/search_panel/user/controller.dart';
 import 'package:pili_aurora/pages/search_panel/user/widgets/item.dart';
 import 'package:pili_aurora/pages/search_panel/view.dart';
 import 'package:pili_aurora/utils/grid.dart';
-import 'package:get/get.dart';
 import 'package:material_ui/material_ui.dart'
     hide SliverGridDelegateWithMaxCrossAxisExtent;
 
@@ -16,10 +16,12 @@ class SearchUserPanel extends CommonSearchPanel {
     required super.keyword,
     required super.tag,
     required super.searchType,
+    super.toTop,
+    super.onCount,
   });
 
   @override
-  State<SearchUserPanel> createState() => _SearchUserPanelState();
+  ConsumerState<SearchUserPanel> createState() => _SearchUserPanelState();
 }
 
 class _SearchUserPanelState
@@ -30,20 +32,11 @@ class _SearchUserPanelState
           SearchUserItemModel
         > {
   @override
-  late final SearchUserController controller;
-
-  @override
-  void initState() {
-    super.initState();
-    controller = Get.put(
-      SearchUserController(
-        keyword: widget.keyword,
-        searchType: widget.searchType,
-        tag: widget.tag,
-      ),
-      tag: widget.searchType.name + widget.tag,
-    );
-  }
+  late final SearchUserController controller = SearchUserController(
+    keyword: widget.keyword,
+    searchType: widget.searchType,
+    tag: widget.tag,
+  );
 
   @override
   Widget buildHeader() {
@@ -53,17 +46,17 @@ class _SearchUserPanelState
         padding: const .fromLTRB(25, 0, 12, 4),
         child: Row(
           children: [
-            Obx(
-              () => Text(
-                '排序: ${controller.userOrderType!.value.label}',
+            Builder(
+              builder: (_) => Text(
+                '排序: ${controller.userOrderType!.label}',
                 maxLines: 1,
                 style: TextStyle(color: colorScheme.outline),
               ),
             ),
             const Spacer(),
-            Obx(
-              () => Text(
-                '用户类型: ${controller.userType!.value.label}',
+            Builder(
+              builder: (_) => Text(
+                '用户类型: ${controller.userType!.label}',
                 maxLines: 1,
                 style: TextStyle(color: colorScheme.outline),
               ),
@@ -101,9 +94,6 @@ class _SearchUserPanelState
     return SliverGrid.builder(
       gridDelegate: gridDelegate,
       itemBuilder: (BuildContext context, int index) {
-        if (index == list.length - 1) {
-          controller.onLoadMore();
-        }
         return SearchUserItem(
           item: list[index],
         );

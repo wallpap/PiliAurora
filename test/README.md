@@ -121,4 +121,6 @@ Windows 保活页面内存回归：先执行 `pwsh -File lib/scripts/patch.ps1 w
 
 `pages/space_setting/controller_test.dart` 覆盖隐私草稿、反向字段、保存互斥、失败重试、切号与刷新隔离及返回保存。`pages/live_settings/controller_test.dart` 覆盖直播屏蔽规则的房间与账号绑定、过期编辑、标签排序保存、推荐账号隔离及成功快照回调。真实直播服务与两端播放器仍需登录验收。
 
-`pages/member_feed/controller_test.dart` 覆盖六类空间列表的账号与入口隔离、分页失败重试及去重、舰队前三名、迟到分页、专栏文集快照和 PGC 筛选；`common/widgets/feed_pagination_test.dart` 另检查通知模式沿用父级滚动控制器。
+`pages/member_feed/controller_test.dart` 覆盖九类空间列表的账号与入口隔离、分页失败重试及去重、舰队前三名、迟到分页、专栏文集快照、充电排行和 PGC 筛选；`common/widgets/feed_pagination_test.dart` 另检查通知模式沿用父级滚动控制器。
+
+`pages/search_results/controller_test.dart` 覆盖综合搜索分类与筛选隔离、推荐及主账号角色、综合卡片、串行分页、去重与移除、验证后原页重查、验证注册及提交的账号绑定与过期隔离、屏蔽过滤补页、离页以及分类回调。验证服务弹窗和真实视频跳转需登录后人工验收。

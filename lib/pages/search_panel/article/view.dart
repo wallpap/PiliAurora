@@ -1,10 +1,10 @@
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pili_aurora/common/widgets/sliver/sliver_floating_header.dart';
 import 'package:pili_aurora/models/search/result.dart';
 import 'package:pili_aurora/pages/search_panel/article/controller.dart';
 import 'package:pili_aurora/pages/search_panel/article/widgets/item.dart';
 import 'package:pili_aurora/pages/search_panel/view.dart';
 import 'package:pili_aurora/utils/grid.dart';
-import 'package:get/get.dart';
 import 'package:material_ui/material_ui.dart';
 
 class SearchArticlePanel extends CommonSearchPanel {
@@ -13,10 +13,12 @@ class SearchArticlePanel extends CommonSearchPanel {
     required super.keyword,
     required super.tag,
     required super.searchType,
+    super.toTop,
+    super.onCount,
   });
 
   @override
-  State<SearchArticlePanel> createState() => _SearchArticlePanelState();
+  ConsumerState<SearchArticlePanel> createState() => _SearchArticlePanelState();
 }
 
 class _SearchArticlePanelState
@@ -28,20 +30,11 @@ class _SearchArticlePanelState
         >
     with GridMixin {
   @override
-  late final SearchArticleController controller;
-
-  @override
-  void initState() {
-    super.initState();
-    controller = Get.put(
-      SearchArticleController(
-        keyword: widget.keyword,
-        searchType: widget.searchType,
-        tag: widget.tag,
-      ),
-      tag: widget.searchType.name + widget.tag,
-    );
-  }
+  late final SearchArticleController controller = SearchArticleController(
+    keyword: widget.keyword,
+    searchType: widget.searchType,
+    tag: widget.tag,
+  );
 
   @override
   Widget buildHeader() {
@@ -51,17 +44,17 @@ class _SearchArticlePanelState
         padding: const .fromLTRB(25, 0, 12, 4),
         child: Row(
           children: [
-            Obx(
-              () => Text(
-                '排序: ${controller.articleOrderType.value.label}',
+            Builder(
+              builder: (_) => Text(
+                '排序: ${controller.articleOrderType.label}',
                 maxLines: 1,
                 style: TextStyle(color: colorScheme.outline),
               ),
             ),
             const Spacer(),
-            Obx(
-              () => Text(
-                '分区: ${controller.articleZoneType!.value.label}',
+            Builder(
+              builder: (_) => Text(
+                '分区: ${controller.articleZoneType!.label}',
                 maxLines: 1,
                 style: TextStyle(color: colorScheme.outline),
               ),
@@ -94,9 +87,6 @@ class _SearchArticlePanelState
     return SliverGrid.builder(
       gridDelegate: gridDelegate,
       itemBuilder: (context, index) {
-        if (index == list.length - 1) {
-          controller.onLoadMore();
-        }
         return SearchArticleItem(item: list[index]);
       },
       itemCount: list.length,

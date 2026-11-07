@@ -1,3 +1,4 @@
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pili_aurora/models/search/result.dart';
 import 'package:pili_aurora/models/search/search_esports.dart';
 import 'package:pili_aurora/pages/search_panel/all/controller.dart';
@@ -8,7 +9,6 @@ import 'package:pili_aurora/pages/search_panel/pgc/widgets/item.dart';
 import 'package:pili_aurora/pages/search_panel/video/view.dart';
 import 'package:pili_aurora/pages/search_panel/view.dart';
 import 'package:pili_aurora/utils/grid.dart';
-import 'package:get/get.dart';
 import 'package:material_ui/material_ui.dart'
     hide SliverGridDelegateWithMaxCrossAxisExtent;
 
@@ -18,10 +18,12 @@ class SearchAllPanel extends SearchVideoPanel {
     required super.keyword,
     required super.tag,
     required super.searchType,
+    super.toTop,
+    super.onCount,
   });
 
   @override
-  State<SearchAllPanel> createState() => _SearchAllPanelState();
+  ConsumerState<SearchAllPanel> createState() => _SearchAllPanelState();
 }
 
 class _SearchAllPanelState
@@ -33,20 +35,11 @@ class _SearchAllPanelState
         >
     with GridMixin, SearchVideoPanelMixin<SearchAllPanel> {
   @override
-  late final SearchAllController controller;
-
-  @override
-  void initState() {
-    super.initState();
-    controller = Get.put(
-      SearchAllController(
-        keyword: widget.keyword,
-        searchType: widget.searchType,
-        tag: widget.tag,
-      ),
-      tag: widget.searchType.name + widget.tag,
-    );
-  }
+  late final SearchAllController controller = SearchAllController(
+    keyword: widget.keyword,
+    searchType: widget.searchType,
+    tag: widget.tag,
+  );
 
   @override
   Widget buildList(List<SearchVideoItemModel> list) {

@@ -462,9 +462,16 @@ abstract final class RequestUtils {
 
   static Future<void> validate(
     String vVoucher,
-    ValueChanged<String> onSuccess,
-  ) async {
-    final res = await ValidateHttp.gaiaVgateRegister(vVoucher);
+    ValueChanged<String> onSuccess, {
+    required Account account,
+    required bool Function() isCurrent,
+  }) async {
+    if (!isCurrent()) return;
+    final res = await ValidateHttp.gaiaVgateRegister(
+      vVoucher,
+      account: account,
+    );
+    if (!isCurrent()) return;
     if (!res.isSuccess) {
       res.toast();
       return;
@@ -495,12 +502,15 @@ abstract final class RequestUtils {
     }
 
     Future<void> gaiaVgateValidate() async {
+      if (!isCurrent()) return;
       final res = await ValidateHttp.gaiaVgateValidate(
+        account: account,
         challenge: captchaData.geetest?.challenge,
         seccode: captchaData.seccode,
         token: captchaData.token,
         validate: captchaData.validate,
       );
+      if (!isCurrent()) return;
       if (res case Success(:final response?)) {
         if (response['is_valid'] == 1) {
           final griskId = response['grisk_id'];
@@ -516,7 +526,7 @@ abstract final class RequestUtils {
     }
 
     final json = await GeetestWebviewDialog.geetest(gt!, challenge!);
-    if (json != null) {
+    if (isCurrent() && json != null) {
       captchaData
         ..validate = json['geetest_validate']
         ..seccode = json['geetest_seccode']
@@ -524,7 +534,7 @@ abstract final class RequestUtils {
           challenge: json['geetest_challenge'],
           gt: gt,
         );
-      gaiaVgateValidate();
+      await gaiaVgateValidate();
     }
   }
 

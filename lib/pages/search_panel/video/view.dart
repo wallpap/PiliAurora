@@ -1,3 +1,4 @@
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pili_aurora/common/widgets/sliver/sliver_floating_header.dart';
 import 'package:pili_aurora/common/widgets/video_card/video_card_h.dart';
 import 'package:pili_aurora/models/common/search/video_search_type.dart';
@@ -6,7 +7,6 @@ import 'package:pili_aurora/pages/search/widgets/search_text.dart';
 import 'package:pili_aurora/pages/search_panel/video/controller.dart';
 import 'package:pili_aurora/pages/search_panel/view.dart';
 import 'package:pili_aurora/utils/grid.dart';
-import 'package:get/get.dart';
 import 'package:material_ui/material_ui.dart';
 
 class SearchVideoPanel extends CommonSearchPanel {
@@ -15,10 +15,12 @@ class SearchVideoPanel extends CommonSearchPanel {
     required super.keyword,
     required super.tag,
     required super.searchType,
+    super.toTop,
+    super.onCount,
   });
 
   @override
-  State<SearchVideoPanel> createState() => _SearchVideoPanelState();
+  ConsumerState<SearchVideoPanel> createState() => _SearchVideoPanelState();
 }
 
 class _SearchVideoPanelState
@@ -30,20 +32,11 @@ class _SearchVideoPanelState
         >
     with GridMixin, SearchVideoPanelMixin<SearchVideoPanel> {
   @override
-  late final SearchVideoController controller;
-
-  @override
-  void initState() {
-    super.initState();
-    controller = Get.put(
-      SearchVideoController(
-        keyword: widget.keyword,
-        searchType: widget.searchType,
-        tag: widget.tag,
-      ),
-      tag: widget.searchType.name + widget.tag,
-    );
-  }
+  late final SearchVideoController controller = SearchVideoController(
+    keyword: widget.keyword,
+    searchType: widget.searchType,
+    tag: widget.tag,
+  );
 }
 
 mixin SearchVideoPanelMixin<S extends SearchVideoPanel>
@@ -67,17 +60,17 @@ mixin SearchVideoPanelMixin<S extends SearchVideoPanel>
                 child: Wrap(
                   children: [
                     for (final e in ArchiveFilterType.values)
-                      Obx(
-                        () => SearchText(
+                      Builder(
+                        builder: (_) => SearchText(
                           fontSize: 13,
                           text: e.desc,
                           bgColor: Colors.transparent,
-                          textColor: controller.selectedType.value == e
+                          textColor: controller.selectedType == e
                               ? colorScheme.primary
                               : colorScheme.outline,
                           onTap: (_) => controller
                             ..order = e == .totalrank ? '' : e.name
-                            ..selectedType.value = e
+                            ..selectedType = e
                             ..onSortSearch(getBack: false),
                         ),
                       ),
@@ -114,14 +107,9 @@ mixin SearchVideoPanelMixin<S extends SearchVideoPanel>
     return SliverGrid.builder(
       gridDelegate: gridDelegate,
       itemBuilder: (context, index) {
-        if (index == list.length - 1) {
-          controller.onLoadMore();
-        }
         return VideoCardH(
           videoItem: list[index],
-          onRemove: () => controller.loadingState
-            ..value.data!.removeAt(index)
-            ..refresh(),
+          onRemove: () => removeItem(list[index]),
         );
       },
       itemCount: list.length,
