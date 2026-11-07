@@ -99,7 +99,10 @@ class Routes {
     // 动态详情
     GetPage(name: '/dynamicDetail', page: () => const DynamicDetailPage()),
     // 关注
-    GetPage(name: '/follow', page: () => const FollowPage()),
+    GetPage(
+      name: '/follow',
+      page: () => FollowPage.fromArguments(Get.arguments),
+    ),
     // 粉丝
     GetPage(
       name: '/fan',
@@ -125,7 +128,10 @@ class Routes {
     GetPage(name: '/favSearch', page: () => const FavSearchPage()),
     GetPage(name: '/historySearch', page: () => const HistorySearchPage()),
     GetPage(name: '/laterSearch', page: () => const LaterSearchPage()),
-    GetPage(name: '/followSearch', page: () => const FollowSearchPage()),
+    GetPage(
+      name: '/followSearch',
+      page: () => FollowSearchPage.fromArguments(Get.arguments),
+    ),
     // 消息页面
     GetPage(name: '/whisper', page: () => const WhisperPage()),
     // 私信详情

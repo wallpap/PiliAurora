@@ -5,22 +5,22 @@ import 'package:pili_aurora/pages/follow_type/view.dart';
 import 'package:pili_aurora/pages/follow/child/child_view.dart';
 import 'package:pili_aurora/pages/follow_search/view.dart';
 import 'package:pili_aurora/pages/share/view.dart' show UserModel;
-import 'package:pili_aurora/utils/accounts.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:pili_aurora/services/account_providers.dart';
 import 'package:get/get.dart';
 import 'package:material_ui/material_ui.dart';
 
-class ContactPage extends StatefulWidget {
+class ContactPage extends ConsumerStatefulWidget {
   const ContactPage({super.key, this.isFromSelect = true});
 
   final bool isFromSelect;
 
   @override
-  State<ContactPage> createState() => _ContactPageState();
+  ConsumerState<ContactPage> createState() => _ContactPageState();
 }
 
-class _ContactPageState extends State<ContactPage>
+class _ContactPageState extends ConsumerState<ContactPage>
     with SingleTickerProviderStateMixin {
-  late final mid = Accounts.main.mid;
   late final TabController _controller;
 
   @override
@@ -41,6 +41,7 @@ class _ContactPageState extends State<ContactPage>
 
   @override
   Widget build(BuildContext context) {
+    final account = ref.watch(mainAccountProvider);
     return SimpleScaffold(
       appBar: AppBar(
         title: const Text('通讯录'),
@@ -50,12 +51,13 @@ class _ContactPageState extends State<ContactPage>
               final UserModel? userModel = await Navigator.of(context).push(
                 GetPageRoute(
                   page: () => FollowSearchPage(
-                    mid: mid,
                     isFromSelect: widget.isFromSelect,
                   ),
                 ),
               );
-              if (userModel != null) {
+              if (mounted &&
+                  identical(account, ref.read(mainAccountProvider)) &&
+                  userModel != null) {
                 Get.back(result: userModel);
               }
             },
@@ -78,7 +80,7 @@ class _ContactPageState extends State<ContactPage>
               controller: _controller,
               children: [
                 FollowChildPage(
-                  mid: mid,
+                  key: ObjectKey(account),
                   onSelect: widget.isFromSelect ? onSelect : null,
                 ),
                 FollowTypePage(

@@ -467,8 +467,13 @@ abstract final class MemberHttp {
   }
 
   // 查询分组
-  static Future<LoadingState<List<MemberTagItemModel>>> followUpTags() async {
-    final res = await Request().get(Api.followUpTag);
+  static Future<LoadingState<List<MemberTagItemModel>>> followUpTags({
+    required Account account,
+  }) async {
+    final res = await Request().get(
+      Api.followUpTag,
+      options: Options(extra: {'account': account}),
+    );
     if (res.data['code'] == 0) {
       return Success(
         (res.data['data'] as List)
@@ -481,6 +486,7 @@ abstract final class MemberHttp {
   }
 
   static Future<LoadingState<void>> specialAction({
+    required Account account,
     int? fid,
     bool isAdd = true,
   }) async {
@@ -488,9 +494,12 @@ abstract final class MemberHttp {
       isAdd ? Api.addSpecial : Api.delSpecial,
       data: {
         'fid': fid,
-        'csrf': Accounts.main.csrf,
+        'csrf': account.csrf,
       },
-      options: Options(contentType: Headers.formUrlEncodedContentType),
+      options: Options(
+        extra: {'account': account, 'noRetry': true},
+        contentType: Headers.formUrlEncodedContentType,
+      ),
     );
     if (res.data['code'] == 0) {
       return const Success(null);
@@ -500,7 +509,11 @@ abstract final class MemberHttp {
   }
 
   // 设置分组
-  static Future<LoadingState<void>> addUsers(String fids, String tagids) async {
+  static Future<LoadingState<void>> addUsers(
+    String fids,
+    String tagids, {
+    required Account account,
+  }) async {
     final res = await Request().post(
       Api.addUsers,
       queryParameters: {
@@ -510,10 +523,13 @@ abstract final class MemberHttp {
       data: {
         'fids': fids,
         'tagids': tagids,
-        'csrf': Accounts.main.csrf,
+        'csrf': account.csrf,
         // 'cross_domain': true
       },
-      options: Options(contentType: Headers.formUrlEncodedContentType),
+      options: Options(
+        extra: {'account': account, 'noRetry': true},
+        contentType: Headers.formUrlEncodedContentType,
+      ),
     );
     if (res.data['code'] == 0) {
       return const Success(null);
@@ -524,14 +540,16 @@ abstract final class MemberHttp {
 
   // 获取某分组下的up
   static Future<LoadingState<FollowData>> followUpGroup({
-    int? mid,
-    int? tagid,
-    int? pn,
+    required Account account,
+    required int mid,
+    required int tagid,
+    required int pn,
     int ps = 20,
     String orderType = '', // ''=>最近关注，'attention'=>最常访问
   }) async {
     final res = await Request().get(
       Api.followUpGroup,
+      options: Options(extra: {'account': account}),
       queryParameters: {
         'mid': mid,
         'tagid': tagid,
@@ -555,7 +573,10 @@ abstract final class MemberHttp {
     }
   }
 
-  static Future<LoadingState<int>> createFollowTag(String tagName) async {
+  static Future<LoadingState<int>> createFollowTag(
+    String tagName, {
+    required Account account,
+  }) async {
     final res = await Request().post(
       Api.createFollowTag,
       queryParameters: {
@@ -564,9 +585,12 @@ abstract final class MemberHttp {
       },
       data: {
         'tag': tagName,
-        'csrf': Accounts.main.csrf,
+        'csrf': account.csrf,
       },
-      options: Options(contentType: Headers.formUrlEncodedContentType),
+      options: Options(
+        extra: {'account': account, 'noRetry': true},
+        contentType: Headers.formUrlEncodedContentType,
+      ),
     );
     if (res.data['code'] == 0) {
       return Success(res.data['data']['tagid']);
@@ -577,8 +601,9 @@ abstract final class MemberHttp {
 
   static Future<LoadingState<void>> updateFollowTag(
     Object tagid,
-    Object name,
-  ) async {
+    Object name, {
+    required Account account,
+  }) async {
     final res = await Request().post(
       Api.updateFollowTag,
       queryParameters: {
@@ -588,9 +613,12 @@ abstract final class MemberHttp {
       data: {
         'tagid': tagid,
         'name': name,
-        'csrf': Accounts.main.csrf,
+        'csrf': account.csrf,
       },
-      options: Options(contentType: Headers.formUrlEncodedContentType),
+      options: Options(
+        extra: {'account': account, 'noRetry': true},
+        contentType: Headers.formUrlEncodedContentType,
+      ),
     );
     if (res.data['code'] == 0) {
       return const Success(null);
@@ -599,7 +627,10 @@ abstract final class MemberHttp {
     }
   }
 
-  static Future<LoadingState<void>> delFollowTag(Object tagid) async {
+  static Future<LoadingState<void>> delFollowTag(
+    Object tagid, {
+    required Account account,
+  }) async {
     final res = await Request().post(
       Api.delFollowTag,
       queryParameters: {
@@ -608,9 +639,12 @@ abstract final class MemberHttp {
       },
       data: {
         'tagid': tagid,
-        'csrf': Accounts.main.csrf,
+        'csrf': account.csrf,
       },
-      options: Options(contentType: Headers.formUrlEncodedContentType),
+      options: Options(
+        extra: {'account': account, 'noRetry': true},
+        contentType: Headers.formUrlEncodedContentType,
+      ),
     );
     if (res.data['code'] == 0) {
       return const Success(null);
@@ -633,7 +667,8 @@ abstract final class MemberHttp {
   }
 
   // 搜索follow
-  static Future<LoadingState<FollowData>> getfollowSearch({
+  static Future<LoadingState<FollowData>> followSearch({
+    required Account account,
     required int mid,
     required int ps,
     required int pn,
@@ -652,6 +687,7 @@ abstract final class MemberHttp {
     Map params = await WbiSign.makSign(data);
     final res = await Request().get(
       Api.followSearch,
+      options: Options(extra: {'account': account}),
       queryParameters: {
         ...data,
         'w_rid': params['w_rid'],

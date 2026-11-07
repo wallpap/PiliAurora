@@ -1,87 +1,78 @@
 import 'dart:math';
 
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:pili_aurora/common/skeleton/msg_feed_top.dart';
 import 'package:pili_aurora/common/sliver_single_child_delegate.dart';
 import 'package:pili_aurora/common/widgets/button/more_btn.dart';
+import 'package:pili_aurora/common/widgets/feed_pagination.dart';
 import 'package:pili_aurora/common/widgets/flutter/refresh_indicator.dart';
 import 'package:pili_aurora/common/widgets/loading_widget/http_error.dart';
-import 'package:pili_aurora/http/loading_state.dart';
+import 'package:pili_aurora/http/loading_state.dart' show Error;
 import 'package:pili_aurora/models/remote/follow/list.dart';
-import 'package:pili_aurora/pages/follow/child/child_controller.dart';
 import 'package:pili_aurora/pages/follow/controller.dart';
 import 'package:pili_aurora/pages/follow/widgets/follow_item.dart';
 import 'package:pili_aurora/pages/follow_type/controller.dart';
 import 'package:pili_aurora/pages/follow_type/view.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pili_aurora/pages/share/view.dart' show UserModel;
-import 'package:pili_aurora/utils/utils.dart';
-import 'package:get/get.dart';
-import 'package:material_ui/material_ui.dart';
+import 'package:pili_aurora/services/account_providers.dart';
+import 'package:pili_aurora/utils/accounts.dart';
 
 class FollowChildPage extends ConsumerStatefulWidget {
   const FollowChildPage({
     super.key,
-    this.tag,
-    this.controller,
-    required this.mid,
+    this.mid,
     this.tagid,
+    this.keyword,
     this.onSelect,
     this.name,
+    this.showCommon = false,
+    this.allowEdit = false,
   });
-
-  final String? tag;
-  final FollowController? controller;
-  final int mid;
+  final int? mid;
   final int? tagid;
+  final String? keyword;
   final ValueChanged<UserModel>? onSelect;
   final String? name;
-
+  final bool showCommon;
+  final bool allowEdit;
+  FollowingQuery get query => (mid: mid, tagid: tagid, keyword: keyword);
   @override
-  ConsumerState<FollowChildPage> createState() => _FollowChildPageState();
+  ConsumerState<FollowChildPage> createState() => FollowChildPageState();
 }
 
-class _FollowChildPageState extends ConsumerState<FollowChildPage>
+class FollowChildPageState extends ConsumerState<FollowChildPage>
     with AutomaticKeepAliveClientMixin {
-  late String _tag;
-  late FollowChildController _followController;
-
-  String get _newTag =>
-      '${widget.tag ?? Utils.generateRandomString(8)}${widget.tagid}';
-
-  @override
-  void initState() {
-    super.initState();
-    _initController();
-  }
-
-  void _initController() {
-    _tag = _newTag;
-    _followController = Get.put(
-      FollowChildController(widget.controller, widget.mid, widget.tagid),
-      tag: _tag,
-    );
-  }
-
-  @override
-  void didUpdateWidget(FollowChildPage oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.tagid != widget.tagid) {
-      final newTag = _newTag;
-      if (Get.isRegistered<FollowChildController>(tag: newTag)) {
-        _followController = Get.find<FollowChildController>(tag: newTag);
-      } else {
-        Get.delete<FollowChildController>(tag: _tag);
-        _initController();
-      }
+  final _scroll = ScrollController();
+  void scrollToTop() {
+    if (_scroll.hasClients) {
+      _scroll.animateTo(
+        0,
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeOut,
+      );
     }
+  }
+
+  @override
+  void dispose() {
+    _scroll.dispose();
+    super.dispose();
+  }
+
+  Future<void> _reload() async {
+    await AsyncValue.guard(
+      () => ref.refresh(followingProvider(widget.query).future),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     super.build(context);
-    final colorScheme = ColorScheme.of(context);
-    final padding = MediaQuery.viewPaddingOf(context);
-    final same = widget.controller?.isOwner == false
+    final provider = followingProvider(widget.query);
+    final snapshot = ref.watch(provider);
+    final account = ref.watch(mainAccountProvider);
+    final same = widget.showCommon
         ? ref.watch(
             followQueryProvider((
               kind: FollowKind.same,
@@ -90,66 +81,115 @@ class _FollowChildPageState extends ConsumerState<FollowChildPage>
             )),
           )
         : null;
+    final padding = MediaQuery.viewPaddingOf(context);
+    final colorScheme = ColorScheme.of(context);
     return Padding(
       padding: EdgeInsets.only(left: padding.left, right: padding.right),
-      child: refreshIndicator(
-        onRefresh: _followController.onRefresh,
-        child: CustomScrollView(
-          controller: _followController.scrollController,
-          physics: const AlwaysScrollableScrollPhysics(),
-          slivers: [
-            if (same != null && !same.isLoading && !same.hasError)
-              _buildSameFollowing(
-                colorScheme,
-                same.requireValue.items,
+      child: FeedPagination(
+        controller: _scroll,
+        dataRevision: snapshot,
+        dataSource: snapshot.value?.source,
+        canLoadMore: () {
+          final latest = ref.read(provider);
+          return !latest.isLoading &&
+              !latest.hasError &&
+              (latest.value?.canLoadMore ?? false);
+        },
+        onLoadMore: ref.read(provider.notifier).loadMore,
+        child: refreshIndicator(
+          onRefresh: _reload,
+          child: CustomScrollView(
+            controller: _scroll,
+            physics: const AlwaysScrollableScrollPhysics(),
+            slivers: [
+              if (same != null && !same.isLoading && !same.hasError)
+                _buildSameFollowing(colorScheme, same.requireValue.items),
+              SliverPadding(
+                padding: EdgeInsets.only(bottom: padding.bottom + 100),
+                sliver: snapshot.when(
+                  skipLoadingOnRefresh: false,
+                  skipLoadingOnReload: false,
+                  loading: () => const SliverPrototypeExtentList(
+                    prototypeItem: MsgFeedTopSkeleton(),
+                    delegate: SliverSingleChildDelegate(
+                      count: 12,
+                      child: MsgFeedTopSkeleton(),
+                    ),
+                  ),
+                  error: (error, _) => HttpError(
+                    errMsg: error is Error ? error.errMsg : '加载失败，请重试',
+                    onReload: _reload,
+                  ),
+                  data: (data) => data.items.isEmpty
+                      ? HttpError(onReload: _reload)
+                      : SliverList.builder(
+                          itemCount: data.items.length + 1,
+                          itemBuilder: (_, index) {
+                            if (index == data.items.length) {
+                              if (data.pageError != null) {
+                                return TextButton(
+                                  onPressed: () => ref
+                                      .read(provider.notifier)
+                                      .loadMore(retry: true),
+                                  child: Text(data.pageError!),
+                                );
+                              }
+                              if (data.isLoadingMore) {
+                                return const Padding(
+                                  padding: EdgeInsets.all(16),
+                                  child: Center(
+                                    child: CircularProgressIndicator(),
+                                  ),
+                                );
+                              }
+                              return const SizedBox.shrink();
+                            }
+                            return FollowItem(
+                              item: data.items[index],
+                              account: account,
+                              isOwner:
+                                  widget.allowEdit &&
+                                  widget.onSelect == null &&
+                                  account.isLogin &&
+                                  (widget.mid ?? account.mid) == account.mid,
+                              onSelect: widget.onSelect == null
+                                  ? null
+                                  : (user) {
+                                      final latest = ref.read(provider);
+                                      if (identical(account, Accounts.main) &&
+                                          !latest.isLoading &&
+                                          !latest.hasError &&
+                                          identical(
+                                            data.source,
+                                            latest.value?.source,
+                                          )) {
+                                        widget.onSelect!(user);
+                                      }
+                                    },
+                              afterMod: (_) {
+                                if (!mounted ||
+                                    !identical(account, Accounts.main)) {
+                                  return;
+                                }
+                                ref.invalidate(followingProvider);
+                                if (ref
+                                        .read(followTagsProvider)
+                                        .value
+                                        ?.isSaving !=
+                                    true) {
+                                  ref.invalidate(followTagsProvider);
+                                }
+                              },
+                            );
+                          },
+                        ),
+                ),
               ),
-            SliverPadding(
-              padding: EdgeInsets.only(bottom: padding.bottom + 100),
-              sliver: Obx(
-                () => _buildBody(_followController.loadingState.value),
-              ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
-  }
-
-  Widget _buildBody(LoadingState<List<FollowItemModel>?> loadingState) {
-    return switch (loadingState) {
-      Loading() => const SliverPrototypeExtentList(
-        prototypeItem: MsgFeedTopSkeleton(),
-        delegate: SliverSingleChildDelegate(
-          count: 12,
-          child: MsgFeedTopSkeleton(),
-        ),
-      ),
-      Success(:final response) =>
-        response != null && response.isNotEmpty
-            ? SliverList.builder(
-                itemCount: response.length,
-                itemBuilder: (context, index) {
-                  if (index == response.length - 1) {
-                    _followController.onLoadMore();
-                  }
-                  final item = response[index];
-                  return FollowItem(
-                    item: item,
-                    isOwner: widget.controller?.isOwner,
-                    onSelect: widget.onSelect,
-                    afterMod: (attr) {
-                      item.attribute = attr == 0 ? -1 : 0;
-                      _followController.loadingState.refresh();
-                    },
-                  );
-                },
-              )
-            : HttpError(onReload: _followController.onReload),
-      Error(:final errMsg) => HttpError(
-        errMsg: errMsg,
-        onReload: _followController.onReload,
-      ),
-    };
   }
 
   Widget _buildSameFollowing(
@@ -178,7 +218,7 @@ class _FollowChildPageState extends ConsumerState<FollowChildPage>
                       moreTextButton(
                         onTap: () => FollowTypePage.open(
                           kind: FollowKind.same,
-                          mid: _followController.mid,
+                          mid: widget.mid ?? ref.read(mainAccountProvider).mid,
                           name: widget.name,
                         ),
                         color: colorScheme.outline,
@@ -212,6 +252,5 @@ class _FollowChildPageState extends ConsumerState<FollowChildPage>
   }
 
   @override
-  bool get wantKeepAlive =>
-      widget.onSelect != null || widget.controller?.tabController != null;
+  bool get wantKeepAlive => true;
 }

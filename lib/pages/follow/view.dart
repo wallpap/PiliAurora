@@ -1,3 +1,8 @@
+import 'package:flutter/foundation.dart' show listEquals;
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
+import 'package:get/get.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:pili_aurora/common/widgets/app_popup_menu_item.dart';
 import 'package:pili_aurora/common/widgets/dialog/dialog.dart';
 import 'package:pili_aurora/common/widgets/dialog/simple_dialog_option.dart';
@@ -5,278 +10,355 @@ import 'package:pili_aurora/common/widgets/loading_widget/loading_widget.dart';
 import 'package:pili_aurora/common/widgets/scaffold/simple_scaffold.dart';
 import 'package:pili_aurora/common/widgets/scroll_physics.dart' show tabBarView;
 import 'package:pili_aurora/common/widgets/view_safe_area.dart';
-import 'package:pili_aurora/http/loading_state.dart';
-import 'package:pili_aurora/models/member/tags.dart';
 import 'package:pili_aurora/pages/common/fab_mixin.dart';
-import 'package:pili_aurora/pages/follow/child/child_controller.dart';
 import 'package:pili_aurora/pages/follow/child/child_view.dart';
 import 'package:pili_aurora/pages/follow/controller.dart';
+import 'package:pili_aurora/pages/follow/widgets/tag_dialog.dart';
 import 'package:pili_aurora/pages/follow_tag_sort/view.dart';
 import 'package:pili_aurora/pages/follow_type/controller.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:pili_aurora/utils/bili_utils.dart';
+import 'package:pili_aurora/services/account_providers.dart';
 import 'package:pili_aurora/utils/parse_int.dart';
 import 'package:pili_aurora/utils/platform_utils.dart';
-import 'package:pili_aurora/utils/request_utils.dart';
-import 'package:pili_aurora/utils/utils.dart';
-import 'package:flutter/services.dart' show LengthLimitingTextInputFormatter;
-import 'package:get/get.dart';
-import 'package:material_ui/material_ui.dart';
 
 class FollowPage extends ConsumerStatefulWidget {
-  const FollowPage({super.key});
+  const FollowPage({super.key, this.mid, this.name});
+  final int? mid;
+  final String? name;
+  factory FollowPage.fromArguments(Object? arguments) {
+    final args = arguments as Map?;
+    return FollowPage(
+      mid: safeToInt(args?['mid']),
+      name: args?['name'] as String?,
+    );
+  }
+  static void toFollowPage({dynamic mid, String? name}) {
+    if (mid == null) return;
+    Get.toNamed('/follow', arguments: {'mid': safeToInt(mid), 'name': name});
+  }
 
   @override
   ConsumerState<FollowPage> createState() => _FollowPageState();
-
-  static void toFollowPage({dynamic mid, String? name}) {
-    if (mid == null) return;
-    Get.toNamed(
-      '/follow',
-      arguments: {
-        'mid': safeToInt(mid),
-        'name': name,
-      },
-    );
-  }
 }
 
 class _FollowPageState extends ConsumerState<FollowPage>
     with SingleTickerProviderStateMixin, BaseFabMixin, LazyFabMixin {
-  final _tag = Utils.generateRandomString(8);
-  late final FollowController _followController;
-
-  @override
-  void initState() {
-    super.initState();
-    _followController = Get.put(FollowController(_tag), tag: _tag);
-  }
-
-  @override
-  bool onNotification(UserScrollNotification notification) {
-    if (notification.metrics.axisDirection == .down) {
-      return super.onNotification(notification);
+  Future<void> _create() async {
+    final before = ref.read(followTagsProvider);
+    if (before.isLoading ||
+        before.hasError ||
+        before.value == null ||
+        before.value!.isSaving) {
+      return;
     }
-    return false;
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final padding = MediaQuery.viewPaddingOf(context);
-    String? name = _followController.name;
-    if (!_followController.isOwner && name == null) {
-      final nameState = ref.watch(followNameProvider(_followController.mid));
-      if (!nameState.isLoading && !nameState.hasError) name = nameState.value;
+    final name = await showFollowTagNameDialog(context);
+    if (!mounted || name == null) return;
+    final result = await ref
+        .read(followTagsProvider.notifier)
+        .create(name, before.requireValue.source);
+    if (mounted) {
+      if (result.isSuccess) {
+        SmartDialog.showToast('创建成功');
+      } else {
+        result.toast();
+      }
     }
-    return SimpleScaffold(
-      appBar: _buildAppBar(name),
-      body: _followController.isOwner
-          ? fabAnimWrapper(
-              child: Obx(() => _buildBody(_followController.followState.value)),
-            )
-          : _childPage(null, name: name),
-      fab: _followController.isOwner
-          ? SlideTransition(
-              position: fabAnimation,
-              child: Padding(
-                padding: .only(
-                  right: kFloatingActionButtonMargin + padding.right,
-                  bottom: kFloatingActionButtonMargin + padding.bottom,
-                ),
-                child: FloatingActionButton.extended(
-                  onPressed: _followController.toggleOrderType,
-                  icon: const Icon(Icons.format_list_bulleted, size: 20),
-                  label: Obx(
-                    () => Text(_followController.orderType.value.title),
-                  ),
-                ),
-              ),
-            )
-          : null,
-    );
   }
 
-  PreferredSizeWidget _buildAppBar(String? name) => AppBar(
-    title: _followController.isOwner
-        ? const Text('我的关注')
-        : name == null
-        ? const SizedBox.shrink()
-        : Text('$name的关注'),
-    actions: _followController.isOwner
-        ? [
-            IconButton(
-              onPressed: () => RequestUtils.createFavTag(
-                context,
-                _followController.onCreateFavTag,
-              ),
-              icon: const Icon(Icons.add),
-              tooltip: '新建分组',
-            ),
-            IconButton(
-              onPressed: () {
-                if (_followController.followState.value is! Success) {
-                  return;
-                }
-                Get.to(FollowTagSortPage(controller: _followController));
-              },
-              icon: const Icon(Icons.sort),
-              tooltip: '分组排序',
-            ),
-            IconButton(
-              onPressed: () => Get.toNamed(
-                '/followSearch',
-                arguments: {
-                  'mid': _followController.mid,
-                },
-              ),
-              icon: const Icon(Icons.search_outlined),
-              tooltip: '搜索',
-            ),
-            PopupMenuButton(
-              icon: const Icon(Icons.more_vert),
-              itemBuilder: (context) => [
-                AppPopupMenuItem(
-                  onTap: () => Get.toNamed('/blackListPage'),
-                  child: const Row(
-                    spacing: 10,
-                    mainAxisSize: .min,
-                    children: [
-                      Icon(Icons.block, size: 19),
-                      Text('黑名单管理'),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(width: 6),
-          ]
-        : null,
-  );
-
-  Widget _childPage(MemberTagItemModel? item, {String? name}) =>
-      FollowChildPage(
-        tag: _tag,
-        controller: _followController,
-        mid: _followController.mid,
-        tagid: item?.tagid,
-        name: name,
-      );
-
-  Widget _buildBody(LoadingState loadingState) {
-    return switch (loadingState) {
-      Loading() => m3eLoading,
-      Success() => Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          ViewSafeArea(
-            child: TabBar(
-              isScrollable: true,
-              tabAlignment: TabAlignment.start,
-              controller: _followController.tabController,
-              tabs: List.generate(_followController.tabs.length, (index) {
-                return Obx(() {
-                  final item = _followController.tabs[index];
-                  int? count = item.count;
-                  if (BiliUtils.isCustomFollowTag(item.tagid)) {
-                    return GestureDetector(
-                      behavior: HitTestBehavior.translucent,
-                      onLongPress: () {
-                        Feedback.forLongPress(context);
-                        _onHandleTag(index, item);
-                      },
-                      onSecondaryTap: PlatformUtils.isMobile
-                          ? null
-                          : () => _onHandleTag(index, item),
-                      child: Tab(
-                        child: Row(
-                          children: [
-                            Text(
-                              '${item.name}${count != null ? '($count)' : ''} ',
-                            ),
-                            const Icon(Icons.menu, size: 18),
-                          ],
-                        ),
-                      ),
-                    );
-                  }
-                  return Tab(
-                    text: '${item.name}${count != null ? '($count)' : ''}',
-                  );
-                });
-              }),
-              onTap: (value) {
-                if (!_followController.tabController!.indexIsChanging) {
-                  final item = _followController.tabs[value];
-                  // if (_isCustomTag(item.tagid)) {
-                  //   _onHandleTag(value, item);
-                  // }
-                  try {
-                    Get.find<FollowChildController>(
-                      tag: '$_tag${item.tagid}',
-                    ).animateToTop();
-                  } catch (_) {}
-                }
-              },
-            ),
-          ),
-          Expanded(
-            child: tabBarView(
-              controller: _followController.tabController,
-              children: _followController.tabs.map(_childPage).toList(),
-            ),
-          ),
-        ],
-      ),
-      Error() => _childPage(null),
-    };
-  }
-
-  void _onHandleTag(int index, MemberTagItemModel item) {
-    showDialog(
+  Future<void> _edit(FollowTag tag) async {
+    final source = ref.read(followTagsProvider).value?.source;
+    if (source == null) return;
+    final action = await showDialog<String>(
       context: context,
       builder: (context) => SimpleDialog(
         clipBehavior: Clip.hardEdge,
         contentPadding: const EdgeInsets.symmetric(vertical: 12),
         children: [
           DialogOption(
-            onPressed: () {
-              Get.back();
-              String tagName = item.name!;
-              showConfirmDialog(
-                context: context,
-                title: const Text('编辑分组名称'),
-                content: TextFormField(
-                  autofocus: true,
-                  initialValue: tagName,
-                  onChanged: (value) => tagName = value,
-                  inputFormatters: [LengthLimitingTextInputFormatter(16)],
-                  decoration: const InputDecoration(
-                    border: OutlineInputBorder(),
-                  ),
-                ),
-                onConfirm: () {
-                  if (tagName.isNotEmpty) {
-                    _followController.onUpdateTag(item, tagName);
-                  }
-                },
-              );
-            },
+            onPressed: () => Navigator.pop(context, 'rename'),
             child: const Text('修改名称', style: TextStyle(fontSize: 14)),
           ),
           DialogOption(
-            onPressed: () {
-              Get.back();
-              showConfirmDialog(
-                context: context,
-                title: const Text('删除分组'),
-                content: const Text('删除后，该分组下的用户依旧保留？'),
-                onConfirm: () => _followController.onDelTag(index, item.tagid!),
-              );
-            },
+            onPressed: () => Navigator.pop(context, 'remove'),
             child: const Text('删除分组', style: TextStyle(fontSize: 14)),
           ),
         ],
       ),
+    );
+    if (!mounted) return;
+    if (action == 'rename') {
+      final name = await showFollowTagNameDialog(context, name: tag.name);
+      if (!mounted || name == null) return;
+      final result = await ref
+          .read(followTagsProvider.notifier)
+          .rename(tag.id, name, source);
+      if (mounted) {
+        if (result.isSuccess) {
+          SmartDialog.showToast('修改成功');
+        } else {
+          result.toast();
+        }
+      }
+    } else if (action == 'remove') {
+      final confirmed = await showConfirmDialog(
+        context: context,
+        title: const Text('删除分组'),
+        content: const Text('删除后，该分组下的用户依旧保留。'),
+      );
+      if (!mounted || !confirmed) return;
+      final result = await ref
+          .read(followTagsProvider.notifier)
+          .remove(tag.id, source);
+      if (mounted) {
+        if (result.isSuccess) {
+          SmartDialog.showToast('删除成功');
+        } else {
+          result.toast();
+        }
+      }
+    }
+  }
+
+  @override
+  bool onNotification(UserScrollNotification notification) =>
+      notification.metrics.axisDirection == AxisDirection.down
+      ? super.onNotification(notification)
+      : false;
+  @override
+  Widget build(BuildContext context) {
+    final account = ref.watch(mainAccountProvider);
+    final owner = (widget.mid ?? account.mid) == account.mid;
+    final groups = owner ? ref.watch(followTagsProvider) : null;
+    final order = owner ? ref.watch(followOrderProvider) : null;
+    String? name = widget.name;
+    if (!owner && name == null) {
+      final state = ref.watch(followNameProvider(widget.mid));
+      if (!state.isLoading && !state.hasError) name = state.value;
+    }
+    final padding = MediaQuery.viewPaddingOf(context);
+    final canEdit =
+        account.isLogin &&
+        groups != null &&
+        !groups.isLoading &&
+        !groups.hasError &&
+        groups.value?.isSaving == false;
+    final mid = widget.mid;
+    return SimpleScaffold(
+      appBar: AppBar(
+        title: owner
+            ? const Text('我的关注')
+            : name == null
+            ? const SizedBox.shrink()
+            : Text('$name的关注'),
+        actions: owner
+            ? [
+                IconButton(
+                  onPressed: canEdit ? _create : null,
+                  icon: const Icon(Icons.add),
+                  tooltip: '新建分组',
+                ),
+                IconButton(
+                  onPressed: canEdit
+                      ? () => Get.to(
+                          () => FollowTagSortPage(initial: groups.requireValue),
+                        )
+                      : null,
+                  icon: const Icon(Icons.sort),
+                  tooltip: '分组排序',
+                ),
+                IconButton(
+                  onPressed: () =>
+                      Get.toNamed('/followSearch', arguments: {'mid': mid}),
+                  icon: const Icon(Icons.search_outlined),
+                  tooltip: '搜索',
+                ),
+                PopupMenuButton(
+                  itemBuilder: (_) => [
+                    AppPopupMenuItem(
+                      onTap: () => Get.toNamed('/blackListPage'),
+                      child: const Row(
+                        spacing: 10,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [Icon(Icons.block, size: 19), Text('黑名单管理')],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(width: 6),
+              ]
+            : null,
+      ),
+      body: owner
+          ? fabAnimWrapper(
+              child: groups!.when(
+                skipLoadingOnRefresh: false,
+                skipLoadingOnReload: false,
+                loading: () => m3eLoading,
+                error: (_, _) => Column(
+                  children: [
+                    TextButton(
+                      onPressed: () => ref.invalidate(followTagsProvider),
+                      child: const Text('分组加载失败，点击重试'),
+                    ),
+                    Expanded(
+                      child: FollowChildPage(
+                        key: ObjectKey(account),
+                        mid: mid,
+                        allowEdit: true,
+                      ),
+                    ),
+                  ],
+                ),
+                data: (data) => _FollowTabs(
+                  key: ObjectKey(account),
+                  mid: mid,
+                  groups: data,
+                  onEdit: canEdit ? _edit : null,
+                ),
+              ),
+            )
+          : FollowChildPage(
+              key: ObjectKey(account),
+              mid: mid,
+              name: name,
+              showCommon: true,
+            ),
+      fab: owner
+          ? SlideTransition(
+              position: fabAnimation,
+              child: Padding(
+                padding: EdgeInsets.only(
+                  right: kFloatingActionButtonMargin + padding.right,
+                  bottom: kFloatingActionButtonMargin + padding.bottom,
+                ),
+                child: FloatingActionButton.extended(
+                  onPressed: ref.read(followOrderProvider.notifier).toggle,
+                  icon: const Icon(Icons.format_list_bulleted, size: 20),
+                  label: Text(order!.title),
+                ),
+              ),
+            )
+          : null,
+    );
+  }
+}
+
+class _FollowTabs extends ConsumerStatefulWidget {
+  const _FollowTabs({
+    super.key,
+    required this.mid,
+    required this.groups,
+    required this.onEdit,
+  });
+  final int? mid;
+  final FollowTagsState groups;
+  final ValueChanged<FollowTag>? onEdit;
+  @override
+  ConsumerState<_FollowTabs> createState() => _FollowTabsState();
+}
+
+class _FollowTabsState extends ConsumerState<_FollowTabs>
+    with TickerProviderStateMixin {
+  late TabController _tabs;
+  final _keys = <int?, GlobalKey<FollowChildPageState>>{};
+  List<int?> get _ids => [null, ...widget.groups.tags.map((tag) => tag.id)];
+  @override
+  void initState() {
+    super.initState();
+    _tabs = TabController(length: _ids.length, vsync: this);
+  }
+
+  @override
+  void didUpdateWidget(_FollowTabs oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final oldIds = <int?>[null, ...oldWidget.groups.tags.map((tag) => tag.id)];
+    if (!listEquals(oldIds, _ids)) {
+      final selected = oldIds[_tabs.index];
+      _tabs.dispose();
+      final index = _ids.indexOf(selected);
+      _tabs = TabController(
+        length: _ids.length,
+        initialIndex: index < 0 ? 0 : index,
+        vsync: this,
+      );
+      _keys.removeWhere((id, _) => !_ids.contains(id));
+    }
+  }
+
+  @override
+  void dispose() {
+    _tabs.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final all = ref.watch(
+      followingProvider((mid: widget.mid, tagid: null, keyword: null)),
+    );
+    final total = all.isLoading || all.hasError ? null : all.value?.total;
+    final tags = widget.groups.tags;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        ViewSafeArea(
+          child: TabBar(
+            isScrollable: true,
+            tabAlignment: TabAlignment.start,
+            controller: _tabs,
+            tabs: [
+              Tab(text: '全部关注${total == null ? '' : '($total)'}'),
+              for (final tag in tags)
+                GestureDetector(
+                  onLongPress: tag.isCustom && widget.onEdit != null
+                      ? () {
+                          Feedback.forLongPress(context);
+                          widget.onEdit!(tag);
+                        }
+                      : null,
+                  onSecondaryTap:
+                      !PlatformUtils.isMobile &&
+                          tag.isCustom &&
+                          widget.onEdit != null
+                      ? () => widget.onEdit!(tag)
+                      : null,
+                  child: Tab(
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          '${tag.name}${tag.count == null ? '' : '(${tag.count})'} ',
+                        ),
+                        if (tag.isCustom) const Icon(Icons.menu, size: 18),
+                      ],
+                    ),
+                  ),
+                ),
+            ],
+            onTap: (index) {
+              if (!_tabs.indexIsChanging) {
+                _keys[_ids[index]]?.currentState?.scrollToTop();
+              }
+            },
+          ),
+        ),
+        Expanded(
+          child: tabBarView(
+            controller: _tabs,
+            children: [
+              for (final id in _ids)
+                FollowChildPage(
+                  key: _keys.putIfAbsent(
+                    id,
+                    GlobalKey<FollowChildPageState>.new,
+                  ),
+                  mid: widget.mid,
+                  tagid: id,
+                  allowEdit: true,
+                ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 }

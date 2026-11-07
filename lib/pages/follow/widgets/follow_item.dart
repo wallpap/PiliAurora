@@ -1,3 +1,4 @@
+import 'package:pili_aurora/utils/accounts/account.dart';
 import 'package:pili_aurora/common/widgets/pendant_avatar.dart';
 import 'package:pili_aurora/models/remote/follow/list.dart';
 import 'package:pili_aurora/pages/share/view.dart' show UserModel;
@@ -16,9 +17,12 @@ class FollowItem extends StatelessWidget {
     super.key,
     required this.item,
     this.afterMod,
+    this.account,
     bool? isOwner,
     this.onSelect,
   }) : isOwner = isOwner ?? false;
+
+  final Account? account;
 
   @override
   Widget build(BuildContext context) {
@@ -29,6 +33,7 @@ class FollowItem extends StatelessWidget {
       followBtn = FilledButton.tonal(
         onPressed: () => RequestUtils.actionRelationMod(
           context: context,
+          account: account,
           mid: item.mid,
           isFollow: isFollow,
           afterMod: afterMod,

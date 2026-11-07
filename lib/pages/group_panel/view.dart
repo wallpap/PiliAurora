@@ -1,132 +1,90 @@
-import 'package:pili_aurora/common/widgets/loading_widget/loading_widget.dart';
-import 'package:pili_aurora/http/loading_state.dart';
-import 'package:pili_aurora/http/member.dart';
-import 'package:pili_aurora/models/member/tags.dart';
-import 'package:pili_aurora/utils/extension/iterable_ext.dart';
-import 'package:pili_aurora/utils/extension/num_ext.dart';
-import 'package:pili_aurora/utils/feed_back.dart';
-import 'package:pili_aurora/utils/request_utils.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:get/get.dart';
 import 'package:material_ui/material_ui.dart';
+import 'package:pili_aurora/common/widgets/loading_widget/loading_widget.dart';
+import 'package:pili_aurora/pages/follow/controller.dart';
+import 'package:pili_aurora/pages/follow/widgets/tag_dialog.dart';
+import 'package:pili_aurora/services/account_providers.dart';
+import 'package:pili_aurora/utils/accounts/account.dart';
 
-class GroupPanel extends StatefulWidget {
-  final int mid;
-  final List<int>? tags;
-  final ScrollController? scrollController;
+class GroupPanel extends ConsumerStatefulWidget {
   const GroupPanel({
     super.key,
     required this.mid,
     this.tags,
     this.scrollController,
+    this.account,
   });
-
+  final int mid;
+  final List<int>? tags;
+  final ScrollController? scrollController;
+  final Account? account;
   @override
-  State<GroupPanel> createState() => _GroupPanelState();
+  ConsumerState<GroupPanel> createState() => _GroupPanelState();
 }
 
-class _GroupPanelState extends State<GroupPanel> {
-  LoadingState<List<MemberTagItemModel>> loadingState = LoadingState.loading();
-  final RxBool showDefaultBtn = true.obs;
-  late final Set<int> tags = widget.tags == null
-      ? {}
-      : Set<int>.from(widget.tags!);
-
-  @override
-  void initState() {
-    super.initState();
-    _queryFollowUpTags();
-  }
-
-  void _queryFollowUpTags() {
-    MemberHttp.followUpTags().then((res) {
-      if (mounted) {
-        loadingState = res..dataOrNull?.removeFirstWhere((e) => e.tagid == 0);
-        showDefaultBtn.value = tags.isEmpty;
-        setState(() {});
-      }
-    });
-  }
-
-  Future<void> onSave() async {
-    if (!loadingState.isSuccess) {
-      Get.back();
+class _GroupPanelState extends ConsumerState<GroupPanel> {
+  late final _account = widget.account ?? ref.read(mainAccountProvider);
+  late final _initial = Set<int>.from(widget.tags ?? const <int>[])..remove(0);
+  late final _selected = Set<int>.of(_initial);
+  bool get _current => identical(_account, ref.read(mainAccountProvider));
+  Future<void> _create() async {
+    final before = ref.read(followTagsProvider);
+    if (!_current ||
+        before.isLoading ||
+        before.hasError ||
+        before.value == null ||
+        before.value!.isSaving) {
       return;
     }
-    feedBack();
-    // 保存
-    final res = await MemberHttp.addUsers(
-      widget.mid.toString(),
-      tags.isEmpty ? '0' : tags.join(','),
-    );
-    if (res.isSuccess) {
-      SmartDialog.showToast('保存成功');
-      Get.back(result: tags);
+    final name = await showFollowTagNameDialog(context);
+    if (!mounted || !_current || name == null) return;
+    final result = await ref
+        .read(followTagsProvider.notifier)
+        .create(name, before.requireValue.source);
+    if (!mounted || !_current) return;
+    if (result.isSuccess) {
+      setState(() => _selected.add(result.data));
+      SmartDialog.showToast('创建成功');
     } else {
-      res.toast();
+      result.toast();
     }
   }
 
-  Widget get _buildBody {
-    return switch (loadingState) {
-      Loading() => m3eLoading,
-      Success(:final response) => ListView.builder(
-        controller: widget.scrollController,
-        itemCount: response.length,
-        itemBuilder: (context, index) {
-          final item = response[index];
-          return Material(
-            type: MaterialType.transparency,
-            child: Builder(
-              builder: (context) {
-                void onTap() {
-                  final tagid = item.tagid!;
-                  if (tags.contains(tagid)) {
-                    tags.remove(tagid);
-                    item.count--;
-                  } else {
-                    tags.add(tagid);
-                    item.count++;
-                  }
-                  (context as Element).markNeedsBuild();
-                  showDefaultBtn.value = tags.isEmpty;
-                }
-
-                return ListTile(
-                  onTap: onTap,
-                  dense: true,
-                  leading: const Icon(Icons.group_outlined),
-                  minLeadingWidth: 0,
-                  title: Text('${item.name} (${item.count})'),
-                  subtitle: item.tip?.isNotEmpty == true
-                      ? Text(item.tip!)
-                      : null,
-                  trailing: Transform.scale(
-                    scale: 0.9,
-                    child: Checkbox(
-                      value: tags.contains(item.tagid),
-                      onChanged: (_) => onTap(),
-                    ),
-                  ),
-                );
-              },
-            ),
-          );
-        },
-      ),
-      Error(:final errMsg) => scrollErrorWidget(
-        controller: widget.scrollController,
-        errMsg: errMsg,
-        onReload: _queryFollowUpTags,
-      ),
-    };
+  Future<void> _save() async {
+    final before = ref.read(followTagsProvider);
+    if (!_current ||
+        before.isLoading ||
+        before.hasError ||
+        before.value == null ||
+        before.value!.isSaving) {
+      return;
+    }
+    final result = await ref
+        .read(followTagsProvider.notifier)
+        .assign(widget.mid, _selected, before.requireValue.source);
+    if (!mounted || !_current) return;
+    if (result.isSuccess) {
+      SmartDialog.showToast('保存成功');
+      Get.back(result: Set<int>.of(_selected));
+    } else {
+      result.toast();
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
+    final account = ref.watch(mainAccountProvider);
+    final snapshot = ref.watch(followTagsProvider);
+    final current = identical(account, _account);
+    final ready =
+        current &&
+        !snapshot.isLoading &&
+        !snapshot.hasError &&
+        snapshot.value?.isSaving == false;
     return Column(
-      crossAxisAlignment: .end,
+      crossAxisAlignment: CrossAxisAlignment.end,
       children: [
         AppBar(
           backgroundColor: Colors.transparent,
@@ -138,50 +96,76 @@ class _GroupPanelState extends State<GroupPanel> {
           title: const Text('设置关注分组'),
           actions: [
             TextButton.icon(
-              onPressed: () =>
-                  RequestUtils.createFavTag(context, _onCreateFavTag),
-              icon: Icon(Icons.add, color: theme.colorScheme.primary),
+              onPressed: ready ? _create : null,
+              icon: const Icon(Icons.add),
               label: const Text('新建分组'),
-              style: const ButtonStyle(
-                visualDensity: .compact,
-                padding: WidgetStatePropertyAll(
-                  .symmetric(horizontal: 18, vertical: 14),
-                ),
-              ),
             ),
             const SizedBox(width: 16),
           ],
         ),
-        Expanded(child: _buildBody),
+        Expanded(
+          child: !current
+              ? const Center(child: Text('账号已切换，请重新打开'))
+              : snapshot.when(
+                  skipLoadingOnRefresh: false,
+                  skipLoadingOnReload: false,
+                  loading: () => m3eLoading,
+                  error: (_, _) => Center(
+                    child: TextButton(
+                      onPressed: () => ref.invalidate(followTagsProvider),
+                      child: const Text('加载失败，点击重试'),
+                    ),
+                  ),
+                  data: (data) {
+                    final tags = data.tags.where((tag) => tag.id != 0).toList();
+                    return ListView.builder(
+                      controller: widget.scrollController,
+                      itemCount: tags.length,
+                      itemBuilder: (_, index) {
+                        final tag = tags[index];
+                        final delta =
+                            (_selected.contains(tag.id) ? 1 : 0) -
+                            (_initial.contains(tag.id) ? 1 : 0);
+                        void toggle() => setState(() {
+                          if (!_selected.remove(tag.id)) _selected.add(tag.id);
+                        });
+                        return ListTile(
+                          onTap: ready ? toggle : null,
+                          dense: true,
+                          leading: const Icon(Icons.group_outlined),
+                          minLeadingWidth: 0,
+                          title: Text(
+                            '${tag.name}${tag.count == null ? '' : ' (${tag.count! + delta})'}',
+                          ),
+                          subtitle: tag.tip?.isNotEmpty == true
+                              ? Text(tag.tip!)
+                              : null,
+                          trailing: Checkbox(
+                            value: _selected.contains(tag.id),
+                            onChanged: ready ? (_) => toggle() : null,
+                          ),
+                        );
+                      },
+                    );
+                  },
+                ),
+        ),
         Divider(
           height: 1,
-          color: theme.disabledColor.withValues(alpha: 0.08),
+          color: Theme.of(context).disabledColor.withValues(alpha: 0.08),
         ),
         Padding(
-          padding: .only(
+          padding: EdgeInsets.only(
             right: 20,
             top: 12,
             bottom: MediaQuery.viewPaddingOf(context).bottom + 12,
           ),
           child: FilledButton.tonal(
-            onPressed: onSave,
-            style: const ButtonStyle(visualDensity: .compact),
-            child: Obx(() => Text(showDefaultBtn.value ? '保存至默认分组' : '保存')),
+            onPressed: ready ? _save : null,
+            child: Text(_selected.isEmpty ? '保存至默认分组' : '保存'),
           ),
         ),
       ],
     );
-  }
-
-  void _onCreateFavTag(({int tagid, String tagName}) res) {
-    if (!mounted) return;
-    if (loadingState case Success(:final response)) {
-      response.add(MemberTagItemModel.fromCreate(res, count: 1));
-      tags.add(res.tagid);
-      showDefaultBtn.value = false;
-      setState(() {});
-    } else {
-      _queryFollowUpTags();
-    }
   }
 }

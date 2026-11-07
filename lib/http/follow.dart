@@ -3,18 +3,20 @@ import 'package:pili_aurora/http/error_msg.dart';
 import 'package:pili_aurora/http/init.dart';
 import 'package:pili_aurora/http/loading_state.dart';
 import 'package:pili_aurora/models/remote/follow/data.dart';
-import 'package:pili_aurora/utils/accounts.dart';
+import 'package:pili_aurora/utils/accounts/account.dart';
 import 'package:dio/dio.dart' show Options, Headers;
 
 abstract final class FollowHttp {
   static Future<LoadingState<FollowData>> followings({
-    int? vmid,
-    int? pn,
+    required Account account,
+    required int vmid,
+    required int pn,
     int ps = 20,
     String orderType = '', // ''=>最近关注，'attention'=>最常访问
   }) async {
     final res = await Request().get(
       Api.followings,
+      options: Options(extra: {'account': account}),
       queryParameters: {
         'vmid': vmid,
         'pn': pn,
@@ -31,6 +33,7 @@ abstract final class FollowHttp {
   }
 
   static Future<LoadingState<void>> sortFollowTag({
+    required Account account,
     required String tagids,
   }) async {
     final res = await Request().post(
@@ -41,9 +44,12 @@ abstract final class FollowHttp {
       },
       data: {
         'tagids': tagids,
-        'csrf': Accounts.main.csrf,
+        'csrf': account.csrf,
       },
-      options: Options(contentType: Headers.formUrlEncodedContentType),
+      options: Options(
+        extra: {'account': account, 'noRetry': true},
+        contentType: Headers.formUrlEncodedContentType,
+      ),
     );
     if (res.data['code'] == 0) {
       return const Success(null);

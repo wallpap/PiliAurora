@@ -1,6 +1,5 @@
 import 'dart:math';
 
-import 'package:pili_aurora/common/widgets/dialog/dialog.dart';
 import 'package:pili_aurora/services/logger.dart';
 import 'package:pili_aurora/common/widgets/dialog/simple_dialog_option.dart';
 import 'package:pili_aurora/common/widgets/selection_text.dart';
@@ -25,6 +24,7 @@ import 'package:pili_aurora/pages/fav_detail/controller.dart'
 import 'package:pili_aurora/pages/group_panel/view.dart';
 import 'package:pili_aurora/pages/login/geetest/geetest_webview_dialog.dart';
 import 'package:pili_aurora/utils/accounts.dart';
+import 'package:pili_aurora/utils/accounts/account.dart';
 import 'package:pili_aurora/utils/extension/context_ext.dart';
 import 'package:pili_aurora/utils/extension/size_ext.dart';
 import 'package:pili_aurora/utils/extension/string_ext.dart';
@@ -36,7 +36,6 @@ import 'package:pili_aurora/utils/storage_key.dart';
 import 'package:pili_aurora/utils/storage_pref.dart';
 import 'package:pili_aurora/utils/theme_utils.dart';
 import 'package:pili_aurora/utils/utils.dart';
-import 'package:flutter/services.dart' show LengthLimitingTextInputFormatter;
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:get/get.dart';
 import 'package:material_ui/material_ui.dart';
@@ -59,52 +58,29 @@ abstract final class RequestUtils {
     }
   }
 
-  static Future<void> createFavTag(
-    BuildContext context,
-    ValueChanged<({int tagid, String tagName})> onSuccess,
-  ) async {
-    String tagName = '';
-    final onCreate = await showConfirmDialog(
-      context: context,
-      title: const Text('新建分组'),
-      content: TextFormField(
-        autofocus: true,
-        initialValue: tagName,
-        onChanged: (value) => tagName = value,
-        inputFormatters: [
-          LengthLimitingTextInputFormatter(16),
-        ],
-        decoration: const InputDecoration(border: OutlineInputBorder()),
-      ),
-    );
-    if (onCreate) {
-      final res = await MemberHttp.createFollowTag(tagName);
-      if (res case Success(:final response)) {
-        onSuccess((tagid: response, tagName: tagName));
-        SmartDialog.showToast('创建成功');
-      } else {
-        res.toast();
-      }
-    }
-  }
-
   static Future<void> actionRelationMod({
     required BuildContext context,
+    Account? account,
     required dynamic mid,
     required bool isFollow,
     required ValueChanged<int>? afterMod,
     RelationData? followStatus,
   }) async {
-    if (mid == null) {
+    final requestAccount = account ?? Accounts.main;
+    bool current() =>
+        context.mounted && identical(requestAccount, Accounts.main);
+    if (mid == null || !current()) {
       return;
     }
     feedBack();
     if (!isFollow) {
       final res = await VideoHttp.relationMod(
+        account: requestAccount,
         mid: mid,
         act: 1,
         reSrc: 11,
       );
+      if (!current()) return;
       if (res.isSuccess) {
         SmartDialog.showToast('关注成功');
         afterMod?.call(2);
@@ -113,7 +89,8 @@ abstract final class RequestUtils {
       }
     } else {
       if (followStatus?.tag == null) {
-        final res = await UserHttp.userRelation(mid);
+        final res = await UserHttp.userRelation(mid, account: requestAccount);
+        if (!current()) return;
         if (res case Success(:final response)) {
           followStatus = response;
         } else {
@@ -122,7 +99,7 @@ abstract final class RequestUtils {
         }
       }
 
-      if (context.mounted) {
+      if (context.mounted && current()) {
         bool isSpecialFollowed = followStatus!.special == 1;
         String text = isSpecialFollowed ? '移除特别关注' : '加入特别关注';
         showDialog(
@@ -134,10 +111,13 @@ abstract final class RequestUtils {
               DialogOption(
                 onPressed: () async {
                   Get.back();
+                  if (!current()) return;
                   final res = await MemberHttp.specialAction(
+                    account: requestAccount,
                     fid: mid,
                     isAdd: !isSpecialFollowed,
                   );
+                  if (!current()) return;
                   if (res.isSuccess) {
                     SmartDialog.showToast('$text成功');
                     afterMod?.call(isSpecialFollowed ? 2 : -10);
@@ -150,6 +130,7 @@ abstract final class RequestUtils {
               DialogOption(
                 onPressed: () async {
                   Get.back();
+                  if (!current()) return;
                   final result = await showModalBottomSheet<Set<int>>(
                     context: context,
                     useSafeArea: true,
@@ -173,6 +154,7 @@ abstract final class RequestUtils {
                         builder: (context, scrollController) {
                           return GroupPanel(
                             mid: mid,
+                            account: requestAccount,
                             tags: followStatus!.tag,
                             scrollController: scrollController,
                           );
@@ -180,7 +162,7 @@ abstract final class RequestUtils {
                       );
                     },
                   );
-                  if (result != null) {
+                  if (current() && result != null) {
                     followStatus!.tag = result.toList();
                     afterMod?.call(result.contains(-10) ? -10 : 2);
                   }
@@ -190,11 +172,14 @@ abstract final class RequestUtils {
               DialogOption(
                 onPressed: () async {
                   Get.back();
+                  if (!current()) return;
                   final res = await VideoHttp.relationMod(
+                    account: requestAccount,
                     mid: mid,
                     act: 2,
                     reSrc: 11,
                   );
+                  if (!current()) return;
                   if (res.isSuccess) {
                     SmartDialog.showToast('取消关注成功');
                     afterMod?.call(0);
