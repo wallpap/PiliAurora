@@ -67,18 +67,6 @@ abstract final class LoginHttp {
     };
   }
 
-  // static Future queryCaptcha() async {
-  //   final res = await Request().get(Api.getCaptcha);
-  //   if (res.data['code'] == 0) {
-  //     return {
-  //       'status': true,
-  //       'data': CaptchaDataModel.fromJson(res.data['data']),
-  //     };
-  //   } else {
-  //     return {'status': false, 'data': res.data['message']};
-  //   }
-  // }
-
   // 获取salt与PubKey
   static Future getWebKey() async {
     final res = await Request().get(Api.getWebKey);

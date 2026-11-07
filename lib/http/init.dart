@@ -66,9 +66,6 @@ class Request {
     if (account.activated) return;
     account.activated = true;
     try {
-      // final html = await Request().get(Api.dynamicSpmPrefix,
-      //     options: Options(extra: {'account': account}));
-      // final String spmPrefix = _spmPrefixExp.firstMatch(html.data)!.group(1)!;
       final String randPngEnd = base64.encode([
         ...Iterable<int>.generate(32, (_) => Utils.random.nextInt(256)),
         0,
@@ -227,13 +224,7 @@ class Request {
         cancelToken: cancelToken,
       );
     } on DioException catch (e) {
-      return Response(
-        data: {
-          'message': await AccountManager.dioError(e),
-        }, // 将自定义 Map 数据赋值给 Response 的 data 属性
-        statusCode: e.response?.statusCode ?? -1,
-        requestOptions: e.requestOptions,
-      );
+      return _failureResponse(e);
     }
   }
 
@@ -247,7 +238,6 @@ class Request {
     Options? options,
     CancelToken? cancelToken,
   }) async {
-    // if (kDebugMode) debugPrint('post-data: $data');
     try {
       return await dio.post<T>(
         url,
@@ -258,13 +248,7 @@ class Request {
       );
     } on DioException catch (e) {
       AccountManager.toast(e);
-      return Response(
-        data: {
-          'message': await AccountManager.dioError(e),
-        }, // 将自定义 Map 数据赋值给 Response 的 data 属性
-        statusCode: e.response?.statusCode ?? -1,
-        requestOptions: e.requestOptions,
-      );
+      return _failureResponse(e);
     }
   }
 
@@ -281,23 +265,18 @@ class Request {
         urlPath,
         savePath,
         cancelToken: cancelToken,
-        // onReceiveProgress: (int count, int total) {
-        // 进度
-        // if (kDebugMode) debugPrint("$count $total");
-        // },
       );
-      // if (kDebugMode) debugPrint('downloadFile success: ${response.data}');
     } on DioException catch (e) {
-      // if (kDebugMode) debugPrint('downloadFile error: $e');
-      return Response(
-        data: {
-          'message': await AccountManager.dioError(e),
-        },
-        statusCode: e.response?.statusCode ?? -1,
-        requestOptions: e.requestOptions,
-      );
+      return _failureResponse(e);
     }
   }
+
+  static Future<Response> _failureResponse(DioException error) async =>
+      Response(
+        data: {'message': await AccountManager.dioError(error)},
+        statusCode: error.response?.statusCode ?? -1,
+        requestOptions: error.requestOptions,
+      );
 
   static List<int> responseBytesDecoder(
     List<int> responseBytes,

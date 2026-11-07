@@ -22,18 +22,6 @@ import 'package:dio/dio.dart';
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 
 abstract final class UserHttp {
-  // static Future<dynamic> userStat({required int mid}) async {
-  //   final res = await Request().get(
-  //     Api.userStat,
-  //     queryParameters: {'vmid': mid},
-  //   );
-  //   if (res.data['code'] == 0) {
-  //     return {'status': true, 'data': res.data['data']};
-  //   } else {
-  //     return {'status': false};
-  //   }
-  // }
-
   static Future<LoadingState<UserInfoData>> userInfo({Account? account}) async {
     final res = await Request().get(
       Api.userInfo,
