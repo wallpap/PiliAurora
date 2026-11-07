@@ -51,21 +51,22 @@ void main() {
     ImageUtils.silentDownImg = false;
   });
 
-  Future<void> mount(WidgetTester tester) async {
+  testWidgets('image failures close loading and preserve shared cache', (
+    tester,
+  ) async {
+    final previous = FilePickerPlatform.instance;
+    FilePickerPlatform.instance = _Picker();
+    addTearDown(() => FilePickerPlatform.instance = previous);
     await tester.pumpWidget(
       MaterialApp(builder: FlutterSmartDialog.init(), home: const SizedBox()),
     );
-  }
+    Future<void> checkLoadingClosed() async {
+      await tester.pumpAndSettle();
+      expect(SmartDialog.config.loading.isExist, isFalse);
+      SmartDialog.dismiss(status: .allToast);
+      await tester.pumpAndSettle();
+    }
 
-  Future<void> dismiss(WidgetTester tester) async {
-    SmartDialog.dismiss(status: .allToast);
-    await tester.pumpAndSettle();
-  }
-
-  testWidgets('partial download failure preserves shared cache files', (
-    tester,
-  ) async {
-    await mount(tester);
     expect(
       await ImageUtils.downloadImg([
         'https://example.test/ok',
@@ -73,30 +74,11 @@ void main() {
       ]),
       isFalse,
     );
-    await tester.pumpAndSettle();
+    await checkLoadingClosed();
     expect(manager.file.deleted, isFalse);
-    expect(SmartDialog.config.loading.isExist, isFalse);
-    await dismiss(tester);
-  });
-
-  testWidgets('directory picker failure returns false and closes loading', (
-    tester,
-  ) async {
-    final previous = FilePickerPlatform.instance;
-    FilePickerPlatform.instance = _Picker();
-    addTearDown(() => FilePickerPlatform.instance = previous);
-    await mount(tester);
     expect(await ImageUtils.downloadImg(['https://example.test/ok']), isFalse);
-    await tester.pumpAndSettle();
-    expect(SmartDialog.config.loading.isExist, isFalse);
-    await dismiss(tester);
-  });
-
-  testWidgets('share download failure closes loading', (tester) async {
-    await mount(tester);
+    await checkLoadingClosed();
     await ImageUtils.onShareImg('https://example.test/fail');
-    await tester.pumpAndSettle();
-    expect(SmartDialog.config.loading.isExist, isFalse);
-    await dismiss(tester);
+    await checkLoadingClosed();
   });
 }

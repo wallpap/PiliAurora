@@ -863,48 +863,39 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('image delivery does not release every waiter at frame end', (
-    tester,
-  ) async {
-    final batch = await _prepareBatch(tester, manager, largeSource);
-    try {
-      tester.binding.scheduleFrame();
-      batch.release();
-      await _flushDecoding(tester);
-      expect(batch.delivered, 1);
-
-      await tester.pump();
-      await _flushDecoding(tester);
-      expect(batch.delivered, 2);
-
-      await tester.pump();
-      await _flushDecoding(tester);
-      expect(batch.delivered, 3);
-      expect(batch.errors, isEmpty);
-    } finally {
-      batch.dispose();
-      await tester.pumpAndSettle();
-    }
-  });
-
-  testWidgets('image delivery budgets a burst without an existing animation', (
-    tester,
-  ) async {
-    final batch = await _prepareBatch(tester, manager, largeSource, count: 2);
-    try {
-      batch.release();
-      await _flushDecoding(tester);
-      expect(batch.delivered, 1);
-
-      await tester.pump();
-      await _flushDecoding(tester);
-      expect(batch.delivered, 2);
-      expect(batch.errors, isEmpty);
-    } finally {
-      batch.dispose();
-      await tester.pumpAndSettle();
-    }
-  });
+  for (final phase in ['idle', 'pending-frame', 'during-frame', 'oversized']) {
+    testWidgets('image delivery $phase admits one image per frame', (
+      tester,
+    ) async {
+      final batch = await _prepareBatch(
+        tester,
+        manager,
+        phase == 'oversized' ? oversizedSource : largeSource,
+      );
+      try {
+        if (phase == 'pending-frame') tester.binding.scheduleFrame();
+        if (phase == 'during-frame') {
+          tester.binding.scheduleFrameCallback((_) => batch.release());
+          await tester.pump();
+        } else {
+          batch.release();
+        }
+        for (
+          var delivered = 1;
+          delivered <= batch.streams.length;
+          delivered++
+        ) {
+          await _flushDecoding(tester);
+          expect(batch.delivered, delivered);
+          await tester.pump();
+        }
+        expect(batch.errors, isEmpty);
+      } finally {
+        batch.dispose();
+        await tester.pumpAndSettle();
+      }
+    });
+  }
 
   testWidgets('removing a budgeted image releases its codec without delivery', (
     tester,
@@ -925,50 +916,6 @@ void main() {
       await tester.pumpAndSettle();
       await _flushDecoding(tester);
       expect(batch.delivered, 1);
-      expect(batch.errors, isEmpty);
-    } finally {
-      batch.dispose();
-      await tester.pumpAndSettle();
-    }
-  });
-
-  testWidgets('image delivery budgets a burst started during a frame', (
-    tester,
-  ) async {
-    final batch = await _prepareBatch(tester, manager, largeSource, count: 2);
-    try {
-      tester.binding.scheduleFrameCallback((_) => batch.release());
-      await tester.pump();
-      await _flushDecoding(tester);
-      expect(batch.delivered, 1);
-
-      await tester.pump();
-      await _flushDecoding(tester);
-      expect(batch.delivered, 2);
-      expect(batch.errors, isEmpty);
-    } finally {
-      batch.dispose();
-      await tester.pumpAndSettle();
-    }
-  });
-
-  testWidgets('oversized image frames are admitted one at a time', (
-    tester,
-  ) async {
-    final batch = await _prepareBatch(
-      tester,
-      manager,
-      oversizedSource,
-      count: 2,
-    );
-    try {
-      batch.release();
-      await _flushDecoding(tester);
-      expect(batch.delivered, 1);
-
-      await tester.pump();
-      await _flushDecoding(tester);
-      expect(batch.delivered, 2);
       expect(batch.errors, isEmpty);
     } finally {
       batch.dispose();
