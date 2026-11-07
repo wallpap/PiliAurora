@@ -56,10 +56,9 @@ import 'package:pili_aurora/plugin/pl_player/utils/video_output_paint_barrier.da
 import 'package:pili_aurora/plugin/pl_player/widgets/video_output_handoff.dart';
 import 'package:pili_aurora/plugin/pl_player/widgets/app_bar_ani.dart';
 import 'package:pili_aurora/plugin/pl_player/widgets/player_loading.dart';
-import 'package:pili_aurora/plugin/pl_player/widgets/backward_seek.dart';
+import 'package:pili_aurora/plugin/pl_player/widgets/seek_indicator.dart';
 import 'package:pili_aurora/plugin/pl_player/widgets/bottom_control.dart';
 import 'package:pili_aurora/plugin/pl_player/widgets/common_btn.dart';
-import 'package:pili_aurora/plugin/pl_player/widgets/forward_seek.dart';
 import 'package:pili_aurora/plugin/pl_player/widgets/mpv_convert_webp.dart';
 import 'package:pili_aurora/plugin/pl_player/widgets/play_pause_btn.dart';
 import 'package:pili_aurora/services/diagnostics/diagnostics.dart';
@@ -1976,21 +1975,6 @@ class _PLVideoPlayerState extends State<PLVideoPlayer>
           ),
         ),
 
-        // Positioned(
-        //   right: 25,
-        //   top: 125,
-        //   child: FilledButton.tonal(
-        //     onPressed: () {
-        //       transformationController.value = Matrix4.identity()
-        //         ..translate(0.5, 0.5)
-        //         ..scale(0.5)
-        //         ..translate(-0.5, -0.5);
-
-        //       showRestoreScaleBtn.value = true;
-        //     },
-        //     child: const Text('scale'),
-        //   ),
-        // ),
         Obx(
           () =>
               showRestoreScaleBtn.value && plPlayerController.showControls.value
@@ -2279,7 +2263,8 @@ class _PLVideoPlayerState extends State<PLVideoPlayer>
                                 opacity: value,
                                 child: child,
                               ),
-                              child: BackwardSeekIndicator(
+                              child: SeekIndicator(
+                                forward: false,
                                 duration:
                                     plPlayerController.fastForBackwardDuration,
                                 onSubmitted: (Duration value) {
@@ -2300,7 +2285,8 @@ class _PLVideoPlayerState extends State<PLVideoPlayer>
                                 opacity: value,
                                 child: child,
                               ),
-                              child: ForwardSeekIndicator(
+                              child: SeekIndicator(
+                                forward: true,
                                 duration:
                                     plPlayerController.fastForBackwardDuration,
                                 onSubmitted: (Duration value) {

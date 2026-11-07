@@ -2,48 +2,50 @@ import 'dart:async';
 
 import 'package:material_ui/material_ui.dart';
 
-class ForwardSeekIndicator extends StatefulWidget {
+class SeekIndicator extends StatefulWidget {
   final ValueChanged<Duration> onSubmitted;
   final Duration duration;
+  final bool forward;
 
-  const ForwardSeekIndicator({
+  const SeekIndicator({
     super.key,
     required this.onSubmitted,
     required this.duration,
+    required this.forward,
   });
 
   @override
-  State<ForwardSeekIndicator> createState() => ForwardSeekIndicatorState();
+  State<SeekIndicator> createState() => _SeekIndicatorState();
 }
 
-class ForwardSeekIndicatorState extends State<ForwardSeekIndicator> {
-  late Duration duration;
+class _SeekIndicatorState extends State<SeekIndicator> {
+  late Duration _duration;
 
-  Timer? timer;
+  Timer? _timer;
 
   @override
   void initState() {
     super.initState();
-    duration = widget.duration;
-    timer = Timer(const Duration(milliseconds: 400), () {
-      widget.onSubmitted(duration);
-    });
+    _duration = widget.duration;
+    _restartTimer();
   }
 
   @override
   void dispose() {
-    timer?.cancel();
+    _timer?.cancel();
     super.dispose();
   }
 
-  void increment() {
-    timer?.cancel();
-    timer = Timer(const Duration(milliseconds: 400), () {
-      widget.onSubmitted(duration);
+  void _restartTimer() {
+    _timer?.cancel();
+    _timer = Timer(const Duration(milliseconds: 400), () {
+      widget.onSubmitted(_duration);
     });
-    setState(() {
-      duration += widget.duration;
-    });
+  }
+
+  void _increment() {
+    _restartTimer();
+    setState(() => _duration += widget.duration);
   }
 
   @override
@@ -52,31 +54,31 @@ class ForwardSeekIndicatorState extends State<ForwardSeekIndicator> {
       type: MaterialType.transparency,
       child: InkWell(
         splashColor: const Color(0x44767676),
-        onTap: increment,
+        onTap: _increment,
         child: Container(
-          decoration: const BoxDecoration(
+          decoration: BoxDecoration(
             gradient: LinearGradient(
-              colors: [
-                Color(0x00767676),
-                Color(0x88767676),
-              ],
+              colors: widget.forward
+                  ? const [Color(0x00767676), Color(0x88767676)]
+                  : const [Color(0x88767676), Color(0x00767676)],
               begin: Alignment.centerLeft,
               end: Alignment.centerRight,
             ),
           ),
           alignment: Alignment.center,
           child: Column(
+            mainAxisSize: MainAxisSize.min,
             mainAxisAlignment: MainAxisAlignment.center,
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              const Icon(
-                Icons.fast_forward,
+              Icon(
+                widget.forward ? Icons.fast_forward : Icons.fast_rewind,
                 size: 24.0,
                 color: Colors.white,
               ),
               const SizedBox(height: 8.0),
               Text(
-                '快进${duration.inSeconds}秒',
+                '${widget.forward ? '快进' : '快退'}${_duration.inSeconds}秒',
                 style: const TextStyle(
                   fontSize: 12.0,
                   color: Colors.white,
