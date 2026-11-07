@@ -30,6 +30,7 @@ $ciTests = @(
     "test/common/widgets/image/network_thumbnail_test.dart",
     "test/pages/home/controller_lifecycle_test.dart",
     "test/pages/search/controller_test.dart",
+    "test/pages/scoped_search/controller_test.dart",
     "test/pages/danmaku_block/controller_test.dart",
     "test/pages/blacklist/controller_test.dart",
     "test/pages/account_queries/provider_test.dart",

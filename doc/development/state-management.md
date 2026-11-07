@@ -1,6 +1,6 @@
 # Riverpod 状态管理
 
-应用根节点在 `lib/app/app.dart` 提供 `ProviderScope`。消息、搜索入口、完整热搜榜、弹幕屏蔽规则、黑名单、账号查询、关注及分组、关注搜索、粉丝与关系查询、关注直播页已使用 Riverpod；路由及其他页面沿用现有实现。迁移按功能入口推进，先明确状态所有权，再移除对应的 GetX 状态注册。
+应用根节点在 `lib/app/app.dart` 提供 `ProviderScope`。消息、搜索入口、完整热搜榜、直播及空间搜索、弹幕屏蔽规则、黑名单、账号查询、关注及分组、关注搜索、粉丝与关系查询、关注直播页已使用 Riverpod；路由及其他页面沿用现有实现。迁移按功能入口推进，先明确状态所有权，再移除对应的 GetX 状态注册。
 
 ## 所有权
 
@@ -17,6 +17,7 @@
 | 粉丝、新增粉丝、共同关注和“我关注的人也关注 TA” | autoDispose family 按查询类型、目标 UID 与新增粉丝排序隔离；账号变化重建 | `lib/pages/follow_type/controller.dart` |
 | 全部关注、分组成员和关注搜索 | autoDispose family 按目标 UID、分组和已提交关键词隔离；账号或列表排序变化使旧请求失效 | `lib/pages/follow/controller.dart` |
 | 关注分组与成员分配 | 账号绑定的 autoDispose AsyncNotifier；列表、排序页与分组面板共享已确认快照，编辑草稿由 Widget 持有 | `followTagsProvider` |
+| 直播房间／主播搜索、空间视频／动态搜索 | autoDispose family 按页面实例、提交关键词、分类与目标 UID 隔离；直播依赖推荐账号，空间搜索依赖主账号 | `lib/pages/common/search/scoped_search.dart` |
 | 关注直播 | 账号绑定的 autoDispose AsyncNotifier，按原始响应分页 | `lib/pages/live_follow/controller.dart` |
 
 FocusNode、TextEditingController、TabController 和滚动装饰状态由 Widget 持有与释放。路由参数与提示也留在页面；Notifier 返回业务结果，不依赖 Get 路由或全局加载弹窗。
@@ -38,6 +39,8 @@ FocusNode、TextEditingController、TabController 和滚动装饰状态由 Widge
 - 主关注与分组成员通过 `FeedPagination` 按实际滚动范围分页，按 UID 去重；失败不推进页码，重复页停止。搜索结果使用已提交关键词作为查询参数，输入变化立即隐藏旧结果，离页后释放对应订阅。列表排序保存在本地 provider 中，切换时重查关注列表和分组，搜索继续使用自己的排序。
 - 分组新建、改名、删除、排序和成员分配按已确认快照串行写入。调用方提交打开编辑时的来源标识，账号变化、查询刷新或分组变更后拒绝过期编辑；写请求绑定账号及 CSRF 并关闭自动重试。成员分配成功后重新查询服务端计数并刷新成员列表，面板勾选不修改共享快照。关系操作沿用共用交互入口，但查询、后续写入及结果回调检查发起账号。
 - 主关注页自行持有 TabController，按分组 ID 保留选中项，选中分组删除后回到全部关注；排序页仅持有本地顺序，不接收父页面控制器。通讯录的关注列表和搜索跟随当前主账号，保留分享选人回调。
+- 直播与空间搜索在提交前不请求；输入变化立即释放旧结果订阅，重新提交建立新查询实例。分类数量从当前查询快照派生，父子页面不互写控制器。页面持有输入、Tab 和滚动控制器，分页由实际滚动范围驱动，失败保留页码和已有条目并等待显式重试。
+- 空间视频保留 gRPC，动态保留 HTTP 游标及过滤行为；过滤后的空页可沿新游标补页，重复游标或连续五页无增长停止。查询按账号对象身份失效，推荐账号独立于主账号变化；所有请求显式绑定所属账号。
 - 关注直播按房间去重，优先使用服务端总页数或原始总数。模型保留过滤离线房间前的条目数量，过滤后的空页不会提前结束；缺少分页信息时按请求页大小继续，连续五页无有效增长后停止。分页失败保留已有房间、人数和页码，等待手动重试。
 
 新增迁移优先使用领域内的直接 Notifier 和不可变状态。公共抽象应由实际重复行为驱动；复用已有 HTTP 和模型，避免为一次调用增加转发层。消息仍使用其既有 Session 资源协议。
@@ -48,7 +51,7 @@ FocusNode、TextEditingController、TabController 和滚动装饰状态由 Widge
 fvm flutter test --no-pub test/pages/search/controller_test.dart test/pages/danmaku_block/controller_test.dart
 fvm flutter test --no-pub test/pages/blacklist/ test/pages/account_queries/ test/common/widgets/feed_pagination_test.dart
 fvm flutter test --no-pub test/pages/follow_type/ test/pages/live_follow/
-fvm flutter test --no-pub test/pages/follow/
+fvm flutter test --no-pub test/pages/follow/ test/pages/scoped_search/
 fvm flutter test --no-pub test/services/messaging/
 fvm flutter analyze --no-pub lib test tool
 ```
