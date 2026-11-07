@@ -5,7 +5,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:get/get.dart';
-import 'package:hive_ce/hive.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:pili_aurora/http/api.dart';
 import 'package:pili_aurora/http/init.dart';
@@ -23,20 +22,7 @@ import 'package:pili_aurora/utils/storage.dart';
 import 'package:pili_aurora/utils/request_utils.dart';
 import 'package:pili_aurora/utils/storage_key.dart';
 
-class _Box<T> implements Box<T> {
-  final valuesMap = <dynamic, T>{};
-  @override
-  T? get(dynamic key, {T? defaultValue}) => valuesMap[key] ?? defaultValue;
-  @override
-  Future<void> put(dynamic key, T value) async {
-    valuesMap[key] = value;
-  }
-
-  @override
-  Iterable<T> get values => const [];
-  @override
-  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
-}
+import '../../support/memory_box.dart';
 
 typedef _Pending = ({
   RequestOptions options,
@@ -104,9 +90,9 @@ void main() {
   }
 
   setUpAll(() {
-    GStorage.setting = _Box<dynamic>();
-    GStorage.localCache = _Box<dynamic>();
-    Accounts.account = _Box<LoginAccount>();
+    GStorage.setting = MemoryBox<dynamic>();
+    GStorage.localCache = MemoryBox<dynamic>();
+    Accounts.account = MemoryBox<LoginAccount>();
     AnonymousAccount().activated = true;
     Request();
     Request.dio.interceptors
@@ -125,7 +111,7 @@ void main() {
   });
   setUp(() {
     requests.clear();
-    (GStorage.setting as _Box).valuesMap.clear();
+    (GStorage.setting as MemoryBox).data.clear();
     GStorage.localCache.put(
       LocalCacheKey.mixinKey,
       '01234567890123456789012345678901',

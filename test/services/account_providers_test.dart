@@ -1,6 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:hive_ce/hive.dart';
 import 'package:pili_aurora/models/common/account_type.dart';
 import 'package:pili_aurora/services/account_providers.dart';
 import 'package:pili_aurora/services/messaging/session.dart';
@@ -8,35 +7,11 @@ import 'package:pili_aurora/utils/accounts.dart';
 import 'package:pili_aurora/utils/accounts/account.dart';
 import 'package:pili_aurora/utils/storage.dart';
 
-class _Box<T> implements Box<T> {
-  final stored = <dynamic, T>{};
-
-  @override
-  T? get(dynamic key, {T? defaultValue}) => stored[key] ?? defaultValue;
-
-  @override
-  Future<void> put(dynamic key, T value) async => stored[key] = value;
-
-  @override
-  Future<void> delete(dynamic key) async => stored.remove(key);
-
-  @override
-  Future<int> clear() async {
-    final count = stored.length;
-    stored.clear();
-    return count;
-  }
-
-  @override
-  Iterable<T> get values => stored.values;
-
-  @override
-  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
-}
+import '../support/memory_box.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
-  late _Box<LoginAccount> accounts;
+  late MemoryBox<LoginAccount> accounts;
   late LoginAccount mainAccount;
   late LoginAccount recommendAccount;
   late ProviderContainer container;
@@ -58,15 +33,15 @@ void main() {
   }
 
   setUpAll(() {
-    GStorage.setting = _Box<dynamic>();
-    GStorage.localCache = _Box<dynamic>();
-    accounts = _Box<LoginAccount>();
+    GStorage.setting = MemoryBox<dynamic>();
+    GStorage.localCache = MemoryBox<dynamic>();
+    accounts = MemoryBox<LoginAccount>();
     Accounts.account = accounts;
     AnonymousAccount().activated = true;
   });
 
   setUp(() {
-    accounts.stored.clear();
+    accounts.data.clear();
     for (final role in AccountType.values) {
       Accounts.accountMode[role.index] = AnonymousAccount();
     }
@@ -74,7 +49,7 @@ void main() {
     recommendAccount = login(200)..type.add(AccountType.recommend);
     Accounts.accountMode[AccountType.main.index] = mainAccount;
     Accounts.accountMode[AccountType.recommend.index] = recommendAccount;
-    accounts.stored.addAll({'100': mainAccount, '200': recommendAccount});
+    accounts.data.addAll({'100': mainAccount, '200': recommendAccount});
     mainSession = Messaging.instance.session;
     mainUpdates.clear();
     recommendUpdates.clear();

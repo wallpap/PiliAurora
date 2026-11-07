@@ -2,7 +2,6 @@ import 'dart:async';
 
 import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:hive_ce/hive.dart';
 import 'package:get/get.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:pili_aurora/common/skeleton/video_card_v.dart';
@@ -22,6 +21,8 @@ import 'package:pili_aurora/utils/id_utils.dart';
 import 'package:pili_aurora/utils/storage.dart';
 import 'package:pili_aurora/utils/storage_key.dart';
 
+import '../../support/memory_box.dart';
+
 class _Video extends BaseRcmdVideoItemModel {
   _Video(int id, {bool cooperation = false, int mid = 8}) {
     aid = id;
@@ -31,16 +32,6 @@ class _Video extends BaseRcmdVideoItemModel {
     stat = Stat.fromJson({});
     authors = VideoAuthors(isCooperation: cooperation);
   }
-}
-
-class _Box<T> implements Box<T> {
-  final entries = <dynamic, T>{};
-  @override
-  T? get(dynamic key, {T? defaultValue}) => entries[key] ?? defaultValue;
-  @override
-  Future<void> put(dynamic key, T value) async => entries[key] = value;
-  @override
-  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
 class _Feed extends RcmdController {
@@ -96,15 +87,15 @@ class _TimedFeed extends _Feed {
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
-  final settings = _Box();
+  final settings = MemoryBox();
   late _Feed feed;
   setUpAll(() {
     GStorage.setting = settings;
-    GStorage.localCache = _Box();
-    GStorage.userInfo = _Box<UserInfoData>();
+    GStorage.localCache = MemoryBox();
+    GStorage.userInfo = MemoryBox<UserInfoData>();
   });
   setUp(() {
-    settings.entries
+    settings.data
       ..clear()
       ..[SettingBoxKey.enableSaveLastData] = false;
     GlobalData().blackMids = {7};
@@ -183,8 +174,8 @@ void main() {
   });
 
   testWidgets('Web 视口首包与两页下载并发，乱序返回仍按页合并并去重', (tester) async {
-    settings.entries[SettingBoxKey.appRcmd] = false;
-    settings.entries[SettingBoxKey.filterBlockedAuthors] = false;
+    settings.data[SettingBoxKey.appRcmd] = false;
+    settings.data[SettingBoxKey.filterBlockedAuthors] = false;
     feed.updateViewport(itemCount: 40, columns: 8, active: true);
     expect(feed.sizes.single, 40);
     feed.requests[0].complete(Success(List.generate(10, (i) => _Video(i + 1))));
@@ -295,7 +286,7 @@ void main() {
       await query;
       query = feed.onLoadMore();
       if (changeSource) {
-        settings.entries[SettingBoxKey.appRcmd] = false;
+        settings.data[SettingBoxKey.appRcmd] = false;
       } else {
         feed.account = Object();
       }

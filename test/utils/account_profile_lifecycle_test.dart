@@ -5,7 +5,6 @@ import 'dart:typed_data';
 import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get/get.dart';
-import 'package:hive_ce/hive.dart';
 import 'package:pili_aurora/http/init.dart';
 import 'package:pili_aurora/models/common/account_type.dart';
 import 'package:pili_aurora/models/user/info.dart';
@@ -16,6 +15,8 @@ import 'package:pili_aurora/utils/accounts/account.dart';
 import 'package:pili_aurora/utils/global_data.dart';
 import 'package:pili_aurora/utils/login_utils.dart';
 import 'package:pili_aurora/utils/storage.dart';
+
+import '../support/memory_box.dart';
 
 class _Adapter implements HttpClientAdapter {
   final requests =
@@ -45,23 +46,10 @@ class _Adapter implements HttpClientAdapter {
   void close({bool force = false}) {}
 }
 
-class _Box<T> implements Box<T> {
-  final storedValues = <dynamic, T>{};
-  @override
-  T? get(dynamic key, {T? defaultValue}) => storedValues[key] ?? defaultValue;
-  @override
-  Future<void> put(dynamic key, T value) async {
-    storedValues[key] = value;
-  }
-
-  @override
-  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
-}
-
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   final adapter = _Adapter();
-  final profile = _Box<UserInfoData>();
+  final profile = MemoryBox<UserInfoData>();
   late Account previousAccount;
   late Account first;
   final mainIndex = AccountType.main.index;
@@ -88,8 +76,8 @@ void main() {
   );
 
   setUpAll(() {
-    GStorage.setting = _Box<dynamic>();
-    GStorage.localCache = _Box<dynamic>();
+    GStorage.setting = MemoryBox<dynamic>();
+    GStorage.localCache = MemoryBox<dynamic>();
     GStorage.userInfo = profile;
     Request();
     Request.dio.interceptors.clear();
@@ -100,7 +88,7 @@ void main() {
     previousAccount = Accounts.main;
     first = account(123);
     Accounts.accountMode[mainIndex] = first;
-    profile.storedValues.clear();
+    profile.data.clear();
     adapter.requests.clear();
     GlobalData().coins = 30;
     Get.put(AccountService());
@@ -140,7 +128,7 @@ void main() {
     adapter.respond(0, info());
     await pending;
     expect(Get.find<AccountService>().isLogin.value, isFalse);
-    expect(profile.storedValues, isEmpty);
+    expect(profile.data, isEmpty);
     expect(GlobalData().coins, 30);
   });
 
@@ -158,7 +146,7 @@ void main() {
       adapter.respond(0, info());
       await pending;
       expect(controller.userInfo.value.mid, isNull);
-      expect(profile.storedValues, isEmpty);
+      expect(profile.data, isEmpty);
       expect(GlobalData().coins, 30);
       expect(adapter.requests, hasLength(1));
       if (!close) controller.onDelete();
@@ -185,7 +173,7 @@ void main() {
     expect(Accounts.main, same(first));
     expect(controller.userInfo.value.money, 12);
     expect(controller.userStat.value.follower, 7);
-    expect(profile.storedValues['userInfoCache']!.mid, 123);
+    expect(profile.data['userInfoCache']!.mid, 123);
     expect(GlobalData().coins, 12);
   });
 }

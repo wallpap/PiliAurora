@@ -2,7 +2,6 @@ import 'package:flutter/services.dart';
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get/get.dart';
-import 'package:hive_ce/hive.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:pili_aurora/http/loading_state.dart';
 import 'package:pili_aurora/models/common/account_type.dart';
@@ -19,21 +18,7 @@ import 'package:pili_aurora/utils/accounts/account.dart';
 import 'package:pili_aurora/utils/storage.dart';
 import 'package:pili_aurora/utils/storage_key.dart';
 
-class _SettingsBox implements Box<dynamic> {
-  final _values = <dynamic, dynamic>{};
-
-  @override
-  dynamic get(dynamic key, {dynamic defaultValue}) =>
-      _values[key] ?? defaultValue;
-
-  @override
-  Future<void> put(dynamic key, dynamic value) async {
-    _values[key] = value;
-  }
-
-  @override
-  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
-}
+import '../../support/memory_box.dart';
 
 class _VideoController extends GetxController implements VideoDetailController {
   @override
@@ -64,8 +49,8 @@ void main() {
   late Account previousAccount;
 
   setUpAll(() async {
-    GStorage.setting = _SettingsBox();
-    GStorage.localCache = _SettingsBox();
+    GStorage.setting = MemoryBox();
+    GStorage.localCache = MemoryBox();
     await GStorage.localCache.put(LocalCacheKey.buvid, 'synthetic-buvid');
   });
 

@@ -24,8 +24,9 @@ import 'package:pili_aurora/utils/storage_key.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get/get.dart';
-import 'package:hive_ce/hive.dart';
 import 'package:material_ui/material_ui.dart' as ui;
+
+import '../../support/memory_box.dart';
 
 class _TestController extends LiveRoomController {
   _TestController() : super('chat-test');
@@ -93,23 +94,6 @@ class _TestMessageStream extends LiveMessageStream {
 }
 
 // 本组在内存中保存设置，不依赖磁盘存储或播放器平台插件。
-class _SettingsBox implements Box<dynamic> {
-  _SettingsBox([Map<dynamic, dynamic> settings = const {}])
-    : _settings = Map.of(settings);
-
-  final Map<dynamic, dynamic> _settings;
-
-  @override
-  dynamic get(dynamic key, {dynamic defaultValue}) =>
-      _settings[key] ?? defaultValue;
-
-  @override
-  Future<void> put(dynamic key, dynamic value) async => _settings[key] = value;
-
-  @override
-  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
-}
-
 DanmakuMsg _message(int id) => DanmakuMsg(
   name: '用户',
   text: '消息 $id',
@@ -130,11 +114,11 @@ Widget _app(LiveRoomController controller, {double width = 360}) => MaterialApp(
 
 void main() {
   setUpAll(() {
-    GStorage.setting = _SettingsBox({
+    GStorage.setting = MemoryBox({
       SettingBoxKey.superChatType: SuperChatType.disable.index,
     });
-    GStorage.video = _SettingsBox();
-    GStorage.localCache = _SettingsBox({
+    GStorage.video = MemoryBox();
+    GStorage.localCache = MemoryBox({
       LocalCacheKey.buvid: 'chat-test-buvid',
     });
     Get.routing.args = 1;

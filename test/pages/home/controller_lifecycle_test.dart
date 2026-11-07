@@ -1,7 +1,6 @@
 import 'package:flutter/scheduler.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get/get.dart';
-import 'package:hive_ce/hive.dart';
 import 'package:pili_aurora/models/user/info.dart';
 import 'package:pili_aurora/pages/home/controller.dart';
 import 'package:pili_aurora/services/account_service.dart';
@@ -9,12 +8,14 @@ import 'package:pili_aurora/services/diagnostics/diagnostics.dart';
 import 'package:pili_aurora/utils/storage.dart';
 import 'package:pili_aurora/utils/storage_key.dart';
 
+import '../../support/memory_box.dart';
+
 void main() {
   setUpAll(() {
-    GStorage.setting = _SettingsBox({SettingBoxKey.hideTopBar: false});
-    GStorage.video = _SettingsBox();
-    GStorage.localCache = _SettingsBox();
-    GStorage.userInfo = _SettingsBox<UserInfoData>();
+    GStorage.setting = MemoryBox({SettingBoxKey.hideTopBar: false});
+    GStorage.video = MemoryBox();
+    GStorage.localCache = MemoryBox();
+    GStorage.userInfo = MemoryBox<UserInfoData>();
   });
 
   setUp(() {
@@ -67,15 +68,4 @@ class _TickerHomeController extends HomeController {
   @override
   Ticker createTicker(TickerCallback onTick) =>
       ticker = super.createTicker(onTick);
-}
-
-class _SettingsBox<T> implements Box<T> {
-  _SettingsBox([Map<dynamic, T>? values]) : _values = values ?? {};
-  final Map<dynamic, T> _values;
-
-  @override
-  T? get(dynamic key, {T? defaultValue}) => _values[key] ?? defaultValue;
-
-  @override
-  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }

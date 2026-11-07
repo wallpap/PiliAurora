@@ -2,7 +2,6 @@ import 'dart:async';
 
 import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:hive_ce/hive.dart';
 import 'package:pili_aurora/http/api.dart';
 import 'package:pili_aurora/http/init.dart';
 import 'package:pili_aurora/services/blocked_authors.dart';
@@ -16,16 +15,7 @@ import 'package:pili_aurora/utils/storage.dart';
 import 'package:pili_aurora/utils/storage_pref.dart';
 import 'package:pili_aurora/utils/storage_key.dart';
 
-class _MemoryBox implements Box<dynamic> {
-  final _values = <dynamic, dynamic>{};
-  @override
-  dynamic get(dynamic key, {dynamic defaultValue}) =>
-      _values[key] ?? defaultValue;
-  @override
-  Future<void> put(dynamic key, dynamic value) async => _values[key] = value;
-  @override
-  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
-}
+import '../support/memory_box.dart';
 
 typedef _Request = ({
   RequestOptions options,
@@ -46,8 +36,8 @@ void main() {
   var accountId = 100;
 
   setUpAll(() {
-    GStorage.setting = _MemoryBox();
-    GStorage.localCache = _MemoryBox();
+    GStorage.setting = MemoryBox();
+    GStorage.localCache = MemoryBox();
     Request();
   });
   setUp(() {

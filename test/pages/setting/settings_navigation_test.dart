@@ -1,6 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get/get.dart';
-import 'package:hive_ce/hive.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:pili_aurora/models/common/setting_type.dart';
 import 'package:pili_aurora/models/common/video/cdn_type.dart';
@@ -16,13 +15,15 @@ import 'package:pili_aurora/utils/storage.dart';
 import 'package:pili_aurora/utils/storage_key.dart';
 import 'package:pili_aurora/utils/storage_pref.dart';
 
+import '../../support/memory_box.dart';
+
 void main() {
-  final settings = _DefaultSettings();
+  final settings = MemoryBox();
   setUpAll(() {
     GStorage.setting = settings;
-    GStorage.video = _DefaultSettings();
+    GStorage.video = MemoryBox();
   });
-  setUp(settings._values.clear);
+  setUp(settings.data.clear);
   tearDown(Get.reset);
 
   testWidgets('评论等级默认关闭，选择后保存并可恢复关闭', (tester) async {
@@ -281,19 +282,3 @@ void main() {
 }
 
 // 导航测试在内存中保存偏好，包含桌面布局的默认值初始化。
-class _DefaultSettings implements Box<dynamic> {
-  final _values = <dynamic, dynamic>{};
-
-  @override
-  dynamic get(dynamic key, {dynamic defaultValue}) =>
-      _values[key] ?? defaultValue;
-
-  @override
-  Future<void> put(dynamic key, dynamic value) async => _values[key] = value;
-
-  @override
-  Future<void> delete(dynamic key) async => _values.remove(key);
-
-  @override
-  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
-}

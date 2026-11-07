@@ -1,7 +1,6 @@
 import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:hive_ce/hive.dart';
 import 'package:pili_aurora/http/loading_state.dart';
 import 'package:pili_aurora/models/dynamics/result.dart';
 import 'package:pili_aurora/models/model_owner.dart';
@@ -19,6 +18,8 @@ import 'package:pili_aurora/utils/id_utils.dart';
 import 'package:pili_aurora/utils/media_author_filter.dart';
 import 'package:pili_aurora/utils/storage.dart';
 import 'package:pili_aurora/utils/storage_key.dart';
+
+import '../../support/memory_box.dart';
 
 class _Video extends BaseVideoItemModel {
   _Video(int id, int mid, {bool cooperation = false}) {
@@ -68,27 +69,16 @@ class _Feed extends DiscoveryListController<List<Object>, Object> {
   }
 }
 
-class _MemoryBox implements Box<dynamic> {
-  final _values = <dynamic, dynamic>{};
-  @override
-  dynamic get(dynamic key, {dynamic defaultValue}) =>
-      _values[key] ?? defaultValue;
-  @override
-  Future<void> put(dynamic key, dynamic value) async => _values[key] = value;
-  @override
-  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
-}
-
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
-  final settings = _MemoryBox();
+  final settings = MemoryBox();
   late _Feed feed;
   setUpAll(() {
     GStorage.setting = settings;
-    GStorage.localCache = _MemoryBox();
+    GStorage.localCache = MemoryBox();
   });
   setUp(() {
-    settings._values.clear();
+    settings.data.clear();
     Accounts.accountMode[0] = AnonymousAccount();
     GlobalData().blackMids = {7};
     feed = _Feed();
@@ -147,12 +137,12 @@ void main() {
       },
     );
     final cooperation = _Video(1, 8, cooperation: true)..authors.mids = {7, 8};
-    settings._values[SettingBoxKey.checkCooperativeAuthors] = false;
+    settings.data[SettingBoxKey.checkCooperativeAuthors] = false;
     final disabled = feed.onRefresh();
     await feed.respond(Success([cooperation]));
     await disabled;
     expect(feed.loadingState.value.data, [cooperation]);
-    settings._values[SettingBoxKey.checkCooperativeAuthors] = true;
+    settings.data[SettingBoxKey.checkCooperativeAuthors] = true;
     GlobalData().blackMids = {};
     final empty = feed.onRefresh();
     await feed.respond(Success([_Video(2, 8, cooperation: true)]));
@@ -275,7 +265,7 @@ void main() {
   });
 
   test('关闭开关后保留原始内容且不补位', () async {
-    settings._values[SettingBoxKey.filterBlockedAuthors] = false;
+    settings.data[SettingBoxKey.filterBlockedAuthors] = false;
     final blocked = _Video(1, 7);
     final query = feed.onRefresh();
     await feed.respond(Success([blocked]));

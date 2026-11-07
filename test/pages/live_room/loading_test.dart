@@ -4,7 +4,6 @@ import 'dart:typed_data';
 import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get/get.dart';
-import 'package:hive_ce/hive.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:pili_aurora/http/init.dart';
 import 'package:pili_aurora/models/common/super_chat_type.dart';
@@ -18,16 +17,18 @@ import 'package:pili_aurora/utils/storage.dart';
 import 'package:pili_aurora/utils/storage_key.dart';
 import 'package:pili_aurora/utils/theme_utils.dart';
 
+import '../../support/memory_box.dart';
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   final adapter = _PendingAdapter();
 
   setUpAll(() {
-    GStorage.setting = _SettingsBox({
+    GStorage.setting = MemoryBox({
       SettingBoxKey.superChatType: SuperChatType.disable.index,
     });
-    GStorage.video = _SettingsBox();
-    GStorage.localCache = _SettingsBox({
+    GStorage.video = MemoryBox();
+    GStorage.localCache = MemoryBox({
       LocalCacheKey.timeStamp: DateTime.now().millisecondsSinceEpoch,
       LocalCacheKey.mixinKey: 'synthetic-test-key',
     });
@@ -152,20 +153,4 @@ class _PendingAdapter implements HttpClientAdapter {
 
   @override
   void close({bool force = false}) {}
-}
-
-class _SettingsBox implements Box<dynamic> {
-  _SettingsBox([Map<dynamic, dynamic> values = const {}])
-    : _values = Map.of(values);
-  final Map<dynamic, dynamic> _values;
-
-  @override
-  dynamic get(dynamic key, {dynamic defaultValue}) =>
-      _values[key] ?? defaultValue;
-
-  @override
-  Future<void> put(dynamic key, dynamic value) async => _values[key] = value;
-
-  @override
-  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
