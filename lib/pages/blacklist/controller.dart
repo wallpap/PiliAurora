@@ -110,6 +110,7 @@ class BlackListNotifier extends AsyncNotifier<BlackListState> {
   Future<void> loadMore({bool retry = false}) async {
     final current = state.value;
     if (state.isLoading ||
+        state.hasError ||
         current == null ||
         !current.hasMore ||
         current.isLoadingMore ||
@@ -134,6 +135,7 @@ class BlackListNotifier extends AsyncNotifier<BlackListState> {
   Future<LoadingState<void>> remove(int mid) async {
     final current = state.value;
     if (state.isLoading ||
+        state.hasError ||
         current == null ||
         current.isLoadingMore ||
         current.removingMid != null) {

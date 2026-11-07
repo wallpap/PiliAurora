@@ -307,6 +307,23 @@ void main() {
     await tester.pump();
     expect(find.text('user-1'), findsNothing);
     expect(find.text('黑名单管理: 1'), findsNothing);
+    await tester.runAsync(() async {
+      await dispatched(2);
+      final failed = expectLater(
+        container.read(blackListProvider.future),
+        throwsA(isA<Error>()),
+      );
+      requests[1].reply.complete({'code': -1, 'message': 'failed'});
+      await failed;
+      await container.read(blackListProvider.notifier).loadMore();
+      expect(
+        await container.read(blackListProvider.notifier).remove(1),
+        isA<Error>(),
+      );
+    });
+    await tester.pumpAndSettle();
+    expect(find.text('黑名单管理: 1'), findsNothing);
+    expect(requests, hasLength(2));
     await tester.pumpWidget(const SizedBox());
     Get.reset();
   });

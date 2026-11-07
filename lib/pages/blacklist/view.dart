@@ -33,7 +33,12 @@ class _BlackListPageState extends ConsumerState<BlackListPage> {
   }
 
   Future<void> _reload() async {
-    if (ref.read(blackListProvider).value?.removingMid != null) return;
+    final snapshot = ref.read(blackListProvider);
+    if (!snapshot.isLoading &&
+        !snapshot.hasError &&
+        snapshot.value?.removingMid != null) {
+      return;
+    }
     await AsyncValue.guard(() => ref.refresh(blackListProvider.future));
   }
 
@@ -60,7 +65,9 @@ class _BlackListPageState extends ConsumerState<BlackListPage> {
   @override
   Widget build(BuildContext context) {
     final snapshot = ref.watch(blackListProvider);
-    final total = snapshot.isLoading ? null : snapshot.value?.total;
+    final total = snapshot.isLoading || snapshot.hasError
+        ? null
+        : snapshot.value?.total;
     return SimpleScaffold(
       appBar: AppBar(title: Text('黑名单管理${total == null ? '' : ': $total'}')),
       body: FeedPagination(
@@ -69,7 +76,9 @@ class _BlackListPageState extends ConsumerState<BlackListPage> {
         dataSource: snapshot.value?.source,
         canLoadMore: () {
           final latest = ref.read(blackListProvider);
-          return !latest.isLoading && (latest.value?.canLoadMore ?? false);
+          return !latest.isLoading &&
+              !latest.hasError &&
+              (latest.value?.canLoadMore ?? false);
         },
         onLoadMore: ref.read(blackListProvider.notifier).loadMore,
         child: refreshIndicator(
