@@ -1,39 +1,21 @@
 import 'package:pili_aurora/utils/extension/num_ext.dart';
-import 'package:pili_aurora/services/logger.dart';
 
 abstract final class NumUtils {
   static final _numRegExp = RegExp(r'([\d\.]+)([千万亿])?');
 
-  static int _getUnit(String? unit) {
-    switch (unit) {
-      case '千':
-        return 1000;
-      case '万':
-        return 10000;
-      case '亿':
-        return 100000000;
-      default:
-        return 1;
-    }
-  }
-
   static int parseNum(String numberStr) {
-    if (numberStr.trim().isEmpty || numberStr.trim() == '-') return 0;
-    try {
-      final match = _numRegExp.firstMatch(numberStr)!;
-      var number = double.parse(match.group(1)!);
-      number *= _getUnit(match.group(2));
-      return number.toInt();
-    } catch (e, stackTrace) {
-      logger
-          .scoped('parsing')
-          .w(
-            'parse failed: "$numberStr" : $e',
-            error: e,
-            stackTrace: stackTrace,
-          );
-      return 0;
-    }
+    final match = _numRegExp.firstMatch(numberStr);
+    if (match == null) return 0;
+    final number = double.tryParse(match.group(1)!);
+    if (number == null) return 0;
+    final unit = switch (match.group(2)) {
+      '千' => 1000,
+      '万' => 10000,
+      '亿' => 100000000,
+      _ => 1,
+    };
+    final value = number * unit;
+    return value.isFinite ? value.toInt() : 0;
   }
 
   static String numFormat(dynamic number) {
