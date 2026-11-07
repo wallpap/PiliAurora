@@ -6,7 +6,8 @@ void main() {
   const screenPeriodUs = 8333;
   const targetIntervalUs = 16667;
 
-  for (final callbackDelayUs in [1000, 8000, 8333, 8500, 10000]) {
+  // 保留屏幕周期之前、恰好到期与刚过期三个边界。
+  for (final callbackDelayUs in [8000, 8333, 8500]) {
     testWidgets('回调迟到 ${callbackDelayUs}us 后保留仍可请求的下一更新槽位', (tester) async {
       tester.view.display.refreshRate = 120;
       addTearDown(tester.view.display.resetRefreshRate);

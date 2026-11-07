@@ -25,7 +25,7 @@ CI 测试脚本在共享逻辑回归之外按主机补充平台用例：Windows 
 | `services/diagnostics/` | 诊断编排、脱敏、HTTP 接线、历史读取、记录存储、日志和进程采样。 |
 | `utils/` | 工具函数与账号状态。 |
 
-测试文件使用 `_test.dart` 后缀，领域内共用的 fixture 与调用者放在同一目录，例如 `services/download/download_fixtures.dart` 和 `services/messaging/messaging_fixtures.dart`。
+测试文件使用 `_test.dart` 后缀，领域专用 fixture 与调用者放在同一目录，例如 `services/download/download_fixtures.dart` 和 `services/messaging/messaging_fixtures.dart`；简单的 Hive 内存读写共用 `support/memory_box.dart`，失败注入与订阅行为仍由对应领域提供。
 
 `pages/video/danmaku_pool_test.dart` 检查弹幕列表刷新、个人点赞状态恢复与取消点赞。挂起接口响应时检查首帧及慢响应期间的加载占位，另覆盖响应缺失、网络异常、查询重试不提交点赞，以及切换弹幕后迟到结果的隔离。
 
@@ -67,11 +67,11 @@ CI 显式选择弹幕生产链路与帧计划的核心回归，完整弹幕测�
 
 `pages/danmaku/native_video_frame_sync_test.dart` 使用独立的纹理刷新请求批次，覆盖引擎不提供零 Build timing 时的 60 FPS 相位学习、30 FPS 视频配 60 FPS 弹幕在 120 Hz 上的相位变化、匹配到失配再匹配时的退化与恢复、mpv 显示同步状态切换与订阅释放、批次限界、请求时间抖动、29.97 FPS 漂移与来源释放。相位变化测试同时断言弹幕更新频率和视频、弹幕合计刷新的次数。屏幕槽位与呈现的结论来自设备检查。
 
-`pages/danmaku/frame_cadence_test.dart` 逐次记录更新所在屏幕槽位，覆盖24/30/60 FPS视频、60/90 FPS弹幕及稳定、每秒相位变化、请求完成时间抖动，另覆盖23.976/29.97/59.94 FPS视频的稳定源时钟漂移。120Hz无阻塞模型中检查更新间隔，防止平均帧率正常时仍夹入25ms长间隔；GPU呈现由目标设备检查。`frame_rate_diagnostics_test.dart` 另检查回调与截止时间跳过计数、间隔分布、暂停空档排除及正常槽位量化。
+`pages/danmaku/frame_cadence_test.dart` 以12组代表组合记录更新所在屏幕槽位，覆盖24/30/60及23.976/29.97/59.94 FPS视频、60/90 FPS弹幕，以及稳定、每秒相位变化、请求完成时间抖动；小数帧率保留稳定源时钟漂移。120Hz无阻塞模型中检查更新间隔，防止平均帧率正常时仍夹入25ms长间隔；GPU呈现由目标设备检查。`frame_rate_diagnostics_test.dart` 另检查回调与截止时间跳过计数、间隔分布、暂停空档排除及正常槽位量化。
 
 `pages/danmaku/frame_deadline_replay_test.dart` 使用诊断中提取的1.2秒数值时序，包含实际回调目标时间、交付时间和原生请求批次，回归亚毫秒偏差引发的连续更新延期。扩大矩阵见 `tool/experiments/danmaku/frame_cadence_device_matrix_test.dart`：用同一时序还原槽位抖动，覆盖Android目标时钟领先、119.88/120.0000076/120.12Hz读数、跟随屏幕及60/90/120FPS、29.97/59.94FPS视频、250ms批次与1秒积压压力；同时检查频率、最长更新间隔、屏幕上限合帧与停止后的释放。
 
-`pages/danmaku/frame_late_delivery_test.dart` 分开模拟引擎请求截止与 Dart 回调交付，覆盖 1/8/8.333/8.5/10ms 的周期性交付延迟，检查 120Hz 屏幕上的 60FPS 仍保持两槽间距；另模拟 Timer 迟到 10/20/31.6ms，检查错过的更新合并及随后恢复。后者按实际迟到预算检查间隔。
+`pages/danmaku/frame_late_delivery_test.dart` 分开模拟引擎请求截止与 Dart 回调交付，保留屏幕周期前、周期点和周期后的 8/8.333/8.5ms 交付延迟，检查 120Hz 屏幕上的 60FPS 仍保持两槽间距；另模拟 Timer 迟到 10/20/31.6ms，检查错过的更新合并及随后恢复。后者按实际迟到预算检查间隔。
 
 `pages/danmaku/frame_rate_ticker_test.dart` 检查所属视图刷新率、屏幕降频、刷新率不可用、暂停与静音时的帧请求释放，以及 60/90/120 FPS 档位。测试使用模拟时钟，不测量设备屏幕或 GPU 合成。
 
