@@ -1,6 +1,6 @@
 # Riverpod 状态管理
 
-应用根节点在 `lib/app/app.dart` 提供 `ProviderScope`。消息、搜索入口、完整热搜榜、弹幕屏蔽规则、黑名单、账号查询、粉丝与关系查询、关注直播页已使用 Riverpod；路由及其他页面沿用现有实现。迁移按功能入口推进，先明确状态所有权，再移除对应的 GetX 状态注册。
+应用根节点在 `lib/app/app.dart` 提供 `ProviderScope`。消息、搜索入口、完整热搜榜、弹幕屏蔽规则、黑名单、账号查询、关注及分组、关注搜索、粉丝与关系查询、关注直播页已使用 Riverpod；路由及其他页面沿用现有实现。迁移按功能入口推进，先明确状态所有权，再移除对应的 GetX 状态注册。
 
 ## 所有权
 
@@ -15,6 +15,8 @@
 | 黑名单及分页、移除操作 | 账号绑定的 autoDispose AsyncNotifier；刷新或切号使旧查询失效 | `lib/pages/blacklist/controller.dart` |
 | 登录设备、登录/硬币/经验记录 | autoDispose FutureProvider；日志按类型隔离，依赖主账号身份 | `lib/pages/login_devices/controller.dart`、`lib/pages/log_table/controller.dart` |
 | 粉丝、新增粉丝、共同关注和“我关注的人也关注 TA” | autoDispose family 按查询类型、目标 UID 与新增粉丝排序隔离；账号变化重建 | `lib/pages/follow_type/controller.dart` |
+| 全部关注、分组成员和关注搜索 | autoDispose family 按目标 UID、分组和已提交关键词隔离；账号或列表排序变化使旧请求失效 | `lib/pages/follow/controller.dart` |
+| 关注分组与成员分配 | 账号绑定的 autoDispose AsyncNotifier；列表、排序页与分组面板共享已确认快照，编辑草稿由 Widget 持有 | `followTagsProvider` |
 | 关注直播 | 账号绑定的 autoDispose AsyncNotifier，按原始响应分页 | `lib/pages/live_follow/controller.dart` |
 
 FocusNode、TextEditingController、TabController 和滚动装饰状态由 Widget 持有与释放。路由参数与提示也留在页面；Notifier 返回业务结果，不依赖 Get 路由或全局加载弹窗。
@@ -33,6 +35,9 @@ FocusNode、TextEditingController、TabController 和滚动装饰状态由 Widge
 - `AsyncValue` 在刷新或切号失败后可能继续保留旧 `value`。读取计数、自动分页和写入资格都要检查 `isLoading` 与 `hasError`，不能仅用 `value != null` 判断数据有效；错误页只允许重新查询。
 - 粉丝与关系查询使用同一 `FollowQuery` family；目标 UID 为空时跟随主账号，显式 UID 则保留正在浏览的目标。昵称单独查询，分享选人保留原有回调。
 - 粉丝关系写入按账号互斥，绑定发起账号及查询所有者。成功后保留当前入口的确认结果，并使其他本人粉丝查询变体失效，丢弃它们的旧读取；移除后重读边界页补足前移条目。查询刷新、账号变更或释放后的迟到写结果不更新页面。
+- 主关注与分组成员通过 `FeedPagination` 按实际滚动范围分页，按 UID 去重；失败不推进页码，重复页停止。搜索结果使用已提交关键词作为查询参数，输入变化立即隐藏旧结果，离页后释放对应订阅。列表排序保存在本地 provider 中，切换时重查关注列表和分组，搜索继续使用自己的排序。
+- 分组新建、改名、删除、排序和成员分配按已确认快照串行写入。调用方提交打开编辑时的来源标识，账号变化、查询刷新或分组变更后拒绝过期编辑；写请求绑定账号及 CSRF 并关闭自动重试。成员分配成功后重新查询服务端计数并刷新成员列表，面板勾选不修改共享快照。关系操作沿用共用交互入口，但查询、后续写入及结果回调检查发起账号。
+- 主关注页自行持有 TabController，按分组 ID 保留选中项，选中分组删除后回到全部关注；排序页仅持有本地顺序，不接收父页面控制器。通讯录的关注列表和搜索跟随当前主账号，保留分享选人回调。
 - 关注直播按房间去重，优先使用服务端总页数或原始总数。模型保留过滤离线房间前的条目数量，过滤后的空页不会提前结束；缺少分页信息时按请求页大小继续，连续五页无有效增长后停止。分页失败保留已有房间、人数和页码，等待手动重试。
 
 新增迁移优先使用领域内的直接 Notifier 和不可变状态。公共抽象应由实际重复行为驱动；复用已有 HTTP 和模型，避免为一次调用增加转发层。消息仍使用其既有 Session 资源协议。
@@ -43,6 +48,7 @@ FocusNode、TextEditingController、TabController 和滚动装饰状态由 Widge
 fvm flutter test --no-pub test/pages/search/controller_test.dart test/pages/danmaku_block/controller_test.dart
 fvm flutter test --no-pub test/pages/blacklist/ test/pages/account_queries/ test/common/widgets/feed_pagination_test.dart
 fvm flutter test --no-pub test/pages/follow_type/ test/pages/live_follow/
+fvm flutter test --no-pub test/pages/follow/
 fvm flutter test --no-pub test/services/messaging/
 fvm flutter analyze --no-pub lib test tool
 ```

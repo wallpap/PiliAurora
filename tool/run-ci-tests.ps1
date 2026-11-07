@@ -34,6 +34,7 @@ $ciTests = @(
     "test/pages/blacklist/controller_test.dart",
     "test/pages/account_queries/provider_test.dart",
     "test/pages/follow_type/controller_test.dart",
+    "test/pages/follow/controller_test.dart",
     "test/pages/live_follow/controller_test.dart",
     "test/common/widgets/feed_pagination_test.dart",
     "test/pages/rcmd/",

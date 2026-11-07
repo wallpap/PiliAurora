@@ -135,7 +135,8 @@ flowchart TD
 - API：`lib/http/dynamics.dart`、`follow.dart`、`fan.dart`。
 - 模型：`lib/models/remote/dynamic/`、`follow/`。
 - 互动操作通常依赖登录状态及 CSRF/请求上下文。排查失败时核对实际请求与响应。
-- 粉丝、新增粉丝、共同关注和“我关注的人也关注 TA”直接使用 `FollowTypePage`，共用 Riverpod 查询 family，按目标 UID、类型与排序隔离。主关注页共用昵称查询与共同关注预览，主关注列表及分组继续沿用现有实现。回关、取消关注及移除粉丝绑定发起账号，成功后刷新其他本人粉丝入口；分享选人通过 `FollowTypePage.onSelect` 返回用户。测试见 `test/pages/follow_type/`。
+- 主关注、分组成员和关注搜索使用账号绑定的 Riverpod 查询，分页失败保留列表与页码并可重试。分组新建、改名、删除、排序和成员分配共用已确认快照，拒绝过期编辑与重复写入；Tab、滚动、输入及排序草稿由页面持有。通讯录沿用选人回调并跟随主账号。测试见 `test/pages/follow/`。
+- 粉丝、新增粉丝、共同关注和“我关注的人也关注 TA”直接使用 `FollowTypePage`，共用 Riverpod 查询 family，按目标 UID、类型与排序隔离。主关注页共用昵称查询与共同关注预览。回关、取消关注及移除粉丝绑定发起账号，成功后刷新其他本人粉丝入口；分享选人通过 `FollowTypePage.onSelect` 返回用户。测试见 `test/pages/follow_type/`。
 
 ## 消息、私信与分享
 

@@ -111,7 +111,7 @@ Windows 保活页面内存回归：先执行 `pwsh -File lib/scripts/patch.ps1 w
 
 `pages/blacklist/controller_test.dart` 覆盖串行分页、UID 去重、移除后的边界页补位、失败重试、账号切换与页面释放；`pages/account_queries/provider_test.dart` 覆盖设备和三类记录的账号绑定、日志隔离、行列映射、重试及旧账号内容隐藏。
 
-`pages/follow_type/controller_test.dart` 覆盖粉丝及两类关系查询的隔离、昵称、分页、账号身份、关系写入互斥、其他本人粉丝入口刷新和分享选人；`pages/live_follow/controller_test.dart` 覆盖房间去重、离线过滤后的空页补足、分页元数据、失败重试、切号及释放。直播、黑名单和关系查询均检查切号失败后不使用错误态保留的旧快照。
+`pages/follow/controller_test.dart` 覆盖关注、分组成员与关键词查询隔离、串行分页、排序切换、账号身份、分组写入回滚及过期编辑拒绝；组件回归检查搜索乱序及清空、Tab 选择保留、排序草稿隔离、分组面板计数与分享选人。`pages/follow_type/controller_test.dart` 覆盖粉丝及两类关系查询的隔离、昵称、分页、账号身份、关系写入互斥、其他本人粉丝入口刷新和分享选人；`pages/live_follow/controller_test.dart` 覆盖房间去重、离线过滤后的空页补足、分页元数据、失败重试、切号及释放。关注、直播、黑名单和关系查询均检查切号失败后不使用错误态保留的旧快照。
 
 `pages/search/controller_test.dart` 覆盖 Riverpod 联想乱序、清空后重复输入、禁用联想、页面释放、多实例隔离、热搜/推荐刷新、共享历史、外部偏好同步与搜索页路由回传。`pages/danmaku_block/controller_test.dart` 覆盖规则刷新、不可变快照、编辑部分失败、请求账号与 CSRF 绑定、切号及订阅释放。`utils/account_profile_lifecycle_test.dart` 覆盖资料/余额的发起账号绑定、切号、页面释放和同账号查询乱序。
 
