@@ -53,6 +53,64 @@ void main() {
   tearDownAll(() => Request.dio.close(force: true));
 
   test(
+    'network bucket keeps later high weights and preserves time order',
+    () async {
+      final source = PlDanmakuController(
+        1,
+        _Player(mergeDanmaku: false),
+        false,
+      );
+      addTearDown(source.dispose);
+      await source.handleDanmaku([
+        for (var i = 0; i < 40; i++) _dm('低权重$i', i)..weight = 1,
+        _dm('高权重', 90)..weight = 11,
+      ], segmentIndex: 0);
+      final range = source.readRange(0, 100000);
+      expect(range.entries.length, 12);
+      expect(range.entries.last.element.content, '高权重');
+      expect(
+        range.entries.map((e) => e.positionUs),
+        orderedEquals([
+          for (var i = 0; i < 11; i++) i * 1000,
+          90000,
+        ]),
+      );
+    },
+  );
+
+  test('file worker promotions restore a representative evicted from a full bucket', () async {
+    final directory = await Directory.systemTemp.createTemp(
+      'pili-priority-file-',
+    );
+    final file = File('${directory.path}/${PathUtils.danmakuName}');
+    await file.writeAsBytes(
+      DmSegMobileReply(
+        elems: [
+          _dm('等待提升', 0)..weight = 1,
+          for (var i = 0; i < 120; i++) _dm('独立内容$i', i % 90)..weight = 9,
+          for (var i = 0; i < 300; i++) _dm('其他时间$i', 1000 + i * 100),
+          _dm('等待提升', 10000)..weight = 11,
+        ],
+      ).writeToBuffer(),
+    );
+    final source = PlDanmakuController(1, _FilePlayer(directory.path), true);
+    addTearDown(() async {
+      source.dispose();
+      await file.delete();
+      await directory.delete();
+    });
+    await source.ensureRange(0, 360000000);
+    final range = source.readRange(0, 100000);
+    expect(range.entries.length, 120);
+    final restored = range.entries
+        .singleWhere((e) => e.element.content == '等待提升')
+        .element;
+    expect(restored.weight, 11);
+    expect(restored.count, 2);
+    expect(restored.progress, 0);
+  });
+
+  test(
     'dense valid gRPC segment remains available after decode and processing',
     () async {
       final reply = DmSegMobileReply(
@@ -494,7 +552,7 @@ void main() {
         segmentIndex: 0,
       );
       final cached = controller.peekBufferedDanmaku(100, 200).toList();
-      expect(cached, hasLength(8));
+      expect(cached, hasLength(12));
       // 未开启合并时保持 protobuf 原始计数，不进行额外处理。
       expect(cached.every((e) => e.count == 0), isTrue);
     },

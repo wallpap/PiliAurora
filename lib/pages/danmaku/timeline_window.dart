@@ -21,7 +21,7 @@ class DanmakuWindowItem<T> {
 
 /// 有界编排索引。准备与资源工作在帧求值之外，时间统一使用媒体微秒。
 class DanmakuTimelineWindow<T> {
-  DanmakuTimelineWindow({this.maxItems = 2048, this.maxBytes = 4 * 1024 * 1024})
+  DanmakuTimelineWindow({this.maxItems = 3072, this.maxBytes = 5 * 1024 * 1024})
     : assert(maxItems > 0),
       assert(maxBytes > 0);
 
@@ -43,6 +43,7 @@ class DanmakuTimelineWindow<T> {
   int get validUntilUs => _validUntilUs;
   int get length => _items.length;
   int get estimatedBytes => _bytes;
+  DanmakuWindowItem<T>? itemFor(Object identity) => _items[identity];
   bool hasIdentity(Object identity) => _items.containsKey(identity);
   List<DanmakuWindowItem<T>> get preparedItems => List.unmodifiable(_starts);
 
@@ -60,16 +61,21 @@ class DanmakuTimelineWindow<T> {
     _clearActive();
   }
 
-  /// 整批获准后扩展完整前沿；边界项可先加入，后续补齐同一时间戳。
+  /// 整批获准后扩展完整前沿；lookaheadUntilUs 允许先编排前沿之后的优先项，
+  /// 这些项不扩大 contains 的完整覆盖，来源时间保持原值。
   /// 失败时调用方缩小准备批次，旧结果保持有效。
   bool extend(
     Iterable<DanmakuWindowItem<T>> additions, {
     required int generation,
     required int preparedUntilUs,
+    int? lookaheadUntilUs,
   }) {
     if (generation != _generation) return false;
     if (preparedUntilUs < _validUntilUs) {
       throw ArgumentError.value(preparedUntilUs);
+    }
+    if (lookaheadUntilUs != null && lookaheadUntilUs < preparedUntilUs) {
+      throw ArgumentError.value(lookaheadUntilUs, 'lookaheadUntilUs');
     }
     final pending = <Object, DanmakuWindowItem<T>>{};
     var bytes = _bytes;
@@ -77,7 +83,7 @@ class DanmakuTimelineWindow<T> {
       if (item.startUs < 0 ||
           item.endUs <= item.startUs ||
           item.estimatedBytes < 0 ||
-          item.startUs > preparedUntilUs) {
+          item.startUs > (lookaheadUntilUs ?? preparedUntilUs)) {
         throw ArgumentError('编排结果必须具有有效区间、预算并位于准备前沿内');
       }
       if (item.endUs <= _validFromUs ||
@@ -95,22 +101,37 @@ class DanmakuTimelineWindow<T> {
     _bytes = bytes;
     _validUntilUs = preparedUntilUs;
     if (pending.isNotEmpty) {
-      // 同时刻的旧结果优先；迟到数据追加，不改写稳定身份的原编排。
-      final order = <Object, int>{};
-      var index = 0;
-      for (final item in _items.values) {
-        order[item.identity] = index++;
-      }
-      _starts
-        ..clear()
-        ..addAll(_items.values)
+      // 仅排序新增项并归并；正常顺播直接追加，避免每小批重排整个窗口。
+      final ordered = pending.values.indexed.toList()
         ..sort((a, b) {
-          final time = a.startUs.compareTo(b.startUs);
-          return time == 0
-              ? order[a.identity]!.compareTo(order[b.identity]!)
-              : time;
+          final time = a.$2.startUs.compareTo(b.$2.startUs);
+          return time != 0 ? time : a.$1.compareTo(b.$1);
         });
-      _clearActive();
+      if (_starts.isEmpty || _starts.last.startUs <= ordered.first.$2.startUs) {
+        _starts.addAll(ordered.map((e) => e.$2));
+      } else {
+        final merged = <DanmakuWindowItem<T>>[];
+        var left = 0;
+        var right = 0;
+        while (left < _starts.length && right < ordered.length) {
+          // 同时刻旧结果先于迟到数据。
+          if (_starts[left].startUs <= ordered[right].$2.startUs) {
+            merged.add(_starts[left++]);
+          } else {
+            merged.add(ordered[right++].$2);
+          }
+        }
+        merged
+          ..addAll(_starts.skip(left))
+          ..addAll(ordered.skip(right).map((e) => e.$2));
+        _starts
+          ..clear()
+          ..addAll(merged);
+      }
+      // 纯前瞻追加不改变当前位置之前的索引，继续消费入场／到期事件。
+      if (_positionUs == null || ordered.first.$2.startUs <= _positionUs!) {
+        _clearActive();
+      }
     }
     return true;
   }

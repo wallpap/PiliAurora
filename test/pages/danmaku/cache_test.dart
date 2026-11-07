@@ -51,7 +51,7 @@ void main() {
       expect(first.entries.length, 120);
       expect(first.isLoaded, isTrue);
       expect(first.entries.map((e) => e.element), [
-        for (var i = 0; i < 120; i++) items[i * items.length ~/ 120],
+        ...items.take(120),
       ]);
       expect(
         cache

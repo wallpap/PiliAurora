@@ -4,6 +4,7 @@ import 'dart:math' as math;
 import 'package:canvas_danmaku/canvas_danmaku.dart';
 import 'package:pili_aurora/grpc/bilibili/community/service/dm/v1.pb.dart';
 import 'package:pili_aurora/pages/danmaku/timeline_range.dart';
+import 'package:pili_aurora/pages/danmaku/priority.dart';
 import 'package:pili_aurora/pages/danmaku/window_renderer.dart';
 
 /// 来源到普通窗口的有界准备；逐帧布局预算不改变固定时间桶内的内容选择。
@@ -12,13 +13,18 @@ class DanmakuWindowCoordinator<T> {
     required this.source,
     required this.renderer,
     required this.contentOf,
-    this.preparePerFrame = 4,
+    this.preparePerFrame = 8,
+    this.maxCandidatesPerBucket = danmakuCandidatesPerBucket,
     this.aheadUs = 2000000,
     this.refillUs = 500000,
     this.historyUs = 10000000,
   }) : assert(
          preparePerFrame > 0 &&
              preparePerFrame <= DanmakuDisplayLimits.maxPerBatch,
+       ),
+       assert(
+         maxCandidatesPerBucket > 0 &&
+             maxCandidatesPerBucket <= DanmakuDisplayLimits.maxPerBatch,
        ),
        assert(aheadUs > 0 && refillUs > 0 && refillUs <= aheadUs),
        assert(historyUs >= 0) {
@@ -30,6 +36,7 @@ class DanmakuWindowCoordinator<T> {
   final DanmakuWindowRenderer<T> renderer;
   final DanmakuContentItem<T>? Function(DanmakuElem) contentOf;
   final int preparePerFrame;
+  final int maxCandidatesPerBucket;
   final int aheadUs;
   final int refillUs;
   final int historyUs;
@@ -42,6 +49,7 @@ class DanmakuWindowCoordinator<T> {
   int? _dirtyUs;
   List<DanmakuWindowContent<T>>? _pending;
   int _offset = 0;
+  List<int> _pendingFrontiers = const [];
   bool _pendingLoaded = false;
   bool _requesting = false;
   bool _refilling = false;
@@ -226,7 +234,7 @@ class DanmakuWindowCoordinator<T> {
         final range = source.readRange(
           _nextBucketUs,
           endUs,
-          maxEntriesPerBucket: DanmakuDisplayLimits.maxPerBatch,
+          maxEntriesPerBucket: maxCandidatesPerBucket,
         );
         if (!range.isLoaded && range.entries.isEmpty) return;
         _pendingLoaded = range.isLoaded && !blocked;
@@ -248,14 +256,14 @@ class DanmakuWindowCoordinator<T> {
                   ),
             )
             .toList();
-        final count = math.min(
-          eligible.length,
-          DanmakuDisplayLimits.maxPerBatch,
-        );
+        final ranked = eligible.indexed.toList()
+          ..sort((a, b) {
+            final priority = compareDanmakuPriority(a.$2.element, b.$2.element);
+            return priority != 0 ? priority : a.$1.compareTo(b.$1);
+          });
         final candidates = <DanmakuWindowContent<T>>[];
         var specials = 0;
-        for (var index = 0; index < count; index++) {
-          final entry = eligible[index * eligible.length ~/ count];
+        for (final (_, entry) in ranked.take(maxCandidatesPerBucket)) {
           final element = entry.element;
           if (element.mode == 7 &&
               ++specials > DanmakuDisplayLimits.maxSpecialPerBatch) {
@@ -279,11 +287,23 @@ class DanmakuWindowCoordinator<T> {
           final content = contentOf(element);
           if (content != null) {
             candidates.add(
-              DanmakuWindowContent(identity, entry.positionUs, content),
+              DanmakuWindowContent(
+                identity,
+                entry.positionUs,
+                content,
+                weight: element.weight,
+              ),
             );
           }
         }
         _pending = candidates;
+        _pendingFrontiers = List.filled(candidates.length + 1, endUs);
+        for (var i = candidates.length - 1; i >= 0; i--) {
+          _pendingFrontiers[i] = math.min(
+            candidates[i].sourceUs,
+            _pendingFrontiers[i + 1],
+          );
+        }
         _offset = 0;
       }
       final pending = _pending!;
@@ -291,11 +311,18 @@ class DanmakuWindowCoordinator<T> {
       final complete = end == pending.length;
       final frontier = complete
           ? (_pendingLoaded ? endUs : renderer.validUntilUs)
-          : pending[end].sourceUs;
+          : _pendingFrontiers[end];
+      final batch = pending.sublist(_offset, end).indexed.toList()
+        ..sort((a, b) {
+          final time = a.$2.sourceUs.compareTo(b.$2.sourceUs);
+          return time != 0 ? time : a.$1.compareTo(b.$1);
+        });
       if (!renderer.prepare(
-        pending.sublist(_offset, end),
+        [for (final (_, content) in batch) content],
         generation: _generation,
         preparedUntilUs: math.max(renderer.validUntilUs, frontier),
+        // 高权重项可先编排在完整前沿之后；来源时间不平移，前沿仍等待余项。
+        lookaheadUntilUs: math.max(renderer.validUntilUs, endUs),
       )) {
         return;
       }

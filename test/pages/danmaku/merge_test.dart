@@ -24,6 +24,25 @@ DanmakuElem _dm(
 );
 
 void main() {
+  test(
+    'worker preserves maximum merged weight across batch boundaries',
+    () async {
+      final input = [
+        _dm('相同弹幕', 0)..weight = 1,
+        for (var i = 1; i < 300; i++) _dm('独立内容$i', i, self: true),
+        _dm('相同弹幕', 1000)..weight = 11,
+      ];
+      final result = await mergeDanmakuInBackground(input);
+      expect(result.first.count, 2);
+      expect(result.first.weight, 11);
+      final cursor = DanmakuMergeCursor()
+        ..appendDelta([_dm('相同弹幕', 0)..weight = 1]);
+      final delta = cursor.appendDelta([_dm('相同弹幕', 1000)..weight = 10]);
+      expect(delta.promotions[0]!.weight, 10);
+      expect(delta.promotions[0]!.progress, 0);
+    },
+  );
+
   test('ordered worker cancellation retains quota until worker exit', () async {
     final quota = DanmakuWorkQuota();
     final token = DanmakuWorkToken();

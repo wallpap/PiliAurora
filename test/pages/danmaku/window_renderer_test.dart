@@ -49,6 +49,50 @@ SpecialDanmakuContentItem<void> _special({
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
+  test(
+    'duplicate identities in a batch measure and retain the first content',
+    () {
+      final renderer = DanmakuWindowRenderer<void>(
+        option: _option,
+        size: _size,
+      );
+      addTearDown(renderer.dispose);
+      renderer.prepare(
+        [
+          DanmakuWindowContent('same', 0, _text('first')),
+          DanmakuWindowContent('same', 0, _text('second text')),
+        ],
+        generation: renderer.generation,
+        preparedUntilUs: 1000000,
+      );
+      renderer.present(0);
+      expect(renderer.interaction.snapshot.single.text, 'first');
+      expect(renderer.rasters.length, 1);
+    },
+  );
+
+  test('simultaneous raster pressure activates higher weights first', () {
+    final measure = DanmakuWindowRenderer<void>(option: _option, size: _size);
+    final bytes = measure.rasters.get(_text('bbbb'))!.bytes;
+    measure.dispose();
+    final renderer = DanmakuWindowRenderer<void>(
+      option: _option.copyWith(massiveMode: true),
+      size: _size,
+      maxActiveBytes: bytes,
+    );
+    addTearDown(renderer.dispose);
+    renderer.prepare(
+      [
+        DanmakuWindowContent('low', 0, _text('aaaa'), weight: 1),
+        DanmakuWindowContent('high', 0, _text('bbbb'), weight: 10),
+      ],
+      generation: renderer.generation,
+      preparedUntilUs: 2000000,
+    );
+    renderer.present(0);
+    expect(renderer.interaction.snapshot.map((e) => e.identity), ['high']);
+  });
+
   test('new raster pressure preserves current visible image references', () {
     final renderer = DanmakuWindowRenderer<void>(
       option: _option,
@@ -81,6 +125,51 @@ void main() {
       lessThanOrEqualTo(renderer.maxWorkingSetBytes),
     );
   });
+
+  test(
+    'a full window reclaims expired decisions and keeps active trajectories',
+    () {
+      final renderer = DanmakuWindowRenderer<void>(
+        option: _option.copyWith(hideTop: true),
+        size: _size,
+      );
+      addTearDown(renderer.dispose);
+      renderer.prepare(
+        [DanmakuWindowContent('keep', 0, _text('keep'))],
+        generation: renderer.generation,
+        preparedUntilUs: 100000,
+      );
+      for (var i = 0; i < 3071; i += 120) {
+        renderer.prepare(
+          [
+            for (var j = i; j < i + 120 && j < 3071; j++)
+              DanmakuWindowContent(
+                j,
+                j + 1,
+                DanmakuContentItem<void>('hidden', type: DanmakuItemType.top),
+              ),
+          ],
+          generation: renderer.generation,
+          preparedUntilUs: 100000,
+        );
+      }
+      renderer.present(50000);
+      final before = renderer.interaction.snapshot.single.bounds;
+      expect(
+        renderer.prepare(
+          [DanmakuWindowContent('new', 100000, _text('new'))],
+          generation: renderer.generation,
+          preparedUntilUs: 200000,
+        ),
+        isTrue,
+      );
+      expect(renderer.hasPrepared(0), isFalse);
+      expect(renderer.validFromUs, 50000);
+      renderer.present(50000);
+      expect(renderer.interaction.snapshot.single.bounds, before);
+      expect(renderer.interaction.snapshot.single.identity, 'keep');
+    },
+  );
 
   test('admission pressure reclaims expired source history while retaining visible resources', () {
     final renderer = DanmakuWindowRenderer<void>(

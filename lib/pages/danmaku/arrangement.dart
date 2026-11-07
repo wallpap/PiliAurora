@@ -13,6 +13,7 @@ class DanmakuMeasuredCandidate<T> {
     required this.payload,
     this.estimatedBytes = 0,
     this.selfSend = false,
+    this.weight = 0,
     this.renderable = true,
     this.specialDurationUs,
   });
@@ -25,6 +26,7 @@ class DanmakuMeasuredCandidate<T> {
   final T payload;
   final int estimatedBytes;
   final bool selfSend;
+  final int weight;
   final bool renderable;
   final int? specialDurationUs;
 }
@@ -72,21 +74,30 @@ class DanmakuWindowPlanner<T> {
     List<DanmakuMeasuredCandidate<T>> candidates, {
     required int generation,
     required int preparedUntilUs,
+    int? lookaheadUntilUs,
   }) {
     if (generation != window.generation) return false;
     if (preparedUntilUs < window.validUntilUs) {
       throw ArgumentError.value(preparedUntilUs);
     }
-    final known = {
-      for (final item in window.preparedItems) item.identity: item,
-    };
+    if (lookaheadUntilUs != null && lookaheadUntilUs < preparedUntilUs) {
+      throw ArgumentError.value(lookaheadUntilUs, 'lookaheadUntilUs');
+    }
+    if (candidates.isEmpty) {
+      return window.extend(
+        const [],
+        generation: generation,
+        preparedUntilUs: preparedUntilUs,
+        lookaheadUntilUs: lookaheadUntilUs,
+      );
+    }
     final pending = <DanmakuMeasuredCandidate<T>>[];
     final identities = <Object>{};
     var bytes = window.estimatedBytes;
     int? previous;
     for (final candidate in candidates) {
       if (candidate.sourceUs < 0 ||
-          candidate.sourceUs > preparedUntilUs ||
+          candidate.sourceUs > (lookaheadUntilUs ?? preparedUntilUs) ||
           (previous != null && candidate.sourceUs < previous) ||
           !candidate.width.isFinite ||
           candidate.width < 0 ||
@@ -96,20 +107,38 @@ class DanmakuWindowPlanner<T> {
         throw ArgumentError('候选必须按媒体时间有序，且测量与预算有效');
       }
       previous = candidate.sourceUs;
-      if (known.containsKey(candidate.identity) ||
+      if (window.hasIdentity(candidate.identity) ||
           !identities.add(candidate.identity)) {
         continue;
       }
       pending.add(candidate);
       bytes += candidate.estimatedBytes + 256;
     }
-    if (known.length + pending.length > window.maxItems ||
+    if (window.length + pending.length > window.maxItems ||
         bytes > window.maxBytes) {
       return false;
     }
+    final ranked = pending.indexed.toList()
+      ..sort((a, b) {
+        final self = (b.$2.selfSend ? 1 : 0).compareTo(a.$2.selfSend ? 1 : 0);
+        if (self != 0) return self;
+        final weight = b.$2.weight.compareTo(a.$2.weight);
+        return weight != 0 ? weight : a.$1.compareTo(b.$1);
+      });
+    final occupancy = _ArrangementOccupancy<T>(
+      trackHeight,
+      trackCount,
+      padding,
+    );
+    final earliestUs = pending.isEmpty
+        ? preparedUntilUs
+        : pending.first.sourceUs;
+    for (final item in window.preparedItems) {
+      if (item.endUs > earliestUs) occupancy.add(item);
+    }
     final additions = <DanmakuWindowItem<DanmakuArrangement<T>>>[];
-    for (final candidate in pending) {
-      final arranged = _arrange(candidate, known.values);
+    for (final (_, candidate) in ranked) {
+      final arranged = _arrange(candidate, occupancy);
       final item = DanmakuWindowItem(
         identity: candidate.identity,
         sourceUs: candidate.sourceUs,
@@ -121,18 +150,19 @@ class DanmakuWindowPlanner<T> {
         payload: arranged,
       );
       additions.add(item);
-      known[item.identity] = item;
+      occupancy.add(item);
     }
     return window.extend(
       additions,
       generation: generation,
       preparedUntilUs: preparedUntilUs,
+      lookaheadUntilUs: lookaheadUntilUs,
     );
   }
 
   DanmakuArrangement<T> _arrange(
     DanmakuMeasuredCandidate<T> candidate,
-    Iterable<DanmakuWindowItem<DanmakuArrangement<T>>> existing,
+    _ArrangementOccupancy<T> occupancy,
   ) {
     DanmakuArrangement<T> rejected() =>
         DanmakuArrangement(candidate, null, -1, false);
@@ -154,7 +184,9 @@ class DanmakuWindowPlanner<T> {
         height: candidate.height,
         velocity: 0,
       );
-      if (!_withinCapacity(motion, existing, special: true)) return rejected();
+      if (!_withinCapacity(motion, occupancy.accepted, special: true)) {
+        return rejected();
+      }
       return DanmakuArrangement(candidate, motion, -1, false);
     }
     if (trackHeight <= 0 ||
@@ -199,7 +231,7 @@ class DanmakuWindowPlanner<T> {
       bool scroll, {
       bool overlap = false,
     }) {
-      for (final item in existing) {
+      for (final item in occupancy.at(motion, track)) {
         final old = item.payload;
         final oldMotion = old.trajectory;
         if (oldMotion == null ||
@@ -266,7 +298,9 @@ class DanmakuWindowPlanner<T> {
     }
     if (track < 0) return rejected();
     final motion = trajectory(track, scrolling);
-    if (!_withinCapacity(motion, existing, special: false)) return rejected();
+    if (!_withinCapacity(motion, occupancy.accepted, special: false)) {
+      return rejected();
+    }
     return DanmakuArrangement(candidate, motion, track, scrolling);
   }
 
@@ -276,7 +310,10 @@ class DanmakuWindowPlanner<T> {
     required bool special,
   }) {
     // 前瞻条目按共同存活区间计入总额度和独立的高级额度。
-    final events = <(double, int, int)>[];
+    var overlaps = 1;
+    var specialOverlaps = special ? 1 : 0;
+    var activeAtStart = 1;
+    var specialAtStart = special ? 1 : 0;
     for (final item in existing) {
       final other = item.payload.trajectory;
       if (other == null) continue;
@@ -286,10 +323,35 @@ class DanmakuWindowPlanner<T> {
           ? 1
           : 0;
       if (start < end) {
-        events
-          ..add((start, 1, advanced))
-          ..add((end, -1, -advanced));
+        overlaps++;
+        specialOverlaps += advanced;
+        if (other.startMs <= motion.startMs) {
+          activeAtStart++;
+          specialAtStart += advanced;
+        }
       }
+    }
+    if (activeAtStart > maxActive ||
+        specialAtStart > DanmakuDisplayLimits.maxActiveSpecial) {
+      return false;
+    }
+    if (overlaps <= maxActive &&
+        specialOverlaps <= DanmakuDisplayLimits.maxActiveSpecial) {
+      return true;
+    }
+    // 常见的未满额路径不分配事件；仅区间交错且可能超额时计算精确峰值。
+    final events = <(double, int, int)>[];
+    for (final item in existing) {
+      final other = item.payload.trajectory!;
+      final start = math.max(motion.startMs, other.startMs);
+      final end = math.min(motion.endMs, other.endMs);
+      if (start >= end) continue;
+      final advanced = item.payload.candidate.type == DanmakuItemType.special
+          ? 1
+          : 0;
+      events
+        ..add((start, 1, advanced))
+        ..add((end, -1, -advanced));
     }
     events.sort((a, b) {
       final time = a.$1.compareTo(b.$1);
@@ -307,5 +369,44 @@ class DanmakuWindowPlanner<T> {
       }
     }
     return true;
+  }
+}
+
+/// 每批建立活动轨迹的纵向索引；拒绝项与高级项不参与普通轨道扫描。
+class _ArrangementOccupancy<T> {
+  _ArrangementOccupancy(this.trackHeight, this.trackCount, this.padding);
+  final double trackHeight;
+  final int trackCount;
+  final double padding;
+  final accepted = <DanmakuWindowItem<DanmakuArrangement<T>>>[];
+  final _tracks = <int, List<DanmakuWindowItem<DanmakuArrangement<T>>>>{};
+
+  void add(DanmakuWindowItem<DanmakuArrangement<T>> item) {
+    final motion = item.payload.trajectory;
+    if (motion == null) return;
+    accepted.add(item);
+    if (item.payload.candidate.type == DanmakuItemType.special ||
+        trackHeight <= 0) {
+      return;
+    }
+    final first = math.max(0, ((motion.y - 2 * padding) / trackHeight).floor());
+    final last = math.min(
+      trackCount - 1,
+      ((motion.y + motion.height + 2 * padding) / trackHeight).floor(),
+    );
+    for (var i = first; i <= last; i++) {
+      (_tracks[i] ??= []).add(item);
+    }
+  }
+
+  Iterable<DanmakuWindowItem<DanmakuArrangement<T>>> at(
+    DanmakuTrajectory motion,
+    int track,
+  ) {
+    final span = DanmakuGeometry.trackSpan(motion.height, trackHeight);
+    if (span == 1) return _tracks[track] ?? const [];
+    return {
+      for (var i = track; i < track + span; i++) ...?_tracks[i],
+    };
   }
 }

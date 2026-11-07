@@ -73,6 +73,12 @@ $ciTests = @(
     "test/plugin/pl_player/video_output/video_output_resizer_test.dart",
     "test/plugin/pl_player/video_output/video_output_handoff_test.dart",
     # 弹幕生产链路与帧计划
+    "tool/experiments/danmaku/density_metrics_test.dart",
+    "test/pages/danmaku/priority_test.dart",
+    "test/pages/danmaku/cache_test.dart",
+    "test/pages/danmaku/merge_test.dart",
+    "test/pages/danmaku/arrangement_test.dart",
+    "test/pages/danmaku/timeline_window_test.dart",
     "test/pages/danmaku/controller_test.dart",
     "test/pages/danmaku/file_store_test.dart",
     "test/pages/danmaku/window_coordinator_test.dart",

@@ -1,6 +1,8 @@
 import 'dart:collection';
 import 'dart:math' as math;
 
+import 'package:pili_aurora/pages/danmaku/priority.dart';
+
 import 'package:pili_aurora/grpc/bilibili/community/service/dm/v1.pb.dart';
 import 'package:pili_aurora/utils/danmaku_utils.dart';
 import 'package:pili_aurora/pages/danmaku/timeline_range.dart';
@@ -10,13 +12,13 @@ import 'package:pili_aurora/pages/danmaku/element_size.dart';
 class DanmakuCache {
   DanmakuCache({
     this.maxBuckets = 6000,
-    this.maxElements = 30000,
-    this.maxElementsPerBucket = 8,
+    this.maxElements = 36000,
+    this.maxElementsPerBucket = danmakuCandidatesPerBucket,
     this.maxSegments = 4,
     this.maxBytes = defaultMaxBytes,
   });
 
-  static const defaultMaxBytes = 16 * 1024 * 1024;
+  static const defaultMaxBytes = 20 * 1024 * 1024;
   static const elementSlotBytes = 64;
   static const bucketIndexBytes = 128;
   static const segmentIndexBytes = 128;
@@ -75,13 +77,12 @@ class DanmakuCache {
       final items = _buckets[bucket]!;
       final lower = _lowerBound(items, startUs);
       final upper = _lowerBound(items, endUs);
-      final length = upper - lower;
-      final count = math.min(length, maxEntriesPerBucket ?? length);
-      for (var index = 0; index < count; index++) {
-        entries.add(
-          DanmakuTimelineEntry(items[lower + index * length ~/ count]),
-        );
-      }
+      final selected = selectDanmakuPriority(
+        items.sublist(lower, upper),
+        maxEntriesPerBucket ?? upper - lower,
+        compareDanmakuPriority,
+      );
+      entries.addAll(selected.map(DanmakuTimelineEntry.new));
       bucket = _buckets.firstKeyAfter(bucket);
     }
     return DanmakuTimelineRange(
@@ -161,14 +162,25 @@ class DanmakuCache {
 
   void addSegmentBuckets(int segment, Map<int, List<DanmakuElem>> buckets) {
     if (_loadedSegments.contains(segment)) return;
-    var segmentBytes = segmentIndexBytes;
+    final retained = DanmakuPriorityRetention(
+      maxElements: maxElements,
+      maxPerBucket: maxElementsPerBucket,
+      maxBytes: maxBytes,
+      baseBytes: segmentIndexBytes,
+    );
+    var index = 0;
     for (final entry in buckets.entries) {
       if (DmUtils.calcSegment(entry.key * 100) != segment) continue;
-      segmentBytes += bucketIndexBytes;
-      for (final item in entry.value.take(maxElementsPerBucket)) {
-        segmentBytes += estimateDanmakuElementBytes(item) + elementSlotBytes;
+      for (final item in entry.value) {
+        retained.add(index++, item);
       }
     }
+    // 单条超限时保持缺失状态，避免把未缓存的数据标为完整。
+    if (buckets.values.any((items) => items.isNotEmpty) && retained.isEmpty) {
+      return;
+    }
+    final selected = retained.buckets;
+    final segmentBytes = retained.estimatedBytes;
     if (segmentBytes > maxBytes) return;
     _segmentBytes[segment] = segmentBytes;
     _estimatedBytes += segmentBytes;
@@ -177,17 +189,10 @@ class DanmakuCache {
     _segmentOrder.addLast(segment);
     final segmentBuckets = _segmentBuckets[segment] = <int>{};
 
-    for (final entry in buckets.entries) {
-      final bucket = entry.key;
-      final items = entry.value;
-      if (DmUtils.calcSegment(bucket * 100) != segment) continue;
-      // 6 分钟最多有 3600 个分桶，每桶 8 条可将单段限制在约 2.9 万条。
-      if (items.length > maxElementsPerBucket) {
-        items.removeRange(maxElementsPerBucket, items.length);
-      }
-      _buckets[bucket] = _ordered(items);
-      segmentBuckets.add(bucket);
-      _elementCount += items.length;
+    for (final entry in selected.entries) {
+      _buckets[entry.key] = _ordered(entry.value);
+      segmentBuckets.add(entry.key);
+      _elementCount += entry.value.length;
     }
 
     _trim(protectedSegment: segment);

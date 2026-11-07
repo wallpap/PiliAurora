@@ -18,6 +18,68 @@ DanmakuWindowItem<String> _item(
 );
 
 void main() {
+  test(
+    'interleaved future additions and late entries keep active expiry exact',
+    () {
+      final window = DanmakuTimelineWindow<String>();
+      void add(List<DanmakuWindowItem<String>> items) => window.extend(
+        items,
+        generation: window.generation,
+        preparedUntilUs: 1000,
+      );
+      add([_item('active', 0, 100), _item('later', 300, 400)]);
+      expect(window.visibleAt(50)!.single.identity, 'active');
+      add([_item('future', 200, 350)]);
+      expect(window.visibleAt(100), isEmpty);
+      expect(window.visibleAt(250)!.single.identity, 'future');
+      add([_item('late', 150, 500)]);
+      expect(window.visibleAt(300)!.map((e) => e.identity), [
+        'late',
+        'future',
+        'later',
+      ]);
+      expect(window.visibleAt(400)!.single.identity, 'late');
+      expect(window.visibleAt(500), isEmpty);
+    },
+  );
+
+  test(
+    'priority lookahead does not grant coverage past an incomplete frontier',
+    () {
+      final window = DanmakuTimelineWindow<String>();
+      window.extend(
+        [_item('future', 90, 200)],
+        generation: window.generation,
+        preparedUntilUs: 0,
+        lookaheadUntilUs: 100,
+      );
+      expect(window.contains(90), isFalse);
+      expect(window.visibleAt(90), isNull);
+      expect(
+        window.visibleAt(90, allowUnprepared: true)!.single.identity,
+        'future',
+      );
+      expect(
+        () => window.extend(
+          const [],
+          generation: window.generation,
+          preparedUntilUs: 100,
+          lookaheadUntilUs: 99,
+        ),
+        throwsArgumentError,
+      );
+      window.extend(
+        [_item('earlier', 0, 200)],
+        generation: window.generation,
+        preparedUntilUs: 100,
+      );
+      expect(window.visibleAt(95)!.map((e) => e.identity), [
+        'earlier',
+        'future',
+      ]);
+    },
+  );
+
   test('partial boundary results render without granting complete cached query coverage', () {
     final window = DanmakuTimelineWindow<String>();
     expect(

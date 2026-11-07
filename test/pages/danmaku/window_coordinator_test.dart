@@ -92,6 +92,90 @@ DanmakuContentItem<void> _content(DanmakuElem element) => DanmakuContentItem(
 );
 
 void main() {
+  test('source selection and per-frame preparation fill twelve slots by relative weight', () {
+    final source = _Source()
+      ..load([
+        for (final group in [(0, 10), (3, 12), (5, 7), (7, 2), (10, 2)])
+          for (var i = 0; i < group.$2; i++)
+            _dm('${group.$1}-$i', 0)..weight = group.$1,
+      ]);
+    const option = DanmakuOption(fontSize: 16, safeArea: false, duration: 8);
+    final measure = DanmakuWindowRenderer<int>(
+      option: option,
+      size: const Size(500, 500),
+    );
+    final trackHeight = measure.rasters.measureTrackHeight();
+    measure.dispose();
+    final renderer = DanmakuWindowRenderer<int>(
+      option: option,
+      size: Size(500, trackHeight * 12 + .01),
+    );
+    final coordinator = DanmakuWindowCoordinator<int>(
+      source: source,
+      renderer: renderer,
+      contentOf: (element) => DanmakuContentItem<int>(
+        element.content,
+        color: const Color(0xffffffff),
+        extra: element.weight,
+      ),
+    );
+    addTearDown(renderer.dispose);
+    addTearDown(coordinator.dispose);
+    addTearDown(source.events.close);
+    coordinator.prepareFrame(renderer, 0);
+    renderer.present(0, allowUnprepared: true);
+    expect(renderer.activeCount, 8);
+    coordinator.prepareFrame(renderer, 0);
+    renderer.present(0, allowUnprepared: true);
+    final distribution = <int, int>{};
+    for (final item in renderer.interaction.snapshot) {
+      distribution.update(item.extra!, (count) => count + 1, ifAbsent: () => 1);
+    }
+    expect(distribution, {10: 2, 7: 2, 5: 7, 3: 1});
+    expect(renderer.activeCount, 12);
+    expect(
+      renderer.interaction.snapshot.singleWhere((item) => item.extra == 3).text,
+      '3-0',
+    );
+  });
+
+  test(
+    'priority preparation preserves original times and incomplete frontier',
+    () {
+      final source = _Source()
+        ..load([
+          _dm('low', 0)..weight = 1,
+          _dm('middle', 50)..weight = 3,
+          _dm('high', 90)..weight = 10,
+        ]);
+      final renderer = _renderer();
+      final converted = <String>[];
+      final coordinator = DanmakuWindowCoordinator<void>(
+        source: source,
+        renderer: renderer,
+        preparePerFrame: 1,
+        contentOf: (e) {
+          converted.add(e.content);
+          return _content(e);
+        },
+      );
+      addTearDown(renderer.dispose);
+      addTearDown(coordinator.dispose);
+      addTearDown(source.events.close);
+      coordinator.prepareFrame(renderer, 0);
+      expect(converted, ['high', 'middle', 'low']);
+      expect(renderer.validUntilUs, 0);
+      renderer.present(0, allowUnprepared: true);
+      expect(renderer.activeCount, 0);
+      renderer.present(90000, allowUnprepared: true);
+      expect(renderer.interaction.snapshot.single.text, 'high');
+      coordinator.prepareFrame(renderer, 0);
+      expect(renderer.validUntilUs, 0);
+      coordinator.prepareFrame(renderer, 0);
+      expect(renderer.validUntilUs, greaterThanOrEqualTo(100000));
+    },
+  );
+
   TestWidgetsFlutterBinding.ensureInitialized();
 
   test('local invalidation preserves unrelated active items and ignores stale ready', () {
@@ -269,6 +353,7 @@ void main() {
       source: source,
       renderer: renderer,
       preparePerFrame: 120,
+      maxCandidatesPerBucket: 120,
       contentOf: (element) {
         converted++;
         return _content(element);
@@ -336,6 +421,7 @@ void main() {
         source: source,
         renderer: renderer,
         contentOf: _content,
+        preparePerFrame: 4,
       );
       addTearDown(renderer.dispose);
       addTearDown(coordinator.dispose);

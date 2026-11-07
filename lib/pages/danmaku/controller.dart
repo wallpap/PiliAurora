@@ -7,9 +7,10 @@ import 'package:pili_aurora/services/danmaku/work_quota.dart';
 import 'package:pili_aurora/grpc/bilibili/community/service/dm/v1.pb.dart';
 import 'package:pili_aurora/grpc/dm.dart';
 import 'package:pili_aurora/pages/danmaku/cache.dart';
+import 'package:pili_aurora/pages/danmaku/priority.dart';
+import 'package:canvas_danmaku/canvas_danmaku.dart' show DanmakuDisplayLimits;
 import 'package:pili_aurora/pages/danmaku/file_reader.dart';
 import 'package:pili_aurora/pages/danmaku/file_store.dart';
-import 'package:pili_aurora/pages/danmaku/element_size.dart';
 import 'package:pili_aurora/pages/danmaku/raw_cache.dart';
 import 'package:pili_aurora/pages/danmaku/processing_rules.dart';
 import 'package:pili_aurora/pages/danmaku/timeline_range.dart';
@@ -294,7 +295,6 @@ class PlDanmakuController implements DanmakuTimelineSource {
     final segmentBuckets = segmentIndex == null
         ? null
         : <int, List<DanmakuElem>>{};
-    final maxElementsPerBucket = _cache.maxElementsPerBucket;
 
     final rules = DanmakuProcessingRules(
       merge: _mergeDanmaku,
@@ -321,8 +321,7 @@ class PlDanmakuController implements DanmakuTimelineSource {
         retained!.add(element);
       } else {
         final bucketIndex = element.progress ~/ 100;
-        final bucket = segmentBuckets![bucketIndex] ??= <DanmakuElem>[];
-        if (bucket.length < maxElementsPerBucket) bucket.add(element);
+        (segmentBuckets![bucketIndex] ??= <DanmakuElem>[]).add(element);
       }
     }
     if (_isFileSource) {
@@ -560,10 +559,13 @@ class PlDanmakuController implements DanmakuTimelineSource {
     );
     final start = first * DmUtils.segLength;
     final end = (last + 1) * DmUtils.segLength;
-    final retained = <int, DanmakuElem>{};
-    final buckets = <int, List<DanmakuElem>>{};
+    final retained = DanmakuPriorityRetention(
+      maxElements: _cache.maxElements,
+      maxPerBucket: DanmakuDisplayLimits.maxPerBatch,
+      maxBytes: _cache.maxBytes,
+      baseBytes: (last - first + 1) * DanmakuCache.segmentIndexBytes,
+    );
     var index = 0;
-    var bytes = (last - first + 1) * DanmakuCache.segmentIndexBytes;
     Stream<List<DanmakuElem>> batches() async* {
       final input = rules.merge
           ? _orderedFile.read(file, token: token)
@@ -592,23 +594,15 @@ class PlDanmakuController implements DanmakuTimelineSource {
         for (final element in delta.additions) {
           final outputIndex = index++;
           if (element.progress < start || element.progress >= end) continue;
-          final bucketIndex = element.progress ~/ 100;
-          final bucket = buckets[bucketIndex];
-          final size =
-              estimateDanmakuElementBytes(element) +
-              DanmakuCache.elementSlotBytes +
-              (bucket == null ? DanmakuCache.bucketIndexBytes : 0);
-          if ((bucket?.length ?? 0) >= 120 ||
-              retained.length >= _cache.maxElements ||
-              bytes + size > resultBytes) {
-            continue;
+          retained.add(outputIndex, element);
+        }
+        for (final update in delta.promotions.entries) {
+          if (update.value.progress >= start && update.value.progress < end) {
+            retained.promote(update.key, update.value);
           }
-          (buckets[bucketIndex] ??= []).add(element);
-          retained[outputIndex] = element;
-          bytes += size;
         }
         for (final update in delta.counts.entries) {
-          retained[update.key]?.count = update.value;
+          retained.update(update.key, count: update.value);
         }
       },
     );
@@ -617,7 +611,7 @@ class PlDanmakuController implements DanmakuTimelineSource {
       throw const DanmakuWorkCancelled();
     }
     if (_disposed || token.isCancelled || revision != _ruleRevision) return;
-    _cache.replaceFileRange(first, last, buckets);
+    _cache.replaceFileRange(first, last, retained.buckets);
     _fileInvalidated = false;
     _changes.add(
       DanmakuSourceChange(

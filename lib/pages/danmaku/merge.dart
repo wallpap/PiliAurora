@@ -33,6 +33,7 @@ int estimateDanmakuWorkBytes(
 /// 批次发送方、worker 输入与返回、接收方引用；游标另行持有跨批上下文。
 const orderedDanmakuWorkerBytes =
     DanmakuProcessingBudget.cursorBytes +
+    DanmakuProcessingBudget.groupBytes + // 权重提升时返回的代表项，最坏为整个合并组。
     DanmakuProcessingBudget.normalizationScratchBytes +
     4 * DanmakuProcessingBudget.batchBytes +
     2 * DanmakuProcessingBudget.rulesBytes +
@@ -276,6 +277,9 @@ Future<List<DanmakuElem>> _mergeInWorker(
       input.send(batch);
       final delta = await next() as DanmakuMergeDelta;
       result.addAll(delta.additions);
+      for (final update in delta.promotions.entries) {
+        result[update.key].weight = update.value.weight;
+      }
       for (final update in delta.counts.entries) {
         result[update.key].count = update.value;
       }
@@ -296,9 +300,14 @@ Future<List<DanmakuElem>> _mergeInWorker(
 }
 
 class DanmakuMergeDelta {
-  const DanmakuMergeDelta(this.additions, this.counts);
+  const DanmakuMergeDelta(
+    this.additions,
+    this.counts, [
+    this.promotions = const {},
+  ]);
   final List<DanmakuElem> additions;
   final Map<int, int> counts;
+  final Map<int, DanmakuElem> promotions;
 }
 
 /// 合并窗口以首条弹幕为锚点，避免连续刷屏把后续整段内容吞掉。
@@ -368,16 +377,18 @@ class DanmakuMergeCursor {
 
   DanmakuMergeDelta appendDelta(List<DanmakuElem> elements) {
     final counts = <int, int>{};
-    final additions = _appendOrdered(elements, counts);
-    return DanmakuMergeDelta(additions, counts);
+    final promotions = <int, DanmakuElem>{};
+    final additions = _appendOrdered(elements, counts, promotions);
+    return DanmakuMergeDelta(additions, counts, promotions);
   }
 
   List<DanmakuElem> appendOrdered(List<DanmakuElem> elements) =>
-      _appendOrdered(elements, null);
+      _appendOrdered(elements, null, null);
 
   List<DanmakuElem> _appendOrdered(
     List<DanmakuElem> elements,
     Map<int, int>? counts,
+    Map<int, DanmakuElem>? promotions,
   ) {
     var previous = _lastProgress;
     for (final element in elements) {
@@ -450,6 +461,10 @@ class DanmakuMergeCursor {
       var match = _exact[key];
       if (match != null) {
         match.element.count++;
+        if (element.weight > match.element.weight) {
+          match.element.weight = element.weight;
+          promotions?[match.index] = match.element;
+        }
         counts?[match.index] = match.element.count;
         continue;
       }
@@ -486,6 +501,10 @@ class DanmakuMergeCursor {
       }
       if (match != null) {
         match.element.count++;
+        if (element.weight > match.element.weight) {
+          match.element.weight = element.weight;
+          promotions?[match.index] = match.element;
+        }
         counts?[match.index] = match.element.count;
         continue;
       }

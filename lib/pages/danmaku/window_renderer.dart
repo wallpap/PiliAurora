@@ -12,7 +12,13 @@ import 'package:pili_aurora/pages/danmaku/interaction.dart';
 import 'package:pili_aurora/pages/danmaku/timeline_window.dart';
 
 class DanmakuWindowContent<T> {
-  const DanmakuWindowContent(this.identity, this.sourceUs, this.content);
+  const DanmakuWindowContent(
+    this.identity,
+    this.sourceUs,
+    this.content, {
+    this.weight = 0,
+  });
+  final int weight;
   final Object identity;
   final int sourceUs;
   final DanmakuContentItem<T> content;
@@ -74,7 +80,7 @@ class DanmakuWindowRenderer<T> extends ChangeNotifier {
     this.additionalWorkingSetBytes,
   }) : maxWorkingSetBytes =
            maxWorkingSetBytes ??
-           maxActiveBytes + rasterCacheMaxBytes + 4 * 1024 * 1024,
+           maxActiveBytes + rasterCacheMaxBytes + 5 * 1024 * 1024,
        _size = size,
        rasters = DanmakuRasterCache(
          option: option,
@@ -780,6 +786,7 @@ class DanmakuWindowRenderer<T> extends ChangeNotifier {
     List<DanmakuWindowContent<T>> contents, {
     required int generation,
     required int preparedUntilUs,
+    int? lookaheadUntilUs,
   }) {
     if (_disposed ||
         _configuration != null ||
@@ -787,13 +794,17 @@ class DanmakuWindowRenderer<T> extends ChangeNotifier {
         contents.length > DanmakuDisplayLimits.maxPerBatch) {
       return false;
     }
-    final known = {
-      for (final item in _planner.window.preparedItems)
-        item.identity: item.payload.candidate,
-    };
+    if (contents.isEmpty) {
+      return _planner.prepare(
+        const [],
+        generation: generation,
+        preparedUntilUs: preparedUntilUs,
+        lookaheadUntilUs: lookaheadUntilUs,
+      );
+    }
     final additions = <Object, DanmakuContentItem<T>>{};
     for (final input in contents) {
-      if (!known.containsKey(input.identity)) {
+      if (!_planner.window.hasIdentity(input.identity)) {
         additions.putIfAbsent(input.identity, () => input.content);
       }
     }
@@ -824,8 +835,12 @@ class DanmakuWindowRenderer<T> extends ChangeNotifier {
       if (!hasCapacity()) return false;
     }
     final candidates = <DanmakuMeasuredCandidate<DanmakuContentItem<T>>>[];
+    final measured =
+        <Object, DanmakuMeasuredCandidate<DanmakuContentItem<T>>>{};
     for (final input in contents) {
-      final previous = known[input.identity];
+      final previous =
+          measured[input.identity] ??
+          _planner.window.itemFor(input.identity)?.payload.candidate;
       if (previous != null) {
         candidates.add(previous);
         continue;
@@ -855,6 +870,7 @@ class DanmakuWindowRenderer<T> extends ChangeNotifier {
         type: content.type,
         payload: content,
         selfSend: content.selfSend,
+        weight: input.weight,
         renderable: renderable,
         specialDurationUs: special == null ? null : special.duration * 1000,
         estimatedBytes:
@@ -865,13 +881,23 @@ class DanmakuWindowRenderer<T> extends ChangeNotifier {
             ),
       );
       candidates.add(candidate);
-      known[input.identity] = candidate;
+      measured[input.identity] = candidate;
     }
-    final prepared = _planner.prepare(
+    bool prepareCandidates() => _planner.prepare(
       candidates,
       generation: generation,
       preparedUntilUs: preparedUntilUs,
+      lookaheadUntilUs: lookaheadUntilUs,
     );
+    var prepared = prepareCandidates();
+    if (!prepared) {
+      // 密集来源的历史拒绝项不能堵住前瞻；按实际结束时间回收，活动轨迹仍保留。
+      final fromUs = math.min(_mediaUs, validUntilUs);
+      if (fromUs > validFromUs) {
+        _planner.window.trimBefore(fromUs);
+        prepared = prepareCandidates();
+      }
+    }
     _pruneInlineSources();
     return prepared;
   }
@@ -891,17 +917,31 @@ class DanmakuWindowRenderer<T> extends ChangeNotifier {
         if (item.payload.accepted) item.identity: item,
     };
     _active.removeWhere((identity, raster) {
-      if (desired.containsKey(identity)) return false;
+      final next = desired[identity];
+      if (next != null) {
+        raster.item = next;
+        return false;
+      }
       raster.release();
       return true;
     });
     if (_active.isEmpty && _held == null) _mayOverlap = false;
-    for (final item in desired.values) {
-      final existing = _active[item.identity];
-      if (existing != null) {
-        existing.item = item;
-        continue;
-      }
+    final ranked =
+        desired.values
+            .where((item) => !_active.containsKey(item.identity))
+            .indexed
+            .toList()
+          ..sort((a, b) {
+            final first = a.$2.payload.candidate;
+            final second = b.$2.payload.candidate;
+            final self = (second.selfSend ? 1 : 0).compareTo(
+              first.selfSend ? 1 : 0,
+            );
+            if (self != 0) return self;
+            final weight = second.weight.compareTo(first.weight);
+            return weight != 0 ? weight : a.$1.compareTo(b.$1);
+          });
+    for (final (_, item) in ranked) {
       if (_unavailable.contains(item.identity)) continue;
       final content = item.payload.candidate.payload;
       if (content is SpecialDanmakuContentItem<T>) {
