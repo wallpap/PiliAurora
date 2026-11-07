@@ -639,10 +639,6 @@ abstract final class Api {
 
   static const String createDynamic = '/x/dynamic/feed/create/dyn';
 
-  static const String createTextDynamic = '/dynamic_svr/v1/dynamic_svr/create';
-
-  // static const String removeDynamic = '${HttpString.tUrl}/dynamic_svr/v1/dynamic_svr/rm_dynamic';
-
   static const String removeDynamic = '/x/dynamic/feed/operate/remove';
 
   static const String uploadBfs = '/x/dynamic/feed/draw/upload_bfs';

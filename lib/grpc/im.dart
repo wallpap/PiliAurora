@@ -11,7 +11,7 @@ import 'package:protobuf/protobuf.dart' show PbMap;
 
 abstract final class ImGrpc {
   static Future<LoadingState<RspSendMsg>> sendMsg({
-    Account? account,
+    required Account account,
     required int senderUid,
     required int receiverId,
     required String content,
@@ -39,7 +39,7 @@ abstract final class ImGrpc {
   }
 
   static Future<LoadingState<RspShareList>> shareList({
-    Account? account,
+    required Account account,
     int size = 10,
   }) {
     return GrpcReq.request(
@@ -51,7 +51,7 @@ abstract final class ImGrpc {
   }
 
   static Future<LoadingState<RspSessionMsg>> syncFetchSessionMsgs({
-    Account? account,
+    required Account account,
     required int talkerId,
     Int64? endSeqno,
     Int64? beginSeqno,
@@ -72,7 +72,7 @@ abstract final class ImGrpc {
   }
 
   static Future<LoadingState<SessionMainReply>> sessionMain({
-    Account? account,
+    required Account account,
     PbMap<int, Offset>? offset,
   }) {
     return GrpcReq.request(
@@ -86,7 +86,7 @@ abstract final class ImGrpc {
   }
 
   static Future<LoadingState<SessionSecondaryReply>> sessionSecondary({
-    Account? account,
+    required Account account,
     PbMap<int, Offset>? offset,
     SessionPageType? pageType,
   }) {
@@ -102,7 +102,7 @@ abstract final class ImGrpc {
   }
 
   static Future<LoadingState<ClearUnreadReply>> clearUnread({
-    Account? account,
+    required Account account,
     SessionPageType? pageType,
     SessionId? sessionId,
   }) {
@@ -119,7 +119,7 @@ abstract final class ImGrpc {
   }
 
   static Future<LoadingState<SessionUpdateReply>> sessionUpdate({
-    Account? account,
+    required Account account,
     SessionPageType? pageType,
     SessionId? sessionId,
   }) {
@@ -135,7 +135,7 @@ abstract final class ImGrpc {
   }
 
   static Future<LoadingState<PinSessionReply>> pinSession({
-    Account? account,
+    required Account account,
     SessionId? sessionId,
     Int64? topTimeMicros,
   }) {
@@ -152,7 +152,7 @@ abstract final class ImGrpc {
   }
 
   static Future<LoadingState<UnPinSessionReply>> unpinSession({
-    Account? account,
+    required Account account,
     SessionId? sessionId,
   }) {
     return GrpcReq.request(
@@ -167,7 +167,7 @@ abstract final class ImGrpc {
   }
 
   static Future<LoadingState<DeleteSessionListReply>> deleteSessionList({
-    Account? account,
+    required Account account,
     SessionPageType? pageType,
   }) {
     return GrpcReq.request(
@@ -182,7 +182,7 @@ abstract final class ImGrpc {
   }
 
   static Future<LoadingState<GetImSettingsReply>> getImSettings({
-    Account? account,
+    required Account account,
     IMSettingType? type,
   }) {
     return GrpcReq.request(
@@ -196,7 +196,7 @@ abstract final class ImGrpc {
   }
 
   static Future<LoadingState<SetImSettingsReply>> setImSettings({
-    Account? account,
+    required Account account,
     Map<int, Setting>? settings,
   }) {
     return GrpcReq.request(
@@ -209,7 +209,7 @@ abstract final class ImGrpc {
   }
 
   static Future<LoadingState<KeywordBlockingListReply>> keywordBlockingList({
-    Account? account,
+    required Account account,
   }) {
     return GrpcReq.request(
       GrpcUrl.keywordBlockingList,
@@ -221,7 +221,7 @@ abstract final class ImGrpc {
 
   static Future<LoadingState<KeywordBlockingAddReply>> keywordBlockingAdd(
     String keyword, {
-    Account? account,
+    required Account account,
   }) {
     return GrpcReq.request(
       GrpcUrl.keywordBlockingAdd,
@@ -234,7 +234,7 @@ abstract final class ImGrpc {
 
   static Future<LoadingState<KeywordBlockingDeleteReply>> keywordBlockingDelete(
     String keyword, {
-    Account? account,
+    required Account account,
   }) {
     return GrpcReq.request(
       GrpcUrl.keywordBlockingDelete,
@@ -246,7 +246,7 @@ abstract final class ImGrpc {
   }
 
   static Future<LoadingState<RspTotalUnread>> getTotalUnread({
-    Account? account,
+    required Account account,
     int? unreadType,
   }) {
     return GrpcReq.request(
@@ -258,7 +258,7 @@ abstract final class ImGrpc {
   }
 
   static Future<LoadingState<SessionInfo>> sessionDetail({
-    Account? account,
+    required Account account,
     Int64? talkerId,
     int? sessionType,
     Int64? uid,

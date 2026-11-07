@@ -11,6 +11,7 @@ import 'package:pili_aurora/grpc/grpc_req.dart';
 import 'package:pili_aurora/grpc/im.dart';
 import 'package:pili_aurora/http/api.dart';
 import 'package:pili_aurora/http/init.dart';
+import 'package:pili_aurora/http/msg.dart';
 import 'package:pili_aurora/models/remote/msg/msg_sys/data.dart';
 import 'package:pili_aurora/services/messaging/conversation_adapter.dart';
 import 'package:pili_aurora/services/messaging/feed.dart';
@@ -56,22 +57,42 @@ void main() {
   });
   tearDown(() => session.dispose());
 
-  for (final explicitAccount in [false, true]) {
-    test('发送${explicitAccount ? '显式' : '默认'}账号请求均关闭自动重试', () async {
-      final result = await ImGrpc.sendMsg(
-        account: explicitAccount ? session.account : null,
-        senderUid: 123,
-        receiverId: 456,
-        content: jsonEncode({'content': 'test'}),
+  test('发送请求绑定账号并关闭自动重试', () async {
+    final result = await ImGrpc.sendMsg(
+      account: session.account,
+      senderUid: 123,
+      receiverId: 456,
+      content: jsonEncode({'content': 'test'}),
+    );
+    expect(result.isSuccess, isTrue);
+    expect(captured.extra['noRetry'], isTrue);
+    expect(captured.extra['account'], same(session.account));
+  });
+
+  test('消息设置请求使用指定账号及其 CSRF', () async {
+    Request.dio.interceptors
+      ..clear()
+      ..add(
+        InterceptorsWrapper(
+          onRequest: (options, handler) {
+            captured = options;
+            handler.resolve(
+              Response(requestOptions: options, data: {'code': 0}),
+            );
+          },
+        ),
       );
-      expect(result.isSuccess, isTrue);
-      expect(captured.extra['noRetry'], isTrue);
-      expect(
-        captured.extra['account'],
-        explicitAccount ? same(session.account) : isNull,
-      );
-    });
-  }
+    final result = await MsgHttp.setMsgDnd(
+      account: session.account,
+      uid: 123,
+      setting: 1,
+      dndUid: 456,
+    );
+    expect(result.isSuccess, isTrue);
+    expect(captured.extra['account'], same(session.account));
+    expect(captured.extra['noRetry'], isTrue);
+    expect((captured.data as Map)['csrf'], session.account.csrf);
+  });
 
   for (final kind in [
     MessageContentKind.shareV2,

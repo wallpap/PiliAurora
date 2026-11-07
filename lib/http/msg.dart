@@ -22,7 +22,7 @@ import 'package:dio/dio.dart';
 
 abstract final class MsgHttp {
   static Future<LoadingState<MsgReplyData>> msgFeedReplyMe({
-    Account? account,
+    required Account account,
     int? cursor,
     int? cursorTime,
   }) async {
@@ -45,7 +45,7 @@ abstract final class MsgHttp {
   }
 
   static Future<LoadingState<MsgAtData>> msgFeedAtMe({
-    Account? account,
+    required Account account,
     int? cursor,
     int? cursorTime,
   }) async {
@@ -68,7 +68,7 @@ abstract final class MsgHttp {
   }
 
   static Future<LoadingState<MsgLikeData>> msgFeedLikeMe({
-    Account? account,
+    required Account account,
     int? cursor,
     int? cursorTime,
   }) async {
@@ -91,7 +91,7 @@ abstract final class MsgHttp {
   }
 
   static Future<LoadingState<MsgLikeDetailData>> msgLikeDetail({
-    Account? account,
+    required Account account,
     required Object cardId,
     required int pn,
     Object lastMid = 0,
@@ -116,7 +116,7 @@ abstract final class MsgHttp {
   }
 
   static Future<LoadingState<List<MsgSysItem>?>> msgFeedNotify({
-    Account? account,
+    required Account account,
     int? cursor,
     int pageSize = 20,
   }) async {
@@ -143,10 +143,9 @@ abstract final class MsgHttp {
 
   static Future<LoadingState<void>> msgSysUpdateCursor(
     int cursor, {
-    Account? account,
+    required Account account,
   }) async {
-    final requestAccount = account ?? Accounts.main;
-    String csrf = requestAccount.csrf;
+    String csrf = account.csrf;
     final res = await _MessageRequest(account).get(
       Api.msgSysUpdateCursor,
       queryParameters: {
@@ -209,32 +208,6 @@ abstract final class MsgHttp {
     }
   }
 
-  static Future<LoadingState<void>> createTextDynamic(
-    Object content, {
-    Account? account,
-  }) async {
-    final requestAccount = account ?? Accounts.main;
-    String csrf = requestAccount.csrf;
-    Map<String, dynamic> data = await WbiSign.makSign({
-      'dynamic_id': 0,
-      'type': 4,
-      'rid': 0,
-      'content': content,
-      'csrf_token': csrf,
-      'csrf': csrf,
-    });
-    final res = await _MessageRequest(account).post(
-      HttpString.tUrl + Api.createTextDynamic,
-      data: data,
-      options: Options(contentType: Headers.formUrlEncodedContentType),
-    );
-    if (res.data['code'] == 0) {
-      return const Success(null);
-    } else {
-      return Error(res.data['message']);
-    }
-  }
-
   static Future<LoadingState<void>> removeDynamic({
     Account? account,
     required Object dynIdStr,
@@ -263,10 +236,9 @@ abstract final class MsgHttp {
 
   static Future<LoadingState<void>> removeMsg(
     Object talkerId, {
-    Account? account,
+    required Account account,
   }) async {
-    final requestAccount = account ?? Accounts.main;
-    String csrf = requestAccount.csrf;
+    String csrf = account.csrf;
     Map<String, dynamic> data = await WbiSign.makSign({
       'talker_id': talkerId,
       'session_type': 1,
@@ -290,10 +262,9 @@ abstract final class MsgHttp {
   static Future<LoadingState<void>> delMsgfeed(
     int tp,
     dynamic id, {
-    Account? account,
+    required Account account,
   }) async {
-    final requestAccount = account ?? Accounts.main;
-    String csrf = requestAccount.csrf;
+    String csrf = account.csrf;
     final res = await _MessageRequest(account).post(
       Api.delMsgfeed,
       data: {
@@ -315,10 +286,9 @@ abstract final class MsgHttp {
 
   static Future<LoadingState<void>> delSysMsg(
     Object id, {
-    Account? account,
+    required Account account,
   }) async {
-    final requestAccount = account ?? Accounts.main;
-    String csrf = requestAccount.csrf;
+    String csrf = account.csrf;
     final res = await _MessageRequest(account).post(
       HttpString.messageBaseUrl + Api.delSysMsg,
       queryParameters: {
@@ -342,12 +312,11 @@ abstract final class MsgHttp {
 
   // 消息标记已读
   static Future<LoadingState<void>> ackSessionMsg({
-    Account? account,
+    required Account account,
     required int talkerId,
     required int ackSeqno,
   }) async {
-    final requestAccount = account ?? Accounts.main;
-    String csrf = requestAccount.csrf;
+    String csrf = account.csrf;
     final params = await WbiSign.makSign({
       'talker_id': talkerId,
       'session_type': 1,
@@ -371,12 +340,11 @@ abstract final class MsgHttp {
   }
 
   static Future<LoadingState<void>> msgSetNotice({
-    Account? account,
+    required Account account,
     required Object id,
     required int noticeState,
   }) async {
-    final requestAccount = account ?? Accounts.main;
-    final csrf = requestAccount.csrf;
+    final csrf = account.csrf;
     final res = await _MessageRequest(account).post(
       Api.msgSetNotice,
       data: {
@@ -401,13 +369,12 @@ abstract final class MsgHttp {
   }
 
   static Future<LoadingState<void>> setMsgDnd({
-    Account? account,
+    required Account account,
     required Object uid,
     required int setting,
     required dndUid,
   }) async {
-    final requestAccount = account ?? Accounts.main;
-    final csrf = requestAccount.csrf;
+    final csrf = account.csrf;
     final res = await _MessageRequest(account).post(
       Api.setMsgDnd,
       data: {
@@ -429,12 +396,11 @@ abstract final class MsgHttp {
   }
 
   static Future<LoadingState<void>> setPushSs({
-    Account? account,
+    required Account account,
     required int setting,
     required talkerUid,
   }) async {
-    final requestAccount = account ?? Accounts.main;
-    final csrf = requestAccount.csrf;
+    final csrf = account.csrf;
     final res = await _MessageRequest(account).post(
       Api.setPushSs,
       data: {
@@ -455,11 +421,10 @@ abstract final class MsgHttp {
   }
 
   static Future<LoadingState<List<ImUserInfosData>?>> imUserInfos({
-    Account? account,
+    required Account account,
     required String uids,
   }) async {
-    final requestAccount = account ?? Accounts.main;
-    final csrf = requestAccount.csrf;
+    final csrf = account.csrf;
     final res = await _MessageRequest(account).get(
       Api.imUserInfos,
       queryParameters: {
@@ -482,11 +447,10 @@ abstract final class MsgHttp {
   }
 
   static Future<LoadingState<SessionSsData>> getSessionSs({
-    Account? account,
+    required Account account,
     required Object talkerUid,
   }) async {
-    final requestAccount = account ?? Accounts.main;
-    final csrf = requestAccount.csrf;
+    final csrf = account.csrf;
     final res = await _MessageRequest(account).get(
       Api.getSessionSs,
       queryParameters: {
@@ -505,15 +469,14 @@ abstract final class MsgHttp {
   }
 
   static Future<LoadingState<List<UidSetting>?>> getMsgDnd({
-    Account? account,
+    required Account account,
     required Object uidsStr,
   }) async {
-    final requestAccount = account ?? Accounts.main;
-    final csrf = requestAccount.csrf;
+    final csrf = account.csrf;
     final res = await _MessageRequest(account).get(
       Api.getMsgDnd,
       queryParameters: {
-        'own_uid': requestAccount.mid,
+        'own_uid': account.mid,
         'uids_str': uidsStr,
         'build': 0,
         'mobi_app': 'web',
@@ -533,7 +496,7 @@ abstract final class MsgHttp {
   }
 
   static Future<LoadingState<SingleUnreadData>> msgUnread({
-    Account? account,
+    required Account account,
   }) async {
     final res = await _MessageRequest(account).get(
       Api.msgUnread,
@@ -552,14 +515,13 @@ abstract final class MsgHttp {
   }
 
   static Future<LoadingState<void>> imMsgReport({
-    Account? account,
+    required Account account,
     required int accusedUid,
     required int reasonType,
     required String reasonDesc,
     required Map comment,
     required Map extra,
   }) async {
-    final requestAccount = account ?? Accounts.main;
     final res = await _MessageRequest(account).post(
       Api.imMsgReport,
       data: {
@@ -571,7 +533,7 @@ abstract final class MsgHttp {
         'module': 604,
         'comment': jsonEncode(comment),
         'extra': jsonEncode(extra),
-        'csrf': requestAccount.csrf,
+        'csrf': account.csrf,
       },
       options: Options(contentType: Headers.formUrlEncodedContentType),
     );
