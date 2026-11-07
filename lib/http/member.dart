@@ -32,6 +32,7 @@ import 'package:pili_aurora/models/remote/space/space_season_series/item.dart';
 import 'package:pili_aurora/models/remote/space/space_shop/data.dart';
 import 'package:pili_aurora/models/remote/upower_rank/data.dart';
 import 'package:pili_aurora/utils/accounts.dart';
+import 'package:pili_aurora/utils/accounts/account.dart';
 import 'package:pili_aurora/utils/app_sign.dart';
 import 'package:pili_aurora/utils/utils.dart';
 import 'package:pili_aurora/utils/wbi_sign.dart';
@@ -288,9 +289,11 @@ abstract final class MemberHttp {
 
   static Future<LoadingState<MemberCardInfoData>> memberCardInfo({
     int? mid,
+    Account? account,
   }) async {
     final res = await Request().get(
       Api.memberCardInfo,
+      options: Options(extra: {'account': account ?? Accounts.main}),
       queryParameters: {
         'mid': mid,
         'photo': false,

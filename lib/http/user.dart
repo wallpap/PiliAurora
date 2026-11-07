@@ -528,12 +528,15 @@ abstract final class UserHttp {
 
   static Future<LoadingState<FollowData>> followedUp({
     required Object mid,
+    Account? account,
     required int pn,
   }) async {
+    final requestAccount = account ?? Accounts.main;
     final res = await Request().get(
       Api.followedUp,
+      options: Options(extra: {'account': requestAccount}),
       queryParameters: {
-        'csrf': Accounts.main.csrf,
+        'csrf': requestAccount.csrf,
         'pn': pn,
         'vmid': mid,
         'web_location': 333.789,
@@ -550,12 +553,15 @@ abstract final class UserHttp {
 
   static Future<LoadingState<FollowData>> sameFollowing({
     required Object mid,
+    Account? account,
     int? pn,
   }) async {
+    final requestAccount = account ?? Accounts.main;
     final res = await Request().get(
       Api.sameFollowing,
+      options: Options(extra: {'account': requestAccount}),
       queryParameters: {
-        'csrf': Accounts.main.csrf,
+        'csrf': requestAccount.csrf,
         'pn': ?pn,
         'vmid': mid,
         'web_location': 333.789,
