@@ -251,7 +251,11 @@ class HeaderControl extends StatefulWidget {
               ctr.filters = filter;
               GStorage.localCache.put(LocalCacheKey.danmakuFilterRules, filter);
             }
-            DanmakuFilterHttp.danmakuFilterAdd(filter: extra.mid, type: 2);
+            DanmakuFilterHttp.danmakuFilterAdd(
+              account: Accounts.main,
+              filter: extra.mid,
+              type: 2,
+            );
           }
           return DanmakuHttp.danmakuReport(
             reason: reasonType,
@@ -280,20 +284,6 @@ class HeaderControl extends StatefulWidget {
         withContent: ReportOptions.liveDanmakuReportCheck,
         contentRequired: ReportOptions.liveDanmakuReportCheck,
         (reasonType, reasonDesc, banUid) {
-          // if (banUid) {
-          //   final filter = ctr.filters;
-          //   if (filter.dmUid.add(extra.mid)) {
-          //     filter.count++;
-          //     GStorage.localCache.put(
-          //       LocalCacheKey.danmakuFilterRules,
-          //       filter,
-          //     );
-          //   }
-          //   DanmakuFilterHttp.danmakuFilterAdd(
-          //     filter: extra.mid,
-          //     type: 2,
-          //   );
-          // }
           return LiveHttp.liveDmReport(
             roomId: roomId,
             mid: extra.mid,
