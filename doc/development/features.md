@@ -69,6 +69,8 @@ flowchart TD
 
 搜索联想通过防抖控制请求频率。输入变化后，旧请求的结果不再生效；空建议会清除上一次结果，关闭页面后也不会应用迟到响应。禁用联想时不发起请求。
 
+搜索入口通过 Riverpod family 隔离各页面的联想、热搜和推荐，历史与记录开关由应用共享 provider 管理；完整热搜榜使用独立的 autoDispose provider。结果页通过回调返回上次选中的分类。所有权及回归入口见[状态管理](state-management.md)。
+
 ## 视频、文章、番剧与音频
 
 - 页面：`lib/pages/video/`、`article/`、`article_list/`、`pgc/`、`audio/`、`music/`。
@@ -100,6 +102,7 @@ flowchart TD
 - 使用说明见[评论与表情包](../guides/comments-and-emotes.md)。评论长按菜单由 `lib/pages/video/reply/widgets/reply_item_grpc.dart` 的 `morePanel` 共用，覆盖主评论和楼中楼；拉黑调用 `VideoHttp.relationMod`，绑定确认前的账号。
 - 表情包入口为输入面板的设置按钮。管理与预览位于 `lib/pages/emote/manage.dart`、`preview.dart`；请求集中在 `ReplyHttp`。详情接口返回 `emotes`，模型同时兼容列表接口的 `emote` 字段。分类筛选位于未添加页签，预览页面通过 Navigator 压入页面栈。
 - 页面：`lib/pages/danmaku/`、`danmaku_block/`、`main_reply/`、`my_reply/`。
+- 弹幕屏蔽规则页通过 Riverpod 绑定当前主账号，读取失败可重试；成功快照同步播放器及本地缓存。编辑的删除和添加串行执行，切号或关闭页面后停止后续步骤；回归见 `test/pages/danmaku_block/controller_test.dart`。
 - API/模型：`lib/http/danmaku.dart`、`reply.dart`，`lib/models/remote/danmaku/`、`reply/`。
 - 视频弹幕操作浮层与弹幕列表共用 `lib/pages/video/widgets/danmaku_like_control.dart`，通过 `DanmakuHttp.likeStats` 查询当前账号的点赞状态。查询完成前显示加载占位，失败后可重试；重试不提交点赞操作，切换弹幕、视频或账号后的迟到结果不写回当前菜单。
 - 渲染：通用组件和播放器插件；直播弹幕另走直播间链路。

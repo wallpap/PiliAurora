@@ -29,6 +29,8 @@ $ciTests = @(
     "test/common/widgets/image/decode_budget_cancel_test.dart",
     "test/common/widgets/image/network_thumbnail_test.dart",
     "test/pages/home/controller_lifecycle_test.dart",
+    "test/pages/search/controller_test.dart",
+    "test/pages/danmaku_block/controller_test.dart",
     "test/pages/rcmd/",
     "test/router/get_route_lifecycle_test.dart",
     "test/utils/app_release_test.dart",

@@ -109,6 +109,6 @@ Windows 保活页面内存回归：先执行 `pwsh -File lib/scripts/patch.ps1 w
 
 `common/widgets/feed_pagination_test.dart` 检查控制器替换后旧请求不会阻塞新列表，也检查 GetX stream 包装重建时同一列表仍保持请求串行。
 
-`pages/search/controller_test.dart` 覆盖联想乱序、清空后重复输入、禁用联想及关闭后的迟到结果。`utils/account_profile_lifecycle_test.dart` 覆盖资料/余额的发起账号绑定、切号、页面释放和同账号查询乱序。
+`pages/search/controller_test.dart` 覆盖 Riverpod 联想乱序、清空后重复输入、禁用联想、页面释放、多实例隔离、热搜/推荐刷新、共享历史、外部偏好同步与搜索页路由回传。`pages/danmaku_block/controller_test.dart` 覆盖规则刷新、不可变快照、编辑部分失败、请求账号与 CSRF 绑定、切号及订阅释放。`utils/account_profile_lifecycle_test.dart` 覆盖资料/余额的发起账号绑定、切号、页面释放和同账号查询乱序。
 
 `services/messaging/settings_test.dart` 检查同键串行、最后确认值回滚、不同键并发、刷新及失效。下载服务测试覆盖准备期间暂停、删除、切换、地址快照和文件提交排空；直播连接测试使用本地主机 HTTP/WebSocket 检查挂起握手取消、超时后备及认证。
