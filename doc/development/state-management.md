@@ -1,6 +1,6 @@
 # Riverpod 状态管理
 
-应用根节点在 `lib/app/app.dart` 提供 `ProviderScope`。消息、搜索入口、完整热搜榜、直播及空间搜索、弹幕屏蔽规则、黑名单、账号查询、关注及分组、关注搜索、粉丝与关系查询、关注直播页已使用 Riverpod；路由及其他页面沿用现有实现。迁移按功能入口推进，先明确状态所有权，再移除对应的 GetX 状态注册。
+应用根节点在 `lib/app/app.dart` 提供 `ProviderScope`。消息、搜索入口、完整热搜榜、直播及空间搜索、弹幕屏蔽规则、黑名单、账号查询、关注及分组、关注搜索、粉丝与关系查询、关注直播页、空间隐私设置、直播分区偏好与直播屏蔽规则已使用 Riverpod；路由及其他页面沿用现有实现。迁移按功能入口推进，先明确状态所有权，再移除对应的 GetX 状态注册。
 
 ## 所有权
 
@@ -18,6 +18,9 @@
 | 全部关注、分组成员和关注搜索 | autoDispose family 按目标 UID、分组和已提交关键词隔离；账号或列表排序变化使旧请求失效 | `lib/pages/follow/controller.dart` |
 | 关注分组与成员分配 | 账号绑定的 autoDispose AsyncNotifier；列表、排序页与分组面板共享已确认快照，编辑草稿由 Widget 持有 | `followTagsProvider` |
 | 直播房间／主播搜索、空间视频／动态搜索 | autoDispose family 按页面实例、提交关键词、分类与目标 UID 隔离；直播依赖推荐账号，空间搜索依赖主账号 | `lib/pages/common/search/scoped_search.dart` |
+| 空间隐私设置 | 账号绑定的 autoDispose AsyncNotifier；页面修改不可变草稿，保存成功后确认 | `lib/pages/space_setting/controller.dart` |
+| 直播分区目录、常用标签 | 目录跟随推荐账号；常用标签跟随主账号，Widget 持有编辑与排序草稿 | `lib/pages/live_area/controller.dart` |
+| 直播关键词与用户屏蔽 | 房间 family 跟随主账号，已确认快照回调给打开页面的直播间 | `lib/pages/live_dm_block/controller.dart` |
 | 关注直播 | 账号绑定的 autoDispose AsyncNotifier，按原始响应分页 | `lib/pages/live_follow/controller.dart` |
 
 FocusNode、TextEditingController、TabController 和滚动装饰状态由 Widget 持有与释放。路由参数与提示也留在页面；Notifier 返回业务结果，不依赖 Get 路由或全局加载弹窗。
@@ -43,6 +46,10 @@ FocusNode、TextEditingController、TabController 和滚动装饰状态由 Widge
 - 空间视频保留 gRPC，动态保留 HTTP 游标及过滤行为；过滤后的空页可沿新游标补页，重复游标或连续五页无增长停止。查询按账号对象身份失效，推荐账号独立于主账号变化；所有请求显式绑定所属账号。
 - 关注直播按房间去重，优先使用服务端总页数或原始总数。模型保留过滤离线房间前的条目数量，过滤后的空页不会提前结束；缺少分页信息时按请求页大小继续，连续五页无有效增长后停止。分页失败保留已有房间、人数和页码，等待手动重试。
 
+- 空间隐私切换保留服务端字段的正反向语义；显式保存与返回保存共用串行写入。失败保留草稿，成功后才离页；dispose 不发请求。切号、刷新或释放后的迟到保存失效，错误提示也绑定发起账号。
+- 直播常用标签的编辑、增删与拖动排序不修改确认列表。保存按来源快照串行执行，失败保留草稿；切号或重新查询使过期草稿失效。目录的 TabController 由 Widget 持有并随分类长度调整。
+- 直播屏蔽写入绑定主账号、CSRF 和房间，关闭自动重试。弹窗捕获来源快照，规则更新后拒绝旧编辑；失败不删除本地规则。读取及写入成功后通过窄回调同步播放器，错误与离页不使用空列表覆盖规则，路由不再传递整个直播间控制器。
+
 新增迁移优先使用领域内的直接 Notifier 和不可变状态。公共抽象应由实际重复行为驱动；复用已有 HTTP 和模型，避免为一次调用增加转发层。消息仍使用其既有 Session 资源协议。
 
 ## 验证
@@ -52,6 +59,7 @@ fvm flutter test --no-pub test/pages/search/controller_test.dart test/pages/danm
 fvm flutter test --no-pub test/pages/blacklist/ test/pages/account_queries/ test/common/widgets/feed_pagination_test.dart
 fvm flutter test --no-pub test/pages/follow_type/ test/pages/live_follow/
 fvm flutter test --no-pub test/pages/follow/ test/pages/scoped_search/
+fvm flutter test --no-pub test/pages/space_setting/ test/pages/live_settings/
 fvm flutter test --no-pub test/services/messaging/
 fvm flutter analyze --no-pub lib test tool
 ```

@@ -1,6 +1,6 @@
 class ShieldUserList {
-  int uid;
-  String uname;
+  final int uid;
+  final String uname;
 
   ShieldUserList({required this.uid, required this.uname});
 

@@ -2,6 +2,8 @@ import 'package:pili_aurora/common/widgets/custom_icon.dart';
 import 'package:pili_aurora/common/widgets/app_popup_menu_item.dart';
 import 'package:pili_aurora/common/widgets/player_bar.dart';
 import 'package:pili_aurora/pages/live_room/controller.dart';
+import 'package:pili_aurora/pages/live_dm_block/controller.dart'
+    show LiveBlockRulesChanged;
 import 'package:pili_aurora/pages/video/widgets/header_mixin.dart';
 import 'package:pili_aurora/plugin/pl_player/controller.dart';
 import 'package:pili_aurora/plugin/pl_player/models/video_fit_type.dart';
@@ -9,6 +11,7 @@ import 'package:pili_aurora/plugin/pl_player/widgets/common_btn.dart';
 import 'package:pili_aurora/plugin/pl_player/widgets/play_pause_btn.dart';
 import 'package:pili_aurora/plugin/pl_player/widgets/desktop_volume_control.dart';
 import 'package:pili_aurora/utils/platform_utils.dart';
+import 'package:pili_aurora/utils/accounts.dart';
 import 'package:pili_aurora/utils/storage.dart';
 import 'package:pili_aurora/utils/storage_key.dart';
 import 'package:pili_aurora/utils/theme_utils.dart';
@@ -98,12 +101,20 @@ class _BottomControlState extends State<BottomControl> with HeaderMixin {
                   ),
                   onTap: () {
                     if (kDebugMode || liveRoomCtr.isLogin) {
+                      final account = Accounts.main;
+                      final roomId = liveRoomCtr.roomId;
                       Get.toNamed(
                         '/liveDmBlockPage',
                         parameters: {
                           'roomId': liveRoomCtr.roomId.toString(),
                         },
-                        arguments: liveRoomCtr,
+                        arguments: ((keywords, uids) {
+                          if (!liveRoomCtr.isClosed &&
+                              liveRoomCtr.roomId == roomId &&
+                              identical(account, Accounts.main)) {
+                            liveRoomCtr.updateBlockRules(keywords, uids);
+                          }
+                        }) as LiveBlockRulesChanged,
                       );
                     } else {
                       SmartDialog.showToast('账号未登录');

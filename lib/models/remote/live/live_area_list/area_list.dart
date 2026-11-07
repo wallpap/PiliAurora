@@ -1,10 +1,11 @@
 import 'package:pili_aurora/models/remote/live/live_area_list/area_item.dart';
 
 class AreaList {
-  String? name;
-  List<AreaItem>? areaList;
+  final String? name;
+  final List<AreaItem>? areaList;
 
-  AreaList({this.name, this.areaList});
+  AreaList({this.name, List<AreaItem>? areaList})
+    : areaList = areaList == null ? null : List.unmodifiable(areaList);
 
   factory AreaList.fromJson(Map<String, dynamic> json) => AreaList(
     name: json['name'] ?? '',

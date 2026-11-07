@@ -6,24 +6,26 @@ class SpaceSettingModel {
     this.isReverse = false,
   });
 
-  String name;
-  String key;
-  int? value;
-  bool isReverse;
+  final String name;
+  final String key;
+  final int? value;
+  final bool isReverse;
 
   bool get boolVal => isReverse ? value == 0 : value == 1;
 }
 
 class Privacy {
-  List<SpaceSettingModel> list1;
-  List<SpaceSettingModel> list2;
-  List<SpaceSettingModel> list3;
+  final List<SpaceSettingModel> list1;
+  final List<SpaceSettingModel> list2;
+  final List<SpaceSettingModel> list3;
 
   Privacy({
-    required this.list1,
-    required this.list2,
-    required this.list3,
-  });
+    required List<SpaceSettingModel> list1,
+    required List<SpaceSettingModel> list2,
+    required List<SpaceSettingModel> list3,
+  }) : list1 = List.unmodifiable(list1),
+       list2 = List.unmodifiable(list2),
+       list3 = List.unmodifiable(list3);
 
   factory Privacy.fromJson(Map<String, dynamic> json) => Privacy(
     list1: [

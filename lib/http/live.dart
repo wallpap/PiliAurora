@@ -329,9 +329,12 @@ abstract final class LiveHttp {
     }
   }
 
-  static Future<LoadingState<List<AreaList>?>> liveAreaList() async {
+  static Future<LoadingState<List<AreaList>?>> liveAreaList({
+    Account? account,
+  }) async {
+    account ??= recommend;
     final params = {
-      'access_key': ?recommend.accessKey,
+      'access_key': ?account.accessKey,
       'actionKey': 'appkey',
       'build': 8430300,
       'channel': 'master',
@@ -347,6 +350,7 @@ abstract final class LiveHttp {
     AppSign.appSign(params);
     final res = await Request().get(
       Api.liveAreaList,
+      options: Options(extra: {'account': account}),
       queryParameters: params,
     );
     if (res.data['code'] == 0) {
@@ -360,9 +364,11 @@ abstract final class LiveHttp {
     }
   }
 
-  static Future<LoadingState<List<AreaItem>>> getLiveFavTag() async {
+  static Future<LoadingState<List<AreaItem>>> getLiveFavTag({
+    required Account account,
+  }) async {
     final params = {
-      'access_key': ?Accounts.main.accessKey,
+      'access_key': ?account.accessKey,
       'actionKey': 'appkey',
       'build': 8430300,
       'channel': 'master',
@@ -378,6 +384,7 @@ abstract final class LiveHttp {
     AppSign.appSign(params);
     final res = await Request().get(
       Api.getLiveFavTag,
+      options: Options(extra: {'account': account}),
       queryParameters: params,
     );
 
@@ -395,10 +402,11 @@ abstract final class LiveHttp {
 
   static Future<LoadingState<void>> setLiveFavTag({
     required String ids,
+    required Account account,
   }) async {
     final data = {
       'tags': ids,
-      'access_key': Accounts.main.accessKey,
+      'access_key': ?account.accessKey,
       'actionKey': 'appkey',
       'build': 8430300,
       'channel': 'master',
@@ -415,7 +423,10 @@ abstract final class LiveHttp {
     final res = await Request().post(
       Api.setLiveFavTag,
       data: data,
-      options: Options(contentType: Headers.formUrlEncodedContentType),
+      options: Options(
+        contentType: Headers.formUrlEncodedContentType,
+        extra: {'account': account, 'noRetry': true},
+      ),
     );
 
     if (res.data['code'] == 0) {
@@ -497,10 +508,13 @@ abstract final class LiveHttp {
   }
 
   static Future<LoadingState<ShieldInfo?>> getLiveInfoByUser(
-    Object roomId,
-  ) async {
+    Object roomId, {
+    Account? account,
+  }) async {
+    account ??= Accounts.main;
     final res = await Request().get(
       Api.getLiveInfoByUser,
+      options: Options(extra: {'account': account}),
       queryParameters: await WbiSign.makSign({
         'room_id': roomId,
         'from': 0,
@@ -539,8 +553,9 @@ abstract final class LiveHttp {
 
   static Future<LoadingState<void>> addShieldKeyword({
     required String keyword,
+    required Account account,
   }) async {
-    final csrf = Accounts.main.csrf;
+    final csrf = account.csrf;
     final res = await Request().post(
       Api.addShieldKeyword,
       data: {
@@ -548,7 +563,10 @@ abstract final class LiveHttp {
         'csrf': csrf,
         'csrf_token': csrf,
       },
-      options: Options(contentType: Headers.formUrlEncodedContentType),
+      options: Options(
+        contentType: Headers.formUrlEncodedContentType,
+        extra: {'account': account, 'noRetry': true},
+      ),
     );
     if (res.data['code'] == 0) {
       return const Success(null);
@@ -559,8 +577,9 @@ abstract final class LiveHttp {
 
   static Future<LoadingState<void>> delShieldKeyword({
     required String keyword,
+    required Account account,
   }) async {
-    final csrf = Accounts.main.csrf;
+    final csrf = account.csrf;
     final res = await Request().post(
       Api.delShieldKeyword,
       data: {
@@ -568,7 +587,10 @@ abstract final class LiveHttp {
         'csrf': csrf,
         'csrf_token': csrf,
       },
-      options: Options(contentType: Headers.formUrlEncodedContentType),
+      options: Options(
+        contentType: Headers.formUrlEncodedContentType,
+        extra: {'account': account, 'noRetry': true},
+      ),
     );
     if (res.data['code'] == 0) {
       return const Success(null);
@@ -577,12 +599,14 @@ abstract final class LiveHttp {
     }
   }
 
-  static Future<LoadingState<ShieldUserList>> liveShieldUser({
+  static Future<LoadingState<ShieldUserList?>> liveShieldUser({
     required Object uid,
     required Object roomid,
     required int type,
+    Account? account,
   }) async {
-    final csrf = Accounts.main.csrf;
+    account ??= Accounts.main;
+    final csrf = account.csrf;
     final res = await Request().post(
       Api.liveShieldUser,
       data: {
@@ -592,10 +616,15 @@ abstract final class LiveHttp {
         'csrf': csrf,
         'csrf_token': csrf,
       },
-      options: Options(contentType: Headers.formUrlEncodedContentType),
+      options: Options(
+        contentType: Headers.formUrlEncodedContentType,
+        extra: {'account': account, 'noRetry': true},
+      ),
     );
     if (res.data['code'] == 0) {
-      return Success(ShieldUserList.fromJson(res.data['data']));
+      return Success(
+        type == 0 ? null : ShieldUserList.fromJson(res.data['data']),
+      );
     } else {
       return Error(res.data['message']);
     }

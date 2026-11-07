@@ -410,11 +410,14 @@ abstract final class UserHttp {
     }
   }
 
-  static Future<LoadingState<SpaceSettingData>> spaceSetting() async {
+  static Future<LoadingState<SpaceSettingData>> spaceSetting({
+    required Account account,
+  }) async {
     final res = await Request().get(
       Api.spaceSetting,
+      options: Options(extra: {'account': account}),
       queryParameters: {
-        'mid': Accounts.main.mid,
+        'mid': account.mid,
       },
     );
     if (res.data['code'] == 0) {
@@ -425,15 +428,19 @@ abstract final class UserHttp {
   }
 
   static Future<LoadingState<void>> spaceSettingMod(
-    Map<String, dynamic> data,
-  ) async {
+    Map<String, dynamic> data, {
+    required Account account,
+  }) async {
     final res = await Request().post(
       Api.spaceSettingMod,
       queryParameters: {
-        'csrf': Accounts.main.csrf,
+        'csrf': account.csrf,
       },
       data: data,
-      options: Options(contentType: Headers.formUrlEncodedContentType),
+      options: Options(
+        extra: {'account': account, 'noRetry': true},
+        contentType: Headers.formUrlEncodedContentType,
+      ),
     );
     if (res.data['code'] == 0) {
       return const Success(null);

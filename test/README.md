@@ -118,3 +118,5 @@ Windows 保活页面内存回归：先执行 `pwsh -File lib/scripts/patch.ps1 w
 `services/messaging/settings_test.dart` 检查同键串行、最后确认值回滚、不同键并发、刷新及失效。下载服务测试覆盖准备期间暂停、删除、切换、地址快照和文件提交排空；直播连接测试使用本地主机 HTTP/WebSocket 检查挂起握手取消、超时后备及认证。
 
 `pages/scoped_search/controller_test.dart` 覆盖直播／空间搜索的页面实例与关键词隔离、账号角色、分页失败重试、旧响应失效、空间视频 gRPC 及动态游标补页，并检查搜索提交、输入替换和清空重查。
+
+`pages/space_setting/controller_test.dart` 覆盖隐私草稿、反向字段、保存互斥、失败重试、切号与刷新隔离及返回保存。`pages/live_settings/controller_test.dart` 覆盖直播屏蔽规则的房间与账号绑定、过期编辑、标签排序保存、推荐账号隔离及成功快照回调。真实直播服务与两端播放器仍需登录验收。

@@ -1,88 +1,82 @@
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pili_aurora/http/live.dart';
 import 'package:pili_aurora/http/loading_state.dart';
 import 'package:pili_aurora/models/remote/live/live_area_list/area_item.dart';
 import 'package:pili_aurora/models/remote/live/live_area_list/area_list.dart';
-import 'package:pili_aurora/pages/common/common_list_controller.dart';
+import 'package:pili_aurora/services/account_providers.dart';
 import 'package:pili_aurora/utils/accounts.dart';
-import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
-import 'package:get/get.dart';
-import 'package:material_ui/material_ui.dart' show TabController;
 
-class LiveAreaController extends CommonListController<List<AreaList>?, AreaList>
-    with GetSingleTickerProviderStateMixin {
-  late final isLogin = Accounts.main.isLogin;
+final liveAreasProvider = FutureProvider.autoDispose<List<AreaList>>((
+  ref,
+) async {
+  final account = ref.watch(recommendAccountProvider);
+  return List.unmodifiable(
+    (await LiveHttp.liveAreaList(account: account)).data ?? [],
+  );
+}, retry: (_, _) => null);
 
-  late final isEditing = false.obs;
-  late final favInfo = {};
+class LiveAreaPreferences {
+  LiveAreaPreferences(
+    Iterable<AreaItem> items, {
+    this.saving = false,
+    Object? source,
+  }) : items = List.unmodifiable(items),
+       source = source ?? Object();
+  final List<AreaItem> items;
+  final bool saving;
+  final Object source;
+}
 
-  TabController? tabController;
+final liveAreaPreferencesProvider =
+    AsyncNotifierProvider.autoDispose<
+      LiveAreaPreferencesNotifier,
+      LiveAreaPreferences
+    >(
+      LiveAreaPreferencesNotifier.new,
+      retry: (_, _) => null,
+    );
 
+class LiveAreaPreferencesNotifier extends AsyncNotifier<LiveAreaPreferences> {
   @override
-  void onInit() {
-    super.onInit();
-    if (isLogin) {
-      queryFavTags();
+  Future<LiveAreaPreferences> build() async {
+    final account = ref.watch(mainAccountProvider);
+    if (!account.isLogin) throw const Error('账号未登录');
+    return LiveAreaPreferences(
+      (await LiveHttp.getLiveFavTag(account: account)).data,
+    );
+  }
+
+  Future<LoadingState<void>> save(Object source, List<AreaItem> draft) async {
+    final before = state.value;
+    final owner = ref;
+    final account = owner.read(mainAccountProvider);
+    if (state.isLoading ||
+        state.hasError ||
+        before == null ||
+        before.saving ||
+        !identical(source, before.source) ||
+        !identical(account, Accounts.main)) {
+      return const Error('标签或账号已更新，请重新编辑');
     }
-    queryData();
-  }
-
-  @override
-  Future<void> onRefresh() {
-    if (isLogin) {
-      queryFavTags();
-    }
-    return super.onRefresh();
-  }
-
-  @override
-  bool customHandleResponse(bool isRefresh, Success<List<AreaList>?> response) {
-    assert(tabController == null);
-    final length = response.response?.length;
-    if (length != null && length != 0) {
-      tabController = TabController(length: length, vsync: this);
-    }
-    return super.customHandleResponse(isRefresh, response);
-  }
-
-  Rx<LoadingState<List<AreaItem>>> favState =
-      LoadingState<List<AreaItem>>.loading().obs;
-
-  @override
-  Future<LoadingState<List<AreaList>?>> customGetData() =>
-      LiveHttp.liveAreaList();
-
-  Future<void> queryFavTags() async {
-    favState.value = await LiveHttp.getLiveFavTag();
-  }
-
-  Future<void> setFavTag() async {
-    if (favState.value case Success(:final response)) {
-      final res = await LiveHttp.setLiveFavTag(
-        ids: response.map((e) => e.id).join(','),
+    final items = draft.toSet().toList(growable: false);
+    state = AsyncData(
+      LiveAreaPreferences(before.items, source: before.source, saving: true),
+    );
+    try {
+      final result = await LiveHttp.setLiveFavTag(
+        ids: items.map((e) => e.id).join(','),
+        account: account,
       );
-      if (res.isSuccess) {
-        isEditing.toggle();
-        SmartDialog.showToast('设置成功');
-      } else {
-        res.toast();
+      if (!owner.mounted || !identical(account, Accounts.main)) {
+        return const Error('账号已切换或页面已关闭');
       }
-    } else {
-      isEditing.toggle();
+      state = AsyncData(result.isSuccess ? LiveAreaPreferences(items) : before);
+      return result;
+    } catch (_) {
+      if (owner.mounted && identical(account, Accounts.main)) {
+        state = AsyncData(before);
+      }
+      return const Error('保存结果待确认，请重试或重新查询');
     }
-  }
-
-  void onEdit() {
-    if (isEditing.value) {
-      setFavTag();
-    } else {
-      isEditing.toggle();
-    }
-  }
-
-  @override
-  void onClose() {
-    tabController?.dispose();
-    tabController = null;
-    super.onClose();
   }
 }
