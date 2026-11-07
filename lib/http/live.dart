@@ -460,12 +460,13 @@ abstract final class LiveHttp {
   }
 
   static Future<LoadingState<LiveSearchData>> liveSearch({
+    required Account account,
     required int page,
     required String keyword,
     required LiveSearchType type,
   }) async {
     final params = {
-      'access_key': ?recommend.accessKey,
+      'access_key': ?account.accessKey,
       'actionKey': 'appkey',
       'build': 8430300,
       'channel': 'master',
@@ -485,6 +486,7 @@ abstract final class LiveHttp {
     AppSign.appSign(params);
     final res = await Request().get(
       Api.liveSearch,
+      options: Options(extra: {'account': account}),
       queryParameters: params,
     );
     if (res.data['code'] == 0) {

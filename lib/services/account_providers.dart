@@ -1,3 +1,4 @@
+import 'package:pili_aurora/models/common/account_type.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pili_aurora/utils/accounts.dart';
 import 'package:pili_aurora/utils/accounts/account.dart';
@@ -9,17 +10,29 @@ final mainAccountProvider = NotifierProvider<MainAccountNotifier, Account>(
 );
 
 class MainAccountNotifier extends Notifier<Account> {
+  Account get currentAccount => Accounts.main;
   @override
   Account build() {
     final accounts = Accounts.mainChanges;
-    void changed() => state = Accounts.main;
+    void changed() => state = currentAccount;
     accounts.addListener(changed);
     ref.onDispose(() => accounts.removeListener(changed));
-    return Accounts.main;
+    return currentAccount;
   }
 
   // 同一 mid 的新凭据也是独立账号对象，不能沿用 Account 的值相等语义。
   @override
   bool updateShouldNotify(Account previous, Account next) =>
       !identical(previous, next);
+}
+
+final recommendAccountProvider =
+    NotifierProvider<RecommendAccountNotifier, Account>(
+      RecommendAccountNotifier.new,
+      isAutoDispose: true,
+    );
+
+class RecommendAccountNotifier extends MainAccountNotifier {
+  @override
+  Account get currentAccount => Accounts.get(AccountType.recommend);
 }

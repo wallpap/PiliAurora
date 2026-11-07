@@ -1,3 +1,4 @@
+import 'package:pili_aurora/utils/accounts/account.dart';
 import 'package:pili_aurora/grpc/bilibili/app/dynamic/v2.pb.dart';
 import 'package:pili_aurora/grpc/bilibili/app/interfaces/v1.pb.dart'
     show SearchArchiveReply, SearchArchiveReq;
@@ -25,6 +26,7 @@ abstract final class SpaceGrpc {
   }
 
   static Future<LoadingState<SearchArchiveReply>> searchArchive({
+    required Account account,
     required String keyword,
     required Int64 mid,
     required int pn,
@@ -39,6 +41,7 @@ abstract final class SpaceGrpc {
         ps: ps,
       ),
       SearchArchiveReply.fromBuffer,
+      account: account,
     );
   }
 }

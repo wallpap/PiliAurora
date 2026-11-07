@@ -1,128 +1,146 @@
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:get/get.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:pili_aurora/common/widgets/scaffold/simple_scaffold.dart';
 import 'package:pili_aurora/common/widgets/scroll_physics.dart' show tabBarView;
 import 'package:pili_aurora/common/widgets/view_safe_area.dart';
+import 'package:pili_aurora/pages/common/search/scoped_search.dart';
 import 'package:pili_aurora/pages/member_search/child/view.dart';
-import 'package:pili_aurora/pages/member_search/controller.dart';
-import 'package:pili_aurora/utils/utils.dart';
-import 'package:get/get.dart';
-import 'package:material_ui/material_ui.dart';
+import 'package:pili_aurora/models/common/member/search_type.dart';
 
-class MemberSearchPage extends StatefulWidget {
+class MemberSearchPage extends ConsumerStatefulWidget {
   const MemberSearchPage({super.key});
-
   @override
-  State<MemberSearchPage> createState() => _MemberSearchPageState();
+  ConsumerState<MemberSearchPage> createState() => _MemberSearchPageState();
 }
 
-class _MemberSearchPageState extends State<MemberSearchPage> {
-  final _controller = Get.put(
-    MemberSearchController(),
-    tag: Utils.generateRandomString(8),
-  );
+class _MemberSearchPageState extends ConsumerState<MemberSearchPage>
+    with SingleTickerProviderStateMixin {
+  final _input = TextEditingController();
+  final _focus = FocusNode();
+  late final _tabs = TabController(length: 2, vsync: this);
+  final _keys = [
+    GlobalKey<MemberSearchChildPageState>(),
+    GlobalKey<MemberSearchChildPageState>(),
+  ];
+  String? _keyword;
+  Object _owner = Object();
+  late final int _mid = int.parse(Get.parameters['mid']!);
+  void _submit() {
+    final value = _input.text.trim();
+    if (value.isEmpty) return;
+
+    setState(() {
+      _keyword = value;
+      _owner = Object();
+    });
+    _focus.unfocus();
+  }
+
+  @override
+  void dispose() {
+    _input.dispose();
+    _focus.dispose();
+    _tabs.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
+    final keyword = _keyword;
+    final kinds = [ScopedSearchKind.archive, ScopedSearchKind.dynamic];
+    final counts = [
+      for (final kind in kinds)
+        if (keyword != null)
+          ref.watch(
+            scopedSearchProvider((
+              kind: kind,
+              keyword: keyword,
+              mid: _mid,
+              owner: _owner,
+            )),
+          ),
+    ];
+    String count(int index) {
+      if (counts.isEmpty || counts[index].isLoading || counts[index].hasError) {
+        return '';
+      }
+      return counts[index].value?.total?.toString() ?? '';
+    }
+
     return SimpleScaffold(
       appBar: AppBar(
         actions: [
           IconButton(
             tooltip: '搜索',
-            onPressed: _controller.submit,
+            onPressed: _submit,
             icon: const Icon(Icons.search, size: 22),
           ),
           const SizedBox(width: 10),
         ],
         title: TextField(
           autofocus: true,
-          focusNode: _controller.focusNode,
-          controller: _controller.editingController,
+          focusNode: _focus,
+          controller: _input,
           textInputAction: TextInputAction.search,
           textAlignVertical: TextAlignVertical.center,
           decoration: InputDecoration(
             hintText: '搜索',
-            visualDensity: .standard,
             border: InputBorder.none,
             suffixIcon: IconButton(
               tooltip: '清空',
               icon: const Icon(Icons.clear, size: 22),
-              onPressed: _controller.onClear,
+              onPressed: () {
+                if (_input.text.isEmpty) {
+                  Get.back();
+                  return;
+                }
+                _input.clear();
+                setState(() => _keyword = null);
+                _focus.requestFocus();
+              },
             ),
           ),
-          onSubmitted: (value) => _controller.submit(),
-          onChanged: (value) {
-            if (value.isEmpty) {
-              _controller.hasData.value = false;
-            }
+          onSubmitted: (_) => _submit(),
+          onChanged: (_) {
+            if (_keyword != null) setState(() => _keyword = null);
           },
         ),
       ),
       body: ViewSafeArea(
-        child: Stack(
-          clipBehavior: Clip.none,
-          children: [
-            Obx(() {
-              return Opacity(
-                opacity: _controller.hasData.value ? 1 : 0,
-                child: Column(
-                  children: [
-                    TabBar(
-                      controller: _controller.tabController,
-                      tabs: [
-                        Obx(
-                          () => Tab(
-                            text:
-                                '视频 ${_controller.counts[0] != -1 ? _controller.counts[0] : ''}',
+        child: keyword == null
+            ? Center(child: Text('搜索「${Get.parameters['uname']}」的动态、视频'))
+            : Column(
+                children: [
+                  TabBar(
+                    controller: _tabs,
+                    tabs: [
+                      Tab(text: '视频 ${count(0)}'),
+                      Tab(text: '动态 ${count(1)}'),
+                    ],
+                    onTap: (index) {
+                      if (!_tabs.indexIsChanging) {
+                        _keys[index].currentState?.scrollToTop();
+                      }
+                    },
+                  ),
+                  Expanded(
+                    child: tabBarView(
+                      controller: _tabs,
+                      children: [
+                        for (var i = 0; i < 2; i++)
+                          MemberSearchChildPage(
+                            key: _keys[i],
+                            keyword: keyword,
+                            owner: _owner,
+                            mid: _mid,
+                            searchType: MemberSearchType.values[i],
                           ),
-                        ),
-                        Obx(
-                          () => Tab(
-                            text:
-                                '动态 ${_controller.counts[1] != -1 ? _controller.counts[1] : ''}',
-                          ),
-                        ),
                       ],
-                      onTap: (index) {
-                        if (!_controller.tabController.indexIsChanging) {
-                          if (index == 0) {
-                            _controller.arcCtr.animateToTop();
-                          } else {
-                            _controller.dynCtr.animateToTop();
-                          }
-                        }
-                      },
                     ),
-                    Expanded(
-                      child: tabBarView(
-                        controller: _controller.tabController,
-                        children: [
-                          MemberSearchChildPage(
-                            controller: _controller.arcCtr,
-                            searchType: .archive,
-                          ),
-                          MemberSearchChildPage(
-                            controller: _controller.dynCtr,
-                            searchType: .dynamic,
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              );
-            }),
-            Obx(
-              () => _controller.hasData.value
-                  ? const SizedBox.shrink()
-                  : Align(
-                      alignment: const Alignment(0, -0.5),
-                      child: Text(
-                        '搜索「${_controller.uname}」的动态、视频',
-                        textAlign: TextAlign.center,
-                      ),
-                    ),
-            ),
-          ],
-        ),
+                  ),
+                ],
+              ),
       ),
     );
   }

@@ -443,6 +443,7 @@ abstract final class MemberHttp {
   }
 
   static Future<LoadingState<DynamicsDataModel>> dynSearch({
+    required Account account,
     required int pn,
     required dynamic mid,
     required dynamic offset,
@@ -450,6 +451,7 @@ abstract final class MemberHttp {
   }) async {
     final res = await Request().get(
       Api.dynSearch,
+      options: Options(extra: {'account': account}),
       queryParameters: {
         'host_mid': mid,
         'page': pn,
