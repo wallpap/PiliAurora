@@ -4,6 +4,7 @@ import 'package:pili_aurora/common/widgets/keep_alive_wrapper.dart';
 import 'package:pili_aurora/common/widgets/loading_widget/loading_widget.dart';
 import 'package:pili_aurora/common/widgets/scaffold/simple_scaffold.dart';
 import 'package:pili_aurora/common/widgets/scroll_physics.dart' show tabBarView;
+import 'package:pili_aurora/http/loading_state.dart';
 import 'package:pili_aurora/models/common/dm_block_type.dart';
 import 'package:pili_aurora/models/user/danmaku_block.dart';
 import 'package:pili_aurora/models/user/danmaku_rule.dart';
@@ -12,19 +13,24 @@ import 'package:pili_aurora/plugin/pl_player/controller.dart';
 import 'package:pili_aurora/utils/storage.dart';
 import 'package:pili_aurora/utils/storage_key.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:get/get.dart';
 import 'package:material_ui/material_ui.dart';
 
-class DanmakuBlockPage extends StatefulWidget {
+class DanmakuBlockPage extends ConsumerStatefulWidget {
   const DanmakuBlockPage({super.key});
 
   @override
-  State<DanmakuBlockPage> createState() => _DanmakuBlockPageState();
+  ConsumerState<DanmakuBlockPage> createState() => _DanmakuBlockPageState();
 }
 
-class _DanmakuBlockPageState extends State<DanmakuBlockPage> {
-  final DanmakuBlockController _controller = Get.put(DanmakuBlockController());
+class _DanmakuBlockPageState extends ConsumerState<DanmakuBlockPage>
+    with SingleTickerProviderStateMixin {
+  late final _tabController = TabController(
+    length: DmBlockType.values.length,
+    vsync: this,
+  );
   late PlPlayerController plPlayerController;
   late EdgeInsets padding;
 
@@ -32,6 +38,24 @@ class _DanmakuBlockPageState extends State<DanmakuBlockPage> {
   void initState() {
     super.initState();
     plPlayerController = Get.arguments as PlPlayerController;
+    ref.listenManual(
+      danmakuBlockProvider.select((value) => value.rules),
+      (_, next) {
+        if (next case Success(:final response)) {
+          final ruleFilter = RuleFilter.fromRuleTypeEntries(response);
+          plPlayerController.filters = ruleFilter;
+          GStorage.localCache.put(LocalCacheKey.danmakuFilterRules, ruleFilter);
+        }
+      },
+      fireImmediately: true,
+    );
+    ref.listenManual(
+      danmakuBlockProvider.select((value) => value.notice),
+      (_, next) {
+        if (next != null) SmartDialog.showToast(next);
+      },
+      fireImmediately: true,
+    );
   }
 
   @override
@@ -42,47 +66,65 @@ class _DanmakuBlockPageState extends State<DanmakuBlockPage> {
 
   @override
   void dispose() {
-    final ruleFilter = RuleFilter.fromRuleTypeEntries(_controller.rules);
-    plPlayerController.filters = ruleFilter;
-    GStorage.localCache.put(LocalCacheKey.danmakuFilterRules, ruleFilter);
+    _tabController.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
+    final snapshot = ref.watch(danmakuBlockProvider);
+    final rules = snapshot.rules.dataOrNull;
+    final controller = ref.read(danmakuBlockProvider.notifier);
     return SimpleScaffold(
-      appBar: AppBar(title: const Text('弹幕屏蔽')),
-      body: Column(
-        children: [
-          TabBar(
-            controller: _controller.tabController,
-            tabs: DmBlockType.values
-                .map(
-                  (e) => Obx(
-                    () => Tab(
-                      text: '${e.label}(${_controller.rules[e.index].length})',
-                    ),
-                  ),
-                )
-                .toList(),
-          ),
-          Expanded(
-            child: tabBarView(
-              controller: _controller.tabController,
-              children: DmBlockType.values
-                  .map(
-                    (e) => KeepAliveWrapper(
-                      child: Obx(
-                        () =>
-                            tabViewBuilder(e.index, _controller.rules[e.index]),
-                      ),
-                    ),
-                  )
-                  .toList(),
-            ),
+      appBar: AppBar(
+        title: const Text('弹幕屏蔽'),
+        actions: [
+          IconButton(
+            tooltip: '刷新',
+            onPressed: snapshot.isSaving ? null : controller.reload,
+            icon: const Icon(Icons.refresh),
           ),
         ],
       ),
+      body: rules == null
+          ? switch (snapshot.rules) {
+              Error(:final errMsg) => scrollErrorWidget(
+                errMsg: errMsg,
+                onReload: controller.reload,
+              ),
+              _ => m3eLoading,
+            }
+          : Column(
+              children: [
+                if (snapshot.isSaving) const LinearProgressIndicator(),
+                TabBar(
+                  controller: _tabController,
+                  tabs: DmBlockType.values
+                      .map(
+                        (e) => Tab(
+                          text: '${e.label}(${rules[e.index].length})',
+                        ),
+                      )
+                      .toList(),
+                ),
+                Expanded(
+                  child: tabBarView(
+                    controller: _tabController,
+                    children: DmBlockType.values
+                        .map(
+                          (e) => KeepAliveWrapper(
+                            child: tabViewBuilder(
+                              e.index,
+                              rules[e.index],
+                              snapshot.isSaving,
+                            ),
+                          ),
+                        )
+                        .toList(),
+                  ),
+                ),
+              ],
+            ),
       fab: Padding(
         padding: .only(
           right: kFloatingActionButtonMargin + padding.right,
@@ -90,16 +132,16 @@ class _DanmakuBlockPageState extends State<DanmakuBlockPage> {
         ),
         child: FloatingActionButton(
           tooltip: '添加',
-          onPressed: () => _showAddDialog(
-            DmBlockType.values[_controller.tabController.index],
-          ),
+          onPressed: rules == null || snapshot.isSaving
+              ? null
+              : () => _showAddDialog(DmBlockType.values[_tabController.index]),
           child: const Icon(Icons.add),
         ),
       ),
     );
   }
 
-  Widget tabViewBuilder(int tabIndex, List<SimpleRule> list) {
+  Widget tabViewBuilder(int tabIndex, List<SimpleRule> list, bool isSaving) {
     if (list.isEmpty) {
       return scrollableError;
     }
@@ -112,15 +154,30 @@ class _DanmakuBlockPageState extends State<DanmakuBlockPage> {
           iconSize: 20,
           tooltip: '删除',
           icon: const Icon(Icons.delete_outlined),
-          onPressed: () => showConfirmDialog(
-            context: context,
-            title: const Text('确定删除该规则？'),
-            onConfirm: () => _controller.danmakuFilterDel(
-              tabIndex,
-              itemIndex,
-              item.id,
-            ),
-          ),
+          onPressed: isSaving
+              ? null
+              : () {
+                  final rules = ref.read(danmakuBlockProvider).rules.dataOrNull;
+                  showConfirmDialog(
+                    context: context,
+                    title: const Text('确定删除该规则？'),
+                    onConfirm: () async {
+                      if (!_hasCurrentRules(rules)) return;
+                      final result = await ref
+                          .read(danmakuBlockProvider.notifier)
+                          .remove(
+                            DmBlockType.values[tabIndex],
+                            item.id,
+                          );
+                      if (!mounted) return;
+                      if (result.isSuccess) {
+                        SmartDialog.showToast('删除成功');
+                      } else {
+                        result.toast();
+                      }
+                    },
+                  );
+                },
         );
         return ListTile(
           title: Text(
@@ -136,12 +193,13 @@ class _DanmakuBlockPageState extends State<DanmakuBlockPage> {
                       iconSize: 20,
                       tooltip: '编辑',
                       icon: const Icon(Icons.edit_outlined),
-                      onPressed: () => _showAddDialog(
-                        DmBlockType.values[_controller.tabController.index],
-                        initFilter: item.filter,
-                        itemIndex: itemIndex,
-                        itemId: item.id,
-                      ),
+                      onPressed: isSaving
+                          ? null
+                          : () => _showAddDialog(
+                              DmBlockType.values[tabIndex],
+                              initFilter: item.filter,
+                              itemId: item.id,
+                            ),
                     ),
                     child,
                   ],
@@ -154,10 +212,9 @@ class _DanmakuBlockPageState extends State<DanmakuBlockPage> {
   void _showAddDialog(
     DmBlockType type, {
     String initFilter = '',
-    int? itemIndex,
     int? itemId,
   }) {
-    assert((itemIndex == null) == (itemId == null));
+    final rules = ref.read(danmakuBlockProvider).rules.dataOrNull;
     String filter = initFilter;
     final hintText = switch (type) {
       DmBlockType.keyword => '输入过滤的关键词，其它类别请切换标签页后添加',
@@ -196,19 +253,22 @@ class _DanmakuBlockPageState extends State<DanmakuBlockPage> {
           TextButton(
             child: const Text('确定'),
             onPressed: () async {
-              if (filter != initFilter) {
+              if (filter.isNotEmpty && filter != initFilter) {
                 Get.back();
-                if (itemId != null) {
-                  await _controller.danmakuFilterDel(
-                    type.index,
-                    itemIndex!,
-                    itemId,
-                  );
+                if (!_hasCurrentRules(rules)) return;
+                final result = await ref
+                    .read(danmakuBlockProvider.notifier)
+                    .save(
+                      type,
+                      filter,
+                      replaceId: itemId,
+                    );
+                if (!mounted) return;
+                if (result.isSuccess) {
+                  SmartDialog.showToast(itemId == null ? '添加成功' : '编辑成功');
+                } else {
+                  result.toast();
                 }
-                await _controller.danmakuFilterAdd(
-                  filter: filter,
-                  type: type.index,
-                );
               } else {
                 SmartDialog.showToast(
                   '输入内容${filter.isEmpty ? "不能为空" : "与上次相同"}',
@@ -220,4 +280,9 @@ class _DanmakuBlockPageState extends State<DanmakuBlockPage> {
       ),
     );
   }
+
+  bool _hasCurrentRules(List<List<SimpleRule>>? rules) =>
+      mounted &&
+      rules != null &&
+      identical(rules, ref.read(danmakuBlockProvider).rules.dataOrNull);
 }

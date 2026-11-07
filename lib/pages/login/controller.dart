@@ -650,12 +650,8 @@ class LoginPageController extends GetxController
       tokenInfo['access_token'],
       tokenInfo['refresh_token'],
     );
+    Accounts.replaceCredentials(account);
     await Future.wait([?account.onChange(), AnonymousAccount().delete()]);
-    for (int i = 0; i < AccountType.values.length; i++) {
-      if (Accounts.accountMode[i].mid == account.mid) {
-        Accounts.accountMode[i] = account;
-      }
-    }
     if (Accounts.main.isLogin) {
       SmartDialog.showToast('登录成功');
     } else {

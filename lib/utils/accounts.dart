@@ -1,5 +1,6 @@
 import 'dart:typed_data';
 
+import 'package:flutter/foundation.dart' show ValueListenable, ValueNotifier;
 import 'package:pili_aurora/http/init.dart';
 import 'package:pili_aurora/models/common/account_type.dart';
 import 'package:pili_aurora/pages/mine/controller.dart';
@@ -17,6 +18,14 @@ abstract final class Accounts {
   );
   static bool get mainEqVideo => main == video;
   static Account get main => accountMode[AccountType.main.index];
+  static final _mainChanges = ValueNotifier(0);
+  static ValueListenable<int> get mainChanges => _mainChanges;
+
+  static void _onMainChanged() {
+    Messaging.onAccountChanged();
+    _mainChanges.value++;
+  }
+
   static Account get video => accountMode[AccountType.video.index];
   static Account get heartbeat => accountMode[AccountType.heartbeat.index];
   static Account get history {
@@ -25,6 +34,18 @@ abstract final class Accounts {
       return Accounts.main;
     }
     return heartbeat;
+  }
+
+  /// 重新登录也会替换账号对象，使使用旧凭据的在途结果失效。
+  static void replaceCredentials(LoginAccount account) {
+    final previousMain = main;
+    for (final type in AccountType.values) {
+      if (accountMode[type.index].mid == account.mid) {
+        accountMode[type.index] = account;
+        account.type.add(type);
+      }
+    }
+    if (!identical(previousMain, main)) _onMainChanged();
   }
   // static set main(Account account) => set(AccountType.main, account);
 
@@ -50,7 +71,7 @@ abstract final class Accounts {
         accountMode[t.index] = a;
       }
     }
-    Messaging.onAccountChanged();
+    _onMainChanged();
     return Future.wait(
       (accountMode.toSet()..removeWhere((i) => i.activated)).map(
         Request.buvidActive,
@@ -63,7 +84,7 @@ abstract final class Accounts {
     for (int i = 0; i < AccountType.values.length; i++) {
       accountMode[i] = AnonymousAccount();
     }
-    Messaging.onAccountChanged();
+    _onMainChanged();
     await AnonymousAccount().delete();
     Request.buvidActive(AnonymousAccount());
   }
@@ -77,7 +98,7 @@ abstract final class Accounts {
       }
     }
     if (!identical(previousMain, Accounts.main)) {
-      Messaging.onAccountChanged();
+      _onMainChanged();
     }
     await Future.wait(accounts.map((i) => i.delete()));
     if (isLoginMain && !Accounts.main.isLogin) {
@@ -88,7 +109,7 @@ abstract final class Accounts {
   static Future<void> set(AccountType key, Account account) async {
     final oldAccount = accountMode[key.index]..type.remove(key);
     accountMode[key.index] = account..type.add(key);
-    if (key == AccountType.main) Messaging.onAccountChanged();
+    if (key == AccountType.main) _onMainChanged();
     await Future.wait([?account.onChange(), ?oldAccount.onChange()]);
     if (!account.activated) await Request.buvidActive(account);
     switch (key) {
