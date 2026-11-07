@@ -1,6 +1,7 @@
 import 'package:pili_aurora/common/widgets/scaffold/simple_scaffold.dart';
 import 'package:pili_aurora/common/widgets/scroll_physics.dart' show tabBarView;
-import 'package:pili_aurora/pages/fan/view.dart';
+import 'package:pili_aurora/pages/follow_type/controller.dart';
+import 'package:pili_aurora/pages/follow_type/view.dart';
 import 'package:pili_aurora/pages/follow/child/child_view.dart';
 import 'package:pili_aurora/pages/follow_search/view.dart';
 import 'package:pili_aurora/pages/share/view.dart' show UserModel;
@@ -80,7 +81,8 @@ class _ContactPageState extends State<ContactPage>
                   mid: mid,
                   onSelect: widget.isFromSelect ? onSelect : null,
                 ),
-                FansPage(
+                FollowTypePage(
+                  query: (kind: FollowKind.fans, mid: null, newFans: false),
                   showName: false,
                   onSelect: widget.isFromSelect ? onSelect : null,
                 ),

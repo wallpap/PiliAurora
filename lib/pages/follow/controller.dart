@@ -16,7 +16,7 @@ class FollowController extends GetxController with GetTickerProviderStateMixin {
   FollowController(this.tag);
 
   late final int mid;
-  late final RxnString name;
+  late final String? name;
   late final bool isOwner;
 
   late final Rx<LoadingState> followState = LoadingState.loading().obs;
@@ -43,21 +43,11 @@ class FollowController extends GetxController with GetTickerProviderStateMixin {
     final ownerMid = Accounts.main.mid;
     final int? mid = args?['mid'];
     this.mid = mid ?? ownerMid;
+    name = args?['name'];
     isOwner = ownerMid == this.mid;
     if (isOwner) {
       queryFollowUpTags();
-    } else {
-      final String? name = args?['name'];
-      this.name = RxnString(name);
-      if (name == null) {
-        _queryUserName();
-      }
     }
-  }
-
-  Future<void> _queryUserName() async {
-    final res = await MemberHttp.memberCardInfo(mid: mid);
-    name.value = res.dataOrNull?.card?.name;
   }
 
   Future<void> queryFollowUpTags() async {

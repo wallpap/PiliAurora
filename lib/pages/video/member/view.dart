@@ -17,7 +17,8 @@ import 'package:pili_aurora/models/common/member/user_info_type.dart';
 import 'package:pili_aurora/models/member/info.dart';
 import 'package:pili_aurora/models/remote/space/space_archive/item.dart';
 import 'package:pili_aurora/models/remote/video/video_detail/episode.dart';
-import 'package:pili_aurora/pages/fan/view.dart';
+import 'package:pili_aurora/pages/follow_type/controller.dart';
+import 'package:pili_aurora/pages/follow_type/view.dart';
 import 'package:pili_aurora/pages/follow/view.dart';
 import 'package:pili_aurora/pages/member_video/widgets/video_card_h_member_video.dart';
 import 'package:pili_aurora/pages/video/controller.dart';
@@ -418,7 +419,8 @@ class _HorizontalMemberPageState extends State<HorizontalMemberPage> {
         num = userStat['follower'] != null
             ? NumUtils.numFormat(userStat['follower'])
             : '';
-        onTap = () => FansPage.toFansPage(
+        onTap = () => FollowTypePage.open(
+          kind: FollowKind.fans,
           mid: widget.mid,
           name: memberInfoModel.name,
         );

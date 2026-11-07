@@ -1,12 +1,10 @@
 import 'package:pili_aurora/http/follow.dart';
 import 'package:pili_aurora/http/loading_state.dart';
 import 'package:pili_aurora/http/member.dart';
-import 'package:pili_aurora/http/user.dart';
 import 'package:pili_aurora/models/remote/follow/data.dart';
 import 'package:pili_aurora/models/remote/follow/list.dart';
 import 'package:pili_aurora/pages/common/common_list_controller.dart';
 import 'package:pili_aurora/pages/follow/controller.dart';
-import 'package:get/get.dart';
 
 class FollowChildController
     extends CommonListController<FollowData, FollowItemModel> {
@@ -16,17 +14,10 @@ class FollowChildController
   final int mid;
   int? total;
 
-  late final loadSameFollow = controller?.isOwner == false;
-  late final Rx<LoadingState<List<FollowItemModel>?>> sameState =
-      LoadingState<List<FollowItemModel>?>.loading().obs;
-
   @override
   void onInit() {
     super.onInit();
     queryData();
-    if (loadSameFollow) {
-      _loadSameFollow();
-    }
   }
 
   @override
@@ -75,12 +66,5 @@ class FollowChildController
       pn: page,
       orderType: controller?.orderType.value.type ?? '',
     );
-  }
-
-  Future<void> _loadSameFollow() async {
-    final res = await UserHttp.sameFollowing(mid: mid);
-    if (res case Success(:final response)) {
-      sameState.value = Success(response.list);
-    }
   }
 }

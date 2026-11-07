@@ -22,6 +22,7 @@ import 'package:pili_aurora/services/account_providers.dart';
 import 'package:pili_aurora/utils/date_utils.dart';
 import 'package:pili_aurora/utils/grid.dart';
 import 'package:pili_aurora/utils/platform_utils.dart';
+import 'package:pili_aurora/utils/parse_int.dart';
 
 class FollowTypePage extends ConsumerStatefulWidget {
   const FollowTypePage({
@@ -31,6 +32,34 @@ class FollowTypePage extends ConsumerStatefulWidget {
     this.showName = true,
     this.onSelect,
   });
+
+  factory FollowTypePage.fromArguments(FollowKind kind, Object? arguments) {
+    final args = arguments as Map?;
+    return FollowTypePage(
+      query: (
+        kind: kind,
+        mid: safeToInt(args?['mid']),
+        newFans: kind == FollowKind.fans && args?['newFans'] == true,
+      ),
+      name: args?['name'] as String?,
+    );
+  }
+
+  static void open({
+    required FollowKind kind,
+    required Object? mid,
+    String? name,
+  }) {
+    final target = safeToInt(mid);
+    if (target == null) return;
+    final route = switch (kind) {
+      FollowKind.fans => '/fan',
+      FollowKind.same => '/sameFollowing',
+      FollowKind.followed => '/followed',
+    };
+    Get.toNamed(route, arguments: {'mid': target, 'name': name});
+  }
+
   final FollowQuery query;
   final String? name;
   final bool showName;

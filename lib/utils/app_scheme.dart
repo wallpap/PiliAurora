@@ -12,9 +12,9 @@ import 'package:pili_aurora/models/common/fav_type.dart';
 import 'package:pili_aurora/models/common/video/source_type.dart';
 import 'package:pili_aurora/pages/audio/view.dart';
 import 'package:pili_aurora/pages/dynamics/widgets/vote.dart';
-import 'package:pili_aurora/pages/fan/view.dart';
 import 'package:pili_aurora/pages/follow/view.dart';
-import 'package:pili_aurora/pages/follow_type/followed/view.dart';
+import 'package:pili_aurora/pages/follow_type/controller.dart';
+import 'package:pili_aurora/pages/follow_type/view.dart';
 import 'package:pili_aurora/pages/live/view.dart';
 import 'package:pili_aurora/pages/rank/view.dart';
 import 'package:pili_aurora/pages/subscription_detail/view.dart';
@@ -535,10 +535,10 @@ abstract final class PiliScheme {
             FollowPage.toFollowPage(mid: mid);
             break;
           case 'fans':
-            FansPage.toFansPage(mid: mid);
+            FollowTypePage.open(kind: FollowKind.fans, mid: mid);
             break;
           case 'followed':
-            FollowedPage.toFollowedPage(mid: mid);
+            FollowTypePage.open(kind: FollowKind.followed, mid: mid);
             break;
           default:
             PageUtils.toDupNamed('/member?mid=$mid', off: off);

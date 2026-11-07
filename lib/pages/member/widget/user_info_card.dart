@@ -18,9 +18,9 @@ import 'package:pili_aurora/models/remote/space/space/images.dart';
 import 'package:pili_aurora/models/remote/space/space/live.dart';
 import 'package:pili_aurora/models/remote/space/space/pr_info.dart';
 import 'package:pili_aurora/models/remote/space/space/top.dart';
-import 'package:pili_aurora/pages/fan/view.dart';
 import 'package:pili_aurora/pages/follow/view.dart';
-import 'package:pili_aurora/pages/follow_type/followed/view.dart';
+import 'package:pili_aurora/pages/follow_type/controller.dart';
+import 'package:pili_aurora/pages/follow_type/view.dart';
 import 'package:pili_aurora/pages/member/widget/header_layout_widget.dart';
 import 'package:pili_aurora/pages/member/widget/medal_widget.dart';
 import 'package:pili_aurora/pages/member_guard/view.dart';
@@ -99,7 +99,8 @@ class UserInfoCard extends StatelessWidget {
     switch (type) {
       case UserInfoType.fan:
         count = card.fans;
-        onTap = () => FansPage.toFansPage(
+        onTap = () => FollowTypePage.open(
+          kind: FollowKind.fans,
           mid: card.mid,
           name: card.name,
         );
@@ -954,7 +955,11 @@ class UserInfoCard extends StatelessWidget {
       ),
     );
     return GestureDetector(
-      onTap: () => FollowedPage.toFollowedPage(mid: card.mid, name: card.name),
+      onTap: () => FollowTypePage.open(
+        kind: FollowKind.followed,
+        mid: card.mid,
+        name: card.name,
+      ),
       child: child,
     );
   }

@@ -289,11 +289,11 @@ abstract final class MemberHttp {
 
   static Future<LoadingState<MemberCardInfoData>> memberCardInfo({
     int? mid,
-    Account? account,
+    required Account account,
   }) async {
     final res = await Request().get(
       Api.memberCardInfo,
-      options: Options(extra: {'account': account ?? Accounts.main}),
+      options: Options(extra: {'account': account}),
       queryParameters: {
         'mid': mid,
         'photo': false,

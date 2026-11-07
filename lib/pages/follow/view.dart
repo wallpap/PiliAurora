@@ -12,6 +12,8 @@ import 'package:pili_aurora/pages/follow/child/child_controller.dart';
 import 'package:pili_aurora/pages/follow/child/child_view.dart';
 import 'package:pili_aurora/pages/follow/controller.dart';
 import 'package:pili_aurora/pages/follow_tag_sort/view.dart';
+import 'package:pili_aurora/pages/follow_type/controller.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pili_aurora/utils/bili_utils.dart';
 import 'package:pili_aurora/utils/parse_int.dart';
 import 'package:pili_aurora/utils/platform_utils.dart';
@@ -21,11 +23,11 @@ import 'package:flutter/services.dart' show LengthLimitingTextInputFormatter;
 import 'package:get/get.dart';
 import 'package:material_ui/material_ui.dart';
 
-class FollowPage extends StatefulWidget {
+class FollowPage extends ConsumerStatefulWidget {
   const FollowPage({super.key});
 
   @override
-  State<FollowPage> createState() => _FollowPageState();
+  ConsumerState<FollowPage> createState() => _FollowPageState();
 
   static void toFollowPage({dynamic mid, String? name}) {
     if (mid == null) return;
@@ -39,7 +41,7 @@ class FollowPage extends StatefulWidget {
   }
 }
 
-class _FollowPageState extends State<FollowPage>
+class _FollowPageState extends ConsumerState<FollowPage>
     with SingleTickerProviderStateMixin, BaseFabMixin, LazyFabMixin {
   final _tag = Utils.generateRandomString(8);
   late final FollowController _followController;
@@ -61,13 +63,18 @@ class _FollowPageState extends State<FollowPage>
   @override
   Widget build(BuildContext context) {
     final padding = MediaQuery.viewPaddingOf(context);
+    String? name = _followController.name;
+    if (!_followController.isOwner && name == null) {
+      final nameState = ref.watch(followNameProvider(_followController.mid));
+      if (!nameState.isLoading && !nameState.hasError) name = nameState.value;
+    }
     return SimpleScaffold(
-      appBar: _buildAppBar,
+      appBar: _buildAppBar(name),
       body: _followController.isOwner
           ? fabAnimWrapper(
               child: Obx(() => _buildBody(_followController.followState.value)),
             )
-          : _childPage(),
+          : _childPage(null, name: name),
       fab: _followController.isOwner
           ? SlideTransition(
               position: fabAnimation,
@@ -89,14 +96,12 @@ class _FollowPageState extends State<FollowPage>
     );
   }
 
-  PreferredSizeWidget get _buildAppBar => AppBar(
+  PreferredSizeWidget _buildAppBar(String? name) => AppBar(
     title: _followController.isOwner
         ? const Text('我的关注')
-        : Obx(() {
-            final name = _followController.name.value;
-            if (name != null) return Text('$name的关注');
-            return const SizedBox.shrink();
-          }),
+        : name == null
+        ? const SizedBox.shrink()
+        : Text('$name的关注'),
     actions: _followController.isOwner
         ? [
             IconButton(
@@ -148,12 +153,14 @@ class _FollowPageState extends State<FollowPage>
         : null,
   );
 
-  Widget _childPage([MemberTagItemModel? item]) => FollowChildPage(
-    tag: _tag,
-    controller: _followController,
-    mid: _followController.mid,
-    tagid: item?.tagid,
-  );
+  Widget _childPage(MemberTagItemModel? item, {String? name}) =>
+      FollowChildPage(
+        tag: _tag,
+        controller: _followController,
+        mid: _followController.mid,
+        tagid: item?.tagid,
+        name: name,
+      );
 
   Widget _buildBody(LoadingState loadingState) {
     return switch (loadingState) {
@@ -220,7 +227,7 @@ class _FollowPageState extends State<FollowPage>
           ),
         ],
       ),
-      Error() => _childPage(),
+      Error() => _childPage(null),
     };
   }
 

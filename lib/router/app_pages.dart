@@ -11,15 +11,14 @@ import 'package:pili_aurora/pages/dynamics_create_vote/view.dart';
 import 'package:pili_aurora/pages/dynamics_detail/view.dart';
 import 'package:pili_aurora/pages/dynamics_topic/view.dart';
 import 'package:pili_aurora/pages/dynamics_topic_rcmd/view.dart';
-import 'package:pili_aurora/pages/fan/view.dart';
 import 'package:pili_aurora/pages/fav/view.dart';
 import 'package:pili_aurora/pages/fav_create/view.dart';
 import 'package:pili_aurora/pages/fav_detail/view.dart';
 import 'package:pili_aurora/pages/fav_search/view.dart';
 import 'package:pili_aurora/pages/follow/view.dart';
 import 'package:pili_aurora/pages/follow_search/view.dart';
-import 'package:pili_aurora/pages/follow_type/follow_same/view.dart';
-import 'package:pili_aurora/pages/follow_type/followed/view.dart';
+import 'package:pili_aurora/pages/follow_type/controller.dart';
+import 'package:pili_aurora/pages/follow_type/view.dart';
 import 'package:pili_aurora/pages/history/view.dart';
 import 'package:pili_aurora/pages/history_search/view.dart';
 import 'package:pili_aurora/pages/home/view.dart';
@@ -102,7 +101,10 @@ class Routes {
     // 关注
     GetPage(name: '/follow', page: () => const FollowPage()),
     // 粉丝
-    GetPage(name: '/fan', page: () => const FansPage()),
+    GetPage(
+      name: '/fan',
+      page: () => FollowTypePage.fromArguments(FollowKind.fans, Get.arguments),
+    ),
     // 直播详情
     GetPage(name: '/liveRoom', page: () => const LiveRoomPage()),
     // 用户中心
@@ -168,8 +170,15 @@ class Routes {
     GetPage(name: '/popularPrecious', page: () => const PopularPreciousPage()),
     GetPage(name: '/audio', page: () => const AudioPage()),
     GetPage(name: '/mainReply', page: () => const MainReplyPage()),
-    GetPage(name: '/followed', page: () => const FollowedPage()),
-    GetPage(name: '/sameFollowing', page: () => const FollowSamePage()),
+    GetPage(
+      name: '/followed',
+      page: () =>
+          FollowTypePage.fromArguments(FollowKind.followed, Get.arguments),
+    ),
+    GetPage(
+      name: '/sameFollowing',
+      page: () => FollowTypePage.fromArguments(FollowKind.same, Get.arguments),
+    ),
     GetPage(name: '/download', page: () => const DownloadPage()),
     GetPage(name: '/dlna', page: () => const DLNAPage()),
     GetPage(name: '/myReply', page: () => const MyReply()),

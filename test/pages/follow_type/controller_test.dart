@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:get/get.dart';
 import 'package:hive_ce/hive.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:pili_aurora/models/remote/follow/list.dart';
@@ -13,6 +14,7 @@ import 'package:pili_aurora/http/init.dart';
 import 'package:pili_aurora/http/loading_state.dart';
 import 'package:pili_aurora/models/common/account_type.dart';
 import 'package:pili_aurora/pages/follow_type/controller.dart';
+import 'package:pili_aurora/router/app_pages.dart';
 import 'package:pili_aurora/utils/accounts.dart';
 import 'package:pili_aurora/utils/accounts/account.dart';
 import 'package:pili_aurora/utils/storage.dart';
@@ -487,6 +489,122 @@ void main() {
     expect(current(fans).items.single.attribute, 6);
     a.close();
     b.close();
+  });
+
+  testWidgets('保留原路由地址并直接使用统一关系页，新增粉丝参数不丢失', (tester) async {
+    const targets = <FollowQuery>[
+      (kind: FollowKind.fans, mid: 200, newFans: false),
+      (kind: FollowKind.same, mid: 200, newFans: false),
+      (kind: FollowKind.followed, mid: 200, newFans: false),
+      (kind: FollowKind.fans, mid: 100, newFans: true),
+    ];
+    container.dispose();
+    container = ProviderContainer(
+      overrides: [
+        for (final query in targets)
+          followQueryProvider(query)
+              .overrideWith(() => _FixtureNotifier(query)),
+      ],
+    );
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: GetMaterialApp(
+          home: const Scaffold(body: Text('root')),
+          getPages: Routes.getPages
+              .where(
+                (page) =>
+                    {'/fan', '/sameFollowing', '/followed'}.contains(page.name),
+              )
+              .toList(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    const titles = ['目标的粉丝', '我与目标的共同关注', '我关注的1人也关注了目标', '新增粉丝'];
+    for (var i = 0; i < targets.length; i++) {
+      final query = targets[i];
+      if (query.newFans) {
+        unawaited(
+          Get.toNamed<void>(
+            '/fan',
+            arguments: {'mid': query.mid, 'newFans': true},
+          ),
+        );
+      } else {
+        FollowTypePage.open(kind: query.kind, mid: '${query.mid}', name: '目标');
+      }
+      await tester.pumpAndSettle();
+      expect(
+        tester.widget<FollowTypePage>(find.byType(FollowTypePage)).query,
+        query,
+      );
+      expect(find.text(titles[i]), findsOneWidget);
+      Get.back();
+      await tester.pumpAndSettle();
+    }
+    expect(requests, isEmpty);
+    await tester.pumpWidget(const SizedBox());
+    Get.reset();
+  });
+
+  testWidgets('主关注昵称与共同关注预览共用 provider，展开列表不重复请求', (tester) async {
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: GetMaterialApp(
+          home: const Scaffold(body: Text('root')),
+          getPages: Routes.getPages
+              .where(
+                (page) => {'/follow', '/sameFollowing'}.contains(page.name),
+              )
+              .toList(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    unawaited(Get.toNamed<void>('/follow', arguments: {'mid': 200}));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+    await tester.runAsync(() async {
+      await dispatched(3);
+      for (final request in requests) {
+        if (request.options.path == Api.memberCardInfo) {
+          request.reply.complete({
+            'code': 0,
+            'data': {
+              'card': {'name': '目标'},
+            },
+          });
+        } else if (request.options.path == Api.sameFollowing) {
+          request.reply.complete(page([1, 2, 3, 4], total: 4));
+        } else {
+          expect(request.options.path, Api.followings);
+          request.reply.complete(page([], total: 0));
+        }
+      }
+      await Future<void>.delayed(Duration.zero);
+    });
+    await tester.pumpAndSettle();
+    expect(find.text('目标的关注'), findsOneWidget);
+    expect(find.text('我们的共同关注'), findsOneWidget);
+    expect(find.text('user-3'), findsOneWidget);
+    expect(find.text('user-4'), findsNothing);
+    await tester.tap(find.textContaining('查看更多', findRichText: true));
+    await tester.pumpAndSettle();
+    expect(find.text('我与目标的共同关注'), findsOneWidget);
+    expect(find.text('user-4'), findsOneWidget);
+    expect(requests, hasLength(3));
+    expect(
+      requests.where((request) => request.options.path == Api.memberCardInfo),
+      hasLength(1),
+    );
+    expect(
+      requests.where((request) => request.options.path == Api.sameFollowing),
+      hasLength(1),
+    );
+    await tester.pumpWidget(const SizedBox());
+    Get.reset();
   });
 
   testWidgets('粉丝作为分享联系人可选择用户', (tester) async {

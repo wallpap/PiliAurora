@@ -158,7 +158,10 @@ class UgcIntroController extends CommonIntroController with ReloadMixin {
       if (mid == null) {
         return;
       }
-      final res = await MemberHttp.memberCardInfo(mid: mid);
+      final res = await MemberHttp.memberCardInfo(
+        mid: mid,
+        account: Accounts.main,
+      );
       if (res case Success(:final response)) {
         userStat.value = response;
       }
