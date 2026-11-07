@@ -117,6 +117,7 @@ flowchart TD
 - API：`lib/http/live.dart`。
 - 服务：`lib/services/live_stream/live.dart`、`live_packet.dart`、`live_packet_decoder.dart`。
 - 排查直播问题时，分别检查连接、包解码、历史与未读消息、渲染和退出清理。
+- 关注直播页使用账号绑定的 Riverpod 状态和滚动分页，按房间去重，分页失败保留列表并可重试。离线过滤后的空页继续按原始分页信息读取；缺少分页信息时对连续无增长页限界。测试见 `test/pages/live_follow/`。
 
 ## 账号、登录与会员
 
@@ -134,6 +135,7 @@ flowchart TD
 - API：`lib/http/dynamics.dart`、`follow.dart`、`fan.dart`。
 - 模型：`lib/models/remote/dynamic/`、`follow/`。
 - 互动操作通常依赖登录状态及 CSRF/请求上下文。排查失败时核对实际请求与响应。
+- 粉丝、新增粉丝、共同关注和“我关注的人也关注 TA”共用 Riverpod 查询 family，按目标 UID、类型与排序隔离；主关注列表及分组继续沿用现有实现。回关、取消关注及移除粉丝绑定发起账号，成功后刷新其他本人粉丝入口；分享选人继续通过 `FansPage.onSelect` 返回用户。测试见 `test/pages/follow_type/`。
 
 ## 消息、私信与分享
 

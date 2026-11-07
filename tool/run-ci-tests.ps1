@@ -33,6 +33,8 @@ $ciTests = @(
     "test/pages/danmaku_block/controller_test.dart",
     "test/pages/blacklist/controller_test.dart",
     "test/pages/account_queries/provider_test.dart",
+    "test/pages/follow_type/controller_test.dart",
+    "test/pages/live_follow/controller_test.dart",
     "test/common/widgets/feed_pagination_test.dart",
     "test/pages/rcmd/",
     "test/router/get_route_lifecycle_test.dart",
