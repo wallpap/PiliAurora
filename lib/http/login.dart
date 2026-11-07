@@ -5,7 +5,6 @@ import 'package:pili_aurora/http/api.dart';
 import 'package:pili_aurora/http/init.dart';
 import 'package:pili_aurora/http/loading_state.dart';
 import 'package:pili_aurora/models/remote/login_devices/data.dart';
-import 'package:pili_aurora/utils/accounts.dart';
 import 'package:pili_aurora/utils/accounts/account.dart';
 import 'package:pili_aurora/utils/app_sign.dart';
 import 'package:pili_aurora/utils/login_utils.dart';
@@ -466,8 +465,9 @@ abstract final class LoginHttp {
     }
   }
 
-  static Future<LoadingState<LoginDevicesData>> loginDevices() async {
-    final account = Accounts.main;
+  static Future<LoadingState<LoginDevicesData>> loginDevices({
+    required Account account,
+  }) async {
     final buvid = LoginUtils.buvid;
     final params = {
       'local_id': buvid,
@@ -484,6 +484,7 @@ abstract final class LoginHttp {
     final res = await Request().get(
       Api.loginDevices,
       queryParameters: params,
+      options: Options(extra: {'account': account}),
     );
     if (res.data['code'] == 0) {
       return Success(LoginDevicesData.fromJson(res.data['data']));

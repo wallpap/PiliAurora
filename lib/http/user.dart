@@ -453,9 +453,12 @@ abstract final class UserHttp {
     }
   }
 
-  static Future<LoadingState<CoinLogData>> coinLog() async {
+  static Future<LoadingState<CoinLogData>> coinLog({
+    required Account account,
+  }) async {
     final res = await Request().get(
       Api.coinLog,
+      options: Options(extra: {'account': account}),
       queryParameters: {
         'jsonp': 'jsonp',
         'web_location': '333.33',
@@ -468,9 +471,12 @@ abstract final class UserHttp {
     }
   }
 
-  static Future<LoadingState<LoginLogData>> loginLog() async {
+  static Future<LoadingState<LoginLogData>> loginLog({
+    required Account account,
+  }) async {
     final res = await Request().get(
       Api.loginLog,
+      options: Options(extra: {'account': account}),
       queryParameters: {
         'jsonp': 'jsonp',
         'web_location': '333.33',
@@ -483,9 +489,12 @@ abstract final class UserHttp {
     }
   }
 
-  static Future<LoadingState<CoinLogData>> expLog() async {
+  static Future<LoadingState<CoinLogData>> expLog({
+    required Account account,
+  }) async {
     final res = await Request().get(
       Api.expLog,
+      options: Options(extra: {'account': account}),
       queryParameters: {
         'jsonp': 'jsonp',
         'web_location': '333.33',

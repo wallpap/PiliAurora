@@ -16,11 +16,9 @@ import 'package:pili_aurora/http/loading_state.dart';
 import 'package:pili_aurora/http/user.dart';
 import 'package:pili_aurora/models/remote/live/live_medal_wall/data.dart';
 import 'package:pili_aurora/models/remote/space/space/reservation_card_list.dart';
-import 'package:pili_aurora/pages/coin_log/controller.dart';
-import 'package:pili_aurora/pages/exp_log/controller.dart';
+import 'package:pili_aurora/pages/log_table/controller.dart';
 import 'package:pili_aurora/pages/log_table/view.dart';
 import 'package:pili_aurora/pages/login_devices/view.dart';
-import 'package:pili_aurora/pages/login_log/controller.dart';
 import 'package:pili_aurora/pages/member/controller.dart';
 import 'package:pili_aurora/pages/member/widget/medal_wall.dart';
 import 'package:pili_aurora/pages/member/widget/reserve_button.dart';
@@ -478,10 +476,7 @@ class _MemberPageState extends State<MemberPage> {
               ),
             ),
             AppPopupMenuItem(
-              onTap: () => Get.to(
-                const LogPage(),
-                arguments: LoginLogController(),
-              ),
+              onTap: () => Get.to(const LogPage(type: LogType.login)),
               child: const Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
@@ -492,10 +487,7 @@ class _MemberPageState extends State<MemberPage> {
               ),
             ),
             AppPopupMenuItem(
-              onTap: () => Get.to(
-                const LogPage(),
-                arguments: CoinLogController(),
-              ),
+              onTap: () => Get.to(const LogPage(type: LogType.coin)),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
@@ -506,10 +498,7 @@ class _MemberPageState extends State<MemberPage> {
               ),
             ),
             AppPopupMenuItem(
-              onTap: () => Get.to(
-                const LogPage(),
-                arguments: ExpLogController(),
-              ),
+              onTap: () => Get.to(const LogPage(type: LogType.exp)),
               child: const Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
