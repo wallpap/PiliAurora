@@ -4,7 +4,6 @@
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
 import os
 from pathlib import Path
@@ -14,10 +13,11 @@ import sys
 import urllib.request
 
 
-ENGINE = 'af7e796e161ae0bb1ff0758c71a7105418bd9ded'
 DEPOT_TOOLS = 'b1c2e86792a7f2b6576c181b7327ddd53b1a42a8'
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import engine_identity
+
+ENGINE = engine_identity.ENGINE_COMMIT
 
 PATCH = engine_identity.PATCHES['windowsDwmPaced']
 
@@ -29,11 +29,6 @@ def run(command, *, cwd, env, capture=False, check=True):
     return subprocess.run(command, cwd=cwd, env=env, check=check, text=True,
                           stdout=subprocess.PIPE if capture else None,
                           stderr=subprocess.PIPE if capture else None)
-
-
-def sha256(path):
-    with path.open('rb') as source:
-        return hashlib.file_digest(source, 'sha256').hexdigest()
 
 
 def prepare(root, sdk, env, jobs, skip_sync):

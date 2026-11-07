@@ -8,7 +8,7 @@ import re
 import subprocess
 import sys
 import time
-from datetime import datetime, timezone
+from datetime import datetime
 from pathlib import Path
 
 from danmaku_frame_pacing_analysis import analyze

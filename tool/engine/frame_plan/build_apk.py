@@ -1,6 +1,5 @@
 """Build a Profile, dev Release or official Release APK with the frame-plan engine."""
 import argparse
-import hashlib
 import json
 import os
 import subprocess
@@ -11,12 +10,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import engine_identity
 
-ENGINE_REVISION = "af7e796e161ae0bb1ff0758c71a7105418bd9ded"
-
-
-def sha256(path):
-    with path.open("rb") as handle:
-        return hashlib.file_digest(handle, "sha256").hexdigest()
+ENGINE_REVISION = engine_identity.ENGINE_COMMIT
 
 
 def validate_source_identity(identity, *, target, mode, package, apk_hash,
@@ -105,8 +99,8 @@ def main():
         identity = json.loads(source.with_suffix(".json").read_text(encoding="utf-8"))
         validate_source_identity(
             identity, target=args.target, mode=mode, package=package,
-            apk_hash=sha256(source),
-            ticker_hash=sha256(repo / "third_party/canvas_danmaku/lib/frame_rate_ticker.dart"),
+            apk_hash=engine_identity.sha256(source),
+            ticker_hash=engine_identity.sha256(repo / "third_party/canvas_danmaku/lib/frame_rate_ticker.dart"),
             dart_defines=args.dart_define, engine_digest=engine_digest, source_hash=source_hash)
     library = args.engine_library.resolve()
     if not library.is_file():
@@ -171,10 +165,10 @@ def main():
             engine_identity.write_json(manifest_path, {
                 **engine, "identityDigest": engine_digest,
                 "application": {
-                    "sourceSha256": source_hash, "apkSha256": sha256(output),
+                    "sourceSha256": source_hash, "apkSha256": engine_identity.sha256(output),
                     "target": args.target, "abi": args.abi, "package": package,
                     "dartDefines": args.dart_define,
-                    "tickerSha256": sha256(repo / "third_party/canvas_danmaku/lib/frame_rate_ticker.dart"),
+                    "tickerSha256": engine_identity.sha256(repo / "third_party/canvas_danmaku/lib/frame_rate_ticker.dart"),
                 },
             })
         finally:
