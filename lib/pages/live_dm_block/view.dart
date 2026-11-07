@@ -32,6 +32,14 @@ class _LiveDmBlockPageState extends ConsumerState<LiveDmBlockPage>
     if (Get.arguments case final LiveBlockRulesChanged callback) {
       _onChanged = callback;
     }
+    ref.listenManual(liveBlockProvider(_roomId), (_, next) {
+      final data = next.value;
+      if (!next.isLoading && !next.hasError && data != null && !data.saving) {
+        if (identical(ref.read(mainAccountProvider), _initialAccount)) {
+          _onChanged?.call(data.keywords, data.users.map((e) => e.uid).toSet());
+        }
+      }
+    }, fireImmediately: true);
   }
 
   @override
@@ -68,14 +76,6 @@ class _LiveDmBlockPageState extends ConsumerState<LiveDmBlockPage>
   Widget build(BuildContext context) {
     final provider = liveBlockProvider(_roomId);
     final snapshot = ref.watch(provider);
-    ref.listen(provider, (_, next) {
-      final data = next.value;
-      if (!next.isLoading && !next.hasError && data != null && !data.saving) {
-        if (identical(ref.read(mainAccountProvider), _initialAccount)) {
-          _onChanged?.call(data.keywords, data.users.map((e) => e.uid).toSet());
-        }
-      }
-    });
     final data = !snapshot.isLoading && !snapshot.hasError
         ? snapshot.value
         : null;

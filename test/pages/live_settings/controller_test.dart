@@ -10,6 +10,9 @@ import 'package:pili_aurora/http/api.dart';
 import 'package:pili_aurora/http/init.dart';
 import 'package:pili_aurora/models/common/account_type.dart';
 import 'package:pili_aurora/pages/live_area/controller.dart';
+import 'package:pili_aurora/pages/live_area/view.dart';
+import 'package:pili_aurora/models/remote/live/live_area_list/area_item.dart';
+import 'package:pili_aurora/http/loading_state.dart';
 import 'package:pili_aurora/pages/live_dm_block/controller.dart';
 import 'package:pili_aurora/pages/live_dm_block/view.dart';
 import 'package:pili_aurora/utils/storage_key.dart';
@@ -38,6 +41,19 @@ class _RulesNotifier extends LiveBlockNotifier {
   Future<LiveBlockState> build() async =>
       LiveBlockState(keywords: ['old'], users: []);
   void fail() => state = AsyncError('failed', StackTrace.current);
+}
+
+class _PreferencesNotifier extends LiveAreaPreferencesNotifier {
+  final saves = <Completer<LoadingState<void>>>[];
+  @override
+  Future<LiveAreaPreferences> build() async => LiveAreaPreferences([]);
+  void replace() => state = AsyncData(LiveAreaPreferences([]));
+  @override
+  Future<LoadingState<void>> save(Object source, List<AreaItem> draft) {
+    final reply = Completer<LoadingState<void>>();
+    saves.add(reply);
+    return reply.future;
+  }
 }
 
 typedef _Pending = ({
@@ -348,12 +364,53 @@ void main() {
     );
   });
 
+  testWidgets('旧标签保存不阻塞新快照编辑，迟到结果不关闭新草稿', (tester) async {
+    container.dispose();
+    final notifier = _PreferencesNotifier();
+    container = ProviderContainer(
+      overrides: [
+        liveAreaPreferencesProvider.overrideWith(() => notifier),
+        liveAreasProvider.overrideWith((_) => []),
+      ],
+    );
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: const MaterialApp(home: LiveAreaPage()),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('编辑'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('完成'));
+    await tester.pumpAndSettle();
+    expect(notifier.saves, hasLength(1));
+    notifier.replace();
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('编辑'));
+    await tester.pumpAndSettle();
+    expect(find.text('完成'), findsOneWidget);
+    notifier.saves.first.complete(const Success(null));
+    await tester.pumpAndSettle();
+    expect(find.text('完成'), findsOneWidget);
+    await tester.tap(find.text('完成'));
+    await tester.pumpAndSettle();
+    expect(notifier.saves, hasLength(2));
+    notifier.saves.last.complete(const Success(null));
+    await tester.pumpAndSettle();
+    await tester.pumpWidget(
+      UncontrolledProviderScope(container: container, child: const SizedBox()),
+    );
+    await tester.pump();
+  });
+
   testWidgets('规则仅在成功读取后回调，失败与离页不清空播放器规则', (tester) async {
     container.dispose();
     final notifier = _RulesNotifier();
     container = ProviderContainer(
       overrides: [provider.overrideWith(() => notifier)],
-    );
+    )..listen(provider, (_, _) {});
+    await tester.pump();
     final changes = <List<String>>[];
     void callback(List<String> words, Set<int> uids) => changes.add(words);
     await tester.pumpWidget(

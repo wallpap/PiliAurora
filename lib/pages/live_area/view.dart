@@ -25,11 +25,13 @@ class LiveAreaPage extends ConsumerStatefulWidget {
 class _LiveAreaPageState extends ConsumerState<LiveAreaPage> {
   Object? _source;
   List<AreaItem>? _draft;
-  bool _saving = false;
+  Object? _savingSource;
+  bool _saving(LiveAreaPreferences? data) =>
+      data != null && identical(_savingSource, data.source);
   bool _editing(LiveAreaPreferences? data) =>
       data != null && identical(_source, data.source) && _draft != null;
   Future<void> _edit(LiveAreaPreferences data) async {
-    if (_saving) return;
+    if (_saving(data)) return;
     if (!_editing(data)) {
       setState(() {
         _source = data.source;
@@ -37,13 +39,18 @@ class _LiveAreaPageState extends ConsumerState<LiveAreaPage> {
       });
       return;
     }
-    setState(() => _saving = true);
+    final account = ref.read(mainAccountProvider);
+    setState(() => _savingSource = data.source);
     final result = await ref
         .read(liveAreaPreferencesProvider.notifier)
         .save(data.source, _draft!);
-    if (!mounted) return;
+    if (!mounted || !identical(_savingSource, data.source)) return;
+    if (!identical(ref.read(mainAccountProvider), account) ||
+        !identical(_source, data.source)) {
+      return;
+    }
     setState(() {
-      _saving = false;
+      _savingSource = null;
       if (result.isSuccess) {
         _source = null;
         _draft = null;
@@ -53,7 +60,10 @@ class _LiveAreaPageState extends ConsumerState<LiveAreaPage> {
   }
 
   void _toggle(AreaItem item) {
-    if (_saving || item.id == 0) return;
+    if ((_savingSource != null && identical(_savingSource, _source)) ||
+        item.id == 0) {
+      return;
+    }
     setState(() {
       if (!_draft!.remove(item)) _draft!.add(item);
     });
@@ -86,9 +96,11 @@ class _LiveAreaPageState extends ConsumerState<LiveAreaPage> {
         actions: [
           if (data != null)
             TextButton(
-              onPressed: _saving || data.saving ? null : () => _edit(data),
+              onPressed: _saving(data) || data.saving
+                  ? null
+                  : () => _edit(data),
               child: Text(
-                _saving
+                _saving(data)
                     ? '保存中'
                     : editing
                     ? '完成'
@@ -120,7 +132,7 @@ class _LiveAreaPageState extends ConsumerState<LiveAreaPage> {
                         spacing: 12,
                         runSpacing: 8,
                         onSortStart: (_) {
-                          if (_saving || data.saving) return;
+                          if (_saving(data) || data.saving) return;
                           if (!editing) {
                             setState(() {
                               _source = data.source;
@@ -129,7 +141,9 @@ class _LiveAreaPageState extends ConsumerState<LiveAreaPage> {
                           }
                         },
                         onSorted: (oldIndex, newIndex) {
-                          if (_saving || data.saving || !_editing(data)) return;
+                          if (_saving(data) || data.saving || !_editing(data)) {
+                            return;
+                          }
                           setState(
                             () => _draft!.insert(
                               newIndex,
