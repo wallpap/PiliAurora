@@ -2,40 +2,30 @@ import 'dart:async';
 import 'dart:io' show Platform;
 import 'dart:math' as math;
 
-import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:material_ui/material_ui.dart';
-import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
 import 'package:pili_aurora/http/video.dart';
-import 'package:pili_aurora/http/browser_ua.dart';
-import 'package:pili_aurora/http/constants.dart';
 import 'package:pili_aurora/models/common/video/video_quality.dart';
 import 'package:pili_aurora/models/common/video/video_type.dart';
 import 'package:pili_aurora/models/video/play/url.dart';
 import 'package:pili_aurora/plugin/pl_player/models/hwdec_type.dart';
 import 'package:pili_aurora/utils/storage_pref.dart';
 import 'package:pili_aurora/services/diagnostics/diagnostics.dart';
-import 'package:pili_aurora/services/diagnostics/player_diagnostics.dart';
-import 'package:pili_aurora/services/android_video_output_limit.dart';
-import 'package:pili_aurora/services/diagnostics/process_metrics.dart';
 
-typedef DecoderMediaHeaderWriter = void Function({
-  String? userAgent,
-  String? referer,
-});
+import 'package:pili_aurora/pages/setting/decoder_test.dart';
+import 'package:pili_aurora/pages/setting/decoder_test_process.dart';
 
-/// 使用和普通播放器相同的媒体请求头，避免 CDN 将测试流拒绝为 403。
-void configureDecoderTestMediaHeaders(DecoderMediaHeaderWriter write) {
-  write(userAgent: BrowserUa.pc, referer: HttpString.baseUrl);
-}
+export 'package:pili_aurora/pages/setting/decoder_test.dart'
+    show configureDecoderTestMediaHeaders;
 
 /// 解码器兼容性测试入口。
 ///
-/// 测试沿用播放器配置，检查持续播放、输出帧和实际解码后端。
+/// 每个组合沿用播放会话与平台输出，检查持续出画和实际解码后端。
 class DecoderTestDialog extends StatefulWidget {
-  const DecoderTestDialog({super.key, this.sampleLoader});
+  const DecoderTestDialog({super.key, this.sampleLoader, this.sessionFactory});
 
   final Future<List<VideoItem>> Function()? sampleLoader;
+  final DecoderTestSessionFactory? sessionFactory;
 
   @override
   State<DecoderTestDialog> createState() => _DecoderTestDialogState();
@@ -44,18 +34,16 @@ class DecoderTestDialog extends StatefulWidget {
 class _DecoderTestDialogState extends State<DecoderTestDialog> {
   static const _sampleBvid = 'BV1fK4y1t7hj';
   static const _sampleCid = 196018899;
-  static const _startupTimeout = Duration(seconds: 10);
-  static const _measureLength = Duration(seconds: 3);
   static const _sampleTimeout = Duration(seconds: 15);
 
-  final Map<String, _DecoderResult> _results = {};
+  final Map<String, DecoderTestResult> _results = {};
   final Set<int> _selectedCodecs = {};
   final Set<String> _selectedDecoders = {};
   late final List<HwDecType> _decoders = _availableDecoders;
 
   List<VideoItem> _codecs = const [];
-  Player? _activePlayer;
-  VideoController? _activeVideoController;
+  DecoderTestSession? _activeSession;
+  bool _stopping = false;
   String? _error;
   bool _loading = true;
   bool _testing = false;
@@ -118,9 +106,19 @@ class _DecoderTestDialogState extends State<DecoderTestDialog> {
   @override
   void dispose() {
     _testGeneration++;
-    final player = _activePlayer;
-    _activePlayer = null;
-    if (player != null) unawaited(player.dispose());
+    final session = _activeSession;
+    _activeSession = null;
+    if (session != null) {
+      unawaited(
+        session.dispose().catchError((Object error) {
+          Diagnostics.instance.playerLog(
+            DiagnosticLogLevel.error,
+            'decoderTest',
+            error,
+          );
+        }),
+      );
+    }
     super.dispose();
   }
 
@@ -134,15 +132,10 @@ class _DecoderTestDialogState extends State<DecoderTestDialog> {
     try {
       final videos = await (widget.sampleLoader?.call() ?? _fetchSample())
           .timeout(_sampleTimeout);
-      final codecs = <int, VideoItem>{};
-      for (final video in videos) {
-        if ([7, 12, 13].contains(video.codecid) && video.playUrls.isNotEmpty) {
-          codecs.putIfAbsent(video.codecid!, () => video);
-        }
-      }
+      final codecs = decoderTestSamples(videos);
       if (!mounted) return;
       setState(() {
-        _codecs = codecs.values.toList();
+        _codecs = codecs;
         if (_codecs.isNotEmpty) {
           _selectedCodecs
             ..clear()
@@ -184,15 +177,6 @@ class _DecoderTestDialogState extends State<DecoderTestDialog> {
     _ => item.codecs ?? '未知格式',
   };
 
-  String _decoderName(String decoder) {
-    if (decoder.isEmpty || decoder == 'no') return '软件解码';
-    return HwDecType.values
-            .where((type) => type.hwdec == decoder)
-            .map((type) => type.desc.split('：').first)
-            .firstOrNull ??
-        decoder;
-  }
-
   Future<void> _runTests() async {
     if (_testing || _selectedCodecs.isEmpty || _selectedDecoders.isEmpty) {
       return;
@@ -204,65 +188,65 @@ class _DecoderTestDialogState extends State<DecoderTestDialog> {
         .where((decoder) => _selectedDecoders.contains(decoder.hwdec))
         .toList();
     if (codecs.isEmpty || decoders.isEmpty) return;
-
     final generation = ++_testGeneration;
-    _totalTests = codecs.length * decoders.length;
-    _completedTests = 0;
     setState(() {
       _testing = true;
       _error = null;
       _results.clear();
+      _totalTests = codecs.length * decoders.length;
+      _completedTests = 0;
     });
-
-    // 同一个解码器复用一个 mpv/VideoOutput 实例，避免每个组合都触发一次
-    // 原生渲染上下文的创建和延迟销毁。Windows 的 libmpv 销毁本身是异步的，
-    // 逐组合创建播放器会在一次测试中积累多个仍未真正释放的上下文。
-    for (final decoder in decoders) {
-      if (!mounted || generation != _testGeneration) break;
-
-      _DecoderTestSession? session;
-      Object? sessionError;
-      try {
-        session = await _createDecoderSession(decoder);
-      } catch (error) {
-        sessionError = error;
-      }
-
-      try {
-        for (final codec in codecs) {
-          if (!mounted || generation != _testGeneration) break;
+    try {
+      for (final codec in codecs) {
+        for (final decoder in decoders) {
+          if (!mounted || generation != _testGeneration) return;
           final key = _resultKey(codec, decoder);
-          setState(() => _results[key] = const _DecoderResult.running());
-          final result = sessionError == null
-              ? await _testDecoder(codec, decoder, session!)
-              : _DecoderResult.failure(
-                  _formatDecoderTestError(sessionError),
-                  performance: const _PerformanceSummary(
-                    averageCpu: null,
-                    peakMemoryMb: null,
-                    averageGpu: null,
-                  ),
-                );
-          if (!mounted || generation != _testGeneration) break;
-          setState(() {
-            _results[key] = result;
-            _completedTests++;
-          });
-        }
-      } finally {
-        if (session != null) {
-          if (identical(_activePlayer, session.player)) {
-            _activePlayer = null;
-            _activeVideoController = null;
-            if (mounted) setState(() {});
+          DecoderTestSession? session;
+          setState(() => _results[key] = const DecoderTestResult.running());
+          try {
+            session = (widget.sessionFactory ?? createDecoderTestSession)(
+              decoder,
+              codec,
+            );
+            _activeSession = session;
+            setState(() {});
+            final result = await session.run();
+            if (!mounted || generation != _testGeneration) return;
+            setState(() {
+              _results[key] = result;
+              _completedTests++;
+            });
+          } catch (error) {
+            if (!mounted || generation != _testGeneration) return;
+            setState(() {
+              _results[key] = DecoderTestResult.failure(
+                formatDecoderTestError(error),
+              );
+              _completedTests++;
+            });
+          } finally {
+            // dispose 必须代表真正的原生释放；停止与本轮收尾共用同一个 Future。
+            await session?.dispose();
+            if (identical(_activeSession, session)) {
+              _activeSession = null;
+              if (mounted) setState(() {});
+            }
           }
-          await session.dispose();
         }
       }
-    }
-
-    if (mounted && generation == _testGeneration) {
-      setState(() => _testing = false);
+    } catch (error) {
+      Diagnostics.instance.playerLog(
+        DiagnosticLogLevel.error,
+        'decoderTest',
+        error,
+      );
+      if (mounted && generation == _testGeneration) {
+        setState(() => _error = formatDecoderTestError(error));
+      }
+    } finally {
+      if (mounted && generation == _testGeneration) {
+        setState(() => _testing = false);
+      }
     }
   }
 
@@ -270,182 +254,29 @@ class _DecoderTestDialogState extends State<DecoderTestDialog> {
       '${codec.codecid}:${decoder.hwdec}';
 
   Future<void> _stopTests() async {
-    if (!_testing) return;
-    _testGeneration++;
-    _testing = false;
-    final player = _activePlayer;
-    _activePlayer = null;
-    _activeVideoController = null;
-    if (player != null) await player.dispose();
-    if (mounted) setState(() {});
-  }
-
-  Future<_DecoderTestSession> _createDecoderSession(HwDecType decoder) async {
-    final player = await Player.create(
-      configuration: const PlayerConfiguration(
-        logLevel: kDebugMode ? .warn : .error,
-        options: {'audio': 'no', 'video-sync': 'audio'},
-      ),
-    );
-    _activePlayer = player;
-    PlayerDiagnostics? diagnostics;
-    try {
-      diagnostics = PlayerDiagnostics(
-        player,
-        extra: () => {
-          'purpose': 'decoderTest',
-          'requestedDecoder': decoder.hwdec,
-        },
-      );
-      final videoController = await VideoController.create(
-        player,
-        configuration: VideoControllerConfiguration(
-          enableHardwareAcceleration: decoder != HwDecType.no,
-          hwdec: decoder.hwdec,
-          androidOutputLimit: Platform.isAndroid
-              ? () => Pref.enableAndroidTextureScaling
-                    ? AndroidVideoOutputLimit.detected
-                    : null
-              : null,
-          onAndroidDiagnostic: (action, details) => diagnostics?.event(
-            action,
-            level: action.contains('error')
-                ? DiagnosticLogLevel.error
-                : DiagnosticLogLevel.info,
-            details: details,
-          ),
-        ),
-      );
-      void writeMediaHeaders({String? userAgent, String? referer}) {
-        player.setMediaHeader(userAgent: userAgent, referer: referer);
-      }
-
-      configureDecoderTestMediaHeaders(writeMediaHeaders);
-      _activeVideoController = videoController;
-      if (mounted) setState(() {});
-      return _DecoderTestSession(
-        player: player,
-        diagnostics: diagnostics,
-      );
-    } catch (_) {
-      diagnostics?.dispose();
-      if (!player.disposed) await player.dispose();
-      if (identical(_activePlayer, player)) {
-        _activePlayer = null;
-        _activeVideoController = null;
-        if (mounted) setState(() {});
-      }
-      rethrow;
-    }
-  }
-
-  String _formatDecoderTestError(Object error) {
-    final message = error.toString().replaceFirst('Bad state: ', '');
-    return message.length > 68 ? '初始化或播放失败' : message;
-  }
-
-  Future<_DecoderResult> _testDecoder(
-    VideoItem codec,
-    HwDecType decoder,
-    _DecoderTestSession session,
-  ) async {
-    final player = session.player;
-    StreamSubscription<String>? errorSubscription;
-    StreamSubscription<PlayerLog>? logSubscription;
-    String? playbackError;
-    final monitor = _PerformanceMonitor();
-    try {
-      final errors = Completer<String>();
-      errorSubscription = player.stream.error.listen((message) {
-        if (!errors.isCompleted) errors.complete(message);
-      });
-      logSubscription = player.stream.log.listen((log) {
-        if ((log.level == 'error' || log.level == 'fatal') &&
-            log.prefix == 'vo/gpu/aimagereader') {
-          playbackError = '视频输出异常：${log.text.trim()}';
-        }
-      });
-      final url = codec.playUrls.firstOrNull;
-      if (url == null || url.isEmpty) throw StateError('测试视频地址为空');
-      await player.open(Media(url), play: true).timeout(_startupTimeout);
-
-      await Future.any([
-        player.stream.position
-            .firstWhere((position) => position >= const Duration(seconds: 1))
-            .then((_) {}),
-        errors.future.then((message) => throw StateError(message)),
-        Future<void>.delayed(_startupTimeout).then(
-          (_) => throw TimeoutException('视频无法开始播放'),
-        ),
-      ]);
-      final firstFrame = Platform.isAndroid
-          ? await readAndroidSurfaceFrameState(player)
-          : null;
-      if (Platform.isAndroid &&
-          ((firstFrame?['consumedFrames'] as int?) ?? 0) == 0) {
-        throw StateError('尚未确认本视频输出画面');
-      }
-      if (!Platform.isAndroid) {
-        final image = await player.screenshot().timeout(_startupTimeout);
-        if (image == null) throw StateError('尚未确认本视频输出画面');
-        image.dispose();
-      }
-      monitor.start();
-      final startPosition = player.state.position;
-      await Future.any([
-        Future<void>.delayed(_measureLength),
-        errors.future.then((message) => playbackError = message),
-      ]);
-      if (playbackError != null) throw StateError(playbackError!);
-
-      final position = player.state.position;
-      final size = '${player.state.width}x${player.state.height}';
-      final activeDecoder = player.getProperty('hwdec-current').trim();
-      final played = position - startPosition;
-      if (played < const Duration(seconds: 2)) {
-        throw StateError('视频未能持续播放');
-      }
-      if (Platform.isAndroid) {
-        final lastFrame = await readAndroidSurfaceFrameState(player);
-        if (lastFrame?['configuredAtNs'] != firstFrame?['configuredAtNs'] ||
-            ((lastFrame?['consumedFrames'] as int?) ?? 0) <=
-                ((firstFrame?['consumedFrames'] as int?) ?? 0)) {
-          throw StateError('未确认持续输出画面');
+    if (!_testing || _stopping) return;
+    final session = _activeSession;
+    setState(() {
+      _testGeneration++;
+      _stopping = true;
+      _activeSession = null;
+      for (final key in _results.keys.toList()) {
+        if (_results[key]!.running) {
+          _results[key] = const DecoderTestResult.cancelled();
         }
       }
-      final automatic =
-          decoder == HwDecType.auto ||
-          decoder == HwDecType.autoSafe ||
-          decoder == HwDecType.autoCopy;
-      final software = activeDecoder.isEmpty || activeDecoder == 'no';
-      final fallback = decoder == HwDecType.no
-          ? !software
-          : automatic
-          ? software ||
-                (decoder == HwDecType.autoCopy &&
-                    !activeDecoder.endsWith('-copy'))
-          : activeDecoder != decoder.hwdec;
-      return _DecoderResult.success(
-        decoder: _decoderName(activeDecoder),
-        size: size,
-        speed: played.inMilliseconds / _measureLength.inMilliseconds,
-        fallback: fallback,
-        performance: await monitor.stop(),
-      );
+    });
+    try {
+      await session?.dispose();
     } catch (error) {
-      Diagnostics.instance.playerLog(
-        DiagnosticLogLevel.error,
-        'decoderTest',
-        error,
-        details: {'decoder': decoder.hwdec, 'codec': codec.codecid},
-      );
-      return _DecoderResult.failure(
-        _formatDecoderTestError(error),
-        performance: await monitor.stop(),
-      );
+      if (mounted) setState(() => _error = formatDecoderTestError(error));
     } finally {
-      await errorSubscription?.cancel();
-      await logSubscription?.cancel();
+      if (mounted) {
+        setState(() {
+          _testing = false;
+          _stopping = false;
+        });
+      }
     }
   }
 
@@ -475,15 +306,51 @@ class _DecoderTestDialogState extends State<DecoderTestDialog> {
       content: SizedBox(
         width: dialogWidth,
         height: dialogHeight,
-        child: _buildContent(theme),
+        child: Column(
+          children: [
+            if (_activeSession is ProcessDecoderTestSession)
+              const Padding(
+                padding: EdgeInsets.only(bottom: 12),
+                child: Text('正在独立窗口中测试，完成后自动关闭。'),
+              )
+            else if (_activeSession case final session?)
+              ValueListenableBuilder<VideoController?>(
+                valueListenable: session.videoController,
+                builder: (_, controller, _) => controller == null
+                    ? const SizedBox.shrink()
+                    : SizedBox(
+                        height: math.min(140, dialogHeight * 0.32),
+                        child: Video(controller: controller),
+                      ),
+              ),
+            Expanded(child: _buildContent(theme)),
+          ],
+        ),
       ),
       actions: [
         TextButton(
-          onPressed: _testing ? _stopTests : () => Navigator.of(context).pop(),
-          child: Text(_testing ? '停止测试' : '关闭'),
+          onPressed: _stopping
+              ? null
+              : _testing
+              ? _stopTests
+              : () => Navigator.of(context).pop(),
+          child: Text(
+            _stopping
+                ? '正在停止…'
+                : _testing
+                ? '停止测试'
+                : '关闭',
+          ),
         ),
         FilledButton.icon(
-          onPressed: _loading || _error != null || _testing ? null : _runTests,
+          onPressed:
+              _loading ||
+                  _error != null ||
+                  _testing ||
+                  _selectedCodecs.isEmpty ||
+                  _selectedDecoders.isEmpty
+              ? null
+              : _runTests,
           icon: _testing
               ? const SizedBox.square(
                   dimension: 16,
@@ -558,7 +425,7 @@ class _DecoderTestDialogState extends State<DecoderTestDialog> {
         Text('硬解模式', style: theme.textTheme.titleSmall),
         const SizedBox(height: 4),
         Text(
-          '选择硬解模式进行实际播放测试。软件解码可作为 CPU 基线，当前未提供 GPU 用量。',
+          '选择要验证的模式。软件解码仅切换解码器，使用相同的视频输出；当前未提供 GPU 用量。',
           style: theme.textTheme.bodySmall,
         ),
         const SizedBox(height: 8),
@@ -566,7 +433,7 @@ class _DecoderTestDialogState extends State<DecoderTestDialog> {
           values: _decoders,
           selected: _selectedDecoders,
           valueOf: (decoder) => decoder.hwdec,
-          labelOf: (decoder) => decoder.desc.split('：').first,
+          labelOf: decoderTestLabel,
           enabled: !_testing,
           onChanged: (value, selected) {
             setState(() {
@@ -580,21 +447,11 @@ class _DecoderTestDialogState extends State<DecoderTestDialog> {
           },
         ),
         const SizedBox(height: 16),
-        if (_activeVideoController case final controller?) ...[
-          AspectRatio(
-            aspectRatio: 16 / 9,
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(4),
-              child: Video(controller: controller),
-            ),
-          ),
-          const SizedBox(height: 12),
-        ],
         if (_results.isNotEmpty) ...[
           Text('测试结果', style: theme.textTheme.titleSmall),
           const SizedBox(height: 4),
           Text(
-            'CPU 为 PiliAurora 进程占全机的比例，内存为本轮采样的进程工作集峰值。其他页面也会影响结果；-- 表示指标不可用。',
+            '结果验证本次播放与出画，颜色和观感请结合预览检查。CPU 为测试所在进程占全机的比例，内存为本轮工作集峰值；-- 表示指标不可用。',
             style: theme.textTheme.bodySmall,
           ),
           const SizedBox(height: 8),
@@ -654,68 +511,9 @@ class _SelectionWrap<T, V> extends StatelessWidget {
   );
 }
 
-class _DecoderTestSession {
-  final Player player;
-  final PlayerDiagnostics diagnostics;
-  bool _disposed = false;
-
-  _DecoderTestSession({required this.player, required this.diagnostics});
-
-  Future<void> dispose() async {
-    if (_disposed) return;
-    _disposed = true;
-    diagnostics.dispose();
-    if (!player.disposed) await player.dispose();
-  }
-}
-
-class _DecoderResult {
-  final bool running;
-  final bool passed;
-  final bool fallback;
-  final String? decoder;
-  final String? size;
-  final double? speed;
-  final String? error;
-  final _PerformanceSummary? performance;
-
-  const _DecoderResult._({
-    this.running = false,
-    this.passed = false,
-    this.fallback = false,
-    this.decoder,
-    this.size,
-    this.speed,
-    this.error,
-    this.performance,
-  });
-
-  const _DecoderResult.running() : this._(running: true);
-
-  const _DecoderResult.success({
-    required String decoder,
-    required String size,
-    required double speed,
-    required bool fallback,
-    required _PerformanceSummary performance,
-  }) : this._(
-         passed: true,
-         fallback: fallback,
-         decoder: decoder,
-         size: size,
-         speed: speed,
-         performance: performance,
-       );
-
-  const _DecoderResult.failure(
-    String error, {
-    required _PerformanceSummary performance,
-  }) : this._(error: error, performance: performance);
-}
-
 class _DecoderResultTile extends StatelessWidget {
   final HwDecType decoder;
-  final _DecoderResult? result;
+  final DecoderTestResult? result;
 
   const _DecoderResultTile({required this.decoder, this.result});
 
@@ -728,6 +526,7 @@ class _DecoderResultTile extends StatelessWidget {
     final status = switch (result) {
       null => '未测试',
       _ when result!.running => '测试中',
+      _ when result!.cancelled => '已停止',
       _ when result!.passed =>
         '${result!.fallback ? "回退后可播放" : "兼容"} · ${result!.decoder} · ${result!.size} · 播放进度比 ${result!.speed!.toStringAsFixed(1)}×',
       _ => result!.error ?? '不兼容',
@@ -735,11 +534,12 @@ class _DecoderResultTile extends StatelessWidget {
     final icon = switch (result) {
       null => Icons.circle_outlined,
       _ when result!.running => Icons.pending_outlined,
+      _ when result!.cancelled => Icons.stop_circle_outlined,
       _ when result!.fallback => Icons.warning_amber_outlined,
       _ when result!.passed => Icons.check_circle_outline,
       _ => Icons.error_outline,
     };
-    final color = result == null || result!.running
+    final color = result == null || result!.running || result!.cancelled
         ? theme.colorScheme.outline
         : result!.fallback
         ? theme.colorScheme.tertiary
@@ -751,7 +551,7 @@ class _DecoderResultTile extends StatelessWidget {
       dense: true,
       contentPadding: EdgeInsets.zero,
       leading: Icon(icon, color: color),
-      title: Text(decoder.desc.split('：').first),
+      title: Text(decoderTestLabel(decoder)),
       subtitle: Text(
         '$status\n'
         'CPU ${_metric(performance?.averageCpu, '%')}  ·  '
@@ -761,60 +561,5 @@ class _DecoderResultTile extends StatelessWidget {
         overflow: TextOverflow.ellipsis,
       ),
     );
-  }
-}
-
-class _PerformanceSummary {
-  final double? averageCpu;
-  final double? peakMemoryMb;
-  final double? averageGpu;
-
-  const _PerformanceSummary({
-    required this.averageCpu,
-    required this.peakMemoryMb,
-    required this.averageGpu,
-  });
-}
-
-class _PerformanceMonitor {
-  static const _interval = Duration(milliseconds: 750);
-
-  Timer? _timer;
-  final _metrics = ProcessMetrics();
-  double _cpuTotal = 0;
-  int _cpuSamples = 0;
-  double? _peakMemoryMb;
-
-  void start() {
-    _timer?.cancel();
-    _metrics.reset();
-    _cpuTotal = 0;
-    _cpuSamples = 0;
-    _peakMemoryMb = null;
-    _record();
-    _timer = Timer.periodic(_interval, (_) => _record());
-  }
-
-  Future<_PerformanceSummary> stop() async {
-    _timer?.cancel();
-    _timer = null;
-    _record();
-    return _PerformanceSummary(
-      averageCpu: _cpuSamples == 0 ? null : _cpuTotal / _cpuSamples,
-      peakMemoryMb: _peakMemoryMb,
-      averageGpu: null,
-    );
-  }
-
-  void _record() {
-    final values = _metrics.sample();
-    if (values['cpuPercentMachine'] case final num cpu) {
-      _cpuTotal += cpu;
-      _cpuSamples++;
-    }
-    if (values['rssBytes'] case final num bytes) {
-      final memoryMb = bytes / 1048576;
-      _peakMemoryMb = math.max(_peakMemoryMb ?? 0, memoryMb);
-    }
   }
 }

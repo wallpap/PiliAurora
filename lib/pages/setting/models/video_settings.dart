@@ -232,7 +232,7 @@ List<SettingsModel> get videoSettings => [
       ),
       const NormalModel(
         title: '解码器测试',
-        subtitle: '选择视频格式和硬解模式，比较播放兼容性与 CPU、内存、GPU 占用',
+        subtitle: '选择视频格式和硬解模式，比较播放兼容性与 CPU、内存占用',
         leading: Icon(Icons.speed_outlined),
         onTap: _showDecoderTestDialog,
       ),

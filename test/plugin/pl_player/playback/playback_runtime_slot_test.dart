@@ -4,6 +4,22 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:pili_aurora/plugin/pl_player/playback/playback_runtime_slot.dart';
 
 void main() {
+  test('诊断资源队列不占用主播放队列', () async {
+    final clock = Stopwatch()..start();
+    final primary = await PlaybackRuntimeSlot.shared.acquire(
+      deadline: const Duration(seconds: 2),
+      now: () => clock.elapsed,
+    );
+    final diagnostic = await PlaybackRuntimeSlot.isolated().acquire(
+      deadline: const Duration(seconds: 2),
+      now: () => clock.elapsed,
+    );
+    expect(primary, isNotNull);
+    expect(diagnostic, isNotNull);
+    diagnostic!.release();
+    primary!.release();
+  });
+
   test('初始化占位与released屏障共同阻止重复分配', () async {
     final slot = PlaybackRuntimeSlot.shared;
     final now = Stopwatch()..start();

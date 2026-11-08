@@ -224,15 +224,37 @@ uv run --locked python tool/probes/windows/windows_texture_frame_probe.py --comp
 
 ## Windows 硬解画面采样探针
 
-`windows_video_sampling_probe.py` 使用本机 ANGLE、libmpv 和真实 GPU 解码帧，读取 media_kit 的生产渲染参数及应用初始化中的 Windows 参数，检查画面底部连续的绿色条带。先构建 Windows Release，再传入曾出现条带的本地 AV1／HEVC 片段：
+设置页的真实解码测试另有 `playback/decoder_test_acceptance.dart`，使用相同的会话工厂：Windows 每组启动独立测试进程，子进程使用 `NativeDecoderTestSession` 和可见纹理消费路径。配置 JSON 为本地样片数组，例如 `[{"path":"E:/media/av1.mp4","codec":13,"width":1920,"height":1080}]`，编码编号 AVC=7、HEVC=12、AV1=13。每项可用 `decoders` 数组指定要测的 mpv 模式，默认检查 `no`、`d3d11va`、`d3d11va-copy`。构建时用 `DECODER_TEST_CONFIG`、`DECODER_TEST_REPORT` 指定配置与报告绝对路径；只使用内存设置，不读取账号，等待每组进程退出后继续。驱动崩溃会在该组结果中记录异常退出码，报告仍保留后续组的结果，任一组失败则验收入口最终退出 1。它验证播放推进与出画，不替代下方像素参考对照。
+
+依赖与补丁准备后，可用独立构建目录运行，避免占用日常应用的程序文件。将下方配置、报告路径改为本机绝对路径；样片应包含至少 10 秒可持续播放的画面：
+
+```powershell
+fvm flutter build windows --release --no-pub --flavor decoder-test --target=tool/probes/playback/decoder_test_acceptance.dart --dart-define=DECODER_TEST_CONFIG=E:/media/decoder-inputs.json --dart-define=DECODER_TEST_REPORT=E:/media/decoder-results.json
+& ./build/windows/x64/decoder-test/runner/Release/PiliAurora.exe
+```
+
+`windows_video_sampling_probe.py` 使用本机 ANGLE、libmpv 和真实解码帧，读取 media_kit 与 controller 的生产渲染参数。暂停后逐帧推进，用 libmpv 的 `NEXT_FRAME_INFO` 排除 REDRAW / REPEAT，绘制真正新帧后再按视频时间与 FFmpeg 软件参考帧对齐，评估整帧、最坏行和局部区域。探针关闭时间戳起点归零，非零起始时间也沿用容器时间；软件参考固定色度位置、完整色度插值和颜色范围，运行时核对 mpv 的实际色度位置。先构建 Windows Release，并在 PATH 提供 `ffmpeg`、`ffprobe`：
 
 ```powershell
 uv run --locked python tool/probes/windows/windows_video_sampling_probe.py --video <本地视频文件>
 ```
 
-默认使用 `build/windows/x64/runner/Release/` 下的 DLL，以 `d3d11va` 解码并输出 `1920×1080`。可用 `--library-dir`、`--width`、`--height` 指定构建目录和输出尺寸；`--output-dir` 默认是 `build/windows-video-sampling/`，保存最后一帧 PNG、实际解码器日志与逐帧绿色行数 JSON。
+默认使用 `build/windows/x64/runner/Release/` 下的 DLL、`d3d11va` 和源视频尺寸。输入须为明确标记色域与范围的 SDR BT.709、8-bit yuv420p、方形像素、无旋转视频，至少 30 帧。可用 `--library-dir`、成对的 `--width` / `--height` 指定构建目录和保持宽高比的输出尺寸；HDR 等其他输入会明确失败，不生成不适用的画质结论。该探针只打开本地视频。
 
-追加 `--control-dumb-mode=auto` 可对照修复前的自动简化渲染模式。退出码 0 表示 16 个采样帧均无绿色边带且实际使用指定硬解器；检测到条带、帧不足或硬解回退会退出 1。输入需有至少 20 帧，画面底部应有正常内容，避免原片自身纯绿色边带造成误判。探针只打开本地视频，不访问网络或账号，覆盖 mpv／ANGLE 的像素输出；Flutter 合成、控件、全屏切换和长期性能在应用内实测。
+`--frames` 默认 30，`--sample-every` 默认 5，检查 30 个连续视频时间戳及其中 7 个像素样本。每帧记录 `hwdec-current`；显式解码器不符时失败，`--decoder no` 验证软件解码，`--decoder auto` 等自动模式允许回退并记录事实。可用 `--decoder dxva2 --expect-decoder no` 明确验证不支持的编码回退，或用 `--expect-decoder` 收紧自动模式的预期。追加 `--control-dumb-mode=auto` 对照简化渲染模式。
+
+探针同时加载 controller 配置的 Windows 基础色度边界 shader。追加 `--control-disable-chroma-clamp` 仅撤销此修正，生成独立命名的报告，可验证 HEVC / AV1 直通纹理底边异常仍可被检测；无需修改播放器源码或默认解码器。
+
+`--output-dir` 默认 `build/windows-video-sampling/`，保存采样 PNG、实际/参考/放大差异接触表和 JSON。画质门限为 MAE ≤ 3、PSNR ≥ 30 dB、通道误差 > 32 的像素占比 ≤ 1%、最坏行/32×32 区域 MAE ≤ 12；另检查相对参考新增的黑色、绿色底边及动态参考下的冻结像素。精确相同的帧以 `psnrDb=null` 表示无误差。黑场和绿色原片内容本身不会被判损坏。退出码 0 表示帧身份、实际解码器与所有画质检查通过，任一失败返回 1 并保留报告。该测试暂停逐帧，不衡量实时吞吐或流畅度，也不覆盖 Flutter 共享纹理导入和最终屏幕呈现。
+
+使用矩阵入口顺序比较 AVC / HEVC / AV1 与 `d3d11va`、`d3d11va-copy`、`no`，每种路径独立进程，报告汇总到 `summary.json`，失败用例不会中止后续检查：
+
+```powershell
+uv run --locked python tool/probes/windows/windows_video_decode_matrix.py --video <AVC片段> --video <HEVC片段> --video <AV1片段> --output-dir build/windows-decode-matrix
+uv run --locked python -m unittest discover -s tool/probes/windows -p windows_video_sampling_probe_test.py -v
+```
+
+矩阵可重复传入 `--decoder` 限定路径，也接受 `--frames`、`--sample-every`、`--width` / `--height`。比较不同输出尺寸时使用不同输出目录。画质单测通过注入一行绿条、局部/整帧黑块、翻转、颜色通道错位、冻结和不对齐时间戳验证失败信号。
 
 ## Windows 直播首帧探针
 

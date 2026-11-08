@@ -37,7 +37,8 @@ class NativePlaybackRuntime
   NativePlaybackRuntime({
     required this.configuration,
     required this.diagnosticsExtra,
-  });
+    PlaybackRuntimeSlot? resourceSlot,
+  }) : _resourceSlot = resourceSlot ?? PlaybackRuntimeSlot.shared;
 
   @visibleForTesting
   NativePlaybackRuntime.withResources({
@@ -47,7 +48,8 @@ class NativePlaybackRuntime
     required VideoController videoController,
     bool subscribeToPlaybackEvents = false,
   }) : _player = player,
-       _videoController = videoController {
+       _videoController = videoController,
+       _resourceSlot = PlaybackRuntimeSlot.shared {
     _bindNativeLifecycle(player);
     if (subscribeToPlaybackEvents) {
       _subscribePlaybackEvents(player, videoController);
@@ -68,6 +70,7 @@ class NativePlaybackRuntime
       : _player?.state.position;
 
   final PlaybackRuntimeConfig configuration;
+  final PlaybackRuntimeSlot _resourceSlot;
   final Map<String, Object?> Function() diagnosticsExtra;
 
   @override
@@ -119,7 +122,8 @@ class NativePlaybackRuntime
   Duration? _healthExpiryDeadline;
   int _outputEpoch = 0;
   int _configRevision = 0;
-  String _appliedShaderList = '';
+  late String _appliedShaderList =
+      configuration.playerOptions['glsl-shaders'] ?? '';
   int _lastBatchId = 0;
   bool _shutdownRequested = false;
   bool _nativeLifecycleUnknown = false;
@@ -424,7 +428,11 @@ class NativePlaybackRuntime
     }
     final output = _videoController;
     final reset = shaderChangeRequiresRendererReset;
-    final shaderList = shaders.join(Platform.isWindows ? ';' : ':');
+    final shaderList = playbackShaderList(
+      shaders,
+      baseShaders: configuration.playerOptions['glsl-shaders'],
+      separator: Platform.isWindows ? ';' : ':',
+    );
     await applyShaderList(
       shaderList,
       command: player.command,
@@ -582,8 +590,10 @@ class NativePlaybackRuntime
       // Windows renderer reset cannot reinitialize an active (possibly live)
       // stream. Always send the list, including an empty one, to clear a prior
       // media's filters.
-      final shaderList = plan.configuration.shaders.join(
-        Platform.isWindows ? ';' : ':',
+      final shaderList = playbackShaderList(
+        plan.configuration.shaders,
+        baseShaders: configuration.playerOptions['glsl-shaders'],
+        separator: Platform.isWindows ? ';' : ':',
       );
       await applyShaderList(
         shaderList,
@@ -820,7 +830,7 @@ class NativePlaybackRuntime
 
     recordStage('begin');
     try {
-      lease = await PlaybackRuntimeSlot.shared.acquire(
+      lease = await _resourceSlot.acquire(
         deadline: context.deadline,
         now: context.monotonicNow,
         cancelled: context.cancelled,

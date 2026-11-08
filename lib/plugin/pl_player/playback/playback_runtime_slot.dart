@@ -8,6 +8,9 @@ import 'dart:async';
 class PlaybackRuntimeSlot {
   PlaybackRuntimeSlot._();
 
+  /// 独立诊断播放器使用自己的资源队列，不占用日常播放的租约。
+  PlaybackRuntimeSlot.isolated();
+
   static final shared = PlaybackRuntimeSlot._();
 
   Completer<void>? _reservation;

@@ -29,8 +29,14 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
   const auto arguments = GetCommandLineArguments();
   const bool player_window = !arguments.empty() &&
       arguments.front() == "--piliaurora-player-window";
-  if (!player_window && SendAppLinkToInstance()) {
+  const bool decoder_test = !arguments.empty() &&
+      arguments.front() == "--piliaurora-decoder-test";
+  if (!player_window && !decoder_test && SendAppLinkToInstance()) {
     return EXIT_SUCCESS;
+  }
+  if (decoder_test) {
+    // 测试驱动崩溃由父进程报告，不能被系统错误对话框阻塞。
+    ::SetErrorMode(SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX);
   }
 
   // Attach to console when present (e.g., 'flutter run') or create a

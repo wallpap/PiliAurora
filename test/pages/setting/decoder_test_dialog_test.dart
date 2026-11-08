@@ -7,14 +7,17 @@ import 'package:material_ui/material_ui.dart';
 import 'package:pili_aurora/http/browser_ua.dart';
 import 'package:pili_aurora/http/constants.dart';
 import 'package:pili_aurora/pages/setting/widgets/decoder_test_dialog.dart';
+import 'package:pili_aurora/pages/setting/decoder_test.dart';
+import 'package:media_kit_video/media_kit_video.dart';
 import 'package:pili_aurora/models/common/video/video_quality.dart';
 import 'package:pili_aurora/models/video/play/url.dart';
 import 'package:pili_aurora/utils/storage.dart';
 
 Future<void> _open(
   WidgetTester tester,
-  Future<List<VideoItem>> Function() loader,
-) async {
+  Future<List<VideoItem>> Function() loader, {
+  DecoderTestSessionFactory? sessionFactory,
+}) async {
   await tester.pumpWidget(
     MaterialApp(
       localizationsDelegates: GlobalMaterialLocalizations.delegates,
@@ -23,7 +26,10 @@ Future<void> _open(
           body: TextButton(
             onPressed: () => showDialog<void>(
               context: context,
-              builder: (_) => DecoderTestDialog(sampleLoader: loader),
+              builder: (_) => DecoderTestDialog(
+                sampleLoader: loader,
+                sessionFactory: sessionFactory,
+              ),
             ),
             child: const Text('打开测试'),
           ),
@@ -142,4 +148,124 @@ void main() {
     expect(find.text('解码器测试'), findsNothing);
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets('资源释放中停止测试，完成释放前不能重新开始', (tester) async {
+    final sessions = <_Session>[];
+    await _open(
+      tester,
+      () async => _samples(),
+      sessionFactory: (_, _) {
+        final session = _Session();
+        sessions.add(session);
+        return session;
+      },
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('开始测试选中项'));
+    await tester.pump();
+    expect(sessions, hasLength(1));
+    sessions.first.result.complete(_success('first'));
+    await tester.pump();
+    expect(sessions.first.disposeCalls, 1);
+    await tester.tap(find.text('停止测试'));
+    await tester.pump();
+    expect(find.text('正在停止…'), findsOneWidget);
+    expect(sessions, hasLength(1));
+    sessions.first.released.complete();
+    await tester.pumpAndSettle();
+    expect(find.text('开始测试选中项'), findsOneWidget);
+    expect(sessions, hasLength(1));
+  });
+
+  testWidgets('停止后迟到的旧结果不得覆盖新测试或释放新会话', (tester) async {
+    final sessions = <_Session>[];
+    await _open(
+      tester,
+      () async => _samples(),
+      sessionFactory: (_, _) {
+        final session = _Session();
+        sessions.add(session);
+        return session;
+      },
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('开始测试选中项'));
+    await tester.pump();
+    await tester.tap(find.text('停止测试'));
+    await tester.pump();
+    sessions.first.released.complete();
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('开始测试选中项'));
+    await tester.pump();
+    expect(sessions, hasLength(2));
+    sessions.first.result.complete(_success('obsolete-backend'));
+    await tester.pump();
+    expect(find.textContaining('obsolete-backend'), findsNothing);
+    expect(sessions.last.disposeCalls, 0);
+    await tester.tap(find.text('停止测试'));
+    await tester.pump();
+    expect(sessions.last.disposeCalls, 1);
+    sessions.last.released.complete();
+    sessions.last.result.complete(const DecoderTestResult.cancelled());
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('关闭正在初始化的测试后释放会话并忽略迟到结果', (tester) async {
+    final session = _Session();
+    await _open(
+      tester,
+      () async => _samples(),
+      sessionFactory: (_, _) => session,
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('开始测试选中项'));
+    await tester.pump();
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
+    expect(session.disposeCalls, 1);
+    session.released.complete();
+    session.result.complete(_success('late-result'));
+    await tester.pumpAndSettle();
+    expect(find.text('解码器测试'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('未选择编码时禁止开始测试', (tester) async {
+    await _open(tester, () async => _samples());
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilterChip, 'AVC'));
+    await tester.pump();
+    expect(
+      tester
+          .widget<FilledButton>(find.widgetWithText(FilledButton, '开始测试选中项'))
+          .onPressed,
+      isNull,
+    );
+  });
+}
+
+DecoderTestResult _success(String name) => DecoderTestResult.success(
+  decoder: name,
+  size: '1920x1080',
+  speed: 1,
+  fallback: false,
+  performance: const DecoderPerformance(),
+);
+
+class _Session implements DecoderTestSession {
+  @override
+  final videoController = ValueNotifier<VideoController?>(null);
+  final result = Completer<DecoderTestResult>();
+  final released = Completer<void>();
+  int disposeCalls = 0;
+  Future<void>? _disposing;
+  @override
+  Future<DecoderTestResult> run() => result.future;
+  @override
+  Future<void> dispose() => _disposing ??= _dispose();
+  Future<void> _dispose() async {
+    disposeCalls++;
+    await released.future;
+  }
 }

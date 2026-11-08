@@ -38,6 +38,7 @@ import 'package:pili_aurora/plugin/pl_player/utils/decode_fallback.dart';
 import 'package:pili_aurora/plugin/pl_player/utils/android_decode_recovery.dart';
 import 'package:pili_aurora/plugin/pl_player/utils/preview_image_cache.dart';
 import 'package:pili_aurora/plugin/pl_player/utils/hardware_video_configuration.dart';
+import 'package:pili_aurora/plugin/pl_player/utils/native_video_options.dart';
 import 'package:pili_aurora/plugin/pl_player/playback/playback_session.dart';
 import 'package:pili_aurora/plugin/pl_player/playback/media_clock.dart';
 import 'package:pili_aurora/plugin/pl_player/playback/playback_contracts.dart';
@@ -1050,7 +1051,7 @@ class PlPlayerController
     final decoder = Pref.hardwareDecoding;
     final playerOptions = <String, String>{
       'video-sync': Pref.videoSync,
-      if (Platform.isWindows) 'gpu-dumb-mode': 'no',
+      ...nativeVideoPlayerOptions(),
       if (Platform.isAndroid) 'ao': Pref.audioOutput,
       'volume':
           (PlatformUtils.isMobile
