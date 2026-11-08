@@ -75,7 +75,7 @@ fvm flutter test --no-pub test/utils/app_release_test.dart
 
 ## 静态检查与测试
 
-提交时记录实际执行的命令和结果。
+提交时记录实际执行的命令和结果。测试位置、共享夹具和异步用例约定见[测试目录](../../test/README.md#目录与夹具)。
 
 ```powershell
 fvm flutter analyze --no-pub lib test tool
