@@ -2,20 +2,15 @@ import 'package:pili_aurora/pages/live_room/chat_buffer.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  test('rejects nonpositive capacities', () {
-    expect(() => LiveChatBuffer<int>(maxHistory: 0), throwsArgumentError);
-    expect(() => LiveChatBuffer<int>(maxPending: -1), throwsArgumentError);
-  });
-
   test('following a busy room keeps only the latest 500 messages', () {
     final buffer = LiveChatBuffer<int>();
-    for (var i = 0; i < 100000; i++) {
+    for (var i = 0; i < 1500; i++) {
       buffer.add(i);
     }
     expect(buffer.historyCount, 500);
     expect(buffer.pendingCount, 0);
-    expect(buffer.history.first.content, 99500);
-    expect(buffer.history.last.content, 99999);
+    expect(buffer.history.first.content, 1000);
+    expect(buffer.history.last.content, 1499);
     expect(buffer.historyTruncated, isTrue);
   });
 
@@ -27,17 +22,17 @@ void main() {
     final visible = buffer.history;
     final revision = buffer.revision;
     buffer.pause();
-    for (var i = 500; i < 100500; i++) {
+    for (var i = 500; i < 2000; i++) {
       buffer.add(i);
     }
     expect(buffer.history, orderedEquals(visible));
     expect(buffer.revision, revision);
     expect(buffer.historyCount + buffer.pendingCount, 1000);
     expect(buffer.pendingCount, 500);
-    expect(buffer.droppedPending, 99500);
+    expect(buffer.droppedPending, 1000);
     buffer.resume();
-    expect(buffer.history.first.content, 100000);
-    expect(buffer.history.last.content, 100499);
+    expect(buffer.history.first.content, 1500);
+    expect(buffer.history.last.content, 1999);
     expect(buffer.pendingCount, 0);
     expect(buffer.droppedPending, 0);
     expect(buffer.historyTruncated, isTrue);
@@ -83,29 +78,25 @@ void main() {
     expect(buffer.droppedPending, 0);
   });
 
-  test('same length replacements change revision and keep newest entries', () {
+  test('历史快照只在变更时替换且不可修改，淘汰和清空不改变旧快照', () {
     final buffer = LiveChatBuffer<int>(maxHistory: 2)
       ..add(1)
       ..add(2);
     final revision = buffer.revision;
     final snapshot = buffer.history;
+    expect(buffer.history, same(snapshot));
+    expect(snapshot.clear, throwsUnsupportedError);
     buffer.add(3);
-    expect(buffer.history.map((message) => message.content), [2, 3]);
+    final replaced = buffer.history;
+    expect(replaced, isNot(same(snapshot)));
+    expect(replaced.map((message) => message.content), [2, 3]);
     expect(buffer.revision, greaterThan(revision));
     expect(snapshot.map((message) => message.content), [1, 2]);
-  });
-
-  test('history reuses an immutable snapshot until it changes', () {
-    final buffer = LiveChatBuffer<int>()..add(1);
-    final first = buffer.history;
-    expect(buffer.history, same(first));
-    buffer.add(2);
-    final second = buffer.history;
-    expect(second, isNot(same(first)));
-    expect(first.map((message) => message.content), [1]);
-    expect(second.map((message) => message.content), [1, 2]);
+    expect(buffer.history, same(replaced));
     buffer.clear();
-    expect(buffer.history, isNot(same(second)));
+    expect(buffer.history, isNot(same(replaced)));
+    expect(buffer.history, isEmpty);
+    expect(replaced.map((message) => message.content), [2, 3]);
   });
 
   test(

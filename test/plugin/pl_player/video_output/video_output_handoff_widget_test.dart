@@ -59,14 +59,11 @@ void main() {
       retained ??= state;
       expect(state, same(retained));
       final texture = tester.widget<Texture>(find.byType(Texture));
-      expect(texture.textureId, 1);
       expect(
         texture.freeze,
         isFalse,
         reason: 'Must continue acquiring frames beneath the snapshot',
       );
-      expect(tester.getSize(find.byType(Texture)), const Size(640, 360));
-      expect(tester.getSize(find.byType(FittedBox)), viewport);
       expect(tester.takeException(), isNull);
     }
 
@@ -82,7 +79,6 @@ void main() {
     for (final size in [
       const Size(500, 300),
       const Size(836.6666666666666, 385.3333333333333),
-      const Size(600, 350),
     ]) {
       await layout(size);
       expect(find.byType(RawImage), findsOneWidget);

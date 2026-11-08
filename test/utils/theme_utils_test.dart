@@ -1,9 +1,6 @@
-import 'dart:io';
-
 import 'package:dynamic_color/dynamic_color.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:hive_ce/hive.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:pili_aurora/models/common/theme/theme_color_type.dart';
 import 'package:pili_aurora/utils/extension/theme_ext.dart';
@@ -12,15 +9,11 @@ import 'package:pili_aurora/utils/storage_key.dart';
 import 'package:pili_aurora/utils/storage_pref.dart';
 import 'package:pili_aurora/utils/theme_utils.dart';
 
+import '../support/memory_box.dart';
+
 void main() {
   final binding = TestWidgetsFlutterBinding.ensureInitialized();
-  late Directory directory;
-
-  setUpAll(() async {
-    directory = await Directory.systemTemp.createTemp('pili-theme-');
-    Hive.init(directory.path);
-    GStorage.setting = await Hive.openBox('setting');
-  });
+  setUpAll(() => GStorage.setting = MemoryBox<dynamic>());
 
   setUp(() async {
     await GStorage.setting.clear();
@@ -32,11 +25,6 @@ void main() {
       DynamicColorPlugin.channel,
       null,
     );
-  });
-
-  tearDownAll(() async {
-    await Hive.close();
-    await directory.delete(recursive: true);
   });
 
   test('builds both themes without importing or mounting the application', () {

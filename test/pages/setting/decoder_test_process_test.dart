@@ -1,15 +1,15 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
-import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:hive_ce/hive.dart';
 import 'package:pili_aurora/models/common/video/video_quality.dart';
 import 'package:pili_aurora/models/video/play/url.dart';
 import 'package:pili_aurora/pages/setting/decoder_test_process.dart';
 import 'package:pili_aurora/plugin/pl_player/models/hwdec_type.dart';
 import 'package:pili_aurora/utils/storage.dart';
+
+import '../../support/memory_box.dart';
 
 VideoItem sample() => VideoItem(
   id: 80,
@@ -60,22 +60,15 @@ const success = {
 };
 
 void main() {
-  setUpAll(() async {
-    GStorage.setting = await Hive.openBox(
-      'decoder-process',
-      bytes: Uint8List(0),
-    );
-  });
-  tearDownAll(Hive.close);
+  setUpAll(() => GStorage.setting = MemoryBox<dynamic>());
 
   test('Windows 的所有测试模式使用进程隔离，包括 Vulkan', () async {
-    if (!Platform.isWindows) return;
     for (final decoder in HwDecType.values) {
       final session = createDecoderTestSession(decoder, sample());
       expect(session, isA<ProcessDecoderTestSession>());
       await session.dispose();
     }
-  });
+  }, skip: !Platform.isWindows);
 
   test('驱动访问违规只报告当前测试失败，下一组仍可正常完成', () async {
     final crashed = _Process()..exited.complete(-1073741819);

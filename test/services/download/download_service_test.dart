@@ -271,12 +271,11 @@ void main() {
       },
     );
     pending.waitDownloadQueue.add(entry);
+    final completed = pending.curDownload.stream.firstWhere(
+      (current) => current == null && pending.downloadList.isNotEmpty,
+    );
     await pending.startDownload(entry);
-    await Future<void>(() async {
-      while (pending.downloadList.isEmpty) {
-        await Future<void>.delayed(const Duration(milliseconds: 1));
-      }
-    }).timeout(const Duration(seconds: 5));
+    await completed.timeout(const Duration(seconds: 5));
     expect(entry.isCompleted, true);
     expect(entry.typeTag, '64');
     expect(entry.pageData!.width, 1920);
@@ -337,21 +336,22 @@ void main() {
     await repository.create(oldEntry);
     await repository.create(newEntry);
     final pendingRequests = <int, Completer<List<int>>>{};
+    final oldStarted = Completer<void>();
+    final newStarted = Completer<void>();
     final pending = DownloadService(
       repository: repository,
       downloadClient: client,
-      prepareDanmaku: (entry) =>
-          (pendingRequests[entry.cid] = Completer<List<int>>()).future,
+      prepareDanmaku: (entry) {
+        final request = pendingRequests[entry.cid] = Completer<List<int>>();
+        (entry.cid == oldEntry.cid ? oldStarted : newStarted).complete();
+        return request.future;
+      },
     );
     pending.waitDownloadQueue.addAll([oldEntry, newEntry]);
     final oldStart = pending.startDownload(oldEntry);
-    while (!pendingRequests.containsKey(oldEntry.cid)) {
-      await Future<void>.delayed(Duration.zero);
-    }
+    await oldStarted.future;
     final newStart = pending.startDownload(newEntry);
-    while (!pendingRequests.containsKey(newEntry.cid)) {
-      await Future<void>.delayed(Duration.zero);
-    }
+    await newStarted.future;
     pendingRequests[oldEntry.cid]!.completeError(StateError('旧请求失败'));
     await oldStart;
     expect(pending.curDownload.value, same(newEntry));

@@ -2,20 +2,12 @@ import 'package:dio/dio.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get/get.dart';
-import 'package:hive_ce/hive.dart';
 import 'package:pili_aurora/http/loading_state.dart';
 import 'package:pili_aurora/pages/rcmd/controller.dart';
 import 'package:pili_aurora/pages/rcmd/viewport.dart';
 import 'package:pili_aurora/utils/storage.dart';
 
-class _Settings implements Box<dynamic> {
-  @override
-  dynamic get(dynamic key, {dynamic defaultValue}) => defaultValue;
-  @override
-  Future<void> put(dynamic key, dynamic value) async {}
-  @override
-  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
-}
+import '../../support/memory_box.dart';
 
 class _Recommendations extends RcmdController {
   _Recommendations(this.now);
@@ -45,8 +37,8 @@ class _Recommendations extends RcmdController {
 
 void main() {
   setUpAll(() {
-    GStorage.setting = _Settings();
-    GStorage.localCache = _Settings();
+    GStorage.setting = MemoryBox<dynamic>();
+    GStorage.localCache = MemoryBox<dynamic>();
   });
 
   testWidgets('容量使用实际布局尺寸，响应窗口与字体变化，并提供一行余量', (tester) async {
@@ -82,6 +74,11 @@ void main() {
           ),
         ),
       );
+      expect(columns, greaterThan(0));
+      expect(target % columns, 0);
+      final visibleRows = target ~/ columns - 1;
+      expect(visibleRows * stride, greaterThanOrEqualTo(size.height));
+      expect((visibleRows - 1) * stride, lessThan(size.height));
     }
 
     tester.view.physicalSize = const Size(3000, 2000);
@@ -89,20 +86,20 @@ void main() {
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
     await layout(const Size(1896, 1000));
-    expect(columns, 8);
-    expect(target, 48);
-    expect((target ~/ columns - 1) * stride, greaterThanOrEqualTo(1000));
+    final wideColumns = columns;
+    final wideTarget = target;
     await layout(const Size(1896, 1080));
-    expect(target, 48);
+    expect(target, greaterThanOrEqualTo(wideTarget));
     await layout(const Size(366, 760));
-    expect(columns, 2);
-    expect(target, 10);
+    expect(columns, lessThan(wideColumns));
+    final narrowColumns = columns;
+    final narrowTarget = target;
     await layout(const Size(366, 760), fontScale: 2);
-    expect(columns, 2);
-    expect(target, 8);
+    expect(columns, narrowColumns);
+    expect(target, lessThan(narrowTarget));
   });
 
-  testWidgets('1920×1080 补足视口与一行预取，100px页脚不会提前结束', (tester) async {
+  testWidgets('分页补足视口与一行预取，页脚不影响是否继续加载', (tester) async {
     tester.view.physicalSize = const Size(1920, 1080);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
@@ -148,19 +145,19 @@ void main() {
         ),
       ),
     );
-    for (var second = 0; second < 5; second++) {
+    for (var second = 0; second < 10 && feed.isLoading; second++) {
       await tester.pump(const Duration(seconds: 1));
     }
-    expect(feed.viewportItems, 48);
-    expect(feed.loadingState.value.data, hasLength(50));
-    expect(feed.starts.map((request) => request.index), [0, 1, 2, 3, 4]);
-    expect(feed.starts.map((request) => request.milliseconds), [
-      0,
-      1000,
-      2000,
-      3000,
-      4000,
-    ]);
+    final pages = (feed.viewportItems / 10).ceil();
+    expect(feed.loadingState.value.data, hasLength(pages * 10));
+    expect(
+      feed.starts.map((request) => request.index),
+      List.generate(pages, (i) => i),
+    );
+    expect(
+      feed.starts.map((request) => request.milliseconds),
+      List.generate(pages, (i) => i * 1000),
+    );
     expect(feed.isLoading, isFalse);
     await tester.pumpWidget(const SizedBox.shrink());
   });

@@ -19,96 +19,75 @@ void main() {
     GStorage.video = MemoryBox();
   });
 
-  for (final scenario in [
-    (size: const Size(390, 844), fullscreen: false),
-    (size: const Size(844, 390), fullscreen: true),
-    (size: const Size(1280, 800), fullscreen: false),
-  ]) {
-    testWidgets('点播面板 ${scenario.size} fullscreen=${scenario.fullscreen}', (
-      tester,
-    ) async {
-      tester.view.physicalSize = scenario.size;
-      tester.view.devicePixelRatio = 1;
-      tester.view.padding = const FakeViewPadding(
-        left: 24,
-        right: 24,
-        bottom: 16,
-      );
-      addTearDown(tester.view.resetPhysicalSize);
-      addTearDown(tester.view.resetDevicePixelRatio);
-      addTearDown(tester.view.resetPadding);
-      addTearDown(Get.reset);
-      DanmakuOptions.danmakuShowArea = .8;
-      DanmakuOptions.blockTypes.clear();
-      addTearDown(DanmakuOptions.blockTypes.clear);
-      await GStorage.setting.put(SettingBoxKey.danmakuFrameRate, 0);
-      await GStorage.setting.put(SettingBoxKey.mergeDanmakuThreshold, 7);
-      final controller = _Controller().._fullScreen.value = scenario.fullscreen;
-      await tester.pumpWidget(GetMaterialApp(home: _Host(controller)));
-      await tester.tap(find.text('打开'));
-      await tester.pumpAndSettle();
-      final reset = find.byTooltip('恢复默认值：50.0%', skipOffstage: false);
-      await tester.ensureVisible(reset);
-      await tester.tap(reset);
-      await tester.pumpAndSettle();
-      expect(DanmakuOptions.danmakuShowArea, .5);
-      await tester.tap(find.text('屏蔽'));
-      await tester.pumpAndSettle();
-      final types = [
-        '滚动',
-        '顶部',
-        '底部',
-        '彩色',
-        '高级',
-      ].map((label) => find.widgetWithText(FilterChip, label)).toList();
-      await tester.tap(types.first);
-      await tester.pumpAndSettle();
-      expect(DanmakuOptions.blockTypes, contains(2));
-      expect(find.widgetWithText(ChoiceChip, '30 FPS'), findsNothing);
-      final fps = find.widgetWithText(ChoiceChip, '60 FPS');
+  setUp(() async {
+    await GStorage.setting.clear();
+    DanmakuOptions.blockTypes.clear();
+  });
+  tearDown(() {
+    DanmakuOptions.blockTypes.clear();
+    Get.reset();
+  });
+
+  testWidgets('点播设置支持恢复默认、屏蔽类型与调整合并阈值', (tester) async {
+    DanmakuOptions.danmakuShowArea = .8;
+    DanmakuOptions.blockTypes.clear();
+    await GStorage.setting.put(SettingBoxKey.danmakuFrameRate, 0);
+    await GStorage.setting.put(SettingBoxKey.mergeDanmakuThreshold, 7);
+    final controller = _Controller();
+    await tester.pumpWidget(GetMaterialApp(home: _Host(controller)));
+    await tester.tap(find.text('打开'));
+    await tester.pumpAndSettle();
+    final reset = find.byTooltip('恢复默认值：50.0%', skipOffstage: false);
+    await tester.ensureVisible(reset);
+    await tester.tap(reset);
+    await tester.pumpAndSettle();
+    expect(DanmakuOptions.danmakuShowArea, .5);
+    await tester.tap(find.text('屏蔽'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilterChip, '滚动'));
+    await tester.pumpAndSettle();
+    expect(DanmakuOptions.blockTypes, contains(2));
+    final fps = find.widgetWithText(ChoiceChip, '60 FPS');
+    expect(fps, findsNothing);
+    await tester.tap(find.text('运动'));
+    await tester.pumpAndSettle();
+    if (Platform.isWindows) {
       expect(fps, findsNothing);
-      await tester.tap(find.text('运动'));
+      expect(find.text('弹幕帧率（实验性）'), findsNothing);
+    } else {
+      expect(find.widgetWithText(ChoiceChip, '30 FPS'), findsNothing);
+      await tester.ensureVisible(fps);
       await tester.pumpAndSettle();
-      if (Platform.isWindows) {
-        expect(fps, findsNothing);
-        expect(find.text('弹幕帧率（实验性）'), findsNothing);
-      } else {
-        expect(find.widgetWithText(ChoiceChip, '30 FPS'), findsNothing);
-        await tester.ensureVisible(fps);
-        await tester.pumpAndSettle();
-        await tester.tap(fps);
-        await tester.pumpAndSettle();
-        expect(Pref.danmakuFrameRate, 60);
-      }
-      await tester.tap(find.text('屏蔽'));
+      await tester.tap(fps);
       await tester.pumpAndSettle();
-      final threshold = find.descendant(
-        of: find.byKey(const ValueKey('danmaku-放大阈值')),
-        matching: find.byType(Slider),
-      );
-      await tester.scrollUntilVisible(
-        threshold,
-        80,
-        continuous: true,
-        scrollable: find.descendant(
-          of: find.byKey(const ValueKey('danmaku-filtering')),
-          matching: find.byType(Scrollable),
-        ),
-      );
-      await tester.pumpAndSettle();
-      await tester.tap(threshold);
-      await tester.pumpAndSettle();
-      expect(Pref.mergeDanmakuThreshold, greaterThan(7));
-      expect(find.byType(AlertDialog), findsNothing);
-      expect(tester.takeException(), isNull);
-      await tester.tap(find.byTooltip('关闭'));
-      await tester.pumpAndSettle();
-      expect(find.text('弹幕设置'), findsNothing);
-    });
-  }
+      expect(Pref.danmakuFrameRate, 60);
+    }
+    await tester.tap(find.text('屏蔽'));
+    await tester.pumpAndSettle();
+    final threshold = find.descendant(
+      of: find.byKey(const ValueKey('danmaku-放大阈值')),
+      matching: find.byType(Slider),
+    );
+    await tester.scrollUntilVisible(
+      threshold,
+      80,
+      continuous: true,
+      scrollable: find.descendant(
+        of: find.byKey(const ValueKey('danmaku-filtering')),
+        matching: find.byType(Scrollable),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(threshold);
+    await tester.pumpAndSettle();
+    expect(Pref.mergeDanmakuThreshold, greaterThan(7));
+    expect(tester.takeException(), isNull);
+    await tester.tap(find.byTooltip('关闭'));
+    await tester.pumpAndSettle();
+    expect(find.text('弹幕设置'), findsNothing);
+  });
 
   testWidgets('直播提供类型屏蔽和行内帧率，省略点播合并选项', (tester) async {
-    addTearDown(Get.reset);
     await tester.pumpWidget(
       GetMaterialApp(home: _Host(_Controller(), isLive: true)),
     );
@@ -117,7 +96,6 @@ void main() {
     expect(find.widgetWithText(FilterChip, '滚动'), findsOneWidget);
     if (Platform.isWindows) {
       expect(find.text('性能'), findsNothing);
-      expect(tester.widget<TabBar>(find.byType(TabBar)).tabs, hasLength(2));
       await tester.tap(find.text('运动'));
       await tester.pumpAndSettle();
       expect(find.text('弹幕帧率（实验性）'), findsNothing);

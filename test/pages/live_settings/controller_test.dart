@@ -1,6 +1,5 @@
 import 'dart:async';
 
-import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get/get.dart';
@@ -19,6 +18,7 @@ import 'package:pili_aurora/utils/accounts.dart';
 import 'package:pili_aurora/utils/accounts/account.dart';
 import 'package:pili_aurora/utils/storage.dart';
 
+import '../../support/controlled_interceptor.dart';
 import '../../support/memory_box.dart';
 
 class _RulesNotifier extends LiveBlockNotifier {
@@ -42,14 +42,11 @@ class _PreferencesNotifier extends LiveAreaPreferencesNotifier {
   }
 }
 
-typedef _Pending = ({
-  RequestOptions options,
-  Completer<Map<String, dynamic>> reply,
-});
-
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
-  final requests = <_Pending>[];
+  final interceptor = ControlledInterceptor();
+  final requests = interceptor.requests;
+  final dispatched = interceptor.waitForRequests;
   late ProviderContainer container;
   late LoginAccount account;
   LoginAccount login(String csrf) => LoginAccount(
@@ -78,13 +75,6 @@ void main() {
       ],
     },
   };
-  Future<void> dispatched(int count) async {
-    for (var i = 0; i < 100 && requests.length < count; i++) {
-      await Future<void>.delayed(Duration.zero);
-    }
-    expect(requests, hasLength(count));
-  }
-
   LiveBlockState current() => container.read(provider).requireValue;
   Future<void> loadRules() async {
     container.listen(provider, (_, _) {});
@@ -109,15 +99,7 @@ void main() {
     Request.dio.interceptors
       ..clear()
       ..add(
-        InterceptorsWrapper(
-          onRequest: (options, handler) async {
-            final reply = Completer<Map<String, dynamic>>();
-            requests.add((options: options, reply: reply));
-            handler.resolve(
-              Response(requestOptions: options, data: await reply.future),
-            );
-          },
-        ),
+        interceptor,
       );
   });
   setUp(() {
@@ -145,7 +127,10 @@ void main() {
     Accounts.accountMode[AccountType.main.index] = AnonymousAccount();
     Get.reset();
   });
-  tearDownAll(() => Request.dio.close(force: true));
+  tearDownAll(() async {
+    Request.dio.close(force: true);
+    await interceptor.close();
+  });
 
   test('直播规则读取绑定房间和账号，成功后不可变快照', () async {
     await loadRules();

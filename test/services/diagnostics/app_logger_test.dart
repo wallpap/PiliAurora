@@ -60,19 +60,35 @@ void main() {
     expect(console, hasLength(4));
   });
 
-  for (final threshold in DiagnosticLogLevel.values) {
-    test('console and persistence share the $threshold threshold', () async {
-      await diagnostics.configure(level: threshold);
-      logAll();
-      final accepted = [
-        DiagnosticLogLevel.debug,
-        DiagnosticLogLevel.info,
-        DiagnosticLogLevel.warning,
-        DiagnosticLogLevel.error,
-      ].where(diagnostics.accepts).toList();
-      expect(diagnostics.recentLogs, hasLength(accepted.length));
-      expect(console, hasLength(accepted.length));
-    });
+  for (final (threshold, expected) in [
+    (DiagnosticLogLevel.trace, ['error', 'warning', 'info', 'debug']),
+    (DiagnosticLogLevel.debug, ['error', 'warning', 'info', 'debug']),
+    (DiagnosticLogLevel.info, ['error', 'warning', 'info']),
+    (DiagnosticLogLevel.warning, ['error', 'warning']),
+    (DiagnosticLogLevel.error, ['error']),
+    (DiagnosticLogLevel.off, <String>[]),
+  ]) {
+    test(
+      'console and persisted records follow the $threshold threshold',
+      () async {
+        await diagnostics.configure(level: threshold);
+        logAll();
+        expect(
+          diagnostics.recentLogs.map((record) => record['level']),
+          expected,
+        );
+        expect(console, hasLength(expected.length));
+        await diagnostics.flush();
+        final file = File('${directory.path}/runtime.jsonl');
+        final persisted = file.existsSync()
+            ? file.readAsLinesSync()
+            : <String>[];
+        expect(
+          persisted.map((line) => (jsonDecode(line) as Map)['level']),
+          expected.reversed,
+        );
+      },
+    );
   }
 
   test('filtered messages are never formatted', () async {

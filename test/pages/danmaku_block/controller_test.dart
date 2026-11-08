@@ -1,8 +1,3 @@
-import 'dart:async';
-import 'dart:convert';
-
-import 'package:archive/archive.dart' show getCrc32;
-import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -23,6 +18,7 @@ import 'package:pili_aurora/utils/accounts/account.dart';
 import 'package:pili_aurora/utils/storage.dart';
 import 'package:pili_aurora/utils/storage_key.dart';
 
+import '../../support/controlled_interceptor.dart';
 import '../../support/memory_box.dart';
 
 class _Player implements PlPlayerController {
@@ -40,14 +36,11 @@ class _BlockNotifier extends DanmakuBlockNotifier {
   void publish(DanmakuBlockState value) => state = value;
 }
 
-typedef _Pending = ({
-  RequestOptions options,
-  Completer<Map<String, dynamic>> reply,
-});
-
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
-  final requests = <_Pending>[];
+  final interceptor = ControlledInterceptor();
+  final requests = interceptor.requests;
+  final dispatched = interceptor.waitForRequests;
   late ProviderContainer container;
   late ProviderSubscription<DanmakuBlockState> subscription;
   late Account account;
@@ -62,13 +55,6 @@ void main() {
     Accounts.accountMode[AccountType.main.index] = value;
     await Accounts.refresh();
     await container.pump();
-  }
-
-  Future<void> dispatched(int count) async {
-    for (var i = 0; i < 100 && requests.length < count; i++) {
-      await Future<void>.delayed(Duration.zero);
-    }
-    expect(requests, hasLength(count));
   }
 
   Map<String, dynamic> rule(int id, {int type = 0, String filter = 'word'}) => {
@@ -96,15 +82,7 @@ void main() {
     Request();
     Request.dio.interceptors.clear();
     Request.dio.interceptors.add(
-      InterceptorsWrapper(
-        onRequest: (options, handler) async {
-          final reply = Completer<Map<String, dynamic>>();
-          requests.add((options: options, reply: reply));
-          handler.resolve(
-            Response(requestOptions: options, data: await reply.future),
-          );
-        },
-      ),
+      interceptor,
     );
   });
 
@@ -123,7 +101,10 @@ void main() {
       if (!pending.reply.isCompleted) pending.reply.complete(rules([]));
     }
   });
-  tearDownAll(() => Request.dio.close(force: true));
+  tearDownAll(() async {
+    Request.dio.close(force: true);
+    await interceptor.close();
+  });
 
   test('加载规则不可变，刷新替换而非追加；迟到查询不覆盖新查询', () async {
     await loaded();
@@ -190,7 +171,7 @@ void main() {
     expect((options.data as Map)['csrf'], account.csrf);
     expect(
       (options.data as Map)['filter'],
-      getCrc32(ascii.encode('456'), 0).toRadixString(16),
+      'b1a8c371',
     );
     expect(await notifier.remove(DmBlockType.keyword, 1), isA<Error>());
     await notifier.reload();

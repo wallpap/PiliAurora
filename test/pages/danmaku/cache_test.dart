@@ -188,9 +188,8 @@ void main() {
 
     expect(cache.containsSegment(0), isTrue);
     expect(cache.elementCount, 4);
-    expect(cache.getAt(0), hasLength(3));
+    expect(cache.getAt(0)!.map((e) => e.content), ['弹幕0', '弹幕1', '弹幕2']);
     expect(cache.getAt(100), hasLength(1));
-    expect(cache.getAt(0), hasLength(3));
   });
 
   test('eviction removes a complete old segment', () {

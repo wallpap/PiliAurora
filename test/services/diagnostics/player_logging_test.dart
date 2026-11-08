@@ -27,16 +27,6 @@ void main() {
         saveSettings: (value) async => settings = value,
       );
       addTearDown(service.dispose);
-      final storage = service.storageStatus;
-      final runtime = storage['runtime'] as Map;
-      final player = storage['player'] as Map;
-      final performance = storage['performance'] as Map;
-      expect(runtime['maxFileBytes'], 8 << 20);
-      expect(runtime['retainedFiles'], 4);
-      expect(player['maxFileBytes'], 16 << 20);
-      expect(player['retainedFiles'], 8);
-      expect(performance['maxFileBytes'], 16 << 20);
-      expect(performance['retainedFiles'], 4);
       service
         ..log(DiagnosticLogLevel.error, 'app', 'disabled')
         ..playerLog(

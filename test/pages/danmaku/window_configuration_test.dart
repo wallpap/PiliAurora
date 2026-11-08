@@ -47,7 +47,10 @@ void main() {
       devicePixelRatio: 1.5,
       fontFamily: 'sans-serif',
     );
-    while (!renderer.prepareConfiguration(maxItems: 1)) {}
+    // 新配置包含三项；每次只准备一项，必须在第三次结束。
+    expect(renderer.prepareConfiguration(maxItems: 1), isFalse);
+    expect(renderer.prepareConfiguration(maxItems: 1), isFalse);
+    expect(renderer.prepareConfiguration(maxItems: 1), isTrue);
     expect(renderer.rasters.option.fontSize, 20);
     renderer.present(1500000, allowUnprepared: true);
     expect(renderer.rasters.option.fontSize, 40);

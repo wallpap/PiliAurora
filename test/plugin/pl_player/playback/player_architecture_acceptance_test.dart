@@ -236,12 +236,14 @@ void main() {
     final runtime = _AcceptanceRuntime();
     final session = PlaybackSession(runtime: runtime);
     final owner = session.attach();
-    final listenerErrors = <Object>[];
+    final listenerError = Completer<Object>();
     final subscription = runZonedGuarded<StreamSubscription<PlaybackSnapshot>>(
       () => owner.snapshots.listen((_) => throw StateError('listener failed')),
-      (error, _) => listenerErrors.add(error),
+      (error, _) {
+        if (!listenerError.isCompleted) listenerError.complete(error);
+      },
     )!;
-    await _until(() => listenerErrors.isNotEmpty);
+    expect(await listenerError.future, isA<StateError>());
 
     owner.close();
     final result = await session.shutdown().timeout(
@@ -292,14 +294,6 @@ PlaybackRuntimeLoadResult _loaded(
     hasAudio: false,
   ),
 );
-
-Future<void> _until(bool Function() condition) async {
-  for (var i = 0; i < 100; i++) {
-    if (condition()) return;
-    await Future<void>.delayed(Duration.zero);
-  }
-  fail('Condition did not become true.');
-}
 
 class _AcceptanceRuntime implements PlaybackRuntimePort {
   @override

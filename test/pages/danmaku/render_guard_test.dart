@@ -16,29 +16,17 @@ SpecialDanmakuContentItem _content(String text, {double fontSize = 20}) =>
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  test('small special danmaku remains renderable', () {
-    expect(
-      DanmakuRenderGuard.canRasterizeSpecial(_content('hello'), 2, 2, 4),
-      isTrue,
-    );
-  });
-
-  test('oversized special danmaku is rejected before image allocation', () {
-    expect(
-      DanmakuRenderGuard.canRasterizeSpecial(
-        _content('弹幕' * 100, fontSize: 100),
-        2,
-        2,
-        4,
-      ),
-      isFalse,
-    );
-  });
-
-  test('invalid pixel ratio is rejected', () {
-    expect(
-      DanmakuRenderGuard.canRasterizeSpecial(_content('hello'), 0, 2, 4),
-      isFalse,
-    );
+  test('高级弹幕只在尺寸和像素比有效且未超预算时允许分配栅格', () {
+    for (final (content, pixelRatio, allowed) in [
+      (_content('hello'), 2.0, true),
+      (_content('弹幕' * 100, fontSize: 100), 2.0, false),
+      (_content('hello'), 0.0, false),
+    ]) {
+      expect(
+        DanmakuRenderGuard.canRasterizeSpecial(content, pixelRatio, 2, 4),
+        allowed,
+        reason: 'textLength=${content.text.length}, pixelRatio=$pixelRatio',
+      );
+    }
   });
 }

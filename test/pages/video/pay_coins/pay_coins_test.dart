@@ -3,13 +3,14 @@ import 'dart:ui' as ui;
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get/get.dart';
-import 'package:hive_ce/hive.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:pili_aurora/common/assets.dart';
 import 'package:pili_aurora/pages/video/pay_coins/view.dart';
 import 'package:pili_aurora/utils/global_data.dart';
 import 'package:pili_aurora/utils/storage.dart';
 import 'package:pili_aurora/utils/storage_key.dart';
+
+import '../../../support/memory_box.dart';
 
 Finder asset(String path) => find.byWidgetPredicate((widget) {
   if (widget is! Image) return false;
@@ -63,15 +64,9 @@ Future<void> openPage(
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
-  setUpAll(() async {
-    GStorage.setting = await Hive.openBox<dynamic>(
-      'coin_motion_test',
-      bytes: Uint8List(0),
-    );
-    GStorage.localCache = await Hive.openBox<dynamic>(
-      'coin_motion_test_cache',
-      bytes: Uint8List(0),
-    );
+  setUpAll(() {
+    GStorage.setting = MemoryBox<dynamic>();
+    GStorage.localCache = MemoryBox<dynamic>();
   });
   setUp(() async {
     Get.testMode = true;
@@ -82,7 +77,6 @@ void main() {
     GlobalData().coins = null;
     Get.reset();
   });
-  tearDownAll(Hive.close);
 
   test('抛币 GIF 各播放一次，帧时长与页面完成回调一致', () async {
     for (final path in [Assets.coinTossOne, Assets.coinTossTwo]) {
@@ -187,7 +181,7 @@ void main() {
           ),
         )
         .image;
-      await tester.pump(const Duration(milliseconds: 800));
+    await tester.pump(const Duration(milliseconds: 800));
     await tester.tap(asset(Assets.panelClose));
     await tester.pumpAndSettle();
     await tester.pump(const Duration(seconds: 2));

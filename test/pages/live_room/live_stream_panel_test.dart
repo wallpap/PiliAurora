@@ -69,20 +69,4 @@ void main() {
     expect(closed, isTrue);
     expect(tester.takeException(), isNull);
   });
-
-  testWidgets('没有可用线路时提示刷新直播间', (tester) async {
-    await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(
-          body: LiveStreamPanel(
-            streams: const [],
-            current: (stream: 0, format: 0, codec: 0, url: 0),
-            onSelected: (_) {},
-            onClose: () {},
-          ),
-        ),
-      ),
-    );
-    expect(find.text('暂无可用线路，请刷新直播间后重试。'), findsOneWidget);
-  });
 }

@@ -1,8 +1,5 @@
-import 'dart:async';
-import 'dart:convert';
 import 'dart:typed_data';
 
-import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hive_ce/hive.dart';
 import 'package:pili_aurora/http/init.dart';
@@ -13,35 +10,11 @@ import 'package:pili_aurora/utils/request_utils.dart';
 import 'package:pili_aurora/utils/storage.dart';
 import 'package:pili_aurora/utils/storage_pref.dart';
 
-class _Adapter implements HttpClientAdapter {
-  final requests = <Completer<ResponseBody>>[];
-  @override
-  Future<ResponseBody> fetch(
-    RequestOptions options,
-    Stream<Uint8List>? stream,
-    Future<void>? cancel,
-  ) {
-    final result = Completer<ResponseBody>();
-    requests.add(result);
-    return result.future;
-  }
-
-  void json(int index, Object value) => requests[index].complete(
-    ResponseBody.fromString(
-      jsonEncode(value),
-      200,
-      headers: {
-        'content-type': ['application/json'],
-      },
-    ),
-  );
-  @override
-  void close({bool force = false}) {}
-}
+import '../support/controlled_http_adapter.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
-  late _Adapter adapter;
+  late ControlledHttpAdapter adapter;
   late List<Account> previousAccounts;
   setUpAll(() async {
     GStorage.setting = await Hive.openBox(
@@ -61,22 +34,17 @@ void main() {
     Request.dio.interceptors.clear();
   });
   setUp(() {
-    adapter = _Adapter();
+    adapter = ControlledHttpAdapter();
     Request.dio.httpClientAdapter = adapter;
   });
   tearDown(() {
+    adapter.close();
     Accounts.accountMode.setAll(0, previousAccounts);
   });
   tearDownAll(() async {
     Request.dio.close(force: true);
     await Hive.close();
   });
-  Future<void> dispatched(int count) async {
-    for (var i = 0; i < 1000 && adapter.requests.length < count; i++) {
-      await Future<void>.delayed(Duration.zero);
-    }
-    expect(adapter.requests.length, count);
-  }
 
   Account account(int mid) => LoginAccount(
     BiliCookieJar.fromJson({'DedeUserID': '$mid', 'bili_jct': 'synthetic'}),
@@ -85,14 +53,14 @@ void main() {
   );
 
   test(
-    'AUDIT2: old account response cannot replace current history pause',
+    'old account response cannot replace current history pause',
     () async {
       Accounts.accountMode[AccountType.heartbeat.index] = account(123);
       final old = RequestUtils.syncHistoryStatus();
-      await dispatched(1);
+      await adapter.waitForRequests(1);
       Accounts.accountMode[AccountType.heartbeat.index] = account(456);
       final latest = RequestUtils.syncHistoryStatus();
-      await dispatched(2);
+      await adapter.waitForRequests(2);
       adapter.json(1, {'code': 0, 'data': true});
       await latest;
       expect(Pref.historyPause, isTrue);

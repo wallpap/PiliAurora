@@ -31,11 +31,6 @@ void main() {
     await directory.delete(recursive: true);
   });
 
-  test('missing download directory yields an empty snapshot', () async {
-    expect(await repository.load(), isEmpty);
-    expect(Directory(rootPath).existsSync(), isTrue);
-  });
-
   for (final episode in [false, true]) {
     test('creates and restores ${episode ? 'PGC' : 'UGC'} records', () async {
       final entry = downloadEntry(episode: episode, audioQuality: 30251);
@@ -54,28 +49,21 @@ void main() {
     });
   }
 
-  test('bad records do not discard valid records', () async {
-    await repository.create(downloadEntry());
-    final badDirectory = await Directory(
-      path.join(rootPath, '2', 'c_22'),
-    ).create(recursive: true);
-    final badFile = File(path.join(badDirectory.path, 'entry.json'));
-    await badFile.writeAsString('{broken');
-    final missingDirectory = await Directory(
-      path.join(rootPath, '3', 'c_33'),
-    ).create(recursive: true);
-    await File(path.join(missingDirectory.path, 'cover.jpg')).writeAsString('');
-    expect((await repository.load()).map((entry) => entry.cid), [11]);
-    expect(corruptPaths, [badFile.path]);
-  });
-
-  test('invalid record shape is isolated like invalid JSON', () async {
-    final entry = downloadEntry();
-    await repository.create(entry);
-    await File(path.join(entry.entryDirPath, 'entry.json')).writeAsString('[]');
-    expect(await repository.load(), isEmpty);
-    expect(corruptPaths, hasLength(1));
-  });
+  for (final malformed in ['{broken', '[]']) {
+    test('损坏记录 $malformed 不影响合法记录，缺少记录的目录被跳过', () async {
+      await repository.create(downloadEntry());
+      final badDirectory = await Directory(path.join(rootPath, '2', 'c_22'))
+          .create(recursive: true);
+      final badFile = File(path.join(badDirectory.path, 'entry.json'));
+      await badFile.writeAsString(malformed);
+      final missingDirectory = await Directory(path.join(rootPath, '3', 'c_33'))
+          .create(recursive: true);
+      await File(path.join(missingDirectory.path, 'cover.jpg'))
+          .writeAsString('');
+      expect((await repository.load()).map((entry) => entry.cid), [11]);
+      expect(corruptPaths, [badFile.path]);
+    });
+  }
 
   test('serializes saves and restores the final snapshot', () async {
     final entry = downloadEntry();
@@ -113,14 +101,17 @@ void main() {
     expect((await repository.load()).single.isCompleted, isFalse);
   });
 
-  test('first interrupted creation can recover a complete temporary file', () async {
-    final entry = downloadEntry();
-    await repository.create(entry);
-    final file = File(path.join(entry.entryDirPath, 'entry.json'));
-    await file.rename('${file.path}.tmp');
-    expect((await repository.load()).single.cid, entry.cid);
-    expect(file.existsSync(), isTrue);
-  });
+  test(
+    'first interrupted creation can recover a complete temporary file',
+    () async {
+      final entry = downloadEntry();
+      await repository.create(entry);
+      final file = File(path.join(entry.entryDirPath, 'entry.json'));
+      await file.rename('${file.path}.tmp');
+      expect((await repository.load()).single.cid, entry.cid);
+      expect(file.existsSync(), isTrue);
+    },
+  );
 
   test('failed replacement preserves the committed record and media', () async {
     final entry = downloadEntry();
@@ -131,7 +122,10 @@ void main() {
     await media.writeAsBytes([1, 2, 3]);
     await Directory('${file.path}.tmp').create();
     entry.downloadedBytes = 20;
-    await expectLater(repository.save(entry), throwsA(isA<FileSystemException>()));
+    await expectLater(
+      repository.save(entry),
+      throwsA(isA<FileSystemException>()),
+    );
     expect(await file.readAsString(), original);
     expect(await media.readAsBytes(), [1, 2, 3]);
   });

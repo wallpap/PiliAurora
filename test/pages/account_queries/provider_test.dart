@@ -1,6 +1,5 @@
 import 'dart:async';
 
-import 'package:dio/dio.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -17,16 +16,14 @@ import 'package:pili_aurora/utils/accounts/account.dart';
 import 'package:pili_aurora/utils/storage.dart';
 import 'package:pili_aurora/utils/storage_key.dart';
 
+import '../../support/controlled_interceptor.dart';
 import '../../support/memory_box.dart';
-
-typedef _Pending = ({
-  RequestOptions options,
-  Completer<Map<String, dynamic>> reply,
-});
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
-  final requests = <_Pending>[];
+  final interceptor = ControlledInterceptor();
+  final requests = interceptor.requests;
+  final dispatched = interceptor.waitForRequests;
   late ProviderContainer container;
   late LoginAccount account;
 
@@ -35,13 +32,6 @@ void main() {
     'access-$credential',
     null,
   )..activated = true;
-  Future<void> dispatched(int count) async {
-    for (var i = 0; i < 100 && requests.length < count; i++) {
-      await Future<void>.delayed(Duration.zero);
-    }
-    expect(requests, hasLength(count));
-  }
-
   Future<void> select(LoginAccount value) async {
     Accounts.accountMode[AccountType.main.index] = value;
     await Accounts.refresh();
@@ -88,15 +78,7 @@ void main() {
     Request();
     Request.dio.interceptors.clear();
     Request.dio.interceptors.add(
-      InterceptorsWrapper(
-        onRequest: (options, handler) async {
-          final reply = Completer<Map<String, dynamic>>();
-          requests.add((options: options, reply: reply));
-          handler.resolve(
-            Response(requestOptions: options, data: await reply.future),
-          );
-        },
-      ),
+      interceptor,
     );
   });
   setUp(() {
@@ -114,7 +96,10 @@ void main() {
       }
     }
   });
-  tearDownAll(() => Request.dio.close(force: true));
+  tearDownAll(() async {
+    Request.dio.close(force: true);
+    await interceptor.close();
+  });
 
   test('各日志请求隔离并保留列与行顺序', () async {
     final subscriptions = [

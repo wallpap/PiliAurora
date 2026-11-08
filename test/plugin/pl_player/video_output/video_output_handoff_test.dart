@@ -28,14 +28,16 @@ void main() {
     addTearDown(handoff.dispose);
     var submitted = false;
     bool? outcome;
-    final run = handoff.run(
-      isCurrent: () => true,
-      canStart: () => true,
-      submit: (_) async {
-        submitted = true;
-        return true;
-      },
-    ).then((value) => outcome = value);
+    final run = handoff
+        .run(
+          isCurrent: () => true,
+          canStart: () => true,
+          submit: (_) async {
+            submitted = true;
+            return true;
+          },
+        )
+        .then((value) => outcome = value);
     await tester.pump();
     expect(handoff.image, isNotNull);
     await tester.pump(const Duration(seconds: 3));
@@ -92,60 +94,35 @@ void main() {
     },
   );
 
-  testWidgets('source changes during snapshot preparation cancel native work', (
-    tester,
-  ) async {
-    final paint = Completer<void>();
-    var current = true;
-    var submissions = 0;
-    final handoff = VideoOutputHandoff(
-      waitForProtectedFrame: () async => true,
-      capture: () async => fixture.clone(),
-      waitForPaint: () => paint.future,
-    );
-    addTearDown(handoff.dispose);
-    final run = handoff.run(
-      isCurrent: () => current,
-      canStart: () => true,
-      submit: (_) async {
-        submissions++;
-        return true;
-      },
-    );
-    await tester.pump();
-    current = false;
-    paint.complete();
-    expect(await run, isFalse);
-    expect(submissions, 0);
-    expect(handoff.image, isNull);
-  });
-
-  testWidgets('pause or disabled setting before commit does not resize', (
-    tester,
-  ) async {
-    var permitted = true;
-    final paint = Completer<void>();
-    var submissions = 0;
-    final handoff = VideoOutputHandoff(
-      waitForProtectedFrame: () async => true,
-      capture: () async => fixture.clone(),
-      waitForPaint: () => paint.future,
-    );
-    addTearDown(handoff.dispose);
-    final run = handoff.run(
-      isCurrent: () => true,
-      canStart: () => permitted,
-      submit: (_) async {
-        submissions++;
-        return true;
-      },
-    );
-    await tester.pump();
-    permitted = false;
-    paint.complete();
-    expect(await run, isFalse);
-    expect(submissions, 0);
-  });
+  for (final sourceChanged in [true, false]) {
+    testWidgets('${sourceChanged ? '切源' : '暂停'}发生在保护图准备期间时，不提交原生 resize', (
+      tester,
+    ) async {
+      final paint = Completer<void>();
+      var valid = true;
+      var submissions = 0;
+      final handoff = VideoOutputHandoff(
+        waitForProtectedFrame: () async => true,
+        capture: () async => fixture.clone(),
+        waitForPaint: () => paint.future,
+      );
+      addTearDown(handoff.dispose);
+      final run = handoff.run(
+        isCurrent: () => !sourceChanged || valid,
+        canStart: () => sourceChanged || valid,
+        submit: (_) async {
+          submissions++;
+          return true;
+        },
+      );
+      await tester.pump();
+      valid = false;
+      paint.complete();
+      expect(await run, isFalse);
+      expect(submissions, 0);
+      expect(handoff.image, isNull);
+    });
+  }
 
   testWidgets(
     'source invalidation clears old snapshot and rejects late receipt',

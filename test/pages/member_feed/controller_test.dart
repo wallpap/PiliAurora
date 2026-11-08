@@ -1,9 +1,6 @@
 import 'package:pili_aurora/pages/member_upower_rank/controller.dart';
 import 'package:pili_aurora/models/common/member/contribute_type.dart';
 
-import 'dart:async';
-
-import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get/get.dart';
@@ -18,16 +15,14 @@ import 'package:pili_aurora/utils/accounts.dart';
 import 'package:pili_aurora/utils/accounts/account.dart';
 import 'package:pili_aurora/utils/storage.dart';
 
+import '../../support/controlled_interceptor.dart';
 import '../../support/memory_box.dart';
-
-typedef _Pending = ({
-  RequestOptions options,
-  Completer<Map<String, dynamic>> reply,
-});
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
-  final requests = <_Pending>[];
+  final interceptor = ControlledInterceptor();
+  final requests = interceptor.requests;
+  final dispatched = interceptor.waitForRequests;
   late ProviderContainer container;
   late LoginAccount account;
   LoginAccount login(String csrf) => LoginAccount(
@@ -112,13 +107,6 @@ void main() {
   };
   List<int> range(int start, int count) =>
       List.generate(count, (index) => start + index);
-  Future<void> dispatched(int count) async {
-    for (var i = 0; i < 100 && requests.length < count; i++) {
-      await Future<void>.delayed(Duration.zero);
-    }
-    expect(requests, hasLength(count));
-  }
-
   setUpAll(() {
     GStorage.setting = MemoryBox<dynamic>();
     GStorage.localCache = MemoryBox<dynamic>();
@@ -128,15 +116,7 @@ void main() {
     Request.dio.interceptors
       ..clear()
       ..add(
-        InterceptorsWrapper(
-          onRequest: (options, handler) async {
-            final reply = Completer<Map<String, dynamic>>();
-            requests.add((options: options, reply: reply));
-            handler.resolve(
-              Response(requestOptions: options, data: await reply.future),
-            );
-          },
-        ),
+        interceptor,
       );
   });
   setUp(() {
@@ -164,7 +144,10 @@ void main() {
     Accounts.accountMode[AccountType.main.index] = AnonymousAccount();
     Get.reset();
   });
-  tearDownAll(() => Request.dio.close(force: true));
+  tearDownAll(() async {
+    Request.dio.close(force: true);
+    await interceptor.close();
+  });
 
   test('九类列表固定账号、目标与入口，列表快照不可变', () async {
     final subscriptions = [

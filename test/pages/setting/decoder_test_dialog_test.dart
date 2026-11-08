@@ -1,8 +1,6 @@
 import 'dart:async';
-import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:hive_ce/hive.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:pili_aurora/http/browser_ua.dart';
 import 'package:pili_aurora/http/constants.dart';
@@ -12,6 +10,8 @@ import 'package:media_kit_video/media_kit_video.dart';
 import 'package:pili_aurora/models/common/video/video_quality.dart';
 import 'package:pili_aurora/models/video/play/url.dart';
 import 'package:pili_aurora/utils/storage.dart';
+
+import '../../support/memory_box.dart';
 
 Future<void> _open(
   WidgetTester tester,
@@ -53,18 +53,7 @@ List<VideoItem> _samples() => [
 ];
 
 void main() {
-  late Directory directory;
-
-  setUpAll(() async {
-    directory = await Directory.systemTemp.createTemp('pili-decoder-dialog-');
-    Hive.init(directory.path);
-    GStorage.setting = await Hive.openBox('setting');
-  });
-
-  tearDownAll(() async {
-    await Hive.close();
-    await directory.delete(recursive: true);
-  });
+  setUpAll(() => GStorage.setting = MemoryBox<dynamic>());
 
   test('decoder media requests use the same headers as normal playback', () {
     String? capturedUserAgent;
@@ -76,18 +65,6 @@ void main() {
 
     expect(capturedUserAgent, BrowserUa.pc);
     expect(capturedReferer, HttpString.baseUrl);
-  });
-
-  testWidgets('decoder dialog opens within the app Material UI context', (
-    tester,
-  ) async {
-    await _open(tester, () async => []);
-    expect(tester.takeException(), isNull);
-    expect(find.text('解码器测试'), findsOneWidget);
-    expect(find.text('关闭'), findsOneWidget);
-    await tester.tap(find.text('关闭'));
-    await tester.pumpAndSettle();
-    expect(find.text('解码器测试'), findsNothing);
   });
 
   testWidgets(
@@ -112,6 +89,14 @@ void main() {
             .widget<FilterChip>(find.widgetWithText(FilterChip, 'AV1'))
             .selected,
         isFalse,
+      );
+      await tester.tap(find.widgetWithText(FilterChip, 'AVC'));
+      await tester.pump();
+      expect(
+        tester
+            .widget<FilledButton>(find.widgetWithText(FilledButton, '开始测试选中项'))
+            .onPressed,
+        isNull,
       );
       await tester.tap(find.text('AV1'));
       await tester.pumpAndSettle();
@@ -229,19 +214,6 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('解码器测试'), findsNothing);
     expect(tester.takeException(), isNull);
-  });
-
-  testWidgets('未选择编码时禁止开始测试', (tester) async {
-    await _open(tester, () async => _samples());
-    await tester.pumpAndSettle();
-    await tester.tap(find.widgetWithText(FilterChip, 'AVC'));
-    await tester.pump();
-    expect(
-      tester
-          .widget<FilledButton>(find.widgetWithText(FilledButton, '开始测试选中项'))
-          .onPressed,
-      isNull,
-    );
   });
 }
 

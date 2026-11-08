@@ -35,78 +35,67 @@ class _DebouncedWidgetState
 }
 
 void main() {
-  testWidgets('stream mixin collapses a burst to the latest value', (
-    tester,
-  ) async {
-    final harness = _Harness<String>()..subInit();
-    harness.ctr!.add('old');
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 100));
-    harness.ctr!.add('new');
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 199));
-    expect(harness.values, isEmpty);
-    await tester.pump(const Duration(milliseconds: 1));
-    expect(harness.values, ['new']);
-    harness.subDispose();
-    await tester.pump();
-  });
-
-  testWidgets('disposing drops pending and queued values', (tester) async {
-    final harness = _Harness<String>()..subInit();
-    harness.ctr!.add('pending');
-    await tester.pump();
-    harness.ctr!.add('queued');
-    harness
-      ..subDispose()
-      ..subDispose();
-    await tester.pump(const Duration(seconds: 1));
-    expect(harness.values, isEmpty);
-    expect(harness.ctr, isNull);
-  });
-
-  testWidgets('reinitializing cancels the old subscription and timer', (
-    tester,
-  ) async {
-    final harness = _Harness<String>()..subInit();
-    harness.ctr!.add('old');
-    await tester.pump();
-    harness.subInit();
-    harness.ctr!.add('new');
-    await tester.pump();
-    await tester.pump(harness.duration);
-    expect(harness.values, ['new']);
-    harness.subDispose();
-    await tester.pump();
-  });
-
-  testWidgets('nullable values are not treated as a missing pending value', (
-    tester,
-  ) async {
+  testWidgets('突发输入只交付静默期后的最后值，null 也是有效结果', (tester) async {
     final harness = _Harness<String?>()..subInit();
-    harness.ctr!.add(null);
-    await tester.pump();
-    await tester.pump(harness.duration);
-    expect(harness.values, [null]);
-    harness.subDispose();
-    await tester.pump();
+    try {
+      harness.ctr!.add('old');
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+      harness.ctr!.add(null);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 199));
+      expect(harness.values, isEmpty);
+      await tester.pump(const Duration(milliseconds: 1));
+      expect(harness.values, [null]);
+    } finally {
+      harness.subDispose();
+    }
   });
 
-  testWidgets('state uses the overridden duration', (tester) async {
+  testWidgets('重建订阅隔离旧计时器，重复释放丢弃待处理及排队值', (tester) async {
+    final harness = _Harness<String>()..subInit();
+    try {
+      harness.ctr!.add('old');
+      await tester.pump();
+      harness.ctr!.add('old queued');
+      harness.subInit();
+      // 先经过一个完整静默期，避免新输入恰好取消旧计时器而掩盖订阅泄漏。
+      await tester.pump();
+      await tester.pump(harness.duration);
+      expect(harness.values, isEmpty);
+      harness.ctr!.add('new');
+      await tester.pump();
+      await tester.pump(harness.duration);
+      expect(harness.values, ['new']);
+
+      harness.ctr!.add('pending');
+      await tester.pump();
+      harness.ctr!.add('queued');
+      harness
+        ..subDispose()
+        ..subDispose();
+      await tester.pump(const Duration(seconds: 1));
+      expect(harness.values, ['new']);
+      expect(harness.ctr, isNull);
+    } finally {
+      harness.subDispose();
+    }
+  });
+
+  testWidgets('State 使用自定义延迟，卸载时取消待交付回调', (tester) async {
     final values = <String>[];
     await tester.pumpWidget(_DebouncedWidget(values));
     await tester.pump(const Duration(milliseconds: 299));
     expect(values, isEmpty);
     await tester.pump(const Duration(milliseconds: 1));
     expect(values, ['value']);
-    await tester.pumpWidget(const SizedBox());
-  });
 
-  testWidgets('unmounting cancels a state pending callback', (tester) async {
-    final values = <String>[];
+    await tester.pumpWidget(const SizedBox());
     await tester.pumpWidget(_DebouncedWidget(values));
+    await tester.pump(const Duration(milliseconds: 299));
+    expect(values, ['value']);
     await tester.pumpWidget(const SizedBox());
     await tester.pump(const Duration(seconds: 1));
-    expect(values, isEmpty);
+    expect(values, ['value']);
   });
 }

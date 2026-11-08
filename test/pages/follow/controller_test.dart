@@ -1,6 +1,3 @@
-import 'dart:async';
-
-import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
@@ -22,16 +19,14 @@ import 'package:pili_aurora/utils/storage.dart';
 import 'package:pili_aurora/utils/request_utils.dart';
 import 'package:pili_aurora/utils/storage_key.dart';
 
+import '../../support/controlled_interceptor.dart';
 import '../../support/memory_box.dart';
-
-typedef _Pending = ({
-  RequestOptions options,
-  Completer<Map<String, dynamic>> reply,
-});
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
-  final requests = <_Pending>[];
+  final interceptor = ControlledInterceptor();
+  final requests = interceptor.requests;
+  final dispatched = interceptor.waitForRequests;
   late ProviderContainer container;
   late LoginAccount account;
   const all = (mid: null, tagid: null, keyword: null);
@@ -61,13 +56,6 @@ void main() {
   };
   List<int> range(int start, int count) =>
       List.generate(count, (i) => start + i);
-  Future<void> dispatched(int count) async {
-    for (var i = 0; i < 100 && requests.length < count; i++) {
-      await Future<void>.delayed(Duration.zero);
-    }
-    expect(requests, hasLength(count));
-  }
-
   Future<void> select(LoginAccount next) async {
     Accounts.accountMode[AccountType.main.index] = next;
     await Accounts.refresh();
@@ -98,15 +86,7 @@ void main() {
     Request.dio.interceptors
       ..clear()
       ..add(
-        InterceptorsWrapper(
-          onRequest: (options, handler) async {
-            final reply = Completer<Map<String, dynamic>>();
-            requests.add((options: options, reply: reply));
-            handler.resolve(
-              Response(requestOptions: options, data: await reply.future),
-            );
-          },
-        ),
+        interceptor,
       );
   });
   setUp(() {
@@ -134,7 +114,10 @@ void main() {
     }
     Get.reset();
   });
-  tearDownAll(() => Request.dio.close(force: true));
+  tearDownAll(() async {
+    Request.dio.close(force: true);
+    await interceptor.close();
+  });
 
   test('全部关注、分组与关键词查询隔离，请求绑定账号和分页参数', () async {
     final subscriptions = [

@@ -1,5 +1,3 @@
-import 'dart:async';
-import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:dio/dio.dart';
@@ -17,28 +15,9 @@ import 'package:pili_aurora/utils/accounts.dart';
 import 'package:pili_aurora/utils/accounts/account.dart';
 import 'package:pili_aurora/utils/storage.dart';
 
-class _Adapter implements HttpClientAdapter {
-  final pending = <Completer<ResponseBody>>[];
-  @override
-  Future<ResponseBody> fetch(
-    RequestOptions o,
-    Stream<Uint8List>? s,
-    Future<void>? c,
-  ) {
-    final reply = Completer<ResponseBody>();
-    pending.add(reply);
-    return reply.future;
-  }
+import '../../support/controlled_http_adapter.dart';
 
-  void json(int i, Object data) => pending[i].complete(
-    ResponseBody.fromString(
-      jsonEncode(data),
-      200,
-      headers: {
-        'content-type': ['application/json'],
-      },
-    ),
-  );
+class _Adapter extends ControlledHttpAdapter {
   void red(int i, int count) => pending[i].complete(
     ResponseBody.fromBytes(
       GrpcReq.compressProtobuf(
@@ -52,8 +31,6 @@ class _Adapter implements HttpClientAdapter {
       },
     ),
   );
-  @override
-  void close({bool force = false}) {}
 }
 
 void main() {
@@ -89,6 +66,7 @@ void main() {
     service = Get.put(AccountService())..isLogin.value = true;
   });
   tearDown(() {
+    adapter.close();
     Accounts.accountMode.setAll(0, originals);
     Get.reset();
   });
@@ -103,7 +81,7 @@ void main() {
   }
 
   test(
-    'FINAL: logout invalidates an outstanding dynamic badge query',
+    'logout invalidates an outstanding dynamic badge query',
     () async {
       final controller = MainController()
         ..hasDyn = true

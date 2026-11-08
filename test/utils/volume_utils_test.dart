@@ -1,17 +1,23 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:hive_ce/hive.dart';
+
 import 'package:pili_aurora/utils/volume_utils.dart';
 
+import '../support/memory_box.dart';
+
 void main() {
-  test('细小滚动累积为整数百分比，并在外部音量变化后重新起算', () {
+  test('滚动累积在外部音量变化后重新起算，并能从上下限反向调整', () {
     final adjustment = VolumeScrollAdjustment();
     var current = .85;
     for (var i = 0; i < 4; i++) {
       current = adjustment.apply(current, -10);
     }
     expect(current, .86);
-    expect(adjustment.apply(.5, 0), .5);
-    expect(adjustment.apply(.99, -1000), 1);
+    // 旧累积值与外部新值相距较远，非零输入才能验证从新值继续调整。
+    expect(adjustment.apply(.5, -40), .51);
+    expect(adjustment.apply(.51, -4000), 1);
+    expect(adjustment.apply(1, 40), .99);
+    expect(adjustment.apply(.99, 4000), 0);
+    expect(adjustment.apply(0, -40), .01);
   });
 
   test('比例按最近整数百分比归整并限制为 0～100%', () {
@@ -32,16 +38,16 @@ void main() {
   });
 
   test('历史音量配置读取时转换并回写，重复读取不重复写入', () {
-    final settings = _Settings()..storedValues['volume'] = .9912;
+    final settings = _Settings()..data['volume'] = .9912;
     expect(readVolumePreference(settings, 'volume', defaultValue: 1), .99);
-    expect(settings.storedValues['volume'], .99);
+    expect(settings.data['volume'], .99);
     expect(readVolumePreference(settings, 'volume', defaultValue: 1), .99);
     expect(settings.writes, 1);
     // 旧备份在当前会话恢复后，重新读取也会立即转换。
-    settings.storedValues['volume'] = .856;
+    settings.data['volume'] = .856;
     expect(readVolumePreference(settings, 'volume', defaultValue: 1), .86);
-    expect(settings.storedValues['volume'], .86);
-    settings.storedValues['gain'] = 125.6;
+    expect(settings.data['volume'], .86);
+    settings.data['gain'] = 125.6;
     expect(
       readVolumePreference(
         settings,
@@ -51,24 +57,20 @@ void main() {
       ),
       100,
     );
-    expect(settings.storedValues['gain'], 100.0);
+    expect(settings.data['gain'], 100.0);
+    expect(settings.writes, 3);
     expect(readVolumePreference(settings, 'missing', defaultValue: 1), 1);
-    expect(settings.storedValues.containsKey('missing'), isFalse);
+    expect(settings.writes, 3);
+    expect(settings.data.containsKey('missing'), isFalse);
   });
 }
 
-class _Settings implements Box<dynamic> {
-  final storedValues = <dynamic, dynamic>{};
+class _Settings extends MemoryBox<dynamic> {
   var writes = 0;
-  @override
-  dynamic get(dynamic key, {dynamic defaultValue}) =>
-      storedValues[key] ?? defaultValue;
-  @override
-  Future<void> put(dynamic key, dynamic value) async {
-    writes++;
-    storedValues[key] = value;
-  }
 
   @override
-  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+  Future<void> put(dynamic key, dynamic value) {
+    writes++;
+    return super.put(key, value);
+  }
 }

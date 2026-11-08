@@ -1,5 +1,3 @@
-import 'dart:typed_data';
-
 import 'package:dio/dio.dart';
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:pili_aurora/pages/video/widgets/danmaku_like_control.dart';
@@ -11,7 +9,6 @@ import 'package:pili_aurora/utils/accounts/account.dart';
 import 'package:canvas_danmaku/canvas_danmaku.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get/get.dart';
-import 'package:hive_ce/hive.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:pili_aurora/pages/danmaku/danmaku_model.dart';
 import 'package:pili_aurora/pages/danmaku/display_binding.dart';
@@ -23,20 +20,12 @@ import 'package:pili_aurora/pages/video/widgets/header_control.dart';
 import 'package:pili_aurora/plugin/pl_player/controller.dart';
 import 'package:pili_aurora/utils/storage.dart';
 
+import '../../support/memory_box.dart';
+
 void main() {
-  setUpAll(() async {
-    GStorage.setting = await Hive.openBox<dynamic>(
-      'pool-test',
-      bytes: Uint8List(0),
-    );
-    GStorage.localCache = await Hive.openBox<dynamic>(
-      'pool-cache',
-      bytes: Uint8List(0),
-    );
-  });
-  tearDownAll(() async {
-    await GStorage.setting.close();
-    await GStorage.localCache.close();
+  setUpAll(() {
+    GStorage.setting = MemoryBox<dynamic>();
+    GStorage.localCache = MemoryBox<dynamic>();
   });
   testWidgets(
     'pool refresh obtains the current handle after seek and media replacement',

@@ -22,6 +22,11 @@ import 'package:pili_aurora/utils/accounts/account.dart';
 
 import 'messaging_fixtures.dart';
 
+class _ObservedValue<T> extends ValueNotifier<T> {
+  _ObservedValue(super.value);
+  bool get observed => hasListeners;
+}
+
 class TestSessionNotifier extends MessagingSessionNotifier {
   TestSessionNotifier(this.session);
   final MessagingSession session;
@@ -237,17 +242,19 @@ void main() {
   });
 
   test('Riverpod 快照桥接同步更新，释放后取消监听', () {
-    final values = ValueNotifier(1);
+    final values = _ObservedValue(1);
     addTearDown(values.dispose);
     final provider = snapshotProvider<int>((ref) => values);
     final container = ProviderContainer();
     addTearDown(container.dispose);
     final subscription = container.listen(provider, (_, next) {});
     expect(container.read(provider), 1);
+    expect(values.observed, isTrue);
     values.value = 2;
     expect(container.read(provider), 2);
     subscription.close();
     container.dispose();
+    expect(values.observed, isFalse);
     values.value = 3;
   });
 

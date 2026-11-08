@@ -1,24 +1,14 @@
-import 'dart:io';
-
 import 'package:flutter/gestures.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:hive_ce/hive.dart';
 import 'package:pili_aurora/common/widgets/gesture/image_horizontal_drag_gesture_recognizer.dart';
 import 'package:pili_aurora/utils/storage.dart';
 
+import '../../../support/memory_box.dart';
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
-  late Directory directory;
-  setUpAll(() async {
-    directory = await Directory.systemTemp.createTemp('pili-trackpad-');
-    Hive.init(directory.path);
-    GStorage.setting = await Hive.openBox('setting');
-  });
-  tearDownAll(() async {
-    await Hive.close();
-    await directory.delete(recursive: true);
-  });
+  setUpAll(() => GStorage.setting = MemoryBox<dynamic>());
 
   for (final horizontal in [true, false]) {
     testWidgets('trackpad accepts horizontal image paging: $horizontal', (

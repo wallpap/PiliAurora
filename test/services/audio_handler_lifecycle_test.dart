@@ -1,8 +1,6 @@
 import 'dart:async';
-import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:hive_ce/hive.dart';
 import 'package:pili_aurora/models/remote/video/video_detail/page.dart'
     show Part;
 import 'package:pili_aurora/plugin/pl_player/controller.dart';
@@ -13,21 +11,14 @@ import 'package:pili_aurora/services/audio_handler.dart';
 import 'package:pili_aurora/services/service_locator.dart';
 import 'package:pili_aurora/utils/storage.dart';
 
+import '../support/memory_box.dart';
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
-  late Directory directory;
-
-  setUpAll(() async {
-    directory = await Directory.systemTemp.createTemp('pili-audio-handler-');
-    Hive.init(directory.path);
-    GStorage.setting = await Hive.openBox('setting');
-    GStorage.video = await Hive.openBox('video');
-    GStorage.localCache = await Hive.openBox('cache');
-  });
-
-  tearDownAll(() async {
-    await Hive.close();
-    await directory.delete(recursive: true);
+  setUpAll(() {
+    GStorage.setting = MemoryBox<dynamic>();
+    GStorage.video = MemoryBox<dynamic>();
+    GStorage.localCache = MemoryBox<dynamic>();
   });
 
   test('关闭服务立即清除通知，禁用期间 clear 仍清理媒体', () {

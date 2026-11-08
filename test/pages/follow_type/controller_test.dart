@@ -1,6 +1,5 @@
 import 'dart:async';
 
-import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get/get.dart';
@@ -18,12 +17,8 @@ import 'package:pili_aurora/utils/accounts.dart';
 import 'package:pili_aurora/utils/accounts/account.dart';
 import 'package:pili_aurora/utils/storage.dart';
 
+import '../../support/controlled_interceptor.dart';
 import '../../support/memory_box.dart';
-
-typedef _Pending = ({
-  RequestOptions options,
-  Completer<Map<String, dynamic>> reply,
-});
 
 class _FixtureNotifier extends FollowQueryNotifier {
   _FixtureNotifier(super.query);
@@ -39,7 +34,9 @@ class _FixtureNotifier extends FollowQueryNotifier {
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
-  final requests = <_Pending>[];
+  final interceptor = ControlledInterceptor();
+  final requests = interceptor.requests;
+  final dispatched = interceptor.waitForRequests;
   late ProviderContainer container;
   late LoginAccount account;
   const fans = (kind: FollowKind.fans, mid: null, newFans: false);
@@ -65,13 +62,6 @@ void main() {
       'total': ?total,
     },
   };
-  Future<void> dispatched(int count) async {
-    for (var i = 0; i < 100 && requests.length < count; i++) {
-      await Future<void>.delayed(Duration.zero);
-    }
-    expect(requests, hasLength(count));
-  }
-
   Future<void> select(LoginAccount next) async {
     Accounts.accountMode[AccountType.main.index] = next;
     await Accounts.refresh();
@@ -98,15 +88,7 @@ void main() {
     Request();
     Request.dio.interceptors.clear();
     Request.dio.interceptors.add(
-      InterceptorsWrapper(
-        onRequest: (options, handler) async {
-          final reply = Completer<Map<String, dynamic>>();
-          requests.add((options: options, reply: reply));
-          handler.resolve(
-            Response(requestOptions: options, data: await reply.future),
-          );
-        },
-      ),
+      interceptor,
     );
   });
   setUp(() {
@@ -124,7 +106,10 @@ void main() {
       }
     }
   });
-  tearDownAll(() => Request.dio.close(force: true));
+  tearDownAll(() async {
+    Request.dio.close(force: true);
+    await interceptor.close();
+  });
 
   test('类型、目标和新粉丝查询隔离，请求与名称绑定账号', () async {
     const sameQuery = (kind: FollowKind.same, mid: 12, newFans: false);
@@ -378,41 +363,6 @@ void main() {
     expect(await notifier.remove(1), isA<Error>());
     expect(requests, hasLength(2));
     sub.close();
-  });
-
-  testWidgets('共同关注和关注者列表保留标题', (tester) async {
-    const sameQuery = (kind: FollowKind.same, mid: 12, newFans: false);
-    const followedQuery = (kind: FollowKind.followed, mid: 12, newFans: false);
-    container.dispose();
-    container = ProviderContainer(
-      overrides: [
-        followQueryProvider(sameQuery)
-            .overrideWith(() => _FixtureNotifier(sameQuery)),
-        followQueryProvider(followedQuery)
-            .overrideWith(() => _FixtureNotifier(followedQuery)),
-      ],
-    );
-    await tester.pumpWidget(
-      UncontrolledProviderScope(
-        container: container,
-        child: const MaterialApp(
-          home: FollowTypePage(query: sameQuery, name: '目标'),
-        ),
-      ),
-    );
-    await tester.pumpAndSettle();
-    expect(find.text('我与目标的共同关注'), findsOneWidget);
-    await tester.pumpWidget(
-      UncontrolledProviderScope(
-        container: container,
-        child: const MaterialApp(
-          home: FollowTypePage(query: followedQuery, name: '目标'),
-        ),
-      ),
-    );
-    await tester.pumpAndSettle();
-    expect(find.text('我关注的1人也关注了目标'), findsOneWidget);
-    await tester.pumpWidget(const SizedBox());
   });
 
   test('关系写入成功后同步其他粉丝列表，移除也刷新其他入口', () async {

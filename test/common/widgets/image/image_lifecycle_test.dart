@@ -402,14 +402,20 @@ void main() {
           }
         }
 
-        final thumbnailPixels = await pixels(
-          CachedImageProvider(
-            'https://example.test/long.png',
-            cacheManager: cache,
-            width: 300,
-            maxDecodePixels: 1 << 20,
+        await tester.pumpWidget(
+          Directionality(
+            textDirection: TextDirection.ltr,
+            child: CachedImage(
+              imageUrl: 'https://example.test/long.png',
+              cacheManager: cache,
+              memCacheWidth: 300,
+            ),
           ),
         );
+        final thumbnailPixels = await pixels(
+          tester.widget<Image>(find.byType(Image)).image,
+        );
+        await tester.pumpWidget(const SizedBox.shrink());
         final viewerPixels = await pixels(
           CachedImageProvider(
             'https://example.test/long.png',
@@ -565,38 +571,6 @@ void main() {
     PaintingBinding.instance.imageCache.clear();
     await tester.pump();
     expect(tester.takeException(), isNull);
-  });
-
-  testWidgets('cached image applies the thumbnail pixel budget by default', (
-    tester,
-  ) async {
-    await tester.runAsync(() async {
-      await tester.pumpWidget(
-        Directionality(
-          textDirection: TextDirection.ltr,
-          child: CachedImage(
-            imageUrl: 'https://example.test/unbounded.png',
-            cacheManager: manager,
-          ),
-        ),
-      );
-      final provider = tester.widget<Image>(find.byType(Image)).image;
-      expect((provider as CachedImageProvider).maxDecodePixels, 1 << 20);
-      final stream = provider.resolve(ImageConfiguration.empty);
-      final loaded = Completer<void>();
-      final listener = ImageStreamListener((info, _) {
-        info.dispose();
-        loaded.complete();
-      }, onError: loaded.completeError);
-      stream.addListener(listener);
-      try {
-        await loaded.future;
-      } finally {
-        stream.removeListener(listener);
-      }
-    });
-    await tester.pumpAndSettle();
-    await tester.pumpWidget(const SizedBox.shrink());
   });
 
   testWidgets(

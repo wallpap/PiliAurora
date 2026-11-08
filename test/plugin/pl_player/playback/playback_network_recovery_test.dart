@@ -2,22 +2,66 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:pili_aurora/plugin/pl_player/utils/playback_network_recovery.dart';
 
 void main() {
-  group('Android TLS 握手失败', () {
-    test('通用握手失败进入网络恢复', () {
-      expect(
-        isPlaybackNetworkFailure('tls: TLS handshake failed.'),
-        isTrue,
-      );
-    });
-
-    test('握手失败伴随 HTTP 403 时保留权限错误处理', () {
-      expect(
-        isPlaybackNetworkFailure(
+  test('网络故障可恢复，权限、解码与无效 seek 保留各自处理路径', () {
+    for (final (expected, events) in [
+      (
+        true,
+        [
+          'tls: TLS handshake failed.',
+          'tls: mbedtls_ssl_handshake returned -0x7280',
+          'https: Stream ends prematurely at 6077440, should be 12527587',
+          'http: HTTP error 404 Not Found',
+          'http: HTTP error 408 Request Timeout',
+          'http: HTTP error 429 Too Many Requests',
+          'http: HTTP error 503 Service Unavailable',
+          'Seek failed (to 40493344, size 169462757)',
+        ],
+      ),
+      (
+        false,
+        [
           'tls: TLS handshake failed.\nhttp: HTTP error 403 Forbidden',
+          'libdav1d: Error parsing OBU data',
+          'av1_mediacodec: Both surface and native_window are NULL',
+          'Error while decoding frame!',
+          'http: HTTP error 403 Forbidden',
+          'Failed to open https://cdn.example/video: HTTP error 403 Forbidden',
+          'Seek failed (to 169462757, size 169462757)',
+          'Seek failed (to 200000000, size 169462757)',
+          'Seek failed (to invalid, size 169462757)',
+          'http: HTTP error 403 Forbidden\nSeek failed (to 40493344, size 169462757)',
+        ],
+      ),
+    ]) {
+      for (final event in events) {
+        expect(isPlaybackNetworkFailure(event), expected, reason: event);
+      }
+    }
+  });
+
+  test('缓冲使用绝对时间戳，仍有内容时延后恢复，健康播放不重连', () {
+    for (final (buffering, buffer, exhausted, defer) in [
+      (true, 90, true, false),
+      (true, 94, false, true),
+      (false, 0, false, false),
+    ]) {
+      expect(
+        hasExhaustedPlaybackBuffer(
+          buffering: buffering,
+          position: const Duration(seconds: 90),
+          buffer: Duration(seconds: buffer),
         ),
-        isFalse,
+        exhausted,
       );
-    });
+      expect(
+        shouldDeferPlaybackNetworkRecovery(
+          buffering: buffering,
+          position: const Duration(seconds: 90),
+          buffer: Duration(seconds: buffer),
+        ),
+        defer,
+      );
+    }
   });
 
   group('分离音视频断流日志', () {
@@ -80,106 +124,6 @@ void main() {
           isFalse,
           reason: '$prefix $level: $message',
         );
-      }
-    });
-  });
-
-  group('2026-10-07 Android network failures', () {
-    for (final event in [
-      'tls: mbedtls_ssl_handshake returned -0x7280',
-      'https: Stream ends prematurely at 6077440, should be 12527587',
-    ]) {
-      test('retries $event', () {
-        expect(isPlaybackNetworkFailure(event), isTrue);
-      });
-    }
-
-    test('stalled playback with nonzero absolute buffer can reconnect', () {
-      expect(
-        hasExhaustedPlaybackBuffer(
-          buffering: true,
-          position: const Duration(seconds: 90),
-          buffer: const Duration(seconds: 90),
-        ),
-        isTrue,
-      );
-    });
-
-    test('remaining buffered media is not interrupted', () {
-      expect(
-        hasExhaustedPlaybackBuffer(
-          buffering: true,
-          position: const Duration(seconds: 90),
-          buffer: const Duration(seconds: 94),
-        ),
-        isFalse,
-      );
-      expect(
-        shouldDeferPlaybackNetworkRecovery(
-          buffering: true,
-          position: const Duration(seconds: 90),
-          buffer: const Duration(seconds: 94),
-        ),
-        isTrue,
-      );
-    });
-
-    test('healthy playback and codec failures do not reconnect', () {
-      expect(
-        hasExhaustedPlaybackBuffer(
-          buffering: false,
-          position: const Duration(seconds: 90),
-          buffer: Duration.zero,
-        ),
-        isFalse,
-      );
-      expect(
-        shouldDeferPlaybackNetworkRecovery(
-          buffering: false,
-          position: const Duration(seconds: 90),
-          buffer: Duration.zero,
-        ),
-        isFalse,
-      );
-      for (final event in [
-        'libdav1d: Error parsing OBU data',
-        'av1_mediacodec: Both surface and native_window are NULL',
-        'Error while decoding frame!',
-        'http: HTTP error 403 Forbidden',
-        'Failed to open https://cdn.example/video: HTTP error 403 Forbidden',
-      ]) {
-        expect(isPlaybackNetworkFailure(event), isFalse);
-      }
-    });
-
-    test('missing or temporarily unavailable CDN nodes can fail over', () {
-      for (final event in [
-        'http: HTTP error 404 Not Found',
-        'http: HTTP error 408 Request Timeout',
-        'http: HTTP error 429 Too Many Requests',
-        'http: HTTP error 503 Service Unavailable',
-      ]) {
-        expect(isPlaybackNetworkFailure(event), isTrue, reason: event);
-      }
-    });
-
-    test('in-range seek errors can trigger network recovery', () {
-      expect(
-        isPlaybackNetworkFailure(
-          'Seek failed (to 40493344, size 169462757)',
-        ),
-        isTrue,
-      );
-    });
-
-    test('invalid and unauthorized seeks do not trigger network recovery', () {
-      for (final event in [
-        'Seek failed (to 169462757, size 169462757)',
-        'Seek failed (to 200000000, size 169462757)',
-        'Seek failed (to invalid, size 169462757)',
-        'http: HTTP error 403 Forbidden\nSeek failed (to 40493344, size 169462757)',
-      ]) {
-        expect(isPlaybackNetworkFailure(event), isFalse, reason: event);
       }
     });
   });

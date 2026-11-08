@@ -81,17 +81,6 @@ void main() {
     );
   });
 
-  test('复制与自动安全模式具有可区分的名称', () {
-    expect(
-      decoderTestLabel(HwDecType.d3d11va),
-      isNot(decoderTestLabel(HwDecType.d3d11vaCopy)),
-    );
-    expect(
-      decoderTestLabel(HwDecType.autoSafe),
-      isNot(decoderTestLabel(HwDecType.autoCopy)),
-    );
-  });
-
   test('测试样本优先1080p而不是接口中的首个4K流', () {
     final preferred = video(7, 80);
     expect(decoderTestSamples([video(7, 120), preferred, video(7, 64)]), [

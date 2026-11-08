@@ -1,26 +1,17 @@
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:hive_ce/hive.dart';
 import 'package:pili_aurora/common/widgets/image/cached_image.dart';
 import 'package:pili_aurora/common/widgets/image/network_img_layer.dart';
 import 'package:pili_aurora/utils/image_utils.dart';
 import 'package:pili_aurora/utils/storage.dart';
+import 'package:pili_aurora/utils/storage_key.dart';
 
-class _SettingsBox implements Box<dynamic> {
-  @override
-  dynamic get(dynamic key, {dynamic defaultValue}) => defaultValue;
-
-  @override
-  Future<void> put(dynamic key, dynamic value) async {}
-
-  @override
-  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
-}
+import '../../../support/memory_box.dart';
 
 void main() {
   setUpAll(() {
-    GStorage.setting = _SettingsBox();
-    GStorage.localCache = _SettingsBox();
+    GStorage.setting = MemoryBox<dynamic>({SettingBoxKey.defaultPicQa: 80});
+    GStorage.localCache = MemoryBox<dynamic>();
   });
 
   testWidgets(
@@ -64,7 +55,7 @@ void main() {
         'https://i0.hdslb.com/bfs/face/avatar.png@800w_800h_200p_1e_1c.webp';
     expect(
       ImageUtils.thumbnailUrlForSize(cropped, width: 171),
-      ImageUtils.thumbnailUrl(cropped),
+      'https://i0.hdslb.com/bfs/face/avatar.png@800w_800h_200p_1e_1c_80q.webp',
     );
     final large = ImageUtils.thumbnailUrlForSize(
       'https://i0.hdslb.com/bfs/new_dyn/animation.webp',
@@ -82,11 +73,11 @@ void main() {
     ]) {
       expect(
         ImageUtils.thumbnailUrlForSize(src, width: 171),
-        ImageUtils.thumbnailUrl(src),
+        '$src@80q.webp',
       );
     }
     const src = 'https://i0.hdslb.com/bfs/new_dyn/animation.gif';
     expect(ImageUtils.thumbnailUrlForSize(src, quality: 100, width: 171), src);
-    expect(ImageUtils.thumbnailUrlForSize(src), ImageUtils.thumbnailUrl(src));
+    expect(ImageUtils.thumbnailUrlForSize(src), '$src@80q.webp');
   });
 }

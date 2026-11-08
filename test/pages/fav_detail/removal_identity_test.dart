@@ -1,8 +1,5 @@
-import 'dart:async';
-import 'dart:convert';
 import 'dart:typed_data';
 
-import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:hive_ce/hive.dart';
@@ -14,36 +11,11 @@ import 'package:pili_aurora/pages/fav_detail/controller.dart';
 import 'package:pili_aurora/utils/storage.dart';
 import 'package:pili_aurora/utils/storage_key.dart';
 
-class _Adapter implements HttpClientAdapter {
-  final pending = <Completer<ResponseBody>>[];
-  @override
-  Future<ResponseBody> fetch(
-    RequestOptions options,
-    Stream<Uint8List>? stream,
-    Future<void>? cancel,
-  ) async {
-    await stream?.drain<void>();
-    final reply = Completer<ResponseBody>();
-    pending.add(reply);
-    return reply.future;
-  }
-
-  void reply(int index, Object data) => pending[index].complete(
-    ResponseBody.fromString(
-      jsonEncode(data),
-      200,
-      headers: {
-        'content-type': ['application/json'],
-      },
-    ),
-  );
-  @override
-  void close({bool force = false}) {}
-}
+import '../../support/controlled_http_adapter.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
-  late _Adapter adapter;
+  late ControlledHttpAdapter adapter;
   setUpAll(() async {
     GStorage.setting = await Hive.openBox(
       'audit3-settings',
@@ -63,9 +35,10 @@ void main() {
     Request.dio.interceptors.clear();
   });
   setUp(() {
-    adapter = _Adapter();
+    adapter = ControlledHttpAdapter();
     Request.dio.httpClientAdapter = adapter;
   });
+  tearDown(() => adapter.close());
   tearDownAll(() async {
     Request.dio.close(force: true);
     await Hive.close();
@@ -83,7 +56,7 @@ void main() {
     ),
   );
 
-  testWidgets('AUDIT3: concurrent unfavorites remove their identities', (
+  testWidgets('concurrent unfavorites remove their identities', (
     tester,
   ) async {
     await mount(tester);
@@ -98,10 +71,10 @@ void main() {
     final second = controller.onCancelFav(1, 2, 2);
     await flush(tester);
     expect(adapter.pending, hasLength(2));
-    adapter.reply(0, {'code': 0});
+    adapter.json(0, {'code': 0});
     await flush(tester);
     await first;
-    adapter.reply(1, {'code': 0});
+    adapter.json(1, {'code': 0});
     await flush(tester);
     await second;
     expect(controller.loadingState.value.data!.map((e) => e.id), [3]);
@@ -118,7 +91,7 @@ void main() {
     final remove = controller.onCancelFav(0, 1, 2);
     await flush(tester);
     controller.loadingState.value = LoadingState.loading();
-    adapter.reply(0, {'code': 0});
+    adapter.json(0, {'code': 0});
     await flush(tester);
     await remove;
     expect(controller.loadingState.value, isA<Loading>());

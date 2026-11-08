@@ -20,54 +20,9 @@ Uint8List _message(int id) =>
     _packet(utf8.encode('{"cmd":"DANMU_MSG","id":$id}'));
 
 // .NET BrotliStream 生成的固定包；展开后是 id=3 的合法直播消息。
-const _brotliMessage = [
-  139,
-  20,
-  128,
-  0,
-  0,
-  0,
-  42,
-  0,
-  16,
-  0,
-  0,
-  0,
-  0,
-  0,
-  5,
-  0,
-  0,
-  0,
-  1,
-  123,
-  34,
-  99,
-  109,
-  100,
-  34,
-  58,
-  34,
-  68,
-  65,
-  78,
-  77,
-  85,
-  95,
-  77,
-  83,
-  71,
-  34,
-  44,
-  34,
-  105,
-  100,
-  34,
-  58,
-  51,
-  125,
-  3,
-];
+final _brotliMessage = base64Decode(
+  'ixSAAAAAKgAQAAAAAAAFAAAAAXsiY21kIjoiREFOTVVfTVNHIiwiaWQiOjN9Aw==',
+);
 
 List<int> _ids(List<DecodedLivePacket> packets) => packets
     .where((packet) => packet.operationCode == 5)

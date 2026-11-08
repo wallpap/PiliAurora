@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -18,14 +16,20 @@ import 'package:pili_aurora/utils/accounts.dart';
 import 'package:pili_aurora/utils/accounts/account.dart';
 import 'package:pili_aurora/utils/storage.dart';
 
+import '../../support/controlled_interceptor.dart';
 import '../../support/memory_box.dart';
 
-typedef Pending = ({RequestOptions options, Completer<dynamic> reply});
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   late ProviderContainer container;
   late LoginAccount account;
-  final requests = <Pending>[];
+  final interceptor = ControlledInterceptor(
+    headers: Headers.fromMap({
+      'grpc-status': ['0'],
+    }),
+  );
+  final requests = interceptor.requests;
+  final dispatched = interceptor.waitForRequests;
   final owner = Object();
   final query = (
     kind: ScopedSearchKind.user,
@@ -49,13 +53,6 @@ void main() {
       },
     },
   };
-  Future<void> dispatched(int n) async {
-    for (var i = 0; i < 100 && requests.length < n; i++) {
-      await Future<void>.delayed(Duration.zero);
-    }
-    expect(requests, hasLength(n));
-  }
-
   Future<void> ready() async {
     await dispatched(1);
     requests.single.reply.complete(page(List.generate(30, (i) => i + 1)));
@@ -71,21 +68,7 @@ void main() {
     Request.dio.interceptors
       ..clear()
       ..add(
-        InterceptorsWrapper(
-          onRequest: (options, handler) async {
-            final reply = Completer<dynamic>();
-            requests.add((options: options, reply: reply));
-            handler.resolve(
-              Response(
-                requestOptions: options,
-                data: await reply.future,
-                headers: Headers.fromMap({
-                  'grpc-status': ['0'],
-                }),
-              ),
-            );
-          },
-        ),
+        interceptor,
       );
   });
   setUp(() {
@@ -105,7 +88,10 @@ void main() {
     Accounts.accountMode[AccountType.main.index] = AnonymousAccount();
     Accounts.accountMode[AccountType.recommend.index] = AnonymousAccount();
   });
-  tearDownAll(() => Request.dio.close(force: true));
+  tearDownAll(() async {
+    Request.dio.close(force: true);
+    await interceptor.close();
+  });
   test('查询按关键词、分类和页面实例隔离，无输入不请求', () async {
     final qs = [
       query,

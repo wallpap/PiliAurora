@@ -1,7 +1,4 @@
-import 'dart:io';
-
 import 'package:flutter_test/flutter_test.dart';
-import 'package:hive_ce/hive.dart';
 import 'package:pili_aurora/models/common/video/audio_quality.dart';
 import 'package:pili_aurora/models/common/video/video_decode_type.dart';
 import 'package:pili_aurora/models/common/video/video_quality.dart';
@@ -10,17 +7,11 @@ import 'package:pili_aurora/pages/video/playback_source.dart';
 import 'package:pili_aurora/utils/storage.dart';
 import 'package:pili_aurora/utils/storage_key.dart';
 
+import '../../support/memory_box.dart';
+
 void main() {
-  late Directory directory;
-  setUpAll(() async {
-    directory = await Directory.systemTemp.createTemp('pili-playback-source-');
-    Hive.init(directory.path);
-    GStorage.setting = await Hive.openBox('setting');
-    await GStorage.setting.put(SettingBoxKey.enableMultiCdn, true);
-  });
-  tearDownAll(() async {
-    await Hive.close();
-    await directory.delete(recursive: true);
+  setUpAll(() {
+    GStorage.setting = MemoryBox<dynamic>({SettingBoxKey.enableMultiCdn: true});
   });
 
   VideoItem video(String codec, {int quality = 80}) => VideoItem(

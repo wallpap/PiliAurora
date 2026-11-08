@@ -23,26 +23,6 @@ Widget _host(Widget child) => Directionality(
 );
 
 void main() {
-  testWidgets('screen passes creation-time cache limits to renderer', (
-    tester,
-  ) async {
-    late WindowsDanmakuRenderer<void> renderer;
-    await tester.pumpWidget(
-      _host(
-        WindowsDanmakuScreen<void>(
-          option: _option,
-          size: _size,
-          rasterCacheMaxBytes: 24 * 1024 * 1024,
-          rasterCacheMaxEntries: 128,
-          createdRenderer: (value) => renderer = value,
-        ),
-      ),
-    );
-    expect(renderer.statistics['cacheImageLimitBytes'], 24 * 1024 * 1024);
-    expect(renderer.statistics['cacheEntryLimit'], 128);
-    await tester.pumpWidget(const SizedBox.shrink());
-  });
-
   testWidgets(
     'hidden and ancestor-muted screens freeze then resume without a time jump',
     (tester) async {

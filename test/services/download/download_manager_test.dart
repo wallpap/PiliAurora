@@ -32,7 +32,9 @@ void main() {
         headers: {
           'content-length': ['${bytes.length - start}'],
           if (start > 0)
-            'content-range': ['bytes $start-${bytes.length - 1}/${bytes.length}'],
+            'content-range': [
+              'bytes $start-${bytes.length - 1}/${bytes.length}',
+            ],
         },
       );
     });
@@ -61,18 +63,24 @@ void main() {
     test('invalid resume response $status preserves existing bytes', () async {
       final file = File('${directory.path}/resume.bin');
       await file.writeAsBytes([1, 2, 3]);
-      client.httpClientAdapter = _Adapter((_) async => ResponseBody.fromBytes(
-        [9, 9], status,
-        headers: {
-          'content-length': ['2'],
-          if (status == 206) 'content-range': ['bytes 0-1/5'],
-          if (status == 416) 'content-range': ['bytes */5'],
-        },
-      ));
+      client.httpClientAdapter = _Adapter(
+        (_) async => ResponseBody.fromBytes(
+          [9, 9],
+          status,
+          headers: {
+            'content-length': ['2'],
+            if (status == 206) 'content-range': ['bytes 0-1/5'],
+            if (status == 416) 'content-range': ['bytes */5'],
+          },
+        ),
+      );
       final errors = <Object?>[];
       final manager = DownloadManager(
-        url: 'https://example.test/video', path: file.path, client: client,
-        onReceiveProgress: null, onDone: ([error]) => errors.add(error),
+        url: 'https://example.test/video',
+        path: file.path,
+        client: client,
+        onReceiveProgress: null,
+        onDone: ([error]) => errors.add(error),
       );
       await manager.task;
       expect(manager.status, DownloadStatus.failDownload);
@@ -82,43 +90,31 @@ void main() {
     });
   }
 
-  test('short successful response is not marked complete', () async {
-    client.httpClientAdapter = _Adapter((_) async => ResponseBody.fromBytes(
-      [1, 2, 3], 200, headers: {'content-length': ['9']},
-    ));
-    final errors = <Object?>[];
-    final manager = DownloadManager(
-      url: 'https://example.test/video', path: '${directory.path}/short.bin',
-      client: client, onReceiveProgress: null,
-      onDone: ([error]) => errors.add(error),
-    );
-    await manager.task;
-    expect(manager.status, DownloadStatus.failDownload);
-    expect(errors.single, isNotNull);
-    expect(await File(manager.path).readAsBytes(), [1, 2, 3]);
-  });
-
-  test('unknown response length is not marked complete', () async {
-    client.httpClientAdapter = _Adapter(
-      (_) async => ResponseBody(
-        Stream.value(Uint8List.fromList([1, 2, 3])),
-        200,
-      ),
-    );
-    final errors = <Object?>[];
-    final manager = DownloadManager(
-      url: 'https://example.test/video',
-      path: '${directory.path}/unknown-length.bin',
-      client: client,
-      onReceiveProgress: null,
-      onDone: ([error]) => errors.add(error),
-    );
-    await manager.task;
-    expect(manager.status, DownloadStatus.failDownload);
-    expect(errors, hasLength(1));
-    expect(errors.single, isNotNull);
-    expect(await File(manager.path).readAsBytes(), [1, 2, 3]);
-  });
+  for (final declaredLength in <int?>[9, null]) {
+    test('响应长度 $declaredLength 不足以确认完成时，保留已收字节且只报告一次失败', () async {
+      client.httpClientAdapter = _Adapter(
+        (_) async => ResponseBody(
+          Stream.value(Uint8List.fromList([1, 2, 3])),
+          200,
+          headers: {
+            if (declaredLength != null) 'content-length': ['$declaredLength'],
+          },
+        ),
+      );
+      final errors = <Object?>[];
+      final manager = DownloadManager(
+        url: 'https://example.test/video',
+        path: '${directory.path}/incomplete.bin',
+        client: client,
+        onReceiveProgress: null,
+        onDone: ([error]) => errors.add(error),
+      );
+      await manager.task;
+      expect(manager.status, DownloadStatus.failDownload);
+      expect(errors.single, isNotNull);
+      expect(await File(manager.path).readAsBytes(), [1, 2, 3]);
+    });
+  }
 
   test('stream error keeps partial data and reports failure once', () async {
     Stream<Uint8List> source() async* {

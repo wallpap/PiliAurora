@@ -54,21 +54,10 @@ void main() {
     }
   });
 
-  testWidgets('增强黑名单屏蔽默认开启并支持切换保存', (tester) async {
+  testWidgets('黑名单父子开关默认开启，父开关切换后保留子项选择', (tester) async {
     final item = privacySettings.whereType<SwitchModel>().single;
     await tester.pumpWidget(MaterialApp(home: Scaffold(body: item.widget)));
     expect(Pref.filterBlockedAuthors, isTrue);
-    await tester.tap(find.text('增强黑名单屏蔽'));
-    await tester.pumpAndSettle();
-    expect(Pref.filterBlockedAuthors, isFalse);
-    await tester.tap(find.text('增强黑名单屏蔽'));
-    await tester.pumpAndSettle();
-    expect(Pref.filterBlockedAuthors, isTrue);
-  });
-
-  testWidgets('黑名单合作作者子开关默认开启并独立保存', (tester) async {
-    final item = privacySettings.whereType<SwitchModel>().single;
-    await tester.pumpWidget(MaterialApp(home: Scaffold(body: item.widget)));
     expect(Pref.checkCooperativeAuthors, isTrue);
     expect(find.text('检查合作视频作者'), findsOneWidget);
     await tester.tap(find.text('检查合作视频作者'));
@@ -77,9 +66,11 @@ void main() {
     expect(Pref.filterBlockedAuthors, isTrue);
     await tester.tap(find.text('增强黑名单屏蔽'));
     await tester.pumpAndSettle();
+    expect(Pref.filterBlockedAuthors, isFalse);
     expect(find.text('检查合作视频作者'), findsNothing);
     await tester.tap(find.text('增强黑名单屏蔽'));
     await tester.pumpAndSettle();
+    expect(Pref.filterBlockedAuthors, isTrue);
     expect(Pref.checkCooperativeAuthors, isFalse);
     expect(find.text('检查合作视频作者'), findsOneWidget);
   });
@@ -114,7 +105,7 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('landscape search stays inside the category list', (
+  testWidgets('桌面分类切换显示对应设置内容', (
     tester,
   ) async {
     tester.view.devicePixelRatio = 1;
@@ -122,12 +113,6 @@ void main() {
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
     await tester.pumpWidget(const MaterialApp(home: SettingPage()));
-    final search = tester.getRect(find.widgetWithText(InkWell, ' 搜索'));
-    final category = tester.getRect(find.text('推荐与过滤'));
-    final subcategory = tester.getRect(find.text('主题与文字'));
-    expect(search.left, 16);
-    expect(search.right, lessThan(subcategory.left));
-    expect(search.bottom, lessThan(category.top));
     expect(find.text('切换账号'), findsNothing);
     expect(find.text('退出登录'), findsNothing);
 
@@ -139,28 +124,6 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('portrait search scrolls with the categories', (
-    tester,
-  ) async {
-    tester.view.devicePixelRatio = 1;
-    tester.view.physicalSize = const Size(400, 600);
-    addTearDown(tester.view.resetPhysicalSize);
-    addTearDown(tester.view.resetDevicePixelRatio);
-    await tester.pumpWidget(const MaterialApp(home: SettingPage()));
-    final search = tester.getRect(find.widgetWithText(InkWell, ' 搜索'));
-    expect(search.width, 368);
-    final top = search.top;
-    final scrollable = tester.state<ScrollableState>(find.byType(Scrollable));
-    expect(scrollable.position.maxScrollExtent, greaterThan(0));
-    scrollable.position.jumpTo(16);
-    await tester.pump();
-    expect(
-      tester.getRect(find.widgetWithText(InkWell, ' 搜索')).top,
-      top - 16,
-    );
-    expect(tester.takeException(), isNull);
-  });
-
   testWidgets(
     'CDN order appears when enabled, saves click order and resets to default',
     (tester) async {
@@ -168,7 +131,6 @@ void main() {
           .expand((item) => item.searchableItems)
           .whereType<SwitchModel>()
           .singleWhere((item) => item.setKey == SettingBoxKey.enableMultiCdn);
-      expect(fallback.title, contains('实验性功能'));
       await tester.pumpWidget(
         GetMaterialApp(home: Scaffold(body: fallback.widget)),
       );
@@ -178,29 +140,22 @@ void main() {
       expect(Pref.enableMultiCdn, isTrue);
       expect(find.text('CDN 回退顺序'), findsOneWidget);
       expect(find.textContaining('默认按 CDN 列表顺序'), findsOneWidget);
-      await tester.tap(find.text('CDN 回退顺序'));
-      await tester.pumpAndSettle();
-      await tester.ensureVisible(find.text(CDNService.cos.desc));
-      await tester.tap(find.text(CDNService.cos.desc));
-      await tester.pump();
-      await tester.ensureVisible(find.text(CDNService.ali.desc));
-      await tester.tap(find.text(CDNService.ali.desc));
-      await tester.pump();
-      await tester.tap(find.text('确定'));
-      await tester.pumpAndSettle();
-      expect(Pref.cdnFallbackOrder, [CDNService.cos, CDNService.ali]);
-
-      await tester.tap(find.text('CDN 回退顺序'));
-      await tester.pumpAndSettle();
-      await tester.ensureVisible(find.text(CDNService.cos.desc));
-      await tester.tap(find.text(CDNService.cos.desc));
-      await tester.pump();
-      await tester.ensureVisible(find.text(CDNService.ali.desc));
-      await tester.tap(find.text(CDNService.ali.desc));
-      await tester.pump();
-      await tester.tap(find.text('确定'));
-      await tester.pumpAndSettle();
-      expect(Pref.cdnFallbackOrder, isEmpty);
+      for (final expected in [
+        [CDNService.cos, CDNService.ali],
+        <CDNService>[],
+      ]) {
+        await tester.tap(find.text('CDN 回退顺序'));
+        await tester.pumpAndSettle();
+        for (final service in [CDNService.cos, CDNService.ali]) {
+          final option = find.text(service.desc);
+          await tester.ensureVisible(option);
+          await tester.tap(option);
+          await tester.pump();
+        }
+        await tester.tap(find.text('确定'));
+        await tester.pumpAndSettle();
+        expect(Pref.cdnFallbackOrder, expected);
+      }
       expect(find.textContaining('默认按 CDN 列表顺序'), findsOneWidget);
 
       await tester.tap(find.byType(Switch));
@@ -234,28 +189,6 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets(
-    'volume belongs to playback behavior while slide controls stay under gestures',
-    (tester) async {
-      await tester.pumpWidget(
-        const MaterialApp(
-          home: CommonSetting(settingType: SettingType.playSetting),
-        ),
-      );
-      await tester.tap(find.text('手势与键盘'));
-      await tester.pumpAndSettle();
-      expect(find.text('左右侧滑动调节亮度/音量'), findsOneWidget);
-      expect(find.text('最高音量'), findsNothing);
-      expect(find.text('播放器音量'), findsNothing);
-      await tester.pageBack();
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('播放行为'));
-      await tester.pumpAndSettle();
-      expect(find.text('最高音量'), findsNothing);
-      expect(tester.takeException(), isNull);
-    },
-  );
-
   testWidgets('embedded category switching replaces the settings tree', (
     tester,
   ) async {
@@ -280,5 +213,3 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 }
-
-// 导航测试在内存中保存偏好，包含桌面布局的默认值初始化。

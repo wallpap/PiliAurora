@@ -48,6 +48,7 @@ void main() {
     await firstStarted.future;
     final Future<void> f2 = queue.run((_) async {
       events.add('enter2');
+      expect(queue.isLoading, isTrue);
       secondStarted.complete();
       await second.future;
       events.add('exit2');
@@ -323,38 +324,6 @@ void main() {
     gate.complete();
     await running;
     expect(observed, <bool>[false]);
-    expect(queue.isLoading, isFalse);
-  });
-
-  test('旧任务收尾不清掉最新任务的加载态', () async {
-    final PlaybackLoadQueue queue = PlaybackLoadQueue();
-    final Completer<void> firstStarted = Completer<void>();
-    final Completer<void> secondStarted = Completer<void>();
-    final Completer<void> first = Completer<void>();
-    final Completer<void> second = Completer<void>();
-    final List<bool> loadingDuringSecond = <bool>[];
-
-    final Future<void> f1 = queue.run((_) async {
-      firstStarted.complete();
-      await first.future;
-    });
-    await firstStarted.future;
-    final Future<void> f2 = queue.run((_) async {
-      // 旧任务此时才结束，不得把加载态提前清掉。
-      loadingDuringSecond.add(queue.isLoading);
-      secondStarted.complete();
-      await second.future;
-    });
-
-    first.complete();
-    await f1;
-    expect(queue.isLoading, isTrue);
-    await secondStarted.future;
-    expect(loadingDuringSecond, <bool>[true]);
-    expect(queue.isLoading, isTrue);
-
-    second.complete();
-    await f2;
     expect(queue.isLoading, isFalse);
   });
 }

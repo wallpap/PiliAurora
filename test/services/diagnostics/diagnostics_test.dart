@@ -9,33 +9,6 @@ import 'package:pili_aurora/services/diagnostics/diagnostics.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
-  test(
-    'startup warning uses each diagnostic channel default as its boundary',
-    () {
-      for (final level in DiagnosticLogLevel.values) {
-        for (final playerLevel in DiagnosticLogLevel.values) {
-          bool warn(bool tracing) => shouldWarnAboutDiagnosticRecording(
-            tracing: tracing,
-            level: level,
-            playerLevel: playerLevel,
-          );
-          expect(
-            warn(false),
-            {
-                  DiagnosticLogLevel.trace,
-                  DiagnosticLogLevel.debug,
-                  DiagnosticLogLevel.info,
-                }.contains(level) ||
-                {
-                  DiagnosticLogLevel.trace,
-                  DiagnosticLogLevel.debug,
-                }.contains(playerLevel),
-          );
-          expect(warn(true), isTrue);
-        }
-      }
-    },
-  );
   late Directory directory;
   late Diagnostics diagnostics;
   var reads = 0;

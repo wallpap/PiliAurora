@@ -1,6 +1,3 @@
-import 'dart:async';
-
-import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get/get.dart';
@@ -17,16 +14,14 @@ import 'package:pili_aurora/utils/accounts.dart';
 import 'package:pili_aurora/utils/accounts/account.dart';
 import 'package:pili_aurora/utils/storage.dart';
 
+import '../../support/controlled_interceptor.dart';
 import '../../support/memory_box.dart';
-
-typedef _Pending = ({
-  RequestOptions options,
-  Completer<Map<String, dynamic>> reply,
-});
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
-  final requests = <_Pending>[];
+  final interceptor = ControlledInterceptor();
+  final requests = interceptor.requests;
+  final dispatched = interceptor.waitForRequests;
   late ProviderContainer container;
   late ProviderSubscription<AsyncValue<LiveFollowState>> subscription;
   late Account account;
@@ -59,13 +54,6 @@ void main() {
       'live_count': ?liveCount,
     },
   };
-  Future<void> dispatched(int count) async {
-    for (var i = 0; i < 100 && requests.length < count; i++) {
-      await Future<void>.delayed(Duration.zero);
-    }
-    expect(requests, hasLength(count));
-  }
-
   Future<void> loaded() async {
     await dispatched(1);
     requests[0].reply.complete(page([room(1)]));
@@ -87,15 +75,7 @@ void main() {
     Request();
     Request.dio.interceptors.clear();
     Request.dio.interceptors.add(
-      InterceptorsWrapper(
-        onRequest: (options, handler) async {
-          final reply = Completer<Map<String, dynamic>>();
-          requests.add((options: options, reply: reply));
-          handler.resolve(
-            Response(requestOptions: options, data: await reply.future),
-          );
-        },
-      ),
+      interceptor,
     );
   });
   setUp(() {
@@ -115,7 +95,10 @@ void main() {
       }
     }
   });
-  tearDownAll(() => Request.dio.close(force: true));
+  tearDownAll(() async {
+    Request.dio.close(force: true);
+    await interceptor.close();
+  });
 
   test('原始条目数量在过滤离线直播间后仍可用于分页', () {
     final data = LiveFollowData.fromJson({

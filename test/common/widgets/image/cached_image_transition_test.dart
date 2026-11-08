@@ -64,36 +64,39 @@ Future<int> _placeholderAlpha(WidgetTester tester) async {
 }
 
 void main() {
-  testWidgets('a cached replacement does not inherit the previous fade', (
-    tester,
-  ) async {
-    await tester.pumpWidget(_imageFrame());
-    await tester.pump(const Duration(milliseconds: 30));
-    expect(find.byType(FadeTransition), findsWidgets);
-
-    await tester.pumpWidget(
-      _imageFrame(
-        url: 'https://example.test/cached.png',
-        synchronouslyLoaded: true,
-      ),
-    );
-
-    expect(find.byType(FadeTransition), findsNothing);
-    expect(find.byKey(const ValueKey('placeholder')), findsNothing);
-    await tester.pumpWidget(const SizedBox.shrink());
-    expect(tester.takeException(), isNull);
-  });
-
-  testWidgets('synchronous delivery skips a fade even when ready stays true', (
-    tester,
-  ) async {
-    await tester.pumpWidget(_imageFrame());
-    await tester.pump(const Duration(milliseconds: 30));
-    await tester.pumpWidget(_imageFrame(synchronouslyLoaded: true));
-
-    expect(find.byType(FadeTransition), findsNothing);
-    expect(find.byKey(const ValueKey('placeholder')), findsNothing);
-  });
+  for (final (name, url, synchronous, duration) in [
+    (
+      'cached replacement',
+      'cached.png',
+      true,
+      const Duration(milliseconds: 120),
+    ),
+    (
+      'synchronous delivery of the same image',
+      'image.png',
+      true,
+      const Duration(milliseconds: 120),
+    ),
+    ('disabling fades while ready', 'image.png', false, Duration.zero),
+  ]) {
+    testWidgets('$name removes the previous fade', (tester) async {
+      await tester.pumpWidget(_imageFrame());
+      await tester.pump(const Duration(milliseconds: 30));
+      expect(find.byType(FadeTransition), findsWidgets);
+      await tester.pumpWidget(
+        _imageFrame(
+          url: 'https://example.test/$url',
+          synchronouslyLoaded: synchronous,
+          fadeIn: duration,
+          fadeOut: duration,
+        ),
+      );
+      expect(find.byType(FadeTransition), findsNothing);
+      expect(find.byKey(const ValueKey('placeholder')), findsNothing);
+      await tester.pumpWidget(const SizedBox.shrink());
+      expect(tester.takeException(), isNull);
+    });
+  }
 
   testWidgets('the placeholder fades behind transparent image pixels', (
     tester,
@@ -122,19 +125,6 @@ void main() {
 
     await tester.pump(const Duration(milliseconds: 120));
     await tester.pumpAndSettle();
-    expect(find.byType(FadeTransition), findsNothing);
-    expect(find.byKey(const ValueKey('placeholder')), findsNothing);
-  });
-
-  testWidgets('zero durations take effect without a ready transition', (
-    tester,
-  ) async {
-    await tester.pumpWidget(_imageFrame());
-    await tester.pump(const Duration(milliseconds: 30));
-    await tester.pumpWidget(
-      _imageFrame(fadeIn: Duration.zero, fadeOut: Duration.zero),
-    );
-
     expect(find.byType(FadeTransition), findsNothing);
     expect(find.byKey(const ValueKey('placeholder')), findsNothing);
   });

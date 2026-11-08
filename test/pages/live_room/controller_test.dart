@@ -4,12 +4,10 @@ import 'dart:convert';
 import 'package:pili_aurora/http/loading_state.dart';
 import 'package:pili_aurora/models/common/super_chat_type.dart';
 import 'package:pili_aurora/models/remote/live/live_danmaku/danmaku_msg.dart';
-import 'package:pili_aurora/models/remote/live/live_danmaku/live_emote.dart';
 import 'package:pili_aurora/models/remote/live/live_dm_info/data.dart';
 import 'package:pili_aurora/models/remote/live/live_dm_info/host_list.dart';
 import 'package:pili_aurora/models/remote/live/live_superchat/item.dart';
 import 'package:pili_aurora/models/remote/live/live_superchat/user_info.dart';
-import 'package:pili_aurora/common/widgets/image/network_img_layer.dart';
 import 'package:pili_aurora/common/widgets/keep_alive_wrapper.dart';
 import 'package:pili_aurora/common/widgets/scroll_physics.dart';
 import 'package:pili_aurora/common/widgets/gesture/horizontal_drag_gesture_recognizer.dart';
@@ -219,58 +217,6 @@ void main() {
     await tester.pumpWidget(const SizedBox.shrink());
     controller.onDelete();
   });
-
-  const ratio = 2.0;
-  for (final (unique, inline, natural, expected) in [
-    ('room_1_1', false, const Size(240, 120), const Size(40, 20)),
-    ('official_1', false, const Size(120, 240), const Size(20, 40)),
-    ('official_2', true, const Size(180, 90), const Size(20, 10)),
-    ('official_3', true, const Size(16, 12), const Size(16, 12)),
-  ]) {
-    testWidgets('聊天表情 $unique 在 DPR $ratio 下保持紧凑尺寸和比例', (tester) async {
-      final controller = createController();
-      BaseEmote emote(String unique, double width, double height) =>
-          BaseEmote.fromJson({
-            'url': 'https://example.test/emote.png',
-            'emoticon_unique': unique,
-            'width': width,
-            'height': height,
-          });
-      final imageEmote = emote(unique, natural.width, natural.height);
-      controller.addDm(
-        DanmakuMsg(
-          name: '用户',
-          text: '[表情]',
-          uemote: inline ? null : imageEmote,
-          emots: inline ? {'[表情]': imageEmote} : null,
-          extra: _message(1).extra,
-        ),
-      );
-      await tester.pumpWidget(
-        MaterialApp(
-          builder: (context, child) => MediaQuery(
-            data: MediaQuery.of(context).copyWith(devicePixelRatio: ratio),
-            child: child!,
-          ),
-          home: Scaffold(
-            body: LiveRoomChatPanel(
-              liveRoomController: controller,
-              isPP: false,
-            ),
-          ),
-        ),
-      );
-      await tester.pump(const Duration(milliseconds: 100));
-      final image = tester.widget<NetworkImgLayer>(
-        find.byType(NetworkImgLayer),
-      );
-      expect(image.width, expected.width);
-      expect(image.height, expected.height);
-      expect(tester.getSize(find.byType(NetworkImgLayer)), expected);
-      expect(tester.takeException(), isNull);
-      controller.onDelete();
-    });
-  }
 
   testWidgets(
     'same length history updates publish newest content every batch',

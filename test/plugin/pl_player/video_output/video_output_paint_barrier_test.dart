@@ -14,27 +14,34 @@ ui.FrameTiming timing(int frameNumber) => ui.FrameTiming(
 );
 
 void main() {
-  testWidgets('回执缺失后取消等待，迟到帧不能授权下一次 resize', (tester) async {
-    var frameNumber = 40;
-    final barrier = VideoOutputPaintBarrier(frameNumber: () => frameNumber);
-    addTearDown(barrier.dispose);
-    final expired = barrier.wait();
-    await tester.pump();
-    await tester.pump(const Duration(seconds: 3));
-    expect(await expired, isFalse);
-
-    frameNumber = 42;
-    bool? outcome;
-    final next = barrier.wait().then((value) => outcome = value);
-    await tester.pump();
-    tester.platformDispatcher.onReportTimings?.call([timing(40)]);
-    await tester.pump();
-    expect(outcome, isNull);
-    tester.platformDispatcher.onReportTimings?.call([timing(42)]);
-    await tester.pump();
-    await next;
-    expect(outcome, isTrue);
-  });
+  for (final timeout in [false, true]) {
+    testWidgets('${timeout ? '回执超时' : '来源取消'}后，迟到帧不能授权下一次 resize', (
+      tester,
+    ) async {
+      var frameNumber = 40;
+      final barrier = VideoOutputPaintBarrier(frameNumber: () => frameNumber);
+      addTearDown(barrier.dispose);
+      final old = barrier.wait();
+      await tester.pump();
+      if (timeout) {
+        await tester.pump(const Duration(seconds: 3));
+      } else {
+        barrier.cancel();
+      }
+      expect(await old, isFalse);
+      frameNumber = 42;
+      bool? outcome;
+      final next = barrier.wait().then((value) => outcome = value);
+      await tester.pump();
+      tester.platformDispatcher.onReportTimings?.call([timing(40)]);
+      await tester.pump();
+      expect(outcome, isNull);
+      tester.platformDispatcher.onReportTimings?.call([timing(42)]);
+      await tester.pump();
+      await next;
+      expect(outcome, isTrue);
+    });
+  }
 
   testWidgets('UI frame completion cannot authorize native resize', (
     tester,
@@ -82,31 +89,6 @@ void main() {
     final wait = barrier.wait();
     await tester.pump();
     expect(await wait, isFalse);
-  });
-
-  testWidgets('source cancellation cannot authorize an old or a new resize', (
-    tester,
-  ) async {
-    var frameNumber = 40;
-    final barrier = VideoOutputPaintBarrier(frameNumber: () => frameNumber);
-    addTearDown(barrier.dispose);
-    final old = barrier.wait();
-    await tester.pump();
-    barrier.cancel();
-    expect(await old, isFalse);
-    frameNumber = 42;
-    var completed = false;
-    final next = barrier.wait().then((painted) {
-      completed = true;
-      return painted;
-    });
-    await tester.pump();
-    tester.platformDispatcher.onReportTimings?.call([timing(40)]);
-    await tester.pump();
-    expect(completed, isFalse);
-    tester.platformDispatcher.onReportTimings?.call([timing(42)]);
-    await tester.pump();
-    expect(await next, isTrue);
   });
 
   testWidgets('dispose unblocks waits without needing another UI frame', (

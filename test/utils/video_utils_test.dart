@@ -1,7 +1,4 @@
-import 'dart:io';
-
 import 'package:flutter_test/flutter_test.dart';
-import 'package:hive_ce/hive.dart';
 import 'package:pili_aurora/models/common/video/cdn_type.dart';
 import 'package:pili_aurora/models/remote/live/live_room_play_info/codec.dart';
 import 'package:pili_aurora/models/remote/live/live_room_play_info/url_info.dart';
@@ -10,58 +7,26 @@ import 'package:pili_aurora/utils/storage_key.dart';
 import 'package:pili_aurora/utils/storage_pref.dart';
 import 'package:pili_aurora/utils/video_utils.dart';
 
+import '../support/memory_box.dart';
+
 void main() {
-  late Directory directory;
+  late bool previousDisableAudioCdn;
+  late String? previousLiveCdnUrl;
 
-  setUpAll(() async {
-    directory = await Directory.systemTemp.createTemp('pili-video-utils-');
-    Hive.init(directory.path);
-    GStorage.setting = await Hive.openBox('setting');
-  });
-
-  tearDownAll(() async {
-    await Hive.close();
-    await directory.delete(recursive: true);
+  setUpAll(() {
+    GStorage.setting = MemoryBox<dynamic>();
   });
 
   setUp(() async {
-    await GStorage.setting.delete(SettingBoxKey.enableMultiCdn);
-    await GStorage.setting.delete(SettingBoxKey.cdnFallbackOrder);
+    await GStorage.setting.clear();
+    previousDisableAudioCdn = VideoUtils.disableAudioCDN;
+    previousLiveCdnUrl = VideoUtils.liveCdnUrl;
     VideoUtils.disableAudioCDN = false;
   });
 
-  test('Akamai 首选使用接口原始签名地址', () {
-    const original =
-        'https://upos-sz-mirrorcos.bilivideo.com/upgcxcode/video?sign=cos';
-    const akamai =
-        'https://upos-hz-mirrorakam.akamaized.net/upgcxcode/video?hdnts=akamai%2Bsignature';
-    expect(
-      VideoUtils.getCdnUrl(
-        [original, akamai],
-        defaultCDNService: CDNService.akamai,
-      ),
-      akamai,
-    );
-  });
-
-  test('多 CDN 回退使用接口提供的 Akamai 签名地址', () async {
-    await GStorage.setting.put(SettingBoxKey.enableMultiCdn, true);
-    const original =
-        'https://upos-sz-mirrorcos.bilivideo.com/upgcxcode/video?sign=cos';
-    const akamai =
-        'https://upos-hz-mirrorakam.akamaized.net/upgcxcode/video?hdnts=akamai%2Bsignature';
-    final urls = VideoUtils.getCdnUrls(
-      [original, akamai],
-      defaultCDNService: CDNService.cos,
-    );
-    expect(urls.first, original);
-    expect(urls, contains(akamai));
-    expect(
-      urls,
-      isNot(
-        contains(akamai.replaceFirst('hdnts=akamai%2Bsignature', 'sign=cos')),
-      ),
-    );
+  tearDown(() {
+    VideoUtils.disableAudioCDN = previousDisableAudioCdn;
+    VideoUtils.liveCdnUrl = previousLiveCdnUrl;
   });
 
   test('接口没有 Akamai 地址时不使用其它 CDN 的签名构造地址', () async {
@@ -154,30 +119,33 @@ void main() {
     expect(proxy.queryParameters['url'], resource);
   });
 
-  test('多源解析对所有首选保持单源结果并保留原始候选', () async {
+  test('签名来源在首选和回退中保持原文、有序且不重复', () async {
     await GStorage.setting.put(SettingBoxKey.enableMultiCdn, true);
-    const originals = [
-      'https://upos-sz-mirrorcos.bilivideo.com/upgcxcode/video?sign=cos',
-      'https://upos-hz-mirrorakam.akamaized.net/upgcxcode/video?hdnts=A%2Bb',
-      'https://upos-sz-mirrorali.bilivideo.com/upgcxcode/video?sign=ali',
-    ];
-    for (final preferred in CDNService.values) {
-      final candidates = VideoUtils.getCdnUrls(
-        originals,
-        defaultCDNService: preferred,
+    await GStorage.setting.put(SettingBoxKey.cdnFallbackOrder, ['hw']);
+    const cos =
+        'https://upos-sz-mirrorcos.bilivideo.com/upgcxcode/video?sign=cos';
+    const ali =
+        'https://upos-sz-mirrorali.bilivideo.com/upgcxcode/video?sign=ali';
+    const akamai =
+        'https://upos-hz-mirrorakam.akamaized.net/upgcxcode/video?hdnts=A%2Bb';
+    const hw =
+        'https://upos-sz-mirrorhw.bilivideo.com/upgcxcode/video?sign=cos';
+    for (final (service, expected) in [
+      (CDNService.cos, [cos, hw, akamai, ali]),
+      (CDNService.ali, [ali, hw, cos, akamai]),
+      (CDNService.akamai, [akamai, hw, cos, ali]),
+      (CDNService.hw, [hw, cos, akamai, ali]),
+    ]) {
+      const sources = [cos, akamai, ali, cos];
+      expect(
+        VideoUtils.getCdnUrl(sources, defaultCDNService: service),
+        expected.first,
+        reason: service.name,
       );
       expect(
-        candidates.first,
-        VideoUtils.getCdnUrl(originals, defaultCDNService: preferred),
-        reason: preferred.name,
-      );
-      expect(candidates.toSet(), hasLength(candidates.length));
-      expect(candidates, containsAll(originals));
-      expect(
-        candidates.where(
-          (url) => Uri.parse(url).host == CDNService.akamai.host,
-        ),
-        [originals[1]],
+        VideoUtils.getCdnUrls(sources, defaultCDNService: service),
+        expected,
+        reason: service.name,
       );
     }
   });
@@ -192,7 +160,6 @@ void main() {
         UrlInfo(host: 'https://b.example.com', extra: '?b=2'),
       ],
     );
-    VideoUtils.liveCdnUrl = null;
     expect(VideoUtils.getLiveCdnUrls(codec, index: 1), [
       'https://b.example.com/stream.flv?b=2',
     ]);
@@ -202,22 +169,6 @@ void main() {
       'https://custom.example.com/stream.flv?b=2',
       'https://a.example.com/stream.flv?a=1',
       'https://b.example.com/stream.flv?b=2',
-    ]);
-    VideoUtils.liveCdnUrl = null;
-  });
-
-  test('默认单 CDN，开启后提供备用源，关闭后恢复首选源', () async {
-    const urls = [
-      'https://upos-sz-mirrorcos.bilivideo.com/upgcxcode/video?deadline=1',
-      'https://upos-sz-mirrorali.bilivideo.com/upgcxcode/video?deadline=1',
-    ];
-
-    expect(Pref.enableMultiCdn, isFalse);
-    await GStorage.setting.put(SettingBoxKey.enableMultiCdn, true);
-    expect(VideoUtils.getCdnUrls(urls).length, greaterThan(1));
-    await GStorage.setting.put(SettingBoxKey.enableMultiCdn, false);
-    expect(VideoUtils.getCdnUrls(urls, defaultCDNService: CDNService.hw), [
-      VideoUtils.getCdnUrl(urls, defaultCDNService: CDNService.hw),
     ]);
   });
 
@@ -243,13 +194,6 @@ void main() {
         'https://upos-sz-mirroralio1.bilivideo.com/upgcxcode/video?deadline=1',
       ]);
       expect(urls.toSet().length, urls.length);
-      expect(
-        urls.first,
-        VideoUtils.getCdnUrl([
-          primary,
-          backup,
-        ], defaultCDNService: CDNService.hw),
-      );
     },
   );
 
@@ -295,48 +239,54 @@ void main() {
     },
   );
 
-  test(
-    'audio opt-out retains API sources without rewriting fallback hosts',
-    () async {
-      await GStorage.setting.put(SettingBoxKey.enableMultiCdn, true);
-      await GStorage.setting.put(SettingBoxKey.cdnFallbackOrder, ['hw']);
-      VideoUtils.disableAudioCDN = true;
-      const urls = [
-        'https://upos-sz-mirrorcos.bilivideo.com/upgcxcode/audio?deadline=1',
-        'https://upos-sz-mirrorali.bilivideo.com/upgcxcode/audio?deadline=1',
-      ];
-      expect(VideoUtils.getCdnUrls(urls, isAudio: true), urls);
-    },
-  );
-
-  test(
-    'audio CDN preference behavior is retained for the primary URL',
-    () async {
-      await GStorage.setting.put(SettingBoxKey.enableMultiCdn, true);
-      const primary =
-          'https://upos-sz-mirrorcos.bilivideo.com/upgcxcode/audio?deadline=1';
-      const backup =
-          'https://upos-sz-mirrorali.bilivideo.com/upgcxcode/audio?deadline=1';
-
-      final urls = VideoUtils.getCdnUrls(
-        [primary, backup],
-        defaultCDNService: CDNService.ali,
-        isAudio: true,
-      );
-
+  test('默认单源，启用和关闭回退只改变候选列表，空来源没有候选', () async {
+    const cos =
+        'https://upos-sz-mirrorcos.bilivideo.com/upgcxcode/video?sign=cos';
+    const hw =
+        'https://upos-sz-mirrorhw.bilivideo.com/upgcxcode/video?sign=cos';
+    await GStorage.setting.put(SettingBoxKey.cdnFallbackOrder, ['hw']);
+    for (final enabled in [null, true, false]) {
+      if (enabled != null) {
+        await GStorage.setting.put(SettingBoxKey.enableMultiCdn, enabled);
+      }
       expect(
-        urls.first,
-        VideoUtils.getCdnUrl(
-          [primary, backup],
-          defaultCDNService: CDNService.ali,
-          isAudio: true,
-        ),
+        VideoUtils.getCdnUrls([cos], defaultCDNService: CDNService.cos),
+        enabled == true ? [cos, hw] : [cos],
+        reason: 'enableMultiCdn=$enabled',
       );
-      expect(urls, contains(backup));
-    },
-  );
-
-  test('empty URL lists have no candidates', () {
-    expect(VideoUtils.getCdnUrls(const []), isEmpty);
+      for (final empty in [
+        <String>[],
+        ['', ''],
+      ]) {
+        expect(VideoUtils.getCdnUrls(empty), isEmpty);
+      }
+    }
   });
+
+  for (final multiCdn in [false, true]) {
+    test('音频 CDN 开关在多源=$multiCdn 时保留首选与原始备用', () async {
+      await GStorage.setting.put(SettingBoxKey.enableMultiCdn, multiCdn);
+      await GStorage.setting.put(SettingBoxKey.cdnFallbackOrder, ['hw']);
+      const cos =
+          'https://upos-sz-mirrorcos.bilivideo.com/upgcxcode/audio?deadline=1';
+      const ali =
+          'https://upos-sz-mirrorali.bilivideo.com/upgcxcode/audio?deadline=1';
+      const hw =
+          'https://upos-sz-mirrorhw.bilivideo.com/upgcxcode/audio?deadline=1';
+      for (final disabled in [false, true]) {
+        VideoUtils.disableAudioCDN = disabled;
+        expect(
+          VideoUtils.getCdnUrls(
+            [cos, ali],
+            defaultCDNService: CDNService.ali,
+            isAudio: true,
+          ),
+          disabled
+              ? (multiCdn ? [cos, ali] : [cos])
+              : (multiCdn ? [ali, hw, cos] : [ali]),
+          reason: 'disableAudioCDN=$disabled',
+        );
+      }
+    });
+  }
 }

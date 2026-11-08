@@ -1,28 +1,24 @@
 import 'dart:async';
-import 'dart:convert';
-import 'dart:typed_data';
 
-import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
-import 'package:hive_ce/hive.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:pili_aurora/http/init.dart';
 import 'package:pili_aurora/http/loading_state.dart';
 import 'package:pili_aurora/pages/login/controller.dart';
 import 'package:pili_aurora/utils/storage.dart';
 
+import '../../support/controlled_http_adapter.dart';
+import '../../support/memory_box.dart';
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   late _Adapter adapter;
   late _Controller controller;
 
-  setUpAll(() async {
-    GStorage.setting = await Hive.openBox('login-test', bytes: Uint8List(0));
-    GStorage.localCache = await Hive.openBox(
-      'login-cache-test',
-      bytes: Uint8List(0),
-    );
+  setUpAll(() {
+    GStorage.setting = MemoryBox<dynamic>();
+    GStorage.localCache = MemoryBox<dynamic>();
     Request();
     Request.dio.interceptors.clear();
   });
@@ -33,12 +29,9 @@ void main() {
   });
   tearDown(() {
     if (!controller.isClosed) controller.onDelete();
+    adapter.close();
   });
-  tearDownAll(() async {
-    Request.dio.close(force: true);
-    await GStorage.setting.close();
-    await GStorage.localCache.close();
-  });
+  tearDownAll(() => Request.dio.close(force: true));
 
   testWidgets('短信登录忽略页面关闭后的成功响应', (tester) async {
     await _mount(tester);
@@ -49,7 +42,7 @@ void main() {
       ..smsSendTimestamp = DateTime.now().millisecondsSinceEpoch;
     final request = controller.loginBySmsCode();
     await _flush(tester);
-    adapter.reply(0, {
+    adapter.json(0, {
       'code': 0,
       'data': {
         'key': r'''-----BEGIN PUBLIC KEY-----
@@ -67,7 +60,7 @@ SQIDAQAB
     await _flush(tester);
     expect(adapter.pending, hasLength(2));
     controller.onDelete();
-    adapter.reply(1, {
+    adapter.json(1, {
       'code': 0,
       'data': {
         'token_info': <String, dynamic>{},
@@ -82,7 +75,7 @@ SQIDAQAB
   testWidgets('二维码申请失败显示错误并允许重新申请', (tester) async {
     final first = controller.refreshQRCode();
     await _flush(tester);
-    adapter.reply(0, {'code': -1, 'message': '模拟失败'});
+    adapter.json(0, {'code': -1, 'message': '模拟失败'});
     await _flush(tester);
     await first;
     expect(controller.codeInfo.value, isA<Error>());
@@ -118,7 +111,7 @@ SQIDAQAB
     await _flush(tester);
     expect(adapter.pending, hasLength(2));
     controller.tabController.index = 0;
-    adapter.reply(1, {
+    adapter.json(1, {
       'code': 0,
       'data': {
         'cookie_info': {'cookies': <Object>[]},
@@ -148,7 +141,7 @@ SQIDAQAB
     await _flush(tester);
     await tester.pump(const Duration(seconds: 1));
     await _flush(tester);
-    adapter.reply(1, {'message': '模拟网络错误'});
+    adapter.json(1, {'message': '模拟网络错误'});
     await _flush(tester);
     expect(controller.qrCodeTimer!.isActive, isFalse);
     expect(controller.qrCodeLeftTime.value, 0);
@@ -163,7 +156,7 @@ SQIDAQAB
     await controller.sendSmsCode();
     await _flush(tester);
     expect(adapter.pending, hasLength(1));
-    adapter.reply(0, {
+    adapter.json(0, {
       'code': 0,
       'data': {'recaptcha_url': '', 'captcha_key': 'synthetic'},
     });
@@ -184,7 +177,7 @@ SQIDAQAB
     controller.captcha = Completer<void>();
     final request = controller.sendSmsCode();
     await _flush(tester);
-    adapter.reply(0, {
+    adapter.json(0, {
       'code': -105,
       'data': {
         'recaptcha_url': 'https://example.test/?recaptcha_token=fake&gee_gt=fake&gee_challenge=fake',
@@ -197,7 +190,7 @@ SQIDAQAB
     controller.captcha!.complete();
     await _flush(tester);
     expect(adapter.pending, hasLength(2));
-    adapter.reply(1, {
+    adapter.json(1, {
       'code': 0,
       'data': {'recaptcha_url': '', 'captcha_key': 'synthetic'},
     });
@@ -214,7 +207,7 @@ SQIDAQAB
     final request = controller.sendSmsCode();
     await _flush(tester);
     controller.onDelete();
-    adapter.reply(0, {
+    adapter.json(0, {
       'code': 0,
       'data': {'recaptcha_url': '', 'captcha_key': 'synthetic'},
     });
@@ -255,35 +248,9 @@ class _Controller extends LoginPageController {
   }
 }
 
-class _Adapter implements HttpClientAdapter {
-  final pending = <Completer<ResponseBody>>[];
-
-  void reply(int index, Map<String, dynamic> data) => pending[index].complete(
-    ResponseBody.fromString(
-      jsonEncode(data),
-      200,
-      headers: {
-        'content-type': ['application/json'],
-      },
-    ),
-  );
-
-  void qr(int index, String code) => reply(index, {
+class _Adapter extends ControlledHttpAdapter {
+  void qr(int index, String code) => json(index, {
     'code': 0,
     'data': {'auth_code': code, 'url': 'https://example.test/$code'},
   });
-
-  @override
-  Future<ResponseBody> fetch(
-    RequestOptions options,
-    Stream<Uint8List>? requestStream,
-    Future<void>? cancelFuture,
-  ) {
-    final response = Completer<ResponseBody>();
-    pending.add(response);
-    return response.future;
-  }
-
-  @override
-  void close({bool force = false}) {}
 }

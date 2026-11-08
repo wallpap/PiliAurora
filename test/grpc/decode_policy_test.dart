@@ -91,50 +91,39 @@ void main() {
       ),
     );
   });
-  test('gzip output obeys the admitted byte limit before protobuf decode', () {
-    final bytes = Uint8List(1024 * 1024);
-    final data = _frame(bytes, compressed: true);
-    expect(
-      GrpcReq.decompressProtobuf(data, maxDecodedBytes: bytes.length),
-      bytes,
-    );
-    expect(
-      () => GrpcReq.decompressProtobuf(data, maxDecodedBytes: 1024),
-      throwsA(isA<DanmakuWorkTooLarge>()),
-    );
+  test('压缩和未压缩输出均在 protobuf 解码前遵守字节预算', () {
+    for (final (length, compressed, deniedBudget) in [
+      (1024 * 1024, true, 1024),
+      (100, false, 99),
+    ]) {
+      final bytes = Uint8List(length);
+      final data = _frame(bytes, compressed: compressed);
+      expect(GrpcReq.decompressProtobuf(data, maxDecodedBytes: length), bytes);
+      expect(
+        () => GrpcReq.decompressProtobuf(data, maxDecodedBytes: deniedBudget),
+        throwsA(isA<DanmakuWorkTooLarge>()),
+        reason: 'compressed=$compressed, length=$length, budget=$deniedBudget',
+      );
+    }
   });
 
-  test('uncompressed output obeys the same admitted byte limit', () {
-    expect(
-      () => GrpcReq.decompressProtobuf(
-        _frame(Uint8List(100)),
-        maxDecodedBytes: 99,
-      ),
-      throwsA(isA<DanmakuWorkTooLarge>()),
-    );
-  });
-
-  test('a small gzip frame with a large expanded payload uses an isolate', () {
-    final data = _frame(Uint8List(1 << 20), compressed: true);
-    expect(data.length, lessThan(GrpcDecodePolicy.isolateSize));
-    expect(GrpcDecodePolicy.shouldUseIsolate(data), isTrue);
-  });
-
-  test('small payloads stay on the calling isolate', () {
-    expect(GrpcDecodePolicy.shouldUseIsolate(_frame(Uint8List(100))), isFalse);
-    expect(
-      GrpcDecodePolicy.shouldUseIsolate(
-        _frame(Uint8List(100), compressed: true),
-      ),
-      isFalse,
-    );
-  });
-
-  test('large uncompressed frames retain the existing background policy', () {
-    expect(
-      GrpcDecodePolicy.shouldUseIsolate(_frame(Uint8List(1 << 20))),
-      isTrue,
-    );
+  test('调度同时考虑原始和解压体积，小帧留在当前 isolate', () {
+    for (final (length, compressed, background) in [
+      (100, false, false),
+      (100, true, false),
+      (1 << 20, false, true),
+      (1 << 20, true, true),
+    ]) {
+      final data = _frame(Uint8List(length), compressed: compressed);
+      if (compressed) {
+        expect(data.length, lessThan(GrpcDecodePolicy.isolateSize));
+      }
+      expect(
+        GrpcDecodePolicy.shouldUseIsolate(data),
+        background,
+        reason: 'compressed=$compressed, decodedLength=$length',
+      );
+    }
   });
 
   test('truncated and invalid frames cannot break the scheduling decision', () {

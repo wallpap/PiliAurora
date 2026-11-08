@@ -1732,7 +1732,11 @@ void main() {
       session.loadId,
       const PlaybackActual(playing: true, videoProgressing: false),
     );
-    await Future<void>.delayed(const Duration(milliseconds: 20));
+    await _until(
+      () =>
+          runtime.loadedKeys.length == 2 &&
+          session.currentSnapshot.phase == PlaybackPhase.ready,
+    );
     expect(runtime.loadedKeys, ['movie', 'movie']);
     expect(session.currentSnapshot.phase, PlaybackPhase.ready);
 

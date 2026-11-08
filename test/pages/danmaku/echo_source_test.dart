@@ -86,6 +86,7 @@ void main() {
 
   test('echo without server id enters while remote coverage is missing', () {
     final origin = _Source()..state = DanmakuCoverageState.missing;
+    addTearDown(origin.events.close);
     final source = DanmakuEchoSource(origin);
     final renderer = DanmakuWindowRenderer<DanmakuExtra>(
       option: const DanmakuOption(),
@@ -110,11 +111,14 @@ void main() {
 
   test(
     'send echo stays stable after server arrival and removal invalidates',
-    () async {
+    () {
       final origin = _Source();
       final source = DanmakuEchoSource(origin);
+      addTearDown(origin.events.close);
+      addTearDown(source.dispose);
       final changes = <DanmakuSourceChange>[];
       final subscription = source.changes.listen(changes.add);
+      addTearDown(subscription.cancel);
       final content = DanmakuContentItem<DanmakuExtra>(
         'sent',
         selfSend: true,
@@ -137,8 +141,6 @@ void main() {
         DanmakuSourceChangeKind.invalidated,
         DanmakuSourceChangeKind.ready,
       ]);
-      source.dispose();
-      await subscription.cancel();
     },
   );
 }

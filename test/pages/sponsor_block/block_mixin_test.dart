@@ -1,9 +1,7 @@
 import 'dart:async';
-import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get/get.dart';
-import 'package:hive_ce/hive.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:pili_aurora/models/common/sponsor_block/segment_model.dart';
 import 'package:pili_aurora/utils/storage_key.dart';
@@ -11,20 +9,14 @@ import 'package:pili_aurora/models/remote/sponsor_block/segment_item.dart';
 import 'package:pili_aurora/pages/sponsor_block/block_mixin.dart';
 import 'package:pili_aurora/utils/storage.dart';
 
+import '../../support/memory_box.dart';
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
-  late Directory directory;
   late _BlockController controller;
 
-  setUpAll(() async {
-    directory = await Directory.systemTemp.createTemp('pili-block-');
-    Hive.init(directory.path);
-    GStorage.setting = await Hive.openBox('setting');
-  });
-  tearDownAll(() async {
-    await Hive.close();
-    await directory.delete(recursive: true);
-  });
+  setUpAll(() => GStorage.setting = MemoryBox<dynamic>());
+
   setUp(() async {
     await GStorage.setting.clear();
     await GStorage.setting.put(SettingBoxKey.blockToast, false);

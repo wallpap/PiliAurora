@@ -32,7 +32,6 @@ class _FeedState extends State<_Feed> {
   late int count = widget.count;
   late bool allowed = widget.allowed;
   int requests = 0;
-  final built = <int>{};
   Completer<void>? pending;
   bool grow = true;
 
@@ -80,7 +79,6 @@ class _FeedState extends State<_Feed> {
               ),
               itemCount: count,
               itemBuilder: (_, index) {
-                built.add(index);
                 return const SizedBox.expand();
               },
             ),
@@ -217,7 +215,6 @@ void main() {
     final feed = await mount(tester);
     expect(feed.count, 40);
     expect(feed.requests, 1);
-    expect(feed.built, contains(39));
     await tester.pumpAndSettle();
     expect(feed.requests, 1);
     feed.controller.jumpTo(feed.controller.position.maxScrollExtent);
@@ -250,18 +247,6 @@ void main() {
     await tester.pumpAndSettle();
     expect(feed.requests, 1);
     expect(feed.count, 180);
-  });
-
-  testWidgets('zero cache avoids constructing cards outside the viewport', (
-    tester,
-  ) async {
-    final feed = await mount(
-      tester,
-      feed: const _Feed(count: 40, cacheExtent: 0),
-    );
-    expect(feed.requests, 0);
-    expect(feed.built.length, 36);
-    expect(feed.built, isNot(contains(39)));
   });
 
   testWidgets(

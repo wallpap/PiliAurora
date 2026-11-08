@@ -35,7 +35,9 @@ void main() {
       );
       await tester.pumpAndSettle();
       expect(handled, isTrue);
-      expect(arguments?['progress'], expected);
+      expect(arguments, isNotNull);
+      expect(arguments!['cid'], 42);
+      expect(arguments!['progress'], expected);
     });
   }
 }

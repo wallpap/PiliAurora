@@ -183,27 +183,6 @@ void main() {
     expect(retries, 1);
   });
 
-  testWidgets('首次检查尚未进入缓冲时保留机会，随后耗尽仍重连', (tester) async {
-    var state = (
-      buffering: false,
-      position: const Duration(seconds: 10),
-      buffer: const Duration(seconds: 20),
-    );
-    var retries = 0;
-    final recovery = PlaybackNetworkRecovery(
-      isCurrent: () => true,
-      readState: () => state,
-      reload: (_) async => retries++,
-      onError: (error) => fail('$error'),
-    )..schedule(requireEmptyBuffer: true);
-    addTearDown(recovery.dispose);
-    await tester.pump(const Duration(seconds: 3));
-    expect(retries, 0);
-    state = empty;
-    await tester.pump(const Duration(seconds: 3));
-    expect(retries, 1);
-  });
-
   testWidgets('默认缓冲恢复连续两轮停滞后重连，不被超前缓存时间卡住', (tester) async {
     var retries = 0;
     final recovery = PlaybackNetworkRecovery(
@@ -491,26 +470,28 @@ void main() {
     recovery.dispose();
   });
 
-  testWidgets('缓冲耗尽时恢复，无需等待另一条错误事件', (tester) async {
-    var state = (
-      buffering: true,
-      position: const Duration(seconds: 10),
-      buffer: const Duration(seconds: 30),
-    );
-    var retries = 0;
-    final recovery = PlaybackNetworkRecovery(
-      isCurrent: () => true,
-      readState: () => state,
-      reload: (_) async => retries++,
-      onError: (error) => fail('$error'),
-    )..schedule(requireEmptyBuffer: true);
-    await tester.pump(const Duration(seconds: 3));
-    expect(retries, 0);
-    state = empty;
-    await tester.pump(const Duration(seconds: 3));
-    expect(retries, 1);
-    recovery.dispose();
-  });
+  for (final buffering in [false, true]) {
+    testWidgets('初始 buffering=$buffering，保留缓存耗尽后的恢复机会', (tester) async {
+      var state = (
+        buffering: buffering,
+        position: const Duration(seconds: 10),
+        buffer: const Duration(seconds: 30),
+      );
+      var retries = 0;
+      final recovery = PlaybackNetworkRecovery(
+        isCurrent: () => true,
+        readState: () => state,
+        reload: (_) async => retries++,
+        onError: (error) => fail('$error'),
+      )..schedule(requireEmptyBuffer: true);
+      await tester.pump(const Duration(seconds: 3));
+      expect(retries, 0);
+      state = empty;
+      await tester.pump(const Duration(seconds: 3));
+      expect(retries, 1);
+      recovery.dispose();
+    });
+  }
 
   testWidgets('新媒体有独立恢复窗口，CDN 候选有独立预算', (tester) async {
     var retries = 0;

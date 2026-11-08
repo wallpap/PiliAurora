@@ -599,39 +599,7 @@ void main() {
     expect((feed.loadingState.value.data!.single as _Video).aid, 2);
   });
 
-  testWidgets('首页实际网格将未核验合作卡片渲染为骨架，普通卡片可见', (tester) async {
-    Get.testMode = true;
-    Get.put<RcmdController>(feed);
-    addTearDown(Get.reset);
-    final authors = Completer<Set<int>?>();
-    feed.lookup = CooperativeAuthors(load: (_) => authors.future);
-    addTearDown(() {
-      if (!authors.isCompleted) authors.complete(null);
-    });
-    await tester.pumpWidget(
-      const MaterialApp(home: Scaffold(body: RcmdPage())),
-    );
-    expect(feed.requests, hasLength(1));
-    final cooperation = _Video(1, cooperation: true);
-    feed.requests.single.complete(
-      Success([
-        cooperation,
-        ...List.generate(30, (i) => _Video(i + 2)),
-      ]),
-    );
-    await tester.pump();
-    expect(find.byType(VideoCardVSkeleton), findsOneWidget);
-    expect(find.text('视频 1'), findsNothing);
-    expect(find.text('视频 2'), findsOneWidget);
-    expect(find.byType(VideoCardV), findsWidgets);
-    authors.complete({8});
-    await tester.pump();
-    expect(find.byType(VideoCardVSkeleton), findsNothing);
-    expect(find.text('视频 1'), findsOneWidget);
-    await tester.pumpWidget(const SizedBox.shrink());
-  });
-
-  testWidgets('单张合作卡片揭示不重发列表或重建普通卡片', (tester) async {
+  testWidgets('合作卡片先显示骨架，揭示不重发列表或重建普通卡片', (tester) async {
     Get.testMode = true;
     Get.put<RcmdController>(feed);
     addTearDown(Get.reset);
@@ -653,6 +621,9 @@ void main() {
       ]),
     );
     await tester.pump();
+    expect(find.byType(VideoCardVSkeleton), findsOneWidget);
+    expect(find.text('视频 1'), findsNothing);
+    expect(find.text('视频 2'), findsOneWidget);
     final cards = find.byWidgetPredicate(
       (widget) => widget is VideoCardV && identical(widget.videoItem, ordinary),
     );

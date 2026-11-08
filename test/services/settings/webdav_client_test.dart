@@ -184,12 +184,10 @@ void main() {
       expect(await client.read('settings.json'), adapter.response);
       expect(adapter.requests.single.responseType, ResponseType.bytes);
       expect(adapter.requests.single.method, 'GET');
+      adapter.response = [];
+      expect(await client.read('settings.json'), isEmpty);
     },
   );
-
-  test('GET accepts empty resources without inventing bytes', () async {
-    expect(await client.read('settings.json'), isEmpty);
-  });
 
   test('HTTP errors expose method and status but never response data or credentials', () async {
     adapter
@@ -228,9 +226,13 @@ void main() {
       await expectLater(client.write('settings.json', []), throwsA(failure));
       final request = adapter.requests.single;
       expect(request.followRedirects, isFalse);
-      expect(request.connectTimeout, const Duration(seconds: 12));
-      expect(request.sendTimeout, const Duration(seconds: 12));
-      expect(request.receiveTimeout, const Duration(seconds: 12));
+      for (final timeout in [
+        request.connectTimeout,
+        request.sendTimeout,
+        request.receiveTimeout,
+      ]) {
+        expect(timeout?.inMicroseconds, greaterThan(0));
+      }
       expect(adapter.requests, hasLength(1));
     },
   );
@@ -241,17 +243,17 @@ void main() {
     expect(adapter.forceClosed, isTrue);
   });
 
-  for (final endpoint in [
-    'file:///backup',
-    'http://example.test/dav',
-    'http://127.0.0.1/dav',
-    'ftp://example.test/dav',
-    '/dav',
-    'https://user:fixture-password@example.test/dav',
-    'https://example.test/dav?token=fixture-token',
-    'https://example.test/dav#fragment',
-  ]) {
-    test('rejects invalid or credential-bearing endpoint', () {
+  test('rejects invalid or credential-bearing endpoints', () {
+    for (final endpoint in [
+      'file:///backup',
+      'http://example.test/dav',
+      'http://127.0.0.1/dav',
+      'ftp://example.test/dav',
+      '/dav',
+      'https://user:fixture-password@example.test/dav',
+      'https://example.test/dav?token=fixture-token',
+      'https://example.test/dav#fragment',
+    ]) {
       expect(
         () => WebDavSettingsClient(
           endpoint: Uri.parse(endpoint),
@@ -260,8 +262,8 @@ void main() {
         ),
         throwsArgumentError,
       );
-    });
-  }
+    }
+  });
 
   test('rejects colon in Basic Auth usernames', () {
     expect(

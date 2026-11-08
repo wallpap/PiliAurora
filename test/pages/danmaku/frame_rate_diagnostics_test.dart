@@ -56,11 +56,11 @@ void main() {
     });
   }
 
-  for (final rate in [120.00000762939453, 120.12]) {
-    testWidgets('120 FPS 在 $rate Hz 屏幕上直接跟随 vsync', (tester) async {
+  for (final rate in [60.0, 120.00000762939453, 120.12]) {
+    testWidgets('目标达到 $rate Hz 屏幕上限时直接跟随 vsync', (tester) async {
       tester.view.display.refreshRate = rate;
       addTearDown(tester.view.display.resetRefreshRate);
-      final ticker = FrameRateTicker((_) {}, frameRate: 120)..start();
+      final ticker = FrameRateTicker((_) {}, frameRate: rate.round())..start();
       await tester.pump();
       expect(ticker.diagnostics['mode'], 'vsync');
       expect(ticker.diagnostics['timerWakeups'], 0);
@@ -103,18 +103,6 @@ void main() {
     expect(ticker.diagnostics, stopped);
     expect(tester.binding.hasScheduledFrame, isFalse);
     ticker.dispose();
-  });
-
-  testWidgets('目标达到屏幕上限时报告 vsync 且不创建唤醒定时器', (tester) async {
-    tester.view.display.refreshRate = 60;
-    addTearDown(tester.view.display.resetRefreshRate);
-    final ticker = FrameRateTicker((_) {}, frameRate: 60)..start();
-    await tester.pump();
-    expect(ticker.diagnostics['mode'], 'vsync');
-    expect(ticker.diagnostics['updates'], 1);
-    expect(ticker.diagnostics['timerWakeups'], 0);
-    ticker.dispose();
-    await tester.pump();
   });
 }
 

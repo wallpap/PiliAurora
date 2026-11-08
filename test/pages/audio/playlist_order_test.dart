@@ -1,5 +1,3 @@
-import 'dart:async';
-import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:dio/dio.dart';
@@ -14,29 +12,10 @@ import 'package:pili_aurora/utils/accounts.dart';
 import 'package:pili_aurora/utils/accounts/account.dart';
 import 'package:pili_aurora/utils/storage.dart';
 
-class _Adapter implements HttpClientAdapter {
-  final requests = <Completer<ResponseBody>>[];
-  @override
-  Future<ResponseBody> fetch(
-    RequestOptions options,
-    Stream<Uint8List>? stream,
-    Future<void>? cancel,
-  ) {
-    final result = Completer<ResponseBody>();
-    requests.add(result);
-    return result.future;
-  }
+import '../../support/controlled_http_adapter.dart';
 
-  void json(int index, Object value) => requests[index].complete(
-    ResponseBody.fromString(
-      jsonEncode(value),
-      200,
-      headers: {
-        'content-type': ['application/json'],
-      },
-    ),
-  );
-  void playlist(int index, List<int> ids) => requests[index].complete(
+class _Adapter extends ControlledHttpAdapter {
+  void playlist(int index, List<int> ids) => pending[index].complete(
     ResponseBody.fromBytes(
       GrpcReq.compressProtobuf(
         PlaylistResp(
@@ -54,8 +33,6 @@ class _Adapter implements HttpClientAdapter {
       },
     ),
   );
-  @override
-  void close({bool force = false}) {}
 }
 
 void main() {
@@ -84,18 +61,13 @@ void main() {
     Request.dio.httpClientAdapter = adapter;
   });
   tearDown(() {
+    adapter.close();
     Accounts.accountMode.setAll(0, previousAccounts);
   });
   tearDownAll(() async {
     Request.dio.close(force: true);
     await Hive.close();
   });
-  Future<void> dispatched(int count) async {
-    for (var i = 0; i < 1000 && adapter.requests.length < count; i++) {
-      await Future<void>.delayed(Duration.zero);
-    }
-    expect(adapter.requests.length, count);
-  }
 
   Future<void> settle() async {
     for (var i = 0; i < 20; i++) {
@@ -103,7 +75,7 @@ void main() {
     }
   }
 
-  test('AUDIT2: playlist order keeps the most recent selection', () async {
+  test('playlist order keeps the most recent selection', () async {
     final controller = AudioController()
       ..id = Int64(11)
       ..oid = Int64(11)
@@ -111,9 +83,9 @@ void main() {
       ..itemType = 2
       ..from = PlaylistSource.DEFAULT
       ..onChangeOrder(ListOrder.ORDER_REVERSE);
-    await dispatched(1);
+    await adapter.waitForRequests(1);
     controller.onChangeOrder(ListOrder.ORDER_NORMAL);
-    await dispatched(2);
+    await adapter.waitForRequests(2);
     adapter.playlist(1, [11, 22]);
     await settle();
     expect(controller.playlist!.map((e) => e.item.oid.toInt()), [11, 22]);

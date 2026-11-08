@@ -1,9 +1,6 @@
 import 'package:pili_aurora/http/validate.dart';
 import 'package:pili_aurora/utils/request_utils.dart';
 
-import 'dart:async';
-
-import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get/get.dart';
@@ -12,7 +9,6 @@ import 'package:pili_aurora/http/init.dart';
 import 'package:pili_aurora/models/common/account_type.dart';
 import 'package:pili_aurora/pages/search_panel/controller.dart';
 import 'package:pili_aurora/pages/search_panel/video/view.dart';
-import 'package:pili_aurora/pages/search_panel/all/view.dart';
 import 'package:pili_aurora/pages/search_result/view.dart';
 import 'package:pili_aurora/models/common/search/search_type.dart';
 import 'package:pili_aurora/http/search.dart';
@@ -23,6 +19,7 @@ import 'package:pili_aurora/utils/accounts.dart';
 import 'package:pili_aurora/utils/accounts/account.dart';
 import 'package:pili_aurora/utils/storage.dart';
 
+import '../../support/controlled_interceptor.dart';
 import '../../support/memory_box.dart';
 
 class _ResultsNotifier extends SearchResultsNotifier {
@@ -35,14 +32,11 @@ class _ResultsNotifier extends SearchResultsNotifier {
   }
 }
 
-typedef _Pending = ({
-  RequestOptions options,
-  Completer<Map<String, dynamic>> reply,
-});
-
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
-  final requests = <_Pending>[];
+  final interceptor = ControlledInterceptor();
+  final requests = interceptor.requests;
+  final dispatched = interceptor.waitForRequests;
   late ProviderContainer container;
   late LoginAccount account;
   LoginAccount login(String csrf) => LoginAccount(
@@ -97,13 +91,6 @@ void main() {
   };
   List<int> range(int start, int count) =>
       List.generate(count, (index) => start + index);
-  Future<void> dispatched(int count) async {
-    for (var i = 0; i < 100 && requests.length < count; i++) {
-      await Future<void>.delayed(Duration.zero);
-    }
-    expect(requests, hasLength(count));
-  }
-
   setUpAll(() {
     GStorage.setting = MemoryBox<dynamic>();
     GStorage.localCache = MemoryBox<dynamic>();
@@ -113,15 +100,7 @@ void main() {
     Request.dio.interceptors
       ..clear()
       ..add(
-        InterceptorsWrapper(
-          onRequest: (options, handler) async {
-            final reply = Completer<Map<String, dynamic>>();
-            requests.add((options: options, reply: reply));
-            handler.resolve(
-              Response(requestOptions: options, data: await reply.future),
-            );
-          },
-        ),
+        interceptor,
       );
   });
   setUp(() {
@@ -151,7 +130,10 @@ void main() {
     Accounts.accountMode[AccountType.main.index] = AnonymousAccount();
     Get.reset();
   });
-  tearDownAll(() => Request.dio.close(force: true));
+  tearDownAll(() async {
+    Request.dio.close(force: true);
+    await interceptor.close();
+  });
 
   test('分类、关键词、页面与筛选快照隔离，请求固定推荐账号', () async {
     final recommend = login('recommend');
@@ -488,50 +470,6 @@ void main() {
     requests.single.reply.complete(page([1]));
     await Future<void>.delayed(Duration.zero);
     expect(requests, hasLength(1));
-  });
-
-  testWidgets('综合搜索缺少影视卡片时不保留影视区域高度', (tester) async {
-    await tester.pumpWidget(
-      UncontrolledProviderScope(
-        container: container,
-        child: const MaterialApp(
-          home: SearchAllPanel(
-            keyword: 'test',
-            searchType: SearchType.all,
-            tag: Object(),
-          ),
-        ),
-      ),
-    );
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 400));
-    await tester.runAsync(() async {
-      await dispatched(1);
-      requests.single.reply.complete({
-        'code': 0,
-        'data': {
-          'numResults': 1,
-          'result': [
-            {
-              'result_type': 'video',
-              'data': [
-                {...video(1), 'pubdate': 1},
-              ],
-            },
-          ],
-        },
-      });
-      await Future<void>.delayed(Duration.zero);
-    });
-    await tester.pumpAndSettle();
-    expect(find.text('video1'), findsOneWidget);
-    expect(
-      find.byWidgetPredicate(
-        (widget) => widget is SizedBox && widget.height == 158,
-      ),
-      findsNothing,
-    );
-    await tester.pumpWidget(const SizedBox());
   });
 
   testWidgets('视频筛选建立新查询，分类计数从有效快照回传', (tester) async {

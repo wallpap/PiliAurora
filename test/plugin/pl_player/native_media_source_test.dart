@@ -27,10 +27,14 @@ void main() {
       snapshot = next;
     } while (true);
 
-    expect(attempted, contains(('video-good', 'audio-good')));
-    expect(attempted, contains(('video-bad', 'audio-good')));
-    expect(attempted.toSet().length, 6);
-    expect(attempted.length, 6);
+    expect(
+      attempted,
+      unorderedEquals([
+        for (final video in ['video-bad', 'video-good'])
+          for (final audio in ['audio-bad-1', 'audio-bad-2', 'audio-good'])
+            (video, audio),
+      ]),
+    );
   });
 
   test('按故障轨道切换候选，保留另一轨道，耗尽后不轮换健康轨道', () {
@@ -70,37 +74,39 @@ void main() {
   });
 
   group('nativeMediaSource', () {
-    test('网络源带独立音轨时主 URL 直接作为播放目标', () {
-      final media = nativeMediaSource(source: net());
-      expect(media.uri, 'https://example.com/video.m4s');
-      expect(media.extras!.keys, ['audio-files-append']);
-    });
-
-    test('保留 start 并透传 extras', () {
+    test('独立音轨保留主 URL、起始位置及 extras，不修改调用方数据', () {
+      final extras = <String, String>{'cache': 'yes'};
       final media = nativeMediaSource(
         source: net(),
         start: const Duration(seconds: 30),
-        extras: const {'cache': 'yes'},
+        extras: extras,
       );
+      expect(media.uri, 'https://example.com/video.m4s');
       expect(media.start, const Duration(seconds: 30));
-      expect(media.extras!.keys, containsAll(['cache', 'audio-files-append']));
+      expect(media.extras!['cache'], 'yes');
+      expect(
+        media.extras!['audio-files-append'],
+        contains('https://example.com/audio.m4s'),
+      );
+      expect(extras, {'cache': 'yes'});
     });
-    test('音轨为空字符串或 null 时不追加音轨', () {
-      expect(nativeMediaSource(source: net(audio: '')).extras, isNull);
-      expect(nativeMediaSource(source: net(audio: null)).extras, isNull);
-    });
-    test('audioOnly 且存在独立音轨时只加载音轨', () {
+
+    test('只听音频优先独立音轨，空音轨回退视频且不追加选项', () {
+      for (final audio in ['', null]) {
+        for (final audioOnly in [false, true]) {
+          final media = nativeMediaSource(
+            source: net(audio: audio),
+            audioOnly: audioOnly,
+          );
+          expect(media.uri, 'https://example.com/video.m4s');
+          expect(media.extras, isNull);
+        }
+      }
       final media = nativeMediaSource(source: net(), audioOnly: true);
       expect(media.uri, 'https://example.com/audio.m4s');
       expect(media.extras, isNull);
     });
 
-    test('audioOnly 且无独立音轨时退回视频源', () {
-      expect(
-        nativeMediaSource(source: net(audio: null), audioOnly: true).uri,
-        'https://example.com/video.m4s',
-      );
-    });
     test('离线 Windows 路径含逗号、分号与反斜杠时按 UTF-8 字节长度转义', () {
       const audio = r'C:\媒体 文件\a,b;c.m4s';
       final media = nativeMediaSource(
@@ -115,12 +121,6 @@ void main() {
       expect(track, startsWith('%${utf8.encode(actual).length}%'));
       expect(media.uri, isNot(startsWith('edl://')));
     });
-    test('不修改调用方传入的 extras', () {
-      final extras = <String, String>{'cache': 'yes'};
-      nativeMediaSource(source: net(), extras: extras);
-      expect(extras, {'cache': 'yes'});
-    });
-
     test('播放来源快照固定候选及音轨，后续业务切换不影响已生成计划', () {
       const primaryVideo = 'https://cdn-a.example/video.m4s';
       const backupVideo = 'https://cdn-b.example/video.m4s';

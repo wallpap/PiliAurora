@@ -25,7 +25,7 @@ CI 测试脚本在共享逻辑回归之外按主机补充平台用例：Windows 
 | `services/diagnostics/` | 诊断编排、脱敏、HTTP 接线、历史读取、记录存储、日志和进程采样。 |
 | `utils/` | 工具函数与账号状态。 |
 
-测试文件使用 `_test.dart` 后缀，领域专用 fixture 与调用者放在同一目录，例如 `services/download/download_fixtures.dart` 和 `services/messaging/messaging_fixtures.dart`；简单的 Hive 内存读写共用 `support/memory_box.dart`，失败注入与订阅行为仍由对应领域提供。
+测试文件使用 `_test.dart` 后缀，领域专用 fixture 与调用者放在同一目录，例如 `services/download/download_fixtures.dart` 和 `services/messaging/messaging_fixtures.dart`；简单的 Hive 内存读写共用 `support/memory_box.dart`；挂起 HTTP 响应可使用 `support/controlled_http_adapter.dart`、`support/controlled_interceptor.dart`，通过 `waitForRequests` 等待真实请求到达，再提交对应响应。失败注入与订阅行为仍由对应领域提供。
 
 `pages/video/danmaku_pool_test.dart` 检查弹幕列表刷新、个人点赞状态恢复与取消点赞。挂起接口响应时检查首帧及慢响应期间的加载占位，另覆盖响应缺失、网络异常、查询重试不提交点赞，以及切换弹幕后迟到结果的隔离。
 

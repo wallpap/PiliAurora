@@ -83,29 +83,22 @@ void main() {
     await query;
   }
 
-  test(
-    'data success uses the typed response and releases the loading flag',
-    () async {
-      final query = data.queryData();
-      expect(data.isLoading, isTrue);
-      data.requests.single.complete(const Success(7));
-      await query;
-      expect(data.loadingState.value.data, 7);
-      expect(data.applied, 1);
+  for (final oldResponse in <LoadingState<int>>[
+    const Success(1),
+    const Error('old error'),
+  ]) {
+    test('最新刷新优先，迟到的 $oldResponse 不执行业务回写', () async {
+      final old = data.onRefresh();
+      final current = data.onRefresh();
+      data.requests.last.complete(const Success(2));
+      await current;
       expect(data.isLoading, isFalse);
-    },
-  );
-
-  test('latest refresh wins even if the old response completes last', () async {
-    final old = data.onRefresh();
-    final current = data.onRefresh();
-    data.requests.last.complete(const Success(2));
-    await current;
-    data.requests.first.complete(const Success(1));
-    await old;
-    expect(data.loadingState.value.data, 2);
-    expect(data.applied, 1);
-  });
+      data.requests.first.complete(oldResponse);
+      await old;
+      expect(data.loadingState.value.data, 2);
+      expect(data.applied, 1);
+    });
+  }
 
   test('an old completion cannot release a newer query loading flag', () async {
     final old = data.queryData();
@@ -117,16 +110,6 @@ void main() {
     data.requests.last.complete(const Success(2));
     await current;
     expect(data.isLoading, isFalse);
-  });
-
-  test('stale errors cannot replace the latest success', () async {
-    final old = data.queryData();
-    final current = data.queryData();
-    data.requests.last.complete(const Success(2));
-    await current;
-    data.requests.first.complete(const Error('old error'));
-    await old;
-    expect(data.loadingState.value.data, 2);
   });
 
   test(
@@ -158,29 +141,26 @@ void main() {
     },
   );
 
-  test('loading responses are not mistaken for an Error', () async {
-    final query = data.queryData();
-    data.requests.single.complete(LoadingState<int>.loading());
-    await query;
-    expect(data.loadingState.value, isA<Loading>());
-    expect(data.isLoading, isFalse);
-  });
-
-  test('handled errors preserve the state chosen by the caller', () async {
-    data.interceptError = true;
-    data.loadingState.value = const Success(1);
-    final query = data.queryData();
-    data.requests.single.complete(const Error('handled'));
-    await query;
-    expect(data.loadingState.value.data, 1);
-  });
-
-  test('unhandled refresh errors become the typed page state', () async {
-    final query = data.queryData();
-    data.requests.single.complete(const Error('failed', code: 500));
-    await query;
-    expect(data.loadingState.value, const Error('failed', code: 500));
-  });
+  for (final (response, intercepted, expected)
+      in <(LoadingState<int>, bool, LoadingState<int>)>[
+        (LoadingState<int>.loading(), false, const Success(1)),
+        (const Error('handled'), true, const Success(1)),
+        (
+          const Error('failed', code: 500),
+          false,
+          const Error('failed', code: 500),
+        ),
+      ]) {
+    test('响应 $response 在错误拦截=$intercepted 时按约定保留或更新状态并释放加载标记', () async {
+      data.interceptError = intercepted;
+      data.loadingState.value = const Success(1);
+      final query = data.queryData();
+      data.requests.single.complete(response);
+      await query;
+      expect(data.loadingState.value, expected);
+      expect(data.isLoading, isFalse);
+    });
+  }
 
   test('load more cannot overlap the current data request', () async {
     final query = data.queryData();
@@ -313,6 +293,10 @@ void main() {
       await expectation;
       expect(list.isLoading, isFalse);
       expect(list.page, 1);
+      list.failHandling = false;
+      await seed([2]);
+      expect(list.loadingState.value.data, [2]);
+      expect(list.page, 2);
     },
   );
 

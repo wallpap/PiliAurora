@@ -1,90 +1,23 @@
-import 'dart:typed_data';
-
 import 'package:flutter/gestures.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:hive_ce/hive.dart';
 import 'package:material_ui/material_ui.dart';
-import 'package:pili_aurora/common/widgets/image/network_img_layer.dart';
 import 'package:pili_aurora/pages/whisper_detail/widget/chat_item.dart';
 import 'package:pili_aurora/pages/whisper_detail/widget/message_content_card.dart';
 import 'package:pili_aurora/services/messaging/message_models.dart';
 import 'package:pili_aurora/utils/storage.dart';
 
+import '../../support/memory_box.dart';
+
 void main() {
-  TestWidgetsFlutterBinding.ensureInitialized();
-
-  setUpAll(() async {
-    GStorage.setting = await Hive.openBox<dynamic>(
-      'message_content_card_test',
-      bytes: Uint8List(0),
-    );
-  });
-  tearDownAll(Hive.close);
-
-  testWidgets('多图在窄屏和宽屏保持封面比例，放大文字后不溢出', (tester) async {
-    for (final (width, brightness) in [
-      (332.0, Brightness.light),
-      (452.0, Brightness.dark),
-    ]) {
-      await tester.pumpWidget(
-        MaterialApp(
-          theme: ThemeData(brightness: brightness),
-          home: Scaffold(
-            body: MediaQuery(
-              data: const MediaQueryData(textScaler: TextScaler.linear(1.25)),
-              child: Center(
-                child: SizedBox(
-                  width: width,
-                  child: MessageContentCard(
-                    coverUrls: const ['', '', '', ''],
-                    title: '长标题' * 30,
-                    summary: '长摘要' * 50,
-                    onTap: () {},
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ),
-      );
-      await tester.pumpAndSettle();
-
-      final coverSize = tester.getSize(find.byType(AspectRatio));
-      final expectedWidth = width < 400 ? width : 400.0;
-      expect(coverSize.width, expectedWidth);
-      expect(coverSize.height, closeTo(expectedWidth * 9 / 16, 0.001));
-      expect(find.byType(NetworkImgLayer), findsNWidgets(3));
-      expect(find.text('共 4 张'), findsOneWidget);
-      expect(tester.takeException(), isNull);
-    }
-  });
-
-  testWidgets('无封面时省略图片区，整张卡片可点击', (tester) async {
-    var taps = 0;
-    await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(
-          body: MessageContentCard(
-            coverUrls: const [],
-            title: '无封面专栏',
-            summary: '专栏摘要',
-            onTap: () => taps++,
-          ),
-        ),
-      ),
-    );
-    expect(find.byType(AspectRatio), findsNothing);
-    await tester.tap(find.text('专栏摘要'));
-    expect(taps, 1);
-  });
+  setUpAll(() => GStorage.setting = MemoryBox<dynamic>());
 
   testWidgets('两类消息接入统一卡片，保留长按、右键和视频附言', (tester) async {
-    var longPresses = 0;
-    var secondaryTaps = 0;
     for (final kind in [
       MessageContentKind.articleCard,
       MessageContentKind.videoCard,
     ]) {
+      var longPresses = 0;
+      var secondaryTaps = 0;
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(
@@ -126,9 +59,9 @@ void main() {
         buttons: kSecondaryMouseButton,
       );
       await gesture.up();
+      expect(longPresses, 1, reason: kind.name);
+      expect(secondaryTaps, 1, reason: kind.name);
       expect(tester.takeException(), isNull);
     }
-    expect(longPresses, 2);
-    expect(secondaryTaps, 2);
   });
 }

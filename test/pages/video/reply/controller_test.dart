@@ -1,5 +1,4 @@
 import 'dart:collection';
-import 'dart:typed_data';
 
 import 'package:pili_aurora/grpc/bilibili/main/community/reply/v1.pb.dart';
 import 'package:pili_aurora/http/loading_state.dart';
@@ -7,9 +6,10 @@ import 'package:pili_aurora/models/common/video/video_type.dart';
 import 'package:pili_aurora/pages/video/reply/controller.dart';
 import 'package:fixnum/fixnum.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:hive_ce/hive.dart';
 import 'package:pili_aurora/utils/storage.dart';
 import 'package:pili_aurora/utils/storage_key.dart';
+
+import '../../../support/memory_box.dart';
 
 ReplyInfo _reply(int id) => ReplyInfo(id: Int64(id));
 
@@ -29,14 +29,8 @@ class _TestVideoReplyController extends VideoReplyController {
 }
 
 void main() {
-  setUpAll(() async {
-    GStorage.setting = await Hive.openBox<dynamic>(
-      'reply-level-controller',
-      bytes: Uint8List(0),
-    );
-  });
+  setUpAll(() => GStorage.setting = MemoryBox<dynamic>());
   setUp(() => GStorage.setting.clear());
-  tearDownAll(() => GStorage.setting.close());
 
   ReplyInfo withLevel(int id, int level, [List<ReplyInfo>? replies]) =>
       ReplyInfo(

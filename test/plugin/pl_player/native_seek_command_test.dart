@@ -4,69 +4,55 @@ import 'package:pili_aurora/plugin/pl_player/models/data_source.dart';
 import 'package:pili_aurora/plugin/pl_player/utils/native_media_source.dart';
 
 void main() {
-  test('Android DASH seeks align video with the separate audio track', () {
-    final media = nativeMediaSource(
+  test('独立音轨强制精确 seek，合流源保留关键帧策略和绝对时间', () {
+    final separate = nativeMediaSource(
       source: NetworkSource(
         videoSource: 'https://example.com/video.m4s',
         audioSource: 'https://example.com/audio.m4s',
       ),
     );
-    expect(
-      nativeSeekCommand(
-        const Duration(milliseconds: 729186),
-        keyframe: true,
-        mediaExtras: media.extras,
+    final combined = nativeMediaSource(
+      source: NetworkSource(
+        videoSource: 'https://example.com/video.mp4',
+        audioSource: null,
       ),
-      ['seek', '729.186', 'absolute+exact'],
     );
-  });
-
-  test('audio-files also aligns a file-local external audio track', () {
-    expect(
-      nativeSeekCommand(
-        const Duration(milliseconds: 2400),
-        keyframe: true,
-        mediaExtras: {'audio-files': 'audio.wav'},
+    for (final (extras, externalAudio, keyframe, position, expected) in [
+      (
+        separate.extras,
+        false,
+        true,
+        729186,
+        ['seek', '729.186', 'absolute+exact'],
       ),
-      ['seek', '2.400', 'absolute+exact'],
-    );
-  });
-
-  test(
-    'switching to a source without separate audio restores keyframe seeks',
-    () {
-      final media = nativeMediaSource(
-        source: NetworkSource(
-          videoSource: 'https://example.com/video.mp4',
-          audioSource: null,
-        ),
-      );
+      (
+        <String, dynamic>{'audio-files': 'audio.wav'},
+        false,
+        true,
+        2400,
+        ['seek', '2.400', 'absolute+exact'],
+      ),
+      (
+        combined.extras,
+        false,
+        true,
+        20500,
+        ['seek', '20.500', 'absolute+keyframes'],
+      ),
+      (null, true, true, 96873, ['seek', '96.873', 'absolute+exact']),
+      (null, false, false, 1250, ['seek', '1.250', 'absolute']),
+    ]) {
       expect(
         nativeSeekCommand(
-          const Duration(seconds: 20, milliseconds: 500),
-          keyframe: true,
-          mediaExtras: media.extras,
+          Duration(milliseconds: position),
+          keyframe: keyframe,
+          mediaExtras: extras,
+          externalAudio: externalAudio,
         ),
-        ['seek', '20.500', 'absolute+keyframes'],
+        expected,
+        reason:
+            'extras=$extras, externalAudio=$externalAudio, keyframe=$keyframe',
       );
-    },
-  );
-
-  test('backward DASH seeks remain exact at non-keyframe targets', () {
-    expect(
-      nativeSeekCommand(
-        const Duration(milliseconds: 96873),
-        keyframe: true,
-        externalAudio: true,
-      ),
-      ['seek', '96.873', 'absolute+exact'],
-    );
-  });
-
-  test('other platforms retain exact absolute seeks', () {
-    expect(
-      nativeSeekCommand(const Duration(milliseconds: 1250)),
-      ['seek', '1.250', 'absolute'],
-    );
+    }
   });
 }

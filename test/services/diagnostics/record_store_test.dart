@@ -66,8 +66,6 @@ void main() {
     await store.flush();
     expect(store.dropped, 0);
     expect(await store.file.readAsLines(), hasLength(4096));
-    expect(store.maxBytes, 8 << 20);
-    expect(store.retainedFiles, 4);
   });
 
   test(

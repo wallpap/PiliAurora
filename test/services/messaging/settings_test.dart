@@ -50,64 +50,38 @@ void main() {
     return handle;
   }
 
-  test('同键写入按顺序执行，全部失败时回到最后确认值', () async {
-    final session = ControlledSession();
-    final handle = createHandle(session);
-
-    final first = handle.setSetting(1, setting(true));
-    final second = handle.setSetting(1, setting(false));
-    expect(
-      handle.state.value.loadingState.dataOrNull![1]!.switch_1.switchOn,
-      false,
+  for (final (firstSucceeds, secondSucceeds, confirmed) in [
+    (false, false, false),
+    (true, false, true),
+    (false, true, false),
+    (true, true, false),
+  ]) {
+    test(
+      '同键串行写入 success=$firstSucceeds/$secondSucceeds，保留最新意图并按确认结果回滚',
+      () async {
+        final session = ControlledSession();
+        final handle = createHandle(session);
+        bool selected() =>
+            handle.state.value.loadingState.dataOrNull![1]!.switch_1.switchOn;
+        final first = handle.setSetting(1, setting(true));
+        final second = handle.setSetting(1, setting(false));
+        expect(selected(), isFalse);
+        expect(session.requests, hasLength(1));
+        session.requests.single.complete(
+          firstSucceeds ? const Success(null) : const Error('失败'),
+        );
+        await first;
+        expect(selected(), isFalse);
+        await settle();
+        expect(session.requests, hasLength(2));
+        session.requests.last.complete(
+          secondSucceeds ? const Success(null) : const Error('失败'),
+        );
+        await second;
+        expect(selected(), confirmed);
+      },
     );
-    expect(session.requests, hasLength(1));
-    session.requests[0].complete(const Error('失败'));
-    await first;
-    await settle();
-    expect(session.requests, hasLength(2));
-    session.requests[1].complete(const Error('失败'));
-    await second;
-    expect(
-      handle.state.value.loadingState.dataOrNull![1]!.switch_1.switchOn,
-      false,
-    );
-  });
-
-  test('较早写入成功、最新写入失败时恢复已确认值', () async {
-    final session = ControlledSession();
-    final handle = createHandle(session);
-    final first = handle.setSetting(1, setting(true));
-    final second = handle.setSetting(1, setting(false));
-    session.requests.single.complete(const Success(null));
-    await first;
-    expect(
-      handle.state.value.loadingState.dataOrNull![1]!.switch_1.switchOn,
-      false,
-    );
-    await settle();
-    session.requests.last.complete(const Error('失败'));
-    await second;
-    expect(
-      handle.state.value.loadingState.dataOrNull![1]!.switch_1.switchOn,
-      true,
-    );
-  });
-
-  test('较早写入失败、最新写入成功时保留最新选择', () async {
-    final session = ControlledSession();
-    final handle = createHandle(session);
-    final first = handle.setSetting(1, setting(true));
-    final second = handle.setSetting(1, setting(false));
-    session.requests.single.complete(const Error('失败'));
-    await first;
-    await settle();
-    session.requests.last.complete(const Success(null));
-    await second;
-    expect(
-      handle.state.value.loadingState.dataOrNull![1]!.switch_1.switchOn,
-      false,
-    );
-  });
+  }
 
   test('不同设置项可并发写入，分别确认或回滚', () async {
     final session = ControlledSession();

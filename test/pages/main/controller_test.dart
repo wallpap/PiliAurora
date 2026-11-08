@@ -1,10 +1,8 @@
 import 'dart:async';
-import 'dart:io';
 
 import 'package:flutter/scheduler.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get/get.dart';
-import 'package:hive_ce/hive.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:pili_aurora/models/common/dynamic/dynamic_badge_mode.dart';
 import 'package:pili_aurora/models/common/nav_bar_config.dart';
@@ -14,15 +12,13 @@ import 'package:pili_aurora/services/account_service.dart';
 import 'package:pili_aurora/utils/storage.dart';
 import 'package:pili_aurora/utils/storage_key.dart';
 
+import '../../support/memory_box.dart';
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
-  late Directory directory;
-
-  setUpAll(() async {
-    directory = await Directory.systemTemp.createTemp('pili-main-controller-');
-    Hive.init(directory.path);
-    GStorage.setting = await Hive.openBox('setting');
-    GStorage.userInfo = await Hive.openBox<UserInfoData>('userInfo');
+  setUpAll(() {
+    GStorage.setting = MemoryBox<dynamic>();
+    GStorage.userInfo = MemoryBox<UserInfoData>();
   });
 
   setUp(() async {
@@ -42,19 +38,12 @@ void main() {
       ..reset();
   });
 
-  tearDownAll(() async {
-    await Hive.close();
-    await directory.delete(recursive: true);
-  });
-
   for (final mainTabBarView in [false, true]) {
     testWidgets('initial badge requests run after the first frame, '
         'with mainTabBarView=$mainTabBarView', (tester) async {
-      await tester.runAsync(
-        () => GStorage.setting.put(
-          SettingBoxKey.mainTabBarView,
-          mainTabBarView,
-        ),
+      await GStorage.setting.put(
+        SettingBoxKey.mainTabBarView,
+        mainTabBarView,
       );
       late _CountingMainController controller;
       var requestsDuringBuild = -1;
@@ -180,14 +169,12 @@ void main() {
       expectedMessages,
     ) = scenario;
     testWidgets('preserves startup request conditions: $name', (tester) async {
-      await tester.runAsync(
-        () => GStorage.setting.putAll({
-          SettingBoxKey.navBarSort: tabs.map((tab) => tab.index).toList(),
-          SettingBoxKey.defaultHomePage: defaultTab.index,
-          SettingBoxKey.dynamicBadgeMode: dynamicBadge.index,
-          SettingBoxKey.msgBadgeMode: messageBadge.index,
-        }),
-      );
+      await GStorage.setting.putAll({
+        SettingBoxKey.navBarSort: tabs.map((tab) => tab.index).toList(),
+        SettingBoxKey.defaultHomePage: defaultTab.index,
+        SettingBoxKey.dynamicBadgeMode: dynamicBadge.index,
+        SettingBoxKey.msgBadgeMode: messageBadge.index,
+      });
       late _CountingMainController controller;
       var dynamicCallsDuringBuild = -1;
       var messageCallsDuringBuild = -1;
@@ -228,11 +215,9 @@ void main() {
   testWidgets('disabling periodic dynamic checks keeps the initial request', (
     tester,
   ) async {
-    await tester.runAsync(
-      () => GStorage.setting.put(
-        SettingBoxKey.checkDynamic,
-        false,
-      ),
+    await GStorage.setting.put(
+      SettingBoxKey.checkDynamic,
+      false,
     );
     late _CountingMainController controller;
     var dynamicCallsDuringBuild = -1;

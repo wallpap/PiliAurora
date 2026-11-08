@@ -1,6 +1,3 @@
-import 'dart:async';
-
-import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -16,16 +13,14 @@ import 'package:pili_aurora/utils/accounts.dart';
 import 'package:pili_aurora/utils/accounts/account.dart';
 import 'package:pili_aurora/utils/storage.dart';
 
+import '../../support/controlled_interceptor.dart';
 import '../../support/memory_box.dart';
-
-typedef _Pending = ({
-  RequestOptions options,
-  Completer<Map<String, dynamic>> reply,
-});
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
-  final requests = <_Pending>[];
+  final interceptor = ControlledInterceptor();
+  final requests = interceptor.requests;
+  final dispatched = interceptor.waitForRequests;
   late ProviderContainer container;
   late ProviderSubscription<AsyncValue<BlackListState>> subscription;
   late Account account;
@@ -46,13 +41,6 @@ void main() {
       'total': ?total,
     },
   };
-  Future<void> dispatched(int count) async {
-    for (var i = 0; i < 100 && requests.length < count; i++) {
-      await Future<void>.delayed(Duration.zero);
-    }
-    expect(requests, hasLength(count));
-  }
-
   Future<void> loaded({int? total = 120}) async {
     await dispatched(1);
     requests[0].reply.complete(page(range(1, 50), total: total));
@@ -74,15 +62,7 @@ void main() {
     Request();
     Request.dio.interceptors.clear();
     Request.dio.interceptors.add(
-      InterceptorsWrapper(
-        onRequest: (options, handler) async {
-          final reply = Completer<Map<String, dynamic>>();
-          requests.add((options: options, reply: reply));
-          handler.resolve(
-            Response(requestOptions: options, data: await reply.future),
-          );
-        },
-      ),
+      interceptor,
     );
   });
   setUp(() {
@@ -102,7 +82,10 @@ void main() {
       }
     }
   });
-  tearDownAll(() => Request.dio.close(force: true));
+  tearDownAll(() async {
+    Request.dio.close(force: true);
+    await interceptor.close();
+  });
 
   test('分页串行、按 UID 去重并发布不可变列表，短页停止', () async {
     await loaded();
