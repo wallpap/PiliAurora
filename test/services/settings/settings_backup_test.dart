@@ -150,8 +150,9 @@ void main() {
       );
     }
 
-    test('invalid JSON leaves storage untouched', () {
-      expect(() => backup.restoreJson('{'), throwsFormatException);
+    test('invalid JSON fails through the returned Future and leaves storage untouched', () async {
+      final operation = backup.restoreJson('{');
+      await expectLater(operation, throwsFormatException);
       expect(events, isEmpty);
     });
 

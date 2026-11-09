@@ -26,7 +26,11 @@ class SettingsBackup {
     return _encoder.convert({'setting': settings, 'video': _video.toMap()});
   }
 
-  Future<void> restoreJson(String data) => restoreMap(jsonDecode(data));
+  Future<void> restoreJson(String data) async {
+    // 解析与持久化失败沿同一个 Future 返回，调用方可统一等待和恢复。
+    final document = jsonDecode(data);
+    await restoreMap(document);
+  }
 
   Future<void> restoreMap(Object? document) =>
       _restoreLock.synchronized(() async {
