@@ -378,20 +378,17 @@ class PlaybackSession implements PlaybackMediaClock {
       final plan = await resolve(query).timeout(remaining);
       if (!_isRequestCurrent(request)) return;
       if (plan == null) {
-        _finishRequest(
-          request,
-          const LoadResult.failed(
-            PlaybackFailure(
-              category: PlaybackFailureCategory.source,
-              operation: 'query',
-              stage: PlaybackStage.resolving,
-              recoverable: false,
-              cause: '来源解析没有返回播放计划。',
-            ),
-          ),
+        const failure = PlaybackFailure(
+          category: PlaybackFailureCategory.source,
+          operation: 'query',
+          stage: PlaybackStage.resolving,
+          recoverable: false,
+          cause: '来源解析没有返回播放计划。',
         );
+        _finishRequest(request, const LoadResult.failed(failure));
         _phase = PlaybackPhase.failed;
         _stage = PlaybackStage.idle;
+        _failure = failure;
         _publish();
         return;
       }
@@ -924,7 +921,21 @@ class PlaybackSession implements PlaybackMediaClock {
               identical(owner, _activeOwner) &&
               _writerPermitted,
         );
-        final result = await _runtime.setPlaying(target, context);
+        PlaybackRuntimeCommandResult result;
+        try {
+          result = await _runtime.setPlaying(target, context);
+        } catch (error) {
+          result = PlaybackRuntimeCommandResult(
+            applied: false,
+            failure: PlaybackFailure(
+              category: PlaybackFailureCategory.unknown,
+              operation: 'playback-intent',
+              stage: _stage,
+              recoverable: false,
+              cause: error.toString(),
+            ),
+          );
+        }
         if (!_closingRequested && context.isCurrent()) {
           if (result.failure != null || !result.applied) {
             final failure =
@@ -958,20 +969,6 @@ class PlaybackSession implements PlaybackMediaClock {
         }
         if (revision == _intentRevision) break;
       }
-    } catch (error) {
-      final revision = _intentRevision;
-      _settlePlayingRevision(
-        revision,
-        CommandResult.failed(
-          PlaybackFailure(
-            category: PlaybackFailureCategory.unknown,
-            operation: 'playback-intent',
-            stage: _stage,
-            recoverable: false,
-            cause: error.toString(),
-          ),
-        ),
-      );
     } finally {
       _writerRunning = false;
       _writerDrain = null;
@@ -1150,11 +1147,24 @@ class PlaybackSession implements PlaybackMediaClock {
     }
     final current = _desiredConfiguration;
     final desired = update(current);
+    final changedKeys = <PlaybackConfigurationKey>{key, ...alsoChanged};
     if (_sameConfiguration(current, desired)) {
-      return Future.value(const CommandResult.applied());
+      if (changedKeys.any(_configurationPending.contains)) {
+        return Future.value(const CommandResult.accepted());
+      }
+      var appliedWithDesiredKeys = _appliedConfiguration;
+      for (final changedKey in changedKeys) {
+        appliedWithDesiredKeys = _copyConfigurationKey(
+          appliedWithDesiredKeys,
+          desired,
+          changedKey,
+        );
+      }
+      if (_sameConfiguration(appliedWithDesiredKeys, _appliedConfiguration)) {
+        return Future.value(const CommandResult.applied());
+      }
     }
     _desiredConfiguration = desired;
-    final changedKeys = <PlaybackConfigurationKey>{key, ...alsoChanged};
     final revisions = <PlaybackConfigurationKey, int>{};
     for (final changedKey in changedKeys) {
       final revision = (_configurationRevisions[changedKey] ?? 0) + 1;
@@ -1230,13 +1240,14 @@ class PlaybackSession implements PlaybackMediaClock {
       },
     );
     return operation.then((result) {
-      if (revisions.entries.every(
-        (entry) => _configurationRevisions[entry.key] == entry.value,
-      )) {
-        if (result.outcome != PlaybackOperationOutcome.completed) {
-          _configurationPending.removeAll(changedKeys);
-          _publish();
+      if (request == _requestId && load == _loadId) {
+        var changed = false;
+        for (final entry in revisions.entries) {
+          if (_configurationRevisions[entry.key] == entry.value) {
+            changed = _configurationPending.remove(entry.key) || changed;
+          }
         }
+        if (changed) _publish();
       }
       return _commandResult(result, key.name, PlaybackStage.observing);
     });
@@ -1739,7 +1750,7 @@ class PlaybackSession implements PlaybackMediaClock {
       case PlaybackRuntimeEnded(:final position, :final duration):
         if (_phase != PlaybackPhase.ready || _pendingAction != null) return;
         final owner = _activeOwner;
-        if (owner == null) return;
+        if (owner == null || owner._requiresLoad) return;
         final plan = _currentPlan;
         final endPosition = position ?? _runtime.position ?? _actual.position;
         final endDuration = duration != null && duration > Duration.zero
@@ -1776,6 +1787,15 @@ class PlaybackSession implements PlaybackMediaClock {
         );
         _publish();
       case PlaybackRuntimeFailure(:final failure):
+        final owner = _activeOwner;
+        final request = _acceptedRequest;
+        if (owner == null ||
+            (request != null && request.loadId != event.loadId) ||
+            (owner._requiresLoad &&
+                (!identical(request?.owner, owner) ||
+                    request?.loadId != event.loadId))) {
+          return;
+        }
         _publishFailure(failure);
     }
   }

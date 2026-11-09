@@ -1336,6 +1336,244 @@ void main() {
     await runtime.released;
   });
 
+  test('activate 交接后旧媒体结束与失败不归属未加载页面', () async {
+    final runtime = _FakeRuntime();
+    final session = PlaybackSession(runtime: runtime);
+    final first = session.attach();
+    await first.load(_plan('movie'));
+    final oldLoad = session.loadId;
+    final second = session.attach();
+    first.activate();
+    runtime._events.add(
+      PlaybackRuntimeEnded(
+        runtimeId: runtime.runtimeId,
+        loadId: oldLoad,
+        position: const Duration(seconds: 10),
+        duration: const Duration(seconds: 10),
+      ),
+    );
+    runtime._events.add(
+      const PlaybackRuntimeFailure(
+        runtimeId: 51,
+        loadId: 1,
+        failure: PlaybackFailure(
+          category: PlaybackFailureCategory.source,
+          operation: 'old',
+          stage: PlaybackStage.observing,
+          recoverable: false,
+          cause: 'old failure',
+        ),
+      ),
+    );
+    expect(session.currentSnapshot.pendingAction, isNull);
+    expect(session.currentSnapshot.phase, PlaybackPhase.ready);
+    expect(session.currentSnapshot.failure, isNull);
+    first.close();
+    second.close();
+    await session.shutdown();
+  });
+
+  test('查询新来源时旧媒体失败不污染新请求', () async {
+    final runtime = _FakeRuntime();
+    final session = PlaybackSession(runtime: runtime);
+    final owner = session.attach();
+    await owner.load(_plan('first'));
+    final oldLoad = session.loadId;
+    final resolve = Completer<PlaybackPlan?>();
+    final loading = owner.query((_) => resolve.future);
+    runtime._events.add(
+      PlaybackRuntimeFailure(
+        runtimeId: runtime.runtimeId,
+        loadId: oldLoad,
+        failure: const PlaybackFailure(
+          category: PlaybackFailureCategory.source,
+          operation: 'old',
+          stage: PlaybackStage.observing,
+          recoverable: false,
+          cause: 'old failure',
+        ),
+      ),
+    );
+    expect(session.currentSnapshot.phase, PlaybackPhase.loading);
+    expect(session.currentSnapshot.failure, isNull);
+    resolve.complete(_plan('second'));
+    expect((await loading).outcome, LoadOutcome.ready);
+    owner.close();
+    await session.shutdown();
+  });
+
+  test('当前加载的原生失败仍发布到快照', () async {
+    final runtime = _FakeRuntime();
+    final session = PlaybackSession(runtime: runtime);
+    final owner = session.attach();
+    final started = Completer<PlaybackExecutionContext>();
+    final finish = Completer<void>();
+    runtime.onLoad = (plan, context, _) async {
+      started.complete(context);
+      await finish.future;
+      return _failedLoad(context);
+    };
+    final loading = owner.load(_plan('movie'));
+    final context = await started.future;
+    const failure = PlaybackFailure(
+      category: PlaybackFailureCategory.source,
+      operation: 'current',
+      stage: PlaybackStage.opening,
+      recoverable: false,
+      cause: 'current failure',
+    );
+    runtime._events.add(
+      PlaybackRuntimeFailure(
+        runtimeId: runtime.runtimeId,
+        loadId: context.loadId,
+        failure: failure,
+      ),
+    );
+    expect(session.currentSnapshot.phase, PlaybackPhase.failed);
+    expect(session.currentSnapshot.failure, same(failure));
+    finish.complete();
+    expect((await loading).outcome, LoadOutcome.failed);
+    owner.close();
+    await session.shutdown();
+  });
+
+  test('旧 writer 异常不污染新媒体加载', () async {
+    final runtime = _FakeRuntime();
+    final session = PlaybackSession(runtime: runtime);
+    final first = session.attach();
+    await first.load(_plan('first'));
+    final started = Completer<void>();
+    final release = Completer<void>();
+    runtime.onSetPlaying = (value, _, _) async {
+      if (value) {
+        started.complete();
+        await release.future;
+        throw StateError('old write failed');
+      }
+      return const PlaybackRuntimeCommandResult();
+    };
+    final old = first.setPlaying(true);
+    await started.future;
+    final second = session.attach();
+    final loading = second.load(_plan('second'));
+    expect((await old).outcome, CommandOutcome.superseded);
+    release.complete();
+    expect((await loading).outcome, LoadOutcome.ready);
+    expect(session.currentSnapshot.failure, isNull);
+    first.close();
+    second.close();
+    await session.shutdown();
+  });
+
+  test('当前播放意图的原生异常返回失败', () async {
+    final runtime = _FakeRuntime();
+    final session = PlaybackSession(runtime: runtime);
+    final owner = session.attach();
+    await owner.load(_plan('movie'));
+    runtime.onSetPlaying = (value, _, _) async {
+      if (value) throw StateError('current write failed');
+      return const PlaybackRuntimeCommandResult();
+    };
+    final result = await owner.setPlaying(true);
+    expect(result.outcome, CommandOutcome.failed);
+    expect(result.failure!.cause, contains('current write failed'));
+    owner.close();
+    await session.shutdown();
+  });
+
+  test('空查询结果的失败原因与快照一致', () async {
+    final runtime = _FakeRuntime();
+    final session = PlaybackSession(runtime: runtime);
+    final owner = session.attach();
+    final result = await owner.query((_) async => null);
+    expect(result.outcome, LoadOutcome.failed);
+    expect(session.currentSnapshot.phase, PlaybackPhase.failed);
+    expect(session.currentSnapshot.failure, same(result.failure));
+    owner.close();
+    await session.shutdown();
+  });
+
+  for (final unsupported in [false, true]) {
+    test('配置${unsupported ? '不支持' : '失败'}后同值可重试', () async {
+      final runtime = _FakeRuntime();
+      final session = PlaybackSession(runtime: runtime);
+      final owner = session.attach();
+      await owner.load(_plan('movie'));
+      const failure = PlaybackFailure(
+        category: PlaybackFailureCategory.source,
+        operation: 'muted',
+        stage: PlaybackStage.observing,
+        recoverable: true,
+        cause: 'test failure',
+      );
+      runtime.onSetMuted = (_, _) async => unsupported
+          ? const PlaybackRuntimeCommandResult(applied: false)
+          : const PlaybackRuntimeCommandResult(
+              applied: false,
+              failure: failure,
+            );
+      for (var i = 0; i < 2; i++) {
+        final result = await owner.setMuted(true);
+        expect(
+          result.outcome,
+          unsupported ? CommandOutcome.unsupported : CommandOutcome.failed,
+        );
+        expect(session.currentSnapshot.configuration.pending, isEmpty);
+        expect(session.currentSnapshot.configuration.desired.muted, isTrue);
+        expect(session.currentSnapshot.configuration.applied.muted, isFalse);
+      }
+      runtime.onSetMuted = null;
+      expect((await owner.setMuted(true)).outcome, CommandOutcome.applied);
+      expect(runtime.mutedCalls, [true, true, true]);
+      expect(session.currentSnapshot.configuration.applied.muted, isTrue);
+      owner.close();
+      await session.shutdown();
+    });
+  }
+
+  test('在途配置的同值请求保持 accepted，完成后为 applied', () async {
+    final runtime = _FakeRuntime();
+    final session = PlaybackSession(runtime: runtime);
+    final owner = session.attach();
+    await owner.load(_plan('movie'));
+    final pending = Completer<PlaybackRuntimeCommandResult>();
+    runtime.onSetMuted = (_, _) => pending.future;
+    final first = owner.setMuted(true);
+    await _until(() => runtime.mutedCalls.isNotEmpty);
+    expect((await owner.setMuted(true)).outcome, CommandOutcome.accepted);
+    expect(runtime.mutedCalls, [true]);
+    pending.complete(const PlaybackRuntimeCommandResult());
+    expect((await first).outcome, CommandOutcome.applied);
+    expect((await owner.setMuted(true)).outcome, CommandOutcome.applied);
+    owner.close();
+    await session.shutdown();
+  });
+
+  test('旧配置失败不能清除新修订的 pending', () async {
+    final runtime = _FakeRuntime();
+    final session = PlaybackSession(runtime: runtime);
+    final owner = session.attach();
+    await owner.load(_plan('movie'));
+    final first = Completer<PlaybackRuntimeCommandResult>();
+    final second = Completer<PlaybackRuntimeCommandResult>();
+    runtime.onSetMuted = (value, _) => value ? first.future : second.future;
+    final old = owner.setMuted(true);
+    await _until(() => runtime.mutedCalls.length == 1);
+    final next = owner.setMuted(false);
+    first.complete(const PlaybackRuntimeCommandResult(applied: false));
+    await old;
+    await _until(() => runtime.mutedCalls.length == 2);
+    expect(
+      session.currentSnapshot.configuration.pending,
+      contains(PlaybackConfigurationKey.muted),
+    );
+    second.complete(const PlaybackRuntimeCommandResult());
+    expect((await next).outcome, CommandOutcome.applied);
+    expect(session.currentSnapshot.configuration.pending, isEmpty);
+    owner.close();
+    await session.shutdown();
+  });
+
   test('静音与音量独立，新媒体恢复默认非静音', () async {
     final runtime = _FakeRuntime();
     final session = PlaybackSession(runtime: runtime);
@@ -1372,6 +1610,7 @@ void main() {
     };
     final loading = owner.load(_plan('first'));
     await started.future;
+    expect((await owner.setMuted(true)).outcome, CommandOutcome.accepted);
     expect((await owner.setMuted(true)).outcome, CommandOutcome.accepted);
     finish.complete();
     expect((await loading).outcome, LoadOutcome.ready);
