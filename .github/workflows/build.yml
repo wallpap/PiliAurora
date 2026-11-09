@@ -244,7 +244,7 @@ jobs:
 
             - name: Verify prebuilt libmpv
               shell: pwsh
-              run: python tool/verify_libmpv.py
+              run: python tool/verify_libmpv.py --backward-seek
 
             - name: Test Windows upgrade installation
               shell: pwsh

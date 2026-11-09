@@ -448,7 +448,7 @@
       ]
     },
     "mpv": {
-      "origin": "https://github.com/mpv-player/mpv/tree/3138fc8eea",
+      "origin": "https://github.com/mpv-player/mpv/tree/46787be250",
       "revision_status": "binary-reported or release-identified, not a full dependency provenance proof",
       "notices": [
         {
@@ -478,7 +478,7 @@
       ]
     },
     "ffmpeg": {
-      "origin": "https://github.com/FFmpeg/FFmpeg/tree/baa68e68b",
+      "origin": "https://github.com/FFmpeg/FFmpeg/tree/200a98d5b",
       "revision_status": "binary-reported or release-identified, not a full dependency provenance proof",
       "notices": [
         {

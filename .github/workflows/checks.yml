@@ -99,3 +99,11 @@ jobs:
 
       - name: Test Windows WebView environment lifecycle
         run: flutter test --no-pub third_party/flutter_inappwebview_windows/test/webview_environment_channel_test.dart
+
+      - name: Set up Python for native playback regression
+        uses: actions/setup-python@v6
+        with:
+          python-version-file: .python-version
+
+      - name: Verify native fragmented audio backward seek
+        run: python tool/verify_libmpv.py --backward-seek

@@ -1,7 +1,12 @@
 """下载并校验固定的标准上游 libmpv 包，供 CI 独立验收。"""
+import argparse
 import hashlib
 import json
 from pathlib import Path
+import shutil
+import subprocess
+import sys
+import tempfile
 import urllib.request
 
 
@@ -50,4 +55,22 @@ def verify(package: Path) -> Path:
 
 
 if __name__ == '__main__':
-    verify(Path(__file__).resolve().parents[1] / 'third_party/media_kit_libs_windows_video')
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--backward-seek', action='store_true',
+                        help='在 Windows 运行分片独立音轨的真实回退回归')
+    args = parser.parse_args()
+    if args.backward_seek:
+        if sys.platform != 'win32':
+            parser.error('--backward-seek requires Windows')
+        if not shutil.which('cmake'):
+            parser.error('--backward-seek requires CMake on PATH')
+    root = Path(__file__).resolve().parents[1]
+    archive = verify(root / 'third_party/media_kit_libs_windows_video')
+    if args.backward_seek:
+        with tempfile.TemporaryDirectory(prefix='piliaurora-mpv-seek-') as directory:
+            subprocess.run(['cmake', '-E', 'tar', 'xf', str(archive)],
+                           cwd=directory, check=True)
+            subprocess.run([
+                sys.executable, str(root / 'tool/probes/playback/native_backward_seek.py'),
+                '--library', str(Path(directory) / 'libmpv-2.dll'),
+            ], check=True)

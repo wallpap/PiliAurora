@@ -63,6 +63,18 @@ uv run --locked python tool/probes/playback/native_media_smoke.py --library buil
 
 该探针的暂停跳转断言要求落点距目标小于 500ms。Android 普通音视频沿用关键帧跳转策略，应提供关键帧间隔不超过 500ms 的样片；稀疏关键帧样片用于单独验证跳转策略，不适用这个精度断言。独立音轨的精确跳转验证使用上文 `--seek-target` 入口。
 
+## Windows 分片独立音轨回退回归
+
+`playback/native_backward_seek.py` 使用仓库内的微型分片 AV1/AAC 合成样片，从 16 秒续播后回退到 8.133 秒，检查原生落点、音画时间差、解码错误及音频时间戳重置。探针无需网络、FFmpeg、GPU 或声卡，使用真实 libmpv 与软件解码；Windows PR 和发布构建通过 `python tool/verify_libmpv.py --backward-seek` 自动执行三轮。校验入口需在 PATH 中提供 CMake，用于解压下载并校验过的上游包。
+
+```powershell
+python tool/probes/playback/native_backward_seek.py --library build/windows/x64/runner/Release/libmpv-2.dll
+```
+
+此回归捕获 20261105 包的分片音轨回退故障。D3D11 纹理、扬声器输出及完整应用交互仍由设备验收。
+
+源码级最小入口为 `playback/ffmpeg_fragment_seek.c`：仅用 16KB AAC 文件，直接调用 libavformat 两次 seek 并跨分片读包，无需 mpv 或解码。编译命令、失败输出、单次 seek 对照和 FFmpeg 提交级归因见[样片说明](playback/fixtures/README.md#直接-libavformat-最小复现)。
+
 ## Windows 独立音轨断流回归
 
 `playback/native_audio_stream_recovery.py` 在127.0.0.1临时HTTP端口提供合成WAV，发送4秒音频后通过RST终止连接，
