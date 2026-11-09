@@ -456,7 +456,14 @@ void main() {
     processes.first.finish(7);
     await restoring.future.timeout(const Duration(seconds: 3));
     final opening = windows.open(const DesktopPlaybackRequest.live(2));
-    await _until(() => peers.length == 2);
+    // 收到就绪响应后，新目标才已排入声音队列；连接建立本身不保证这一点。
+    await _until(
+      () =>
+          peers.length == 2 &&
+          peers.last.messages.any(
+            (message) => message['type'] == 'diagnosticSettings',
+          ),
+    );
     expect(applied, [true]);
     restored.complete();
     await opening;
@@ -466,8 +473,10 @@ void main() {
     expect(requested, [true, false, true]);
     expect(applied, [true, false, true]);
     expect(
-      peers.last.messages.lastWhere((message) => message['type'] == 'mute'),
-      {'type': 'mute', 'muted': false},
+      peers.last.messages.where((message) => message['type'] == 'mute'),
+      [
+        {'type': 'mute', 'muted': false},
+      ],
     );
   });
 
