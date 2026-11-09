@@ -31,6 +31,7 @@
 | 收藏适配器、快速收藏与收藏夹创建／选择：`http/fav.dart`、`common_intro_controller.dart`、`fav_create`、`fav_panel` | 35 个接口接入业务契约，保留笔记和空间列表的可空语义；缺少收藏夹 ID、名称或属性不再假报成功；只将明确 -404 视频判为不可用；请求进入拦截器前固定账号；快速收藏等待真实写入，失败显示本次写入结果，切号拒绝旧查询和后续写入；创建防重复提交、保留失败草稿，空标题不等同加载中，迟到查询不再写入已释放文本框；封面上传 Future 被消费，裁剪取消不提交上传 | `test/http/fav_response_test.dart`、`test/pages/fav/operation_results_test.dart`、收藏详情、空间收藏和订阅回归 |
 | 风控校验：`http/validate.dart`、`models/login/gaia_result.dart`、`RequestUtils.validate` | 挑战参数不再返回可空 Map；验证通过携带非空 ID，明确拒绝与协议／传输不确定性分离；空参数不分发请求，缺字段不进入 WebView 或提交校验；用户取消、失效结果和不完整证明不会触发成功回调，异步消费者完成／失败沿同一 Future 交付 | `test/http/validate_response_test.dart`、`test/utils/gaia_validation_test.dart`、登录回归 |
 | 音乐与赛事：`http/music.dart`、`match.dart`、`pages/music`、`match_info` | 接入业务结果契约，音乐名称必需，封面／创作者／评论和赛事对象保留可选语义；详情重复加载、乱序、关闭和切号不会发布旧结果，旧评论绑定详情快照；音乐缺少评论来源时呈现空状态，评论失败保留已加载详情；赛事详情和评论独立加载，非法路由交付可读错误；点赞显示在途状态、防止重复写入，仅在确认成功后更新当前账号快照，未知计数保持未知 | `test/http/metadata_response_test.dart`、`test/pages/metadata/` |
+| 空降助手：`http/sponsor_block.dart`、`pages/sponsor_block`、视频片段提交与搬运绑定入口 | 保留独立 HTTP 状态协议，8 个接口的查询解析／传输失败沿结果交付，明确拒绝保留状态码，写入断连、服务端错误及损坏成功响应返回 UnknownResult；不展示原始响应正文，自定义服务器显式不绑定 B 站账号；统计数据校验后再展示，非法片段和配置在本地失败；片段提交防重入、保留失败草稿，成功只处理本次草稿和所属视频／面板；投票拒绝并发和迟到提示，状态查询拒绝旧结果；搬运查询失败不视作尚未绑定 | `test/http/sponsor_block_response_test.dart`、`test/pages/sponsor_block/operation_results_test.dart`、既有跳过行为与设置兼容回归 |
 
 ## 已检查且保留的契约
 
@@ -55,6 +56,7 @@
 - 收藏详情、排序／批量迁移、视频自动收藏等其余消费端继续核对；收藏 HTTP 适配器及上述三个页面路径完成，不等于收藏相关全部页面已经验收。
 - 极验 WebView 自身的脚本失败、超时与取消结果仍需独立审查；风控协调回归通过导航替身提供弹窗结果，不启动原生 WebView。
 - 赛事卡片中各可选字段的局部降级继续随模型消费审查；当前批次覆盖接口、详情／评论生命周期和失败重试。
+- 空降助手设置页的其余偏好持久化和手动时间输入提示，随公共设置／输入校验继续检查；搬运绑定接口已回归，UGC 绑定确认流仅完成源码检查与静态分析，尚无页面自动化或真实服务验收。
 
 ## 验证范围
 
@@ -75,3 +77,5 @@
 - 上述收藏与账号捕获改动后的完整 CI：1150 项通过。`fvm flutter analyze --no-pub lib test tool` 仍只有上游控件副本的 24 条既有 info，没有 error 或 warning。
 - 风控响应、验证协调和登录组合回归 29 项通过，定向分析无问题（`build/validate-contract-tests.log`、`build/validate-contract-analyze.log`）。原生极验页面及真实平台校验仍需登录设备验收。
 - 音乐／赛事接口、控制器、真实音乐页面、番剧分享与成员信息流组合回归 33 项通过，定向分析无问题（`build/metadata-contract-tests.log`、`build/metadata-contract-analyze.log`）。账号写入和原生评论交互仍需登录设备验收。
+- 空降助手接口、真实提交／设置页面、投票、跳过／静音与设置兼容共 36 项回归通过；新增页面操作 7 项单独复验通过（`build/sponsor-block-operations.log`）。真实服务写入与 UGC 搬运绑定确认流尚未验证。
+- 风控、音乐／赛事与空降助手批次后的完整 CI：1218 项通过（`build/error-contract-ci-tests.log`）。`fvm flutter analyze --no-pub lib test tool` 只有上游控件副本中的 24 条既有 info，没有 error 或 warning；修改文件格式检查无改动，`git diff --check` 通过。

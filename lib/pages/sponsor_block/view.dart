@@ -39,8 +39,10 @@ class _SponsorBlockPageState extends State<SponsorBlockPage> {
   bool _blockToast = Pref.blockToast;
   String _blockServer = Pref.blockServer;
   bool _blockTrack = Pref.blockTrack;
-  final _serverStatus = Rxn<bool>();
+  final _serverStatus = LoadingState<void>.loading().obs;
   final _userInfo = LoadingState<UserInfo>.loading().obs;
+  int _statusVersion = 0;
+  int _userVersion = 0;
 
   Box setting = GStorage.setting;
 
@@ -58,15 +60,31 @@ class _SponsorBlockPageState extends State<SponsorBlockPage> {
   }
 
   Future<void> _checkServerStatus() async {
-    _serverStatus.value = (await SponsorBlock.uptimeStatus()).isSuccess;
+    final version = ++_statusVersion;
+    final server = _blockServer;
+    _serverStatus.value = LoadingState.loading();
+    final result = await SponsorBlock.uptimeStatus();
+    if (mounted && version == _statusVersion && server == _blockServer) {
+      _serverStatus.value = result;
+    }
   }
 
   Future<void> _getUserInfo() async {
-    _userInfo.value = await SponsorBlock.userInfo(const [
+    final version = ++_userVersion;
+    final server = _blockServer;
+    final userId = _userId;
+    _userInfo.value = LoadingState.loading();
+    final result = await SponsorBlock.userInfo(const [
       'viewCount',
       'minutesSaved',
       'segmentCount',
-    ], userId: _userId);
+    ], userId: userId);
+    if (mounted &&
+        version == _userVersion &&
+        server == _blockServer &&
+        userId == _userId) {
+      _userInfo.value = result;
+    }
   }
 
   Widget _blockLimitItem(
@@ -178,6 +196,7 @@ class _SponsorBlockPageState extends State<SponsorBlockPage> {
                         List.generate(16, (_) => Utils.random.nextInt(256)),
                       ).toString();
                       setting.put(SettingBoxKey.blockUserID, _userId);
+                      _getUserInfo();
                       (context as Element).markNeedsBuild();
                     },
                     child: const Text('随机'),
@@ -197,6 +216,7 @@ class _SponsorBlockPageState extends State<SponsorBlockPage> {
                         Get.back();
                         _userId = _textController.text;
                         setting.put(SettingBoxKey.blockUserID, _userId);
+                        _getUserInfo();
                         (context as Element).markNeedsBuild();
                       }
                     },
@@ -281,10 +301,7 @@ class _SponsorBlockPageState extends State<SponsorBlockPage> {
     () {
       return ListTile(
         dense: true,
-        onTap: () {
-          _userInfo.value = LoadingState.loading();
-          _getUserInfo();
-        },
+        onTap: _getUserInfo,
         title: Text(
           '您的信息',
           style: titleStyle,
@@ -295,8 +312,8 @@ class _SponsorBlockPageState extends State<SponsorBlockPage> {
             response.toString(),
             style: subTitleStyle,
           ),
-          Error(:final errMsg) => Text(
-            errMsg ?? '服务器错误',
+          Error error => Text(
+            error.toString(),
             style: subTitleStyle.copyWith(color: theme.colorScheme.error),
           ),
         },
@@ -330,6 +347,8 @@ class _SponsorBlockPageState extends State<SponsorBlockPage> {
                     _blockServer = HttpString.sponsorBlockBaseUrl;
                     setting.put(SettingBoxKey.blockServer, _blockServer);
                     AccountManager.blockServer = _blockServer;
+                    _checkServerStatus();
+                    _getUserInfo();
                     (context as Element).markNeedsBuild();
                   },
                   child: const Text('重置'),
@@ -376,25 +395,26 @@ class _SponsorBlockPageState extends State<SponsorBlockPage> {
       String status;
       Color? color;
       switch (_serverStatus.value) {
-        case null:
-          status = '——';
-        case true:
+        case Loading():
+          status = '检查中';
+        case Success():
           status = '正常';
           color = theme.colorScheme.primary;
-        case false:
-          status = '错误';
+        case Error error:
+          status = error.toString();
           color = theme.colorScheme.error;
       }
       return ListTile(
         dense: true,
-        onTap: () {
-          _serverStatus.value = null;
-          _checkServerStatus();
-        },
+        onTap: _checkServerStatus,
         title: Text('服务器状态', style: titleStyle),
-        trailing: Text(
-          status,
-          style: TextStyle(fontSize: 13, color: color),
+        trailing: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 250),
+          child: Text(
+            status,
+            textAlign: TextAlign.end,
+            style: TextStyle(fontSize: 13, color: color),
+          ),
         ),
       );
     },

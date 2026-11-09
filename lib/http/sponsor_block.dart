@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:pili_aurora/build_config.dart';
 import 'package:pili_aurora/common/constants.dart';
+import 'package:pili_aurora/http/api_response.dart';
 import 'package:pili_aurora/http/init.dart';
 import 'package:pili_aurora/http/loading_state.dart';
 import 'package:pili_aurora/http/sponsor_block_api.dart';
@@ -9,129 +10,190 @@ import 'package:pili_aurora/models/common/sponsor_block/post_segment_model.dart'
 import 'package:pili_aurora/models/common/sponsor_block/segment_type.dart';
 import 'package:pili_aurora/models/remote/sponsor_block/segment_item.dart';
 import 'package:pili_aurora/models/remote/sponsor_block/user_info.dart';
+import 'package:pili_aurora/utils/accounts/account.dart';
+import 'package:pili_aurora/utils/accounts/account_manager/account_mgr.dart';
 import 'package:pili_aurora/utils/storage_pref.dart';
-import 'package:pili_aurora/utils/utils.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart' show kDebugMode;
 
-/// https://github.com/hanydd/BilibiliSponsorBlock/wiki/API
+/// 使用 HTTP 状态码的第三方协议，不套用 B 站 code/message/data 业务包体。
 abstract final class SponsorBlock {
   static String get blockServer => Pref.blockServer;
-  static final options = Options(
-    followRedirects: true,
-    // https://github.com/hanydd/BilibiliSponsorBlock/wiki/API#1-%E5%85%AC%E7%94%A8%E5%8F%82%E6%95%B0
-    headers: kDebugMode
-        ? null
-        : {
-            'origin': Constants.appName,
-            'x-ext-version': BuildConfig.versionName,
-          },
-    validateStatus: (status) => true,
-  );
 
-  static Error getErrMsg(Response res) {
-    String statusMessage = switch (res.statusCode) {
-      200 => '意料之外的响应',
+  static Error _httpError(
+    int? status, {
+    Object? cause,
+    StackTrace? stackTrace,
+  }) => Error(
+    switch (status) {
       400 => '参数错误',
       403 => '被自动审核机制拒绝',
       404 => '未找到数据',
       409 => '重复提交',
-      429 => '提交太快（触发速率控制）',
+      429 => '提交太快，请稍后再试',
       500 => '服务器无法获取信息',
-      -1 => res.data['message'].toString(), // DioException
-      _ => res.statusMessage ?? res.statusCode.toString(),
-    };
-    if (res.statusCode != null && res.statusCode != -1) {
-      final data = res.data;
-      if (res.statusCode == 200 ||
-          (data is String && data.isNotEmpty && data.length < 200)) {
-        statusMessage = '$statusMessage：$data';
-      }
+      _ => status == null ? '未收到有效的服务器响应' : '服务器响应异常（HTTP $status）',
+    },
+    code: status,
+    cause: cause,
+    stackTrace: stackTrace,
+  );
+
+  static bool _isRejection(int? status) =>
+      status != null && status >= 400 && status < 500 && status != 408;
+
+  static Future<LoadingState<T>> _request<T>(
+    String endpoint, {
+    required ApiCallKind kind,
+    required T Function(dynamic body) decode,
+    Map<String, dynamic>? queryParameters,
+    Object? data,
+  }) async {
+    final server = blockServer.trim().replaceFirst(RegExp(r'/+$'), '');
+    final uri = Uri.tryParse(server);
+    if (uri == null ||
+        !const {'http', 'https'}.contains(uri.scheme) ||
+        uri.host.isEmpty ||
+        uri.hasQuery ||
+        uri.hasFragment) {
+      return const Error('空降助手服务器地址无效，请检查设置');
     }
-    return Error(statusMessage, code: res.statusCode);
+    final Response<dynamic> response;
+    try {
+      Request();
+      response = await Request.dio.request<dynamic>(
+        '$server/api/$endpoint',
+        data: data,
+        queryParameters: queryParameters,
+        options: Options(
+          method: kind == ApiCallKind.query ? 'GET' : 'POST',
+          followRedirects: true,
+          headers: kDebugMode
+              ? null
+              : {
+                  'origin': Constants.appName,
+                  'x-ext-version': BuildConfig.versionName,
+                },
+          // 自定义服务器不使用 B 站账号，且写入无论重试设置如何都不能重放。
+          extra: {
+            'account': const NoAccount(),
+            'noRetry': kind == ApiCallKind.mutation,
+          },
+          validateStatus: (_) => true,
+        ),
+      );
+    } on DioException catch (error, stackTrace) {
+      final status = error.response?.statusCode;
+      if (_isRejection(status)) {
+        return _httpError(status, cause: error, stackTrace: stackTrace);
+      }
+      if (kind == ApiCallKind.mutation) {
+        return UnknownResult(cause: error, stackTrace: stackTrace);
+      }
+      return Error(
+        await AccountManager.dioError(error),
+        code: status,
+        cause: error,
+        stackTrace: stackTrace,
+      );
+    } catch (error, stackTrace) {
+      final failure = Error.fromException(error, stackTrace);
+      return kind == ApiCallKind.mutation
+          ? UnknownResult(cause: error, stackTrace: stackTrace)
+          : failure;
+    }
+    if (response.statusCode != 200) {
+      final failure = _httpError(response.statusCode);
+      return kind == ApiCallKind.mutation && !_isRejection(response.statusCode)
+          ? UnknownResult(cause: failure)
+          : failure;
+    }
+    try {
+      return Success(decode(response.data));
+    } catch (error, stackTrace) {
+      final failure = Error.fromException(error, stackTrace);
+      return kind == ApiCallKind.mutation
+          ? UnknownResult(cause: error, stackTrace: stackTrace)
+          : failure;
+    }
   }
 
-  static String _api(String url) => '$blockServer/api/$url';
+  static List<SegmentItemModel> _segments(dynamic body) =>
+      (body as List).map((item) => SegmentItemModel.fromJson(item)).toList();
+
+  static String _requiredString(dynamic body, String field) {
+    if (body is Map<String, dynamic>) {
+      if (body[field] case final String value when value.trim().isNotEmpty) {
+        return value;
+      }
+    }
+    throw FormatException('空降助手响应缺少有效 $field');
+  }
 
   static Future<LoadingState<List<SegmentItemModel>>> getSkipSegments({
     required String bvid,
     required int cid,
-  }) async {
-    final res = await Request().get(
-      _api(SponsorBlockApi.skipSegments),
-      queryParameters: {
-        'videoID': bvid,
-        'cid': cid,
-      },
-      options: options,
-    );
-
-    if (res.statusCode == 200) {
-      if (res.data case final List list) {
-        return Success(list.map((i) => SegmentItemModel.fromJson(i)).toList());
-      }
-    }
-    return getErrMsg(res);
-  }
+  }) => _request(
+    SponsorBlockApi.skipSegments,
+    kind: ApiCallKind.query,
+    decode: _segments,
+    queryParameters: {'videoID': bvid, 'cid': cid},
+  );
 
   static Future<LoadingState<void>> voteOnSponsorTime({
     required String uuid,
     int? type,
     SegmentType? category,
   }) async {
-    assert((type == null) != (category == null));
-    final res = await Request().post(
-      _api(SponsorBlockApi.voteOnSponsorTime),
+    if (uuid.trim().isEmpty || (type == null) == (category == null)) {
+      return const Error('请选择有效片段及一种投票方式');
+    }
+    return _request<void>(
+      SponsorBlockApi.voteOnSponsorTime,
+      kind: ApiCallKind.mutation,
+      decode: (_) {},
       queryParameters: {
         'UUID': uuid,
         'type': ?type,
         'category': ?category?.name,
         'userID': Pref.blockUserID,
       },
-      options: options,
     );
-    return res.statusCode == 200 ? const Success(null) : getErrMsg(res);
   }
 
   static Future<LoadingState<void>> viewedVideoSponsorTime(String uuid) async {
-    final res = await Request().post(
-      _api(SponsorBlockApi.viewedVideoSponsorTime),
+    if (uuid.trim().isEmpty) return const Error('片段标识无效');
+    return _request<void>(
+      SponsorBlockApi.viewedVideoSponsorTime,
+      kind: ApiCallKind.mutation,
+      decode: (_) {},
       data: {'UUID': uuid},
-      options: options,
     );
-    return res.statusCode == 200 ? const Success(null) : getErrMsg(res);
   }
 
-  static Future<LoadingState<void>> uptimeStatus() async {
-    final res = await Request().get(
-      _api(SponsorBlockApi.uptimeStatus),
-      options: options,
-    );
-    if (res.statusCode == 200 &&
-        res.data is String &&
-        Utils.isStringNumeric(res.data)) {
-      return const Success(null);
-    }
-    return getErrMsg(res);
-  }
+  static Future<LoadingState<void>> uptimeStatus() => _request<void>(
+    SponsorBlockApi.uptimeStatus,
+    kind: ApiCallKind.query,
+    decode: (body) {
+      final value = body is String ? double.tryParse(body) : null;
+      if (value == null || !value.isFinite || value < 0) {
+        throw const FormatException('空降助手运行状态无效');
+      }
+    },
+  );
 
   static Future<LoadingState<UserInfo>> userInfo(
     List<String> query, {
     String? userId,
-  }) async {
-    final res = await Request().get(
-      _api(SponsorBlockApi.userInfo),
-      queryParameters: {
-        'userID': userId ?? Pref.blockUserID,
-        'values': jsonEncode(query),
-      },
-      options: options,
-    );
-    if (res.statusCode == 200) {
-      return Success(UserInfo.fromJson(res.data));
-    }
-    return getErrMsg(res);
-  }
+  }) => _request(
+    SponsorBlockApi.userInfo,
+    kind: ApiCallKind.query,
+    decode: (body) => UserInfo.fromJson(body),
+    queryParameters: {
+      'userID': userId ?? Pref.blockUserID,
+      'values': jsonEncode(query),
+    },
+  );
 
   static Future<LoadingState<List<SegmentItemModel>>> postSkipSegments({
     required String bvid,
@@ -139,8 +201,28 @@ abstract final class SponsorBlock {
     required double videoDuration,
     required List<PostSegmentModel> segments,
   }) async {
-    final res = await Request().post(
-      _api(SponsorBlockApi.skipSegments),
+    if (bvid.trim().isEmpty ||
+        cid <= 0 ||
+        !videoDuration.isFinite ||
+        videoDuration <= 0) {
+      return const Error('视频信息尚未就绪，请稍后再提交');
+    }
+    if (segments.isEmpty ||
+        segments.any((item) {
+          final start = item.segment.first;
+          final end = item.segment.second;
+          return !start.isFinite ||
+              !end.isFinite ||
+              start < 0 ||
+              end < start ||
+              end > videoDuration;
+        })) {
+      return const Error('请检查片段的开始和结束时间');
+    }
+    return _request(
+      SponsorBlockApi.skipSegments,
+      kind: ApiCallKind.mutation,
+      decode: _segments,
       data: {
         'videoID': bvid,
         'cid': cid.toString(),
@@ -159,48 +241,18 @@ abstract final class SponsorBlock {
             )
             .toList(),
       },
-      options: options,
     );
-
-    if (res.statusCode == 200) {
-      if (res.data case final List list) {
-        return Success(list.map((i) => SegmentItemModel.fromJson(i)).toList());
-      }
-    }
-    return getErrMsg(res);
   }
 
-  /// {
-  ///   "bvID": string,     // B站视频BVID
-  ///   "cid": string,      // 视频CID
-  ///   "ytbID": string,    // YouTube视频ID
-  ///   "UUID": string,     // 绑定记录的UUID（不是视频中片段的UUID，是绑定记录本身的UUID）
-  ///   "votes": int,       // 绑定记录的投票数
-  ///   "locked": int,      // 绑定记录是否锁定
-  /// }
-  /// TODO: show port video info dialog
   static Future<LoadingState<String>> getPortVideo({
     required String bvid,
     required int cid,
-  }) async {
-    final res = await Request().get(
-      _api(SponsorBlockApi.portVideo),
-      queryParameters: {
-        'videoID': bvid,
-        'cid': cid.toString(),
-      },
-      options: options,
-    );
-
-    if (res.statusCode == 200) {
-      if (res.data case final Map<String, dynamic> data) {
-        if (data['ytbID'] case String ytbId) {
-          return Success(ytbId);
-        }
-      }
-    }
-    return getErrMsg(res);
-  }
+  }) => _request(
+    SponsorBlockApi.portVideo,
+    kind: ApiCallKind.query,
+    decode: (body) => _requiredString(body, 'ytbID'),
+    queryParameters: {'videoID': bvid, 'cid': cid.toString()},
+  );
 
   static Future<LoadingState<String>> postPortVideo({
     required String bvid,
@@ -208,8 +260,16 @@ abstract final class SponsorBlock {
     required String ytbId,
     required int videoDuration,
   }) async {
-    final res = await Request().post(
-      _api(SponsorBlockApi.portVideo),
+    if (bvid.trim().isEmpty ||
+        cid <= 0 ||
+        ytbId.trim().isEmpty ||
+        videoDuration <= 0) {
+      return const Error('视频绑定信息不完整，请重新打开视频');
+    }
+    return _request(
+      SponsorBlockApi.portVideo,
+      kind: ApiCallKind.mutation,
+      decode: (body) => _requiredString(body, 'UUID'),
       data: {
         'bvID': bvid,
         'cid': cid.toString(),
@@ -217,16 +277,6 @@ abstract final class SponsorBlock {
         'userID': Pref.blockUserID,
         'biliDuration': videoDuration,
       },
-      options: options,
     );
-
-    if (res.statusCode == 200) {
-      if (res.data case final Map<String, dynamic> data) {
-        if (data['UUID'] case String uuid) {
-          return Success(uuid);
-        }
-      }
-    }
-    return getErrMsg(res);
   }
 }

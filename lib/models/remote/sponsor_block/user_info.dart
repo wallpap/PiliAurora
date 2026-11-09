@@ -12,11 +12,25 @@ class UserInfo {
     required this.segmentCount,
   });
 
-  factory UserInfo.fromJson(Map<String, dynamic> json) => UserInfo(
-    viewCount: json['viewCount'],
-    minutesSaved: (json['minutesSaved'] as num).toDouble(),
-    segmentCount: json['segmentCount'],
-  );
+  factory UserInfo.fromJson(Map<String, dynamic> json) {
+    final views = json['viewCount'];
+    final minutes = json['minutesSaved'];
+    final segments = json['segmentCount'];
+    if (views is! int ||
+        views < 0 ||
+        segments is! int ||
+        segments < 0 ||
+        minutes is! num ||
+        !minutes.isFinite ||
+        minutes < 0) {
+      throw const FormatException('空降助手用户统计无效');
+    }
+    return UserInfo(
+      viewCount: views,
+      minutesSaved: minutes.toDouble(),
+      segmentCount: segments,
+    );
+  }
 
   @override
   String toString() {

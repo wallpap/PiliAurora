@@ -66,6 +66,8 @@ fvm flutter test test/services/diagnostics/ test/pages/about/diagnostics_page_te
 
 `http/metadata_response_test.dart` 与 `pages/metadata/` 覆盖音乐／赛事响应、可选封面和评论、空赛事、重复加载、乱序与账号隔离；音乐页面检查加载、错误重试和无评论降级，点赞检查在途禁用、未知计数与写入待确认，旧详情的评论不覆盖刷新后的空状态。
 
+`http/sponsor_block_response_test.dart` 覆盖空降助手 8 个接口的 HTTP 状态、损坏响应、写入待确认、账号隔离与本地参数校验；`pages/sponsor_block/operation_results_test.dart` 挂真实提交／设置页面，检查草稿、防重入、关闭／切换视频后的迟到结果、投票和查询代次，另检查查询等待消费者完成。既有 `block_mixin_test.dart` 与 `utils/sponsor_block_settings_test.dart` 检查跳过／静音行为和配置兼容。真实服务写入、播放器动作和 UGC 搬运绑定确认流需另外验收。
+
 `utils/image_save_results_test.dart` 检查取消保存不误报成功、选择器收到真实字节、保存结果和共享缓存文件保留。Windows 文件选择使用模拟 adapter；Android 图库写入与权限需目标设备验收。
 
 `pages/video/danmaku_pool_test.dart` 检查弹幕列表刷新、个人点赞状态恢复与取消点赞。挂起接口响应时检查首帧及慢响应期间的加载占位，另覆盖响应缺失、网络异常、查询重试不提交点赞，以及切换弹幕后迟到结果的隔离。

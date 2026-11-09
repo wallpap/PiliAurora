@@ -240,6 +240,9 @@ class PostPanel extends CommonSlidePage {
 
 class _PostPanelState extends State<PostPanel>
     with SingleTickerProviderStateMixin, CommonSlideMixin {
+  late final String _bvid;
+  late final int _cid;
+  bool _posting = false;
   late final VideoDetailController videoDetailController =
       widget.videoDetailController;
   late final PlPlayerController plPlayerController = widget.plPlayerController;
@@ -250,6 +253,13 @@ class _PostPanelState extends State<PostPanel>
   double currentPos() => plPlayerController.positionInMilliseconds / 1000;
 
   late double bottom;
+
+  @override
+  void initState() {
+    super.initState();
+    _bvid = videoDetailController.bvid;
+    _cid = videoDetailController.cid.value;
+  }
 
   @override
   Widget buildPage(ThemeData theme) {
@@ -264,21 +274,23 @@ class _PostPanelState extends State<PostPanel>
               size: 32,
               context: context,
               tooltip: '添加片段',
-              onPressed: () {
-                setState(() {
-                  list.insert(
-                    0,
-                    PostSegmentModel(
-                      segment: Pair(
-                        first: 0,
-                        second: currentPos(),
-                      ),
-                      category: SegmentType.sponsor,
-                      actionType: ActionType.skip,
-                    ),
-                  );
-                });
-              },
+              onPressed: _posting
+                  ? null
+                  : () {
+                      setState(() {
+                        list.insert(
+                          0,
+                          PostSegmentModel(
+                            segment: Pair(
+                              first: 0,
+                              second: currentPos(),
+                            ),
+                            category: SegmentType.sponsor,
+                            actionType: ActionType.skip,
+                          ),
+                        );
+                      });
+                    },
               icon: const Icon(Icons.add),
             ),
             const SizedBox(width: 10),
@@ -293,7 +305,10 @@ class _PostPanelState extends State<PostPanel>
           ],
         ),
       ),
-      body: enableSlide ? slideList(theme) : buildList(theme),
+      body: AbsorbPointer(
+        absorbing: _posting,
+        child: enableSlide ? slideList(theme) : buildList(theme),
+      ),
       fab: list.isEmpty
           ? null
           : Padding(
@@ -302,27 +317,31 @@ class _PostPanelState extends State<PostPanel>
                 bottom: kFloatingActionButtonMargin + bottom,
               ),
               child: FloatingActionButton(
-                tooltip: '提交',
-                onPressed: () => showDialog(
-                  context: context,
-                  builder: (context) => AlertDialog(
-                    title: const Text('确定无误再提交'),
-                    actions: [
-                      TextButton(
-                        onPressed: Get.back,
-                        child: Text(
-                          '取消',
-                          style: TextStyle(color: theme.colorScheme.outline),
+                tooltip: _posting ? '提交中' : '提交',
+                onPressed: _posting
+                    ? null
+                    : () => showDialog(
+                        context: context,
+                        builder: (context) => AlertDialog(
+                          title: const Text('确定无误再提交'),
+                          actions: [
+                            TextButton(
+                              onPressed: Get.back,
+                              child: Text(
+                                '取消',
+                                style: TextStyle(
+                                  color: theme.colorScheme.outline,
+                                ),
+                              ),
+                            ),
+                            TextButton(
+                              onPressed: () => _onPost(context),
+                              child: const Text('确定提交'),
+                            ),
+                          ],
                         ),
                       ),
-                      TextButton(
-                        onPressed: _onPost,
-                        child: const Text('确定提交'),
-                      ),
-                    ],
-                  ),
-                ),
-                child: const Icon(Icons.check),
+                child: Icon(_posting ? Icons.hourglass_top : Icons.check),
               ),
             ),
     );
@@ -354,25 +373,44 @@ class _PostPanelState extends State<PostPanel>
     );
   }
 
-  Future<void> _onPost() async {
-    Get.back();
-    final res = await SponsorBlock.postSkipSegments(
-      bvid: videoDetailController.bvid,
-      cid: videoDetailController.cid.value,
-      videoDuration: videoDuration,
-      segments: list,
-    );
-
-    if (res case Success(:final response)) {
-      Get.back();
-      SmartDialog.showToast('提交成功');
-      list.clear();
-      videoDetailController.handleSBData(response);
-      if (videoDetailController.blockListener == null) {
-        videoDetailController.initSkip();
+  Future<void> _onPost(BuildContext confirmationContext) async {
+    if (_posting) return;
+    Navigator.of(confirmationContext).pop();
+    bool currentVideo() =>
+        !videoDetailController.isClosed &&
+        videoDetailController.bvid == _bvid &&
+        videoDetailController.cid.value == _cid;
+    if (!currentVideo()) {
+      SmartDialog.showToast('视频已切换，请重新打开提交面板');
+      return;
+    }
+    final route = ModalRoute.of(context);
+    final submitted = List<PostSegmentModel>.of(list);
+    setState(() => _posting = true);
+    try {
+      final res = await SponsorBlock.postSkipSegments(
+        bvid: _bvid,
+        cid: _cid,
+        videoDuration: videoDuration,
+        segments: submitted,
+      );
+      if (res case Success(:final response)) {
+        SmartDialog.showToast('提交成功');
+        if (!mounted || !currentVideo()) return;
+        list.removeWhere(submitted.contains);
+        await videoDetailController.handleSBData(response);
+        if (!mounted || !currentVideo()) return;
+        if (videoDetailController.blockListener == null) {
+          videoDetailController.initSkip();
+        }
+        if (mounted && currentVideo() && route?.isCurrent == true) {
+          Navigator.of(context).pop();
+        }
+      } else {
+        res.toast();
       }
-    } else {
-      SmartDialog.showToast('提交失败: $res');
+    } finally {
+      if (mounted) setState(() => _posting = false);
     }
   }
 

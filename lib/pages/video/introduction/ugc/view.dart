@@ -13,6 +13,7 @@ import 'package:pili_aurora/common/widgets/selection_text.dart';
 import 'package:pili_aurora/common/widgets/stat/stat.dart';
 import 'package:pili_aurora/common/widgets/translucent_column.dart';
 import 'package:pili_aurora/http/sponsor_block.dart';
+import 'package:pili_aurora/http/loading_state.dart';
 import 'package:pili_aurora/models/remote/video/video_ai_conclusion/model_result.dart';
 import 'package:pili_aurora/models/remote/video/video_detail/data.dart';
 import 'package:pili_aurora/models/remote/video/video_detail/desc_v2.dart';
@@ -544,6 +545,70 @@ class _UgcIntroPanelState extends State<UgcIntroPanel> {
     );
   }
 
+  bool _openingDescriptionUrl = false;
+
+  Future<void> _openDescriptionUrl(String url) async {
+    if (_openingDescriptionUrl) return;
+    _openingDescriptionUrl = true;
+    try {
+      final ytbId = youtubeRegExp.firstMatch(url)?.group(1);
+      final duration =
+          videoDetailCtr.data.timeLength ??
+          videoDetailCtr.plPlayerController.durationInMilliseconds;
+      if (videoDetailCtr.plPlayerController.enableSponsorBlock &&
+          duration > 0 &&
+          ytbId != null) {
+        final bvid = videoDetailCtr.bvid;
+        final cid = videoDetailCtr.cid.value;
+        bool currentVideo() =>
+            mounted &&
+            !videoDetailCtr.isClosed &&
+            videoDetailCtr.bvid == bvid &&
+            videoDetailCtr.cid.value == cid;
+        final LoadingState<String> port;
+        SmartDialog.showLoading();
+        try {
+          port = await SponsorBlock.getPortVideo(bvid: bvid, cid: cid);
+        } finally {
+          SmartDialog.dismiss();
+        }
+        if (!mounted || !currentVideo()) return;
+        // 查询失败不能当成尚未绑定，避免未读到当前绑定就继续写入。
+        if (port is Error && port.code != 404) {
+          port.toast();
+          await PageUtils.handleWebview(url);
+          return;
+        }
+        final alreadyBound = port.dataOrNull == ytbId;
+        final confirmed = await showConfirmDialog(
+          context: context,
+          title: const Text('空降助手：搬运视频同步'),
+          content: Text(
+            '${alreadyBound ? "" : "是否将"}该视频${alreadyBound ? "已" : ""}绑定到此YouTube视频($ytbId)',
+          ),
+        );
+        if (!currentVideo()) return;
+        if (!alreadyBound && confirmed) {
+          final result = await SponsorBlock.postPortVideo(
+            bvid: bvid,
+            cid: cid,
+            ytbId: ytbId,
+            videoDuration: (duration / 1000).round(),
+          );
+          if (result.isSuccess) {
+            SmartDialog.showToast('提交搬运视频成功');
+          } else {
+            result.toast();
+          }
+          return;
+        }
+      }
+      if (mounted) await PageUtils.handleWebview(url);
+    } finally {
+      _openingDescriptionUrl = false;
+    }
+  }
+
   static final RegExp urlRegExp = RegExp(
     Constants.urlRegex.pattern + r'|av\d+|bv[a-z\d]{10}|(?:\d+[:：])?\d+[:：]\d+',
     caseSensitive: false,
@@ -573,57 +638,7 @@ class _UgcIntroPanelState extends State<UgcIntroPanel> {
                     text: matchStr,
                     style: TextStyle(color: colorScheme.primary),
                     recognizer: NoDeadlineTapGestureRecognizer()
-                      ..onTap = () async {
-                        if (videoDetailCtr
-                            .plPlayerController
-                            .enableSponsorBlock) {
-                          final duration =
-                              videoDetailCtr.data.timeLength ??
-                              videoDetailCtr
-                                  .plPlayerController
-                                  .durationInMilliseconds;
-                          if (duration > 0) {
-                            final ytbId = youtubeRegExp
-                                .firstMatch(matchStr)
-                                ?.group(1);
-                            if (ytbId != null) {
-                              final bvid = videoDetailCtr.bvid;
-                              final cid = videoDetailCtr.cid.value;
-
-                              SmartDialog.showLoading();
-                              final hasPortVideo =
-                                  (await SponsorBlock.getPortVideo(
-                                    bvid: bvid,
-                                    cid: cid,
-                                  )).dataOrNull ==
-                                  ytbId;
-                              SmartDialog.dismiss();
-
-                              if (!mounted) return;
-                              final confirmed = await showConfirmDialog(
-                                context: context,
-                                title: const Text('空降助手：搬运视频同步'),
-                                content: Text(
-                                  '${hasPortVideo ? "" : "是否将"}该视频${hasPortVideo ? "已" : ""}绑定到此YouTube视频($ytbId)',
-                                ),
-                              );
-                              if (!hasPortVideo && confirmed) {
-                                final res = await SponsorBlock.postPortVideo(
-                                  bvid: bvid,
-                                  cid: cid,
-                                  ytbId: ytbId,
-                                  videoDuration: (duration / 1000).round(),
-                                );
-                                SmartDialog.showToast(
-                                  '提交搬运视频${res.isSuccess ? "成功" : "失败: $res"}',
-                                );
-                                return;
-                              }
-                            }
-                          }
-                        }
-                        PageUtils.handleWebview(matchStr);
-                      },
+                      ..onTap = () => _openDescriptionUrl(matchStr),
                   ),
                 );
               } else if (matchStrLowerCase.startsWith('av')) {

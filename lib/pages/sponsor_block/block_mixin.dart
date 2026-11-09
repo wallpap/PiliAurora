@@ -43,6 +43,7 @@ mixin BlockMixin on GetxController {
   bool _blockMuted = false;
   final _activeMuteSegments = <SegmentModel>{};
   final _manualVisits = <SegmentModel>{};
+  final _pendingBlockVotes = <String>{};
 
   Future<void> applyBlockMute(bool muted);
 
@@ -122,7 +123,7 @@ mixin BlockMixin on GetxController {
     }
     switch (result) {
       case Success<List<SegmentItemModel>>(:final response):
-        handleSBData(response);
+        await handleSBData(response);
       case Error(:final code) when code != 404:
         if (kDebugMode) {
           result.toast();
@@ -344,14 +345,14 @@ mixin BlockMixin on GetxController {
             child: const Text('赞成票', style: TextStyle(fontSize: 14)),
             onPressed: () {
               Get.back();
-              _doVote(segment.uuid, 1);
+              voteBlockSegment(uuid: segment.uuid, type: 1);
             },
           ),
           DialogOption(
             child: const Text('反对票', style: TextStyle(fontSize: 14)),
             onPressed: () {
               Get.back();
-              _doVote(segment.uuid, 0);
+              voteBlockSegment(uuid: segment.uuid, type: 0);
             },
           ),
           DialogOption(
@@ -366,10 +367,36 @@ mixin BlockMixin on GetxController {
     );
   }
 
-  void _doVote(String uuid, int type) => SponsorBlock.voteOnSponsorTime(
-    uuid: uuid,
-    type: type,
-  ).then((i) => SmartDialog.showToast(i.isSuccess ? '投票成功' : '投票失败: $i'));
+  Future<void> voteBlockSegment({
+    required String uuid,
+    int? type,
+    SegmentType? category,
+  }) async {
+    if (isClosed || !_pendingBlockVotes.add(uuid)) return;
+    final generation = _blockGeneration;
+    final server = Pref.blockServer;
+    final userId = Pref.blockUserID;
+    try {
+      final result = await SponsorBlock.voteOnSponsorTime(
+        uuid: uuid,
+        type: type,
+        category: category,
+      );
+      if (isClosed ||
+          generation != _blockGeneration ||
+          server != Pref.blockServer ||
+          userId != Pref.blockUserID) {
+        return;
+      }
+      if (result.isSuccess) {
+        _showBlockToast(category == null ? '投票成功' : '类别更改成功');
+      } else {
+        result.toast();
+      }
+    } finally {
+      _pendingBlockVotes.remove(uuid);
+    }
+  }
 
   void _showCategoryDialog(SegmentModel segment) {
     showDialog(
@@ -383,14 +410,10 @@ mixin BlockMixin on GetxController {
                 dense: true,
                 onTap: () {
                   Get.back();
-                  SponsorBlock.voteOnSponsorTime(
+                  voteBlockSegment(
                     uuid: segment.uuid,
                     category: item,
-                  ).then((i) {
-                    SmartDialog.showToast(
-                      '类别更改${i.isSuccess ? '成功' : '失败: $i'}',
-                    );
-                  });
+                  );
                 },
                 title: Text.rich(
                   TextSpan(
