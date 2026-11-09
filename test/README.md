@@ -23,6 +23,8 @@ fvm flutter test test/services/diagnostics/ test/pages/about/diagnostics_page_te
 `plugin/pl_player/fullscreen_system_ui_test.dart` 通过模拟系统通道验证方向和系统栏的失败重试。
 这些回归均接入 CI 的对应主机范围。
 
+`plugin/pl_player/native_flag_test.dart` 在原生标志读写边界检查 C int 宽度、非零分配尾部和异步写入期间的参数存活及释放，不依赖设备或 libmpv 动态库；已接入两端 CI。真实播放器的暂停恢复和输出仍需平台验证。
+
 | 目录 | 范围 |
 | --- | --- |
 | `architecture/` | 依赖政策、模块边界和发布工作流约束。 |

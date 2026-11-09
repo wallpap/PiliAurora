@@ -23,6 +23,7 @@ import 'package:media_kit/src/player/native/player/seek_command.dart';
 import 'package:media_kit/src/player/native/player/seek_observation.dart';
 import 'package:media_kit/src/player/native/player/native_event.dart';
 import 'package:media_kit/src/player/native/player/native_hook.dart';
+import 'package:media_kit/src/player/native/player/native_flag.dart';
 
 import 'package:media_kit/src/player/native/utils/android_helper.dart';
 
@@ -1265,7 +1266,7 @@ class NativePlayer extends PlatformPlayer {
         switch (prop.ref.name.toDartString()) {
           case 'pause':
             if (prop.ref.format == generated.mpv_format.MPV_FORMAT_FLAG) {
-              final playing = prop.ref.data.cast<Int8>().value == 0;
+              final playing = !readMpvFlag(prop.ref.data);
               if (isPlayingStateChangeAllowed) {
                 state.playing = playing;
                 if (!playingController.isClosed) {
@@ -1276,7 +1277,7 @@ class NativePlayer extends PlatformPlayer {
           case 'core-idle':
             if (prop.ref.format == generated.mpv_format.MPV_FORMAT_FLAG) {
               // Check for [isBufferingStateChangeAllowed] because `pause` causes `core-idle` to be fired.
-              final buffering = prop.ref.data.cast<Int8>().value == 1;
+              final buffering = readMpvFlag(prop.ref.data);
               if (buffering) {
                 if (isBufferingStateChangeAllowed) {
                   state.buffering = true;
@@ -1294,7 +1295,7 @@ class NativePlayer extends PlatformPlayer {
             }
           case 'paused-for-cache':
             if (prop.ref.format == generated.mpv_format.MPV_FORMAT_FLAG) {
-              final buffering = prop.ref.data.cast<Int8>().value == 1;
+              final buffering = readMpvFlag(prop.ref.data);
               state.buffering = buffering;
               if (!bufferingController.isClosed) {
                 bufferingController.add(buffering);
@@ -1613,7 +1614,7 @@ class NativePlayer extends PlatformPlayer {
             }
           case 'eof-reached':
             if (prop.ref.format == generated.mpv_format.MPV_FORMAT_FLAG) {
-              final value = prop.ref.data.cast<Bool>().value;
+              final value = readMpvFlag(prop.ref.data);
               if (value) {
                 if (isPlayingStateChangeAllowed) {
                   state
@@ -1854,7 +1855,7 @@ class NativePlayer extends PlatformPlayer {
         _emitNativeEvent(
           NativePlaybackEof(
             playlistEntryId: _activePlaylistEntryId,
-            reached: property.data.cast<Bool>().value,
+            reached: readMpvFlag(property.data),
             position: state.position,
             duration: state.duration,
           ),
@@ -2619,18 +2620,8 @@ class NativePlayer extends PlatformPlayer {
     return completer.future.then((code) => _checkRequest(code, 'set $name'));
   }
 
-  Future<void> _setPropertyFlag(String name, bool value) async {
-    final ptr = calloc<Bool>(1)..value = value;
-    try {
-      await _setProperty(
-        name,
-        generated.mpv_format.MPV_FORMAT_FLAG,
-        ptr.cast(),
-      );
-    } finally {
-      calloc.free(ptr);
-    }
-  }
+  Future<void> _setPropertyFlag(String name, bool value) =>
+      setMpvFlagProperty(name, value, _setProperty);
 
   Future<void> _setPropertyDouble(String name, double value) async {
     final ptr = calloc<Double>(1)..value = value;

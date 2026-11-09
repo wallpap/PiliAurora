@@ -1,6 +1,6 @@
 # media_kit 本地版本
 
-- 本地版本：`1.1.11+piliaurora.6`；来源包版本：`1.1.11`。
+- 本地版本：`1.1.11+piliaurora.7`；来源包版本：`1.1.11`。
 - 来源仓库：https://github.com/My-Responsitories/media-kit.git
 - 来源提交：`73771ec38176be2d984a3049c28177bce23b54a0`。
 - 来源子目录：`media_kit`。
@@ -25,3 +25,5 @@
 2026-10-27：open 在 libmpv 接受 loadfile 后同步通知调用方，并等待加载命令回执。运行时据此区分提交前失败和提交后回执迟到，按实际原生归属执行卸载与关闭。
 
 2026-10-30：单一 native reader 将 `eof-reached` 复制为带当前文件身份、位置及媒体时长的 `NativePlaybackEof`，覆盖 keep-open 保留文件时的播放结束和 seek 后恢复；文件卸载继续沿用独立的 end-file 事实。
+
+2026-11-09：统一以 C int（Int32）读写 `MPV_FORMAT_FLAG`，修正暂停写入分配 1 字节、暂停／缓冲／结束通知按单字节读取的问题。参数保留至异步写入结束，并在成功、失败及同步抛错时释放；回归覆盖非零分配尾部和原生整数读回。
