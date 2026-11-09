@@ -17,15 +17,6 @@ extension IterableExt<T> on Iterable<T> {
 }
 
 extension ListExt<T> on List<T> {
-  bool removeFirstWhere(bool Function(T) test) {
-    final index = indexWhere(test);
-    if (index != -1) {
-      removeAt(index);
-      return true;
-    }
-    return false;
-  }
-
   List<R> fromCast<R>() {
     return List<R>.from(this);
   }

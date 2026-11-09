@@ -4,6 +4,9 @@ import 'package:pili_aurora/common/skeleton/video_card_h.dart';
 import 'package:pili_aurora/common/sliver_single_child_delegate.dart';
 import 'package:pili_aurora/utils/storage_pref.dart';
 import 'package:flutter/rendering.dart';
+import 'package:flutter/rendering.dart'
+    as rendering
+    show SliverGridDelegateWithMaxCrossAxisExtent;
 import 'package:material_ui/material_ui.dart';
 
 mixin GridMixin {
@@ -83,7 +86,7 @@ class SliverGridDelegateWithExtentAndRatio extends SliverGridDelegate {
     return true;
   }
 
-  SliverGridLayout? layoutCache;
+  SliverGridRegularTileLayout? layoutCache;
   double? crossAxisExtentCache;
 
   @override
@@ -102,9 +105,8 @@ class SliverGridDelegateWithExtentAndRatio extends SliverGridDelegate {
     assert(_debugAssertIsValid(crossAxisExtent));
     if (layoutCache != null &&
         crossAxisExtent == crossAxisExtentCache &&
-        (layoutCache! as SliverGridRegularTileLayout).reverseCrossAxis ==
-            reverseCrossAxis) {
-      return layoutCache! as SliverGridRegularTileLayout;
+        layoutCache!.reverseCrossAxis == reverseCrossAxis) {
+      return layoutCache!;
     }
     crossAxisExtentCache = crossAxisExtent;
     int crossAxisCount =
@@ -146,104 +148,38 @@ class SliverGridDelegateWithExtentAndRatio extends SliverGridDelegate {
   }
 }
 
-class SliverGridDelegateWithMaxCrossAxisExtent extends SliverGridDelegate {
-  /// Creates a delegate that makes grid layouts with tiles that have a maximum
-  /// cross-axis extent.
-  ///
-  /// The [maxCrossAxisExtent], [mainAxisExtent], [mainAxisSpacing],
-  /// and [crossAxisSpacing] arguments must not be negative.
-  /// The [childAspectRatio] argument must be greater than zero.
+/// 复用 Flutter 的网格几何，保留分页预取和按索引跳转所需的最近布局。
+class SliverGridDelegateWithMaxCrossAxisExtent
+    extends rendering.SliverGridDelegateWithMaxCrossAxisExtent {
   SliverGridDelegateWithMaxCrossAxisExtent({
-    required this.maxCrossAxisExtent,
-    this.mainAxisSpacing = 0.0,
-    this.crossAxisSpacing = 0.0,
-    this.childAspectRatio = 1.0,
-    this.mainAxisExtent,
-  }) : assert(maxCrossAxisExtent > 0),
-       assert(mainAxisSpacing >= 0),
-       assert(crossAxisSpacing >= 0),
-       assert(childAspectRatio > 0),
-       assert(mainAxisExtent == null || mainAxisExtent >= 0);
+    required super.maxCrossAxisExtent,
+    super.mainAxisSpacing,
+    super.crossAxisSpacing,
+    super.childAspectRatio,
+    super.mainAxisExtent,
+  });
 
-  /// The maximum extent of tiles in the cross axis.
-  ///
-  /// This delegate will select a cross-axis extent for the tiles that is as
-  /// large as possible subject to the following conditions:
-  ///
-  ///  - The extent evenly divides the cross-axis extent of the grid.
-  ///  - The extent is at most [maxCrossAxisExtent].
-  ///
-  /// For example, if the grid is vertical, the grid is 500.0 pixels wide, and
-  /// [maxCrossAxisExtent] is 150.0, this delegate will create a grid with 4
-  /// columns that are 125.0 pixels wide.
-  final double maxCrossAxisExtent;
-
-  /// The number of logical pixels between each child along the main axis.
-  final double mainAxisSpacing;
-
-  /// The number of logical pixels between each child along the cross axis.
-  final double crossAxisSpacing;
-
-  /// The ratio of the cross-axis to the main-axis extent of each child.
-  final double childAspectRatio;
-
-  /// The extent of each tile in the main axis. If provided it would define the
-  /// logical pixels taken by each tile in the main-axis.
-  ///
-  /// If null, [childAspectRatio] is used instead.
-  final double? mainAxisExtent;
-
-  bool _debugAssertIsValid(double crossAxisExtent) {
-    assert(crossAxisExtent > 0.0);
-    assert(maxCrossAxisExtent > 0.0);
-    assert(mainAxisSpacing >= 0.0);
-    assert(crossAxisSpacing >= 0.0);
-    assert(childAspectRatio > 0.0);
-    return true;
-  }
-
-  SliverGridLayout? layoutCache;
+  SliverGridRegularTileLayout? layoutCache;
   double? crossAxisExtentCache;
 
   @override
   SliverGridLayout getLayout(SliverConstraints constraints) {
-    assert(_debugAssertIsValid(constraints.crossAxisExtent));
     if (layoutCache != null &&
-        constraints.crossAxisExtent == crossAxisExtentCache) {
+        constraints.crossAxisExtent == crossAxisExtentCache &&
+        layoutCache!.reverseCrossAxis ==
+            axisDirectionIsReversed(constraints.crossAxisDirection)) {
       return layoutCache!;
     }
     crossAxisExtentCache = constraints.crossAxisExtent;
-    int crossAxisCount =
-        (constraints.crossAxisExtent / (maxCrossAxisExtent + crossAxisSpacing))
-            .ceil();
-    // Ensure a minimum count of 1, can be zero and result in an infinite extent
-    // below when the window size is 0.
-    crossAxisCount = max(1, crossAxisCount);
-    final double usableCrossAxisExtent = max(
-      0.0,
-      constraints.crossAxisExtent - crossAxisSpacing * (crossAxisCount - 1),
-    );
-    final double childCrossAxisExtent = usableCrossAxisExtent / crossAxisCount;
-    final double childMainAxisExtent =
-        mainAxisExtent ?? childCrossAxisExtent / childAspectRatio;
-    return layoutCache = SliverGridRegularTileLayout(
-      crossAxisCount: crossAxisCount,
-      mainAxisStride: childMainAxisExtent + mainAxisSpacing,
-      crossAxisStride: childCrossAxisExtent + crossAxisSpacing,
-      childMainAxisExtent: childMainAxisExtent,
-      childCrossAxisExtent: childCrossAxisExtent,
-      reverseCrossAxis: axisDirectionIsReversed(constraints.crossAxisDirection),
-    );
+    return layoutCache =
+        super.getLayout(constraints) as SliverGridRegularTileLayout;
   }
 
   @override
-  bool shouldRelayout(SliverGridDelegateWithMaxCrossAxisExtent oldDelegate) {
-    final flag =
-        oldDelegate.maxCrossAxisExtent != maxCrossAxisExtent ||
-        oldDelegate.mainAxisSpacing != mainAxisSpacing ||
-        oldDelegate.crossAxisSpacing != crossAxisSpacing ||
-        oldDelegate.childAspectRatio != childAspectRatio ||
-        oldDelegate.mainAxisExtent != mainAxisExtent;
+  bool shouldRelayout(
+    rendering.SliverGridDelegateWithMaxCrossAxisExtent oldDelegate,
+  ) {
+    final flag = super.shouldRelayout(oldDelegate);
     if (flag) layoutCache = null;
     return flag;
   }

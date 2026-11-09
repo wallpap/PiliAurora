@@ -6,8 +6,7 @@ import 'package:pili_aurora/utils/global_data.dart';
 import 'package:pili_aurora/utils/grid.dart';
 import 'package:flutter/rendering.dart' show SliverConstraints;
 import 'package:material_ui/material_ui.dart';
-import 'package:waterfall_flow/waterfall_flow.dart'
-    show SliverWaterfallFlowDelegate;
+import 'package:waterfall_flow/waterfall_flow.dart' as waterfall;
 
 mixin DynMixin {
   late final dynGridDelegate =
@@ -55,34 +54,16 @@ mixin DynMixin {
 }
 
 class SliverWaterfallFlowDelegateWithMaxCrossAxisExtent
-    extends SliverWaterfallFlowDelegate {
-  /// Creates a delegate that makes masonry layouts with tiles that have a maximum
-  /// cross-axis extent.
-  ///
-  /// All of the arguments must not be null. The [maxCrossAxisExtent],
-  /// [mainAxisSpacing], and [crossAxisSpacing] arguments must not be negative.
+    extends waterfall.SliverWaterfallFlowDelegateWithMaxCrossAxisExtent {
   SliverWaterfallFlowDelegateWithMaxCrossAxisExtent({
-    required this.maxCrossAxisExtent,
+    required super.maxCrossAxisExtent,
     super.mainAxisSpacing,
     super.crossAxisSpacing,
     super.lastChildLayoutTypeBuilder,
     super.collectGarbage,
     super.viewportBuilder,
     super.closeToTrailing,
-  }) : assert(maxCrossAxisExtent >= 0);
-
-  /// The maximum extent of tiles in the cross axis.
-  ///
-  /// This delegate will select a cross-axis extent for the tiles that is as
-  /// large as possible subject to the following conditions:
-  ///
-  ///  - The extent evenly divides the cross-axis extent of the grid.
-  ///  - The extent is at most [maxCrossAxisExtent].
-  ///
-  /// For example, if the grid is vertical, the grid is 500.0 pixels wide, and
-  /// [maxCrossAxisExtent] is 150.0, this delegate will create a grid with 4
-  /// columns that are 125.0 pixels wide.
-  final double maxCrossAxisExtent;
+  });
 
   int? crossAxisCount;
   double? crossAxisExtent;
@@ -94,18 +75,13 @@ class SliverWaterfallFlowDelegateWithMaxCrossAxisExtent
       return crossAxisCount!;
     }
     this.crossAxisExtent = crossAxisExtent;
-    crossAxisCount = (crossAxisExtent / (maxCrossAxisExtent + crossAxisSpacing))
-        .ceil();
+    crossAxisCount = super.getCrossAxisCount(constraints);
     return crossAxisCount!;
   }
 
   @override
-  bool shouldRelayout(SliverWaterfallFlowDelegate oldDelegate) {
-    final flag =
-        (oldDelegate.runtimeType != runtimeType) ||
-        (oldDelegate is SliverWaterfallFlowDelegateWithMaxCrossAxisExtent &&
-            (oldDelegate.maxCrossAxisExtent != maxCrossAxisExtent ||
-                super.shouldRelayout(oldDelegate)));
+  bool shouldRelayout(waterfall.SliverWaterfallFlowDelegate oldDelegate) {
+    final flag = super.shouldRelayout(oldDelegate);
     if (flag) {
       crossAxisCount = null;
     }
