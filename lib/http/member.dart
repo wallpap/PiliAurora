@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:pili_aurora/common/constants.dart';
 import 'package:pili_aurora/http/api.dart';
+import 'package:pili_aurora/http/api_response.dart';
 import 'package:pili_aurora/http/browser_ua.dart';
 import 'package:pili_aurora/http/constants.dart';
 import 'package:pili_aurora/http/error_msg.dart';
@@ -408,48 +409,53 @@ abstract final class MemberHttp {
   // 用户动态
   @pragma('vm:notify-debugger-on-exception')
   static Future<LoadingState<DynamicsDataModel>> memberDynamic({
+    Account? account,
     String? offset,
     required int mid,
   }) async {
-    String dmImgStr = Utils.base64EncodeRandomString(16, 64);
-    String dmCoverImgStr = Utils.base64EncodeRandomString(32, 128);
-    final params = await WbiSign.makSign({
-      'offset': offset ?? '',
-      'host_mid': mid,
-      'timezone_offset': '-480',
-      'features': Constants.dynFeatures,
-      'platform': 'web',
-      'web_location': '333.1387',
-      'dm_img_list': '[]',
-      'dm_img_str': dmImgStr,
-      'dm_cover_img_str': dmCoverImgStr,
-      'dm_img_inter': '{"ds":[],"wh":[0,0,0],"of":[0,0,0]}',
-      'x-bili-device-req-json':
-          '{"platform":"web","device":"pc","spmid":"333.1387"}',
-    });
-    final res = await Request().get(
-      Api.memberDynamic,
-      queryParameters: params,
-      options: Options(
-        headers: {
-          'user-agent': BrowserUa.pc,
-          'origin': 'https://space.bilibili.com',
-          'referer': 'https://space.bilibili.com/$mid/dynamic',
-        },
-      ),
-    );
-    if (res.data['code'] == 0) {
-      try {
-        DynamicsDataModel data = DynamicsDataModel.fromJson(res.data['data']);
-        if (data.loadNext == true) {
-          return await memberDynamic(offset: data.offset, mid: mid);
+    account ??= Accounts.main;
+    final offsets = {offset};
+    try {
+      for (var page = 0; page < 100; page++) {
+        final result = await Request().requestApi(
+          Api.memberDynamic,
+          kind: ApiCallKind.query,
+          decode: (body) => DynamicsDataModel.fromJson(body['data']),
+          errorMessages: errorMsg,
+          queryParameters: await WbiSign.makSign({
+            'offset': offset ?? '',
+            'host_mid': mid,
+            'timezone_offset': '-480',
+            'features': Constants.dynFeatures,
+            'platform': 'web',
+            'web_location': '333.1387',
+            'dm_img_list': '[]',
+            'dm_img_str': Utils.base64EncodeRandomString(16, 64),
+            'dm_cover_img_str': Utils.base64EncodeRandomString(32, 128),
+            'dm_img_inter': '{"ds":[],"wh":[0,0,0],"of":[0,0,0]}',
+            'x-bili-device-req-json':
+                '{"platform":"web","device":"pc","spmid":"333.1387"}',
+          }),
+          options: Options(
+            extra: {'account': account},
+            headers: {
+              'user-agent': BrowserUa.pc,
+              'origin': 'https://space.bilibili.com',
+              'referer': 'https://space.bilibili.com/$mid/dynamic',
+            },
+          ),
+        );
+        if (result is Error) return result;
+        final data = result.data;
+        if (data.loadNext != true) return result;
+        offset = data.offset;
+        if (offset == null || offset.isEmpty || !offsets.add(offset)) {
+          return const Error('动态分页未取得进展，请重试');
         }
-        return Success(data);
-      } catch (e, s) {
-        return Error.fromException(e, s);
       }
-    } else {
-      return Error(errorMsg[res.data['code']] ?? res.data['message']);
+      return const Error('动态过滤页数过多，请调整过滤条件后重试');
+    } catch (error, stackTrace) {
+      return Error.fromException(error, stackTrace);
     }
   }
 

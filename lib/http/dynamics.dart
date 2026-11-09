@@ -271,6 +271,9 @@ abstract final class DynamicsHttp {
         if ((int.tryParse(item.idStr.toString()) ?? 0) <= 0) {
           throw const FormatException('动态详情缺少有效 ID');
         }
+        if (id != null && item.idStr.toString() != id.toString()) {
+          throw const FormatException('动态详情与请求目标不符');
+        }
         return item;
       },
       queryParameters: {

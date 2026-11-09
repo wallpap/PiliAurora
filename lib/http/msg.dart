@@ -3,6 +3,7 @@ import 'package:pili_aurora/utils/accounts/account.dart';
 import 'dart:convert';
 
 import 'package:pili_aurora/http/api.dart';
+import 'package:pili_aurora/http/api_response.dart';
 import 'package:pili_aurora/http/constants.dart';
 import 'package:pili_aurora/http/init.dart';
 import 'package:pili_aurora/http/loading_state.dart';
@@ -190,22 +191,34 @@ abstract final class MsgHttp {
     String? biz,
     CancelToken? cancelToken,
   }) async {
-    final requestAccount = account ?? Accounts.main;
-    final res = await _MessageRequest(account).post(
+    account ??= Accounts.main;
+    final MultipartFile file;
+    try {
+      file = await MultipartFile.fromFile(path);
+    } catch (error, stackTrace) {
+      return Error('无法读取待上传图片', cause: error, stackTrace: stackTrace);
+    }
+    return Request().requestApi(
       Api.uploadBfs,
+      kind: ApiCallKind.mutation,
+      decode: (body) {
+        final image = UploadBfsResData.fromJson(body['data']);
+        if (image.imageUrl?.isNotEmpty != true ||
+            (image.imageWidth ?? 0) <= 0 ||
+            (image.imageHeight ?? 0) <= 0) {
+          throw const FormatException('图片上传结果不完整');
+        }
+        return image;
+      },
       data: FormData.fromMap({
-        'file_up': await MultipartFile.fromFile(path),
+        'file_up': file,
         'category': ?category,
         'biz': ?biz,
-        'csrf': requestAccount.csrf,
+        'csrf': account.csrf,
       }),
+      options: Options(extra: {'account': account}),
       cancelToken: cancelToken,
     );
-    if (res.data['code'] == 0) {
-      return Success(UploadBfsResData.fromJson(res.data['data']));
-    } else {
-      return Error(res.data['message']);
-    }
   }
 
   static Future<LoadingState<void>> removeDynamic({
@@ -214,24 +227,22 @@ abstract final class MsgHttp {
     Object? dynType,
     Object? ridStr,
   }) async {
-    final requestAccount = account ?? Accounts.main;
-    final res = await _MessageRequest(account).post(
+    account ??= Accounts.main;
+    return await Request().requestApi<void>(
       Api.removeDynamic,
+      kind: ApiCallKind.mutation,
+      decode: (_) {},
       queryParameters: {
         'platform': 'web',
-        'csrf': requestAccount.csrf,
+        'csrf': account.csrf,
       },
       data: {
         "dyn_id_str": dynIdStr,
         "dyn_type": ?dynType,
         "rid_str": ?ridStr,
       },
+      options: Options(extra: {'account': account}),
     );
-    if (res.data['code'] == 0) {
-      return const Success(null);
-    } else {
-      return Error(res.data['message']);
-    }
   }
 
   static Future<LoadingState<void>> removeMsg(

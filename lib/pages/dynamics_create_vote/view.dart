@@ -4,6 +4,7 @@ import 'package:pili_aurora/common/widgets/button/icon_button.dart';
 import 'package:pili_aurora/common/widgets/image/network_img_layer.dart';
 import 'package:pili_aurora/common/widgets/scaffold/simple_scaffold.dart';
 import 'package:pili_aurora/common/widgets/time_picker.dart';
+import 'package:pili_aurora/http/loading_state.dart';
 import 'package:pili_aurora/models/dynamics/vote_model.dart';
 import 'package:pili_aurora/pages/dynamics_create_vote/controller.dart';
 import 'package:pili_aurora/utils/date_utils.dart';
@@ -12,6 +13,7 @@ import 'package:pili_aurora/utils/platform_utils.dart';
 import 'package:pili_aurora/utils/utils.dart';
 import 'package:pili_aurora/utils/rate_limiter.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter/foundation.dart' show listEquals;
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:get/get.dart';
 import 'package:image_picker/image_picker.dart';
@@ -28,6 +30,7 @@ class CreateVotePage extends StatefulWidget {
 
 class _CreateVotePageState extends State<CreateVotePage> {
   late final CreateVoteController _controller;
+  final _tag = Utils.generateRandomString(8);
   late final imagePicker = ImagePicker();
 
   late TextStyle _leadingStyle;
@@ -37,8 +40,30 @@ class _CreateVotePageState extends State<CreateVotePage> {
     super.initState();
     _controller = Get.put(
       CreateVoteController(widget.voteId),
-      tag: Utils.generateRandomString(8),
+      tag: _tag,
     );
+  }
+
+  @override
+  void dispose() {
+    Get.delete<CreateVoteController>(tag: _tag);
+    super.dispose();
+  }
+
+  Future<void> _onCreate() async {
+    final route = ModalRoute.of(context);
+    final draft = _controller.draft;
+    final result = await _controller.onCreate();
+    if (!mounted || !_controller.isCurrent) return;
+    if (result case Success(:final response)) {
+      if (listEquals(draft, _controller.draft) && route?.isCurrent == true) {
+        Navigator.of(context).pop(response);
+      } else {
+        SmartDialog.showToast('投票已保存，已保留当前草稿');
+      }
+    } else {
+      result.toast();
+    }
   }
 
   @override
@@ -65,6 +90,21 @@ class _CreateVotePageState extends State<CreateVotePage> {
           bottom: padding.bottom + 100,
         ),
         children: [
+          Obx(() {
+            if (_controller.loading.value) {
+              return const LinearProgressIndicator();
+            }
+            final error = _controller.loadError.value;
+            return error == null
+                ? const SizedBox.shrink()
+                : ListTile(
+                    title: Text(error.toString()),
+                    trailing: TextButton(
+                      onPressed: _controller.queryData,
+                      child: const Text('重试'),
+                    ),
+                  );
+          }),
           const Text(
             '投票类型',
             style: TextStyle(fontSize: 14),
@@ -236,7 +276,7 @@ class _CreateVotePageState extends State<CreateVotePage> {
                         _controller.endtime.value,
                       ),
                     );
-                    if (newTime != null) {
+                    if (newTime != null && mounted && _controller.isCurrent) {
                       final newEndtime = DateTime(
                         newDate.year,
                         newDate.month,
@@ -271,8 +311,10 @@ class _CreateVotePageState extends State<CreateVotePage> {
           Obx(() {
             final canCreate = _controller.canCreate.value;
             return FilledButton.tonal(
-              onPressed: canCreate ? _controller.onCreate : null,
-              child: const Text('发起投票'),
+              onPressed: canCreate && !_controller.saving.value
+                  ? _onCreate
+                  : null,
+              child: Text(_controller.saving.value ? '保存中' : '发起投票'),
             );
           }),
         ],
@@ -424,6 +466,7 @@ class _CreateVotePageState extends State<CreateVotePage> {
   );
 
   void _onPickImg(int index) {
+    final option = _controller.options[index];
     ActionThrottle.run(
       'imagePicker',
       const Duration(milliseconds: 500),
@@ -434,9 +477,9 @@ class _CreateVotePageState extends State<CreateVotePage> {
             source: ImageSource.gallery,
             requestFullMetadata: false,
           );
-          if (pickedFile != null) {
+          if (pickedFile != null && mounted) {
             final path = pickedFile.path;
-            _controller.onUpload(index, path).whenComplete(() {
+            _controller.onUpload(option, path).whenComplete(() {
               if (PlatformUtils.isMobile) {
                 File(path).tryDel();
               }

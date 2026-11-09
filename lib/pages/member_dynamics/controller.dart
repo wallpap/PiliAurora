@@ -4,6 +4,7 @@ import 'package:pili_aurora/http/member.dart';
 import 'package:pili_aurora/http/msg.dart';
 import 'package:pili_aurora/models/dynamics/result.dart';
 import 'package:pili_aurora/pages/common/common_list_controller.dart';
+import 'package:pili_aurora/utils/accounts.dart';
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 
 class MemberDynamicsController
@@ -11,11 +12,29 @@ class MemberDynamicsController
   MemberDynamicsController(this.mid);
   int mid;
   String offset = '';
+  final _removing = <String, Object>{};
+  Object? _topOperation;
+
+  @override
+  Object get queryContext => Accounts.main;
 
   @override
   void onInit() {
     super.onInit();
+    Accounts.mainChanges.addListener(_onAccountChanged);
     queryData();
+  }
+
+  void _onAccountChanged() {
+    _removing.clear();
+    _topOperation = null;
+    onReload();
+  }
+
+  @override
+  void onClose() {
+    Accounts.mainChanges.removeListener(_onAccountChanged);
+    super.onClose();
   }
 
   @override
@@ -44,47 +63,102 @@ class MemberDynamicsController
   @override
   Future<LoadingState<DynamicsDataModel>> customGetData() =>
       MemberHttp.memberDynamic(
+        account: Accounts.main,
         offset: offset,
         mid: mid,
       );
 
   Future<void> onRemove(dynamic dynamicId) async {
-    final res = await MsgHttp.removeDynamic(dynIdStr: dynamicId);
-    if (res.isSuccess) {
-      loadingState
-        ..value.data!.removeWhere((item) => item.idStr == dynamicId)
-        ..refresh();
-      SmartDialog.showToast('删除成功');
-    } else {
-      res.toast();
+    final account = Accounts.main;
+    final list = loadingState.value.dataOrNull;
+    final id = dynamicId.toString();
+    final targetMid = mid;
+    if (isClosed ||
+        isLoading ||
+        !account.isLogin ||
+        list == null ||
+        !list.any((item) => item.idStr.toString() == id) ||
+        _topOperation != null ||
+        _removing.containsKey(id)) {
+      return;
+    }
+    final operation = _removing[id] = Object();
+    try {
+      final res = await MsgHttp.removeDynamic(account: account, dynIdStr: id);
+      if (isClosed ||
+          isLoading ||
+          mid != targetMid ||
+          !identical(account, Accounts.main) ||
+          !identical(list, loadingState.value.dataOrNull)) {
+        return;
+      }
+      if (res.isSuccess) {
+        list.removeWhere((item) => item.idStr.toString() == id);
+        loadingState.refresh();
+        SmartDialog.showToast('删除成功');
+      } else {
+        res.toast();
+      }
+    } finally {
+      if (identical(_removing[id], operation)) _removing.remove(id);
     }
   }
 
   Future<void> onSetTop(bool isTop, Object dynamicId) async {
-    final res = await (isTop
-        ? DynamicsHttp.rmTop(dynamicId: dynamicId)
-        : DynamicsHttp.setTop(dynamicId: dynamicId));
-    if (res.isSuccess) {
-      List<DynamicItemModel> list = loadingState.value.data!;
-      list[0].modules
-        ..moduleTag = null
-        ..moduleAuthor?.isTop = false;
-      if (isTop) {
-        loadingState.refresh();
-        SmartDialog.showToast('取消置顶成功');
-      } else {
-        final item = list.firstWhere((item) => item.idStr == dynamicId);
-        item.modules
-          ..moduleTag = ModuleTag(text: '置顶')
-          ..moduleAuthor?.isTop = true;
-        list
-          ..remove(item)
-          ..insert(0, item);
-        loadingState.refresh();
-        SmartDialog.showToast('置顶成功');
+    final account = Accounts.main;
+    final list = loadingState.value.dataOrNull;
+    final targetMid = mid;
+    final item = list
+        ?.where((item) => item.idStr.toString() == dynamicId.toString())
+        .firstOrNull;
+    if (isClosed ||
+        isLoading ||
+        !account.isLogin ||
+        list == null ||
+        item == null ||
+        _topOperation != null ||
+        _removing.isNotEmpty) {
+      return;
+    }
+    final operation = _topOperation = Object();
+    try {
+      final res = await (isTop
+          ? DynamicsHttp.rmTop(account: account, dynamicId: dynamicId)
+          : DynamicsHttp.setTop(account: account, dynamicId: dynamicId));
+      if (isClosed ||
+          isLoading ||
+          mid != targetMid ||
+          !identical(account, Accounts.main) ||
+          !identical(list, loadingState.value.dataOrNull) ||
+          !list.contains(item)) {
+        return;
       }
-    } else {
-      res.toast();
+      if (res.isSuccess) {
+        if (!isTop) {
+          for (final previous in list) {
+            if (previous.modules.moduleAuthor?.isTop == true ||
+                previous.modules.moduleTag?.text == '置顶') {
+              previous.modules
+                ..moduleTag = null
+                ..moduleAuthor?.isTop = false;
+            }
+          }
+        }
+        item.modules
+          ..moduleTag = isTop ? null : ModuleTag(text: '置顶')
+          ..moduleAuthor?.isTop = !isTop;
+        if (!isTop) {
+          list
+            ..remove(item)
+            ..insert(0, item);
+        }
+        loadingState.refresh();
+        SmartDialog.showToast(isTop ? '取消置顶成功' : '置顶成功');
+      } else {
+        res.toast();
+      }
+    } finally {
+      if (identical(_topOperation, operation)) _topOperation = null;
     }
   }
 }

@@ -33,6 +33,7 @@ import 'package:pili_aurora/pages/dynamics/widgets/dynamic_panel.dart';
 import 'package:pili_aurora/pages/dynamics_create/view.dart';
 import 'package:pili_aurora/pages/dynamics_detail/controller.dart';
 import 'package:pili_aurora/pages/dynamics_repost/view.dart';
+import 'package:pili_aurora/utils/accounts.dart';
 import 'package:pili_aurora/utils/extension/get_ext.dart';
 import 'package:pili_aurora/utils/grid.dart';
 import 'package:pili_aurora/utils/num_utils.dart';
@@ -233,6 +234,12 @@ class _DynamicDetailPageState
         replyOption = .close;
       }
     }
+    final account = Accounts.main;
+    bool isCurrent() =>
+        mounted &&
+        !controller.isClosed &&
+        identical(account, Accounts.main) &&
+        identical(item, controller.dynItem);
     CreateDynPanel.onCreateDyn(
       context,
       title: opus?.title,
@@ -249,10 +256,13 @@ class _DynamicDetailPageState
         Timer(
           const Duration(milliseconds: 500),
           () async {
-            if (!mounted) return;
-            final res = await DynamicsHttp.dynamicDetail(id: item.idStr);
+            if (!isCurrent()) return;
+            final res = await DynamicsHttp.dynamicDetail(
+              id: item.idStr,
+              account: account,
+            );
             if (res case Success(:final response)) {
-              if (mounted) {
+              if (isCurrent()) {
                 controller.dynItem = response;
                 setState(() {});
               }
@@ -625,6 +635,7 @@ class _DynamicDetailPageState
                               (context as Element).markNeedsBuild();
                             }
                           },
+                          context: context,
                         ),
                       );
                     },

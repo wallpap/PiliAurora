@@ -16,11 +16,14 @@ class DynamicDetailController extends CommonDynController with ReloadMixin {
   DynamicDetailController({super.count});
 
   @override
-  late int oid;
+  int oid = 0;
   @override
-  late int replyType;
+  int replyType = 0;
   late DynamicItemModel dynItem;
   bool _changingReplySubject = false;
+  bool _changingVisibility = false;
+  bool _loadingSource = false;
+  bool _sourceReady = false;
 
   @override
   dynamic get sourceId => replyType == 1 ? IdUtils.av2bv(oid) : oid;
@@ -37,34 +40,80 @@ class DynamicDetailController extends CommonDynController with ReloadMixin {
         commentIdStr.isNotEmpty) {
       _init(commentIdStr, commentType);
     } else {
-      DynamicsHttp.dynamicDetail(id: dynItem.idStr).then((res) {
-        if (res case Success(:final response)) {
-          _init(response.basic!.commentIdStr!, response.basic!.commentType!);
-        } else {
-          res.toast();
-        }
-      });
+      _loadCommentSource();
     }
   }
 
-  void _init(String commentIdStr, int commentType) {
-    oid = int.parse(commentIdStr);
+  Future<void> _loadCommentSource() async {
+    if (isClosed || _loadingSource) return;
+    _loadingSource = true;
+    final item = dynItem;
+    final account = Accounts.heartbeat;
+    try {
+      final result = await DynamicsHttp.dynamicDetail(
+        id: item.idStr,
+        account: account,
+      );
+      if (isClosed ||
+          !identical(item, dynItem) ||
+          !identical(account, Accounts.heartbeat)) {
+        return;
+      }
+      if (result case Success(:final response)) {
+        _init(response.basic?.commentIdStr, response.basic?.commentType);
+      } else if (result is Error) {
+        loadingState.value = result;
+      }
+    } finally {
+      _loadingSource = false;
+    }
+  }
+
+  void _init(String? commentIdStr, int? commentType) {
+    final id = int.tryParse(commentIdStr ?? '');
+    if (id == null || id <= 0 || commentType == null || commentType <= 0) {
+      loadingState.value = const Error('动态缺少有效的评论来源，请重试');
+      return;
+    }
+    oid = id;
     replyType = commentType;
+    _sourceReady = true;
     queryData();
   }
 
-  Future<LoadingState> onSetPubSetting(bool isPrivate, Object dynId) async {
-    final res = await DynamicsHttp.dynPrivatePubSetting(
-      dynId: dynId,
-      action: isPrivate ? 'public_pub' : 'private_pub',
-    );
-    if (res.isSuccess) {
-      dynItem.modules.moduleAuthor?.badgeText = isPrivate ? null : '仅自己可见';
-      SmartDialog.showToast('设置成功');
-    } else {
-      res.toast();
+  Future<LoadingState<void>> onSetPubSetting(
+    bool isPrivate,
+    Object dynId,
+  ) async {
+    if (isClosed) return const Error('页面已关闭');
+    if (_changingVisibility) return const Error('正在设置可见范围，请稍候');
+    final account = Accounts.main;
+    final item = dynItem;
+    if (dynId.toString() != item.idStr.toString()) {
+      return const Error('动态已变更，请重试');
     }
-    return res;
+    _changingVisibility = true;
+    try {
+      final result = await DynamicsHttp.dynPrivatePubSetting(
+        account: account,
+        dynId: dynId,
+        action: isPrivate ? 'public_pub' : 'private_pub',
+      );
+      if (isClosed ||
+          !identical(account, Accounts.main) ||
+          !identical(item, dynItem)) {
+        return const Error('账号或动态已变更');
+      }
+      if (result.isSuccess) {
+        item.modules.moduleAuthor?.badgeText = isPrivate ? null : '仅自己可见';
+        SmartDialog.showToast('设置成功');
+      } else {
+        result.toast();
+      }
+      return result;
+    } finally {
+      _changingVisibility = false;
+    }
   }
 
   Future<void> onSetReplySubject(int action) async {
@@ -112,6 +161,6 @@ class DynamicDetailController extends CommonDynController with ReloadMixin {
   @override
   Future<void> onReload() {
     reload = true;
-    return super.onReload();
+    return _sourceReady ? super.onReload() : _loadCommentSource();
   }
 }

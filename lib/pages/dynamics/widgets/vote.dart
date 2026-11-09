@@ -37,6 +37,10 @@ class VotePanel extends StatefulWidget {
 
 class _VotePanelState extends State<VotePanel> {
   late bool anonymous = false;
+  final _account = Accounts.main;
+  bool _submitting = false;
+  int _generation = 0;
+  bool get _isCurrent => identical(_account, Accounts.main);
 
   late VoteInfo _voteInfo;
   late final RxList<int> groupValue =
@@ -44,23 +48,106 @@ class _VotePanelState extends State<VotePanel> {
   late var _percentage = _cnt2Percentage(_voteInfo.options);
   late bool _enabled =
       groupValue.isEmpty &&
-      _voteInfo.endTime! * 1000 > DateTime.now().millisecondsSinceEpoch;
+      (_voteInfo.endTime ?? 0) * 1000 > DateTime.now().millisecondsSinceEpoch;
   late bool _showPercentage = !_enabled;
-  late final _maxCnt = _voteInfo.choiceCnt ?? _voteInfo.options.length;
-  final isLogin = Accounts.main.isLogin;
+  int get _maxCnt => _voteInfo.choiceCnt ?? _voteInfo.options.length;
+  bool get isLogin => _isCurrent && _account.isLogin;
   late final followeeVote = Rxn<List<FolloweeVote>>();
 
   @override
   void initState() {
     super.initState();
     _voteInfo = widget.voteInfo;
-    if (isLogin) {
-      DynamicsHttp.followeeVotes(voteId: _voteInfo.voteId).then((res) {
-        if (!mounted) return;
-        if (res case Success(:final response)) {
-          followeeVote.value = response;
-        }
-      });
+    Accounts.mainChanges.addListener(_onAccountChanged);
+    _loadFolloweeVotes();
+  }
+
+  void _onAccountChanged() {
+    followeeVote.value = null;
+    setState(() {});
+  }
+
+  Future<void> _loadFolloweeVotes() async {
+    if (!isLogin) return;
+    final info = _voteInfo;
+    final generation = _generation;
+    final result = await DynamicsHttp.followeeVotes(
+      voteId: info.voteId,
+      account: _account,
+    );
+    if (!mounted ||
+        !_isCurrent ||
+        generation != _generation ||
+        !identical(info, _voteInfo)) {
+      return;
+    }
+    if (result case Success(:final response)) followeeVote.value = response;
+  }
+
+  @override
+  void didUpdateWidget(covariant VotePanel oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!identical(oldWidget.voteInfo, widget.voteInfo)) {
+      _generation++;
+      _submitting = false;
+      _voteInfo = widget.voteInfo;
+      groupValue.value = _voteInfo.myVotes?.toList() ?? [];
+      _percentage = _cnt2Percentage(_voteInfo.options);
+      _enabled =
+          groupValue.isEmpty &&
+          (_voteInfo.endTime ?? 0) * 1000 >
+              DateTime.now().millisecondsSinceEpoch;
+      _showPercentage = !_enabled;
+      followeeVote.value = null;
+      _loadFolloweeVotes();
+    }
+  }
+
+  @override
+  void dispose() {
+    Accounts.mainChanges.removeListener(_onAccountChanged);
+    _generation++;
+    super.dispose();
+  }
+
+  Future<void> _onVote() async {
+    if (_submitting || !_isCurrent || !_enabled || groupValue.isEmpty) return;
+    final info = _voteInfo;
+    final generation = _generation;
+    final vote = widget.onVote;
+    final votes = groupValue.toSet();
+    final anonymous = this.anonymous;
+    setState(() => _submitting = true);
+    try {
+      final result = await vote(votes, anonymous);
+      if (!mounted ||
+          !_isCurrent ||
+          generation != _generation ||
+          !identical(info, _voteInfo)) {
+        return;
+      }
+      if (result case Success(:final response)) {
+        setState(() {
+          _enabled = false;
+          _showPercentage = true;
+          _voteInfo = response;
+          groupValue.value = response.myVotes?.toList() ?? votes.toList();
+          _percentage = _cnt2Percentage(response.options);
+        });
+      } else {
+        result.toast();
+      }
+    } catch (error, stackTrace) {
+      if (mounted &&
+          _isCurrent &&
+          generation == _generation &&
+          identical(info, _voteInfo)) {
+        UnknownResult(cause: error, stackTrace: stackTrace).toast();
+      }
+    } finally {
+      if (mounted && generation == _generation) {
+        setState(() => _submitting = false);
+      }
     }
   }
 
@@ -74,7 +161,9 @@ class _VotePanelState extends State<VotePanel> {
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           Text(
-            _enabled
+            !_isCurrent
+                ? '账号已切换，请重新打开投票'
+                : _enabled
                 ? '投票选项'
                 : groupValue.isEmpty
                 ? '已结束'
@@ -116,25 +205,10 @@ class _VotePanelState extends State<VotePanel> {
           padding: const EdgeInsets.only(top: 8),
           child: Obx(
             () => OutlinedButton(
-              onPressed: groupValue.isNotEmpty
-                  ? () async {
-                      final res = await widget.onVote(
-                        groupValue.toSet(),
-                        anonymous,
-                      );
-                      if (!mounted) return;
-                      if (res case Success(:final response)) {
-                        _enabled = false;
-                        _showPercentage = true;
-                        _voteInfo = response;
-                        _percentage = _cnt2Percentage(_voteInfo.options);
-                        setState(() {});
-                      } else {
-                        res.toast();
-                      }
-                    }
+              onPressed: groupValue.isNotEmpty && !_submitting && _isCurrent
+                  ? _onVote
                   : null,
-              child: const Center(child: Text('投票')),
+              child: Center(child: Text(_submitting ? '提交中' : '投票')),
             ),
           ),
         ),
@@ -304,7 +378,9 @@ class _VotePanelState extends State<VotePanel> {
       CheckBoxText(
         text: '匿名',
         selected: anonymous,
-        onChanged: (val) => anonymous = val,
+        onChanged: (val) {
+          if (!_submitting && _isCurrent) anonymous = val;
+        },
       ),
     ],
   );
@@ -323,7 +399,7 @@ class _VotePanelState extends State<VotePanel> {
           final opt = _voteInfo.options[index];
           final selected = groupValue.contains(opt.optIdx);
           return InkWell(
-            onTap: !_enabled
+            onTap: !_enabled || _submitting || !_isCurrent
                 ? null
                 : () => _onSelected(context, !selected, opt.optIdx!),
             onLongPress: PlatformUtils.isMobile ? onLongPress : null,
@@ -425,7 +501,7 @@ class _VotePanelState extends State<VotePanel> {
           label: opt.optDesc!,
           percentage: _showPercentage ? _percentage[index] : null,
           selected: selected,
-          onSelected: !_enabled
+          onSelected: !_enabled || _submitting || !_isCurrent
               ? null
               : () => _onSelected(context, !selected, opt.optIdx!),
         );
@@ -434,6 +510,7 @@ class _VotePanelState extends State<VotePanel> {
   }
 
   void _onSelected(BuildContext itemCtx, bool value, int optidx) {
+    if (_submitting || !_isCurrent) return;
     final bool isMax = groupValue.length >= _maxCnt;
     if (isMax && value && !groupValue.contains(optidx)) {
       groupValue
@@ -534,8 +611,9 @@ Future<void> showVoteDialog(
   int voteId, [
   int? dynamicId,
 ]) async {
-  final voteInfo = await DynamicsHttp.voteInfo(voteId);
-  if (context.mounted) {
+  final account = Accounts.main;
+  final voteInfo = await DynamicsHttp.voteInfo(voteId, account: account);
+  if (context.mounted && identical(account, Accounts.main)) {
     if (voteInfo case Success(:final response)) {
       showDialog(
         context: context,
@@ -546,6 +624,7 @@ Future<void> showVoteDialog(
             child: VotePanel(
               voteInfo: response,
               onVote: (votes, anonymous) => DynamicsHttp.doVote(
+                account: account,
                 voteId: voteId,
                 votes: votes.toList(),
                 anonymous: anonymous,

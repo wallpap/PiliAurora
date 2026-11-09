@@ -1,3 +1,4 @@
+import 'dart:async' show unawaited;
 import 'dart:math' show max;
 
 import 'package:pili_aurora/common/style.dart';
@@ -27,9 +28,11 @@ import 'package:pili_aurora/pages/dynamics_select_topic/view.dart';
 import 'package:pili_aurora/pages/emote/controller.dart';
 import 'package:pili_aurora/pages/emote/view.dart';
 import 'package:pili_aurora/utils/accounts.dart';
+import 'package:pili_aurora/services/logger.dart';
 import 'package:pili_aurora/utils/date_utils.dart';
 import 'package:pili_aurora/utils/extension/context_ext.dart';
 import 'package:pili_aurora/utils/grid.dart';
+import 'package:pili_aurora/utils/feed_back.dart';
 import 'package:pili_aurora/utils/request_utils.dart';
 import 'package:collection/collection.dart';
 import 'package:flutter/services.dart' show LengthLimitingTextInputFormatter;
@@ -107,6 +110,7 @@ class _CreateDynPanelState extends CommonRichTextPubPageState<CreateDynPanel> {
   late final TextEditingController _titleEditCtr;
   late final _publishTime = Rxn<DateTime>();
   final _reserveCard = Rxn<ReserveInfoData>();
+  final _publishing = false.obs;
 
   @override
   void initState() {
@@ -357,7 +361,9 @@ class _CreateDynPanelState extends CommonRichTextPubPageState<CreateDynPanel> {
           alignment: Alignment.centerRight,
           child: Obx(
             () => FilledButton.tonal(
-              onPressed: enablePublish.value ? onPublishThrottle : null,
+              onPressed: enablePublish.value && !_publishing.value
+                  ? onPublishThrottle
+                  : null,
               style: FilledButton.styleFrom(
                 tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                 padding: const EdgeInsets.symmetric(
@@ -366,7 +372,13 @@ class _CreateDynPanelState extends CommonRichTextPubPageState<CreateDynPanel> {
                 ),
                 visualDensity: VisualDensity.compact,
               ),
-              child: Text(_publishTime.value == null ? '发布' : '定时发布'),
+              child: Text(
+                _publishing.value
+                    ? '发布中'
+                    : _publishTime.value == null
+                    ? '发布'
+                    : '定时发布',
+              ),
             ),
           ),
         ),
@@ -719,78 +731,126 @@ class _CreateDynPanelState extends CommonRichTextPubPageState<CreateDynPanel> {
   Widget? get customPanel => EmotePanel(onChoose: onChooseEmote);
 
   @override
+  Future<void> onPublish() => onCustomPublish();
+
+  @override
   Future<void> onCustomPublish({List? pictures}) async {
-    if (!mounted) return;
-    SmartDialog.showLoading(msg: '正在发布');
-    List<Map<String, dynamic>>? extraContent = getRichContent();
-    final hasRichText = extraContent != null;
-
-    if (_isEdit) {
-      final editConfig = widget.editConfig!;
-      final res = await DynamicsHttp.editDyn(
-        dynId: editConfig.dynId,
-        repostDynId: editConfig.repostDynId,
-        rawText: hasRichText ? null : editController.text,
-        pics: pictures,
-        replyOption: _replyOption.value,
-        privatePub: _isPrivate.value ? 1 : null,
-        title: _titleEditCtr.text,
-        topic: _topic.value,
-        extraContent: extraContent,
-      );
-      if (!mounted) return;
-      SmartDialog.dismiss();
-      if (res.isSuccess) {
-        hasPub = true;
-        Get.back();
-        SmartDialog.showToast('发布成功');
-        widget.onSuccess?.call();
+    if (!mounted || _publishing.value) return;
+    final account = Accounts.main;
+    final route = ModalRoute.of(context);
+    final editConfig = widget.editConfig;
+    final onSuccess = widget.onSuccess;
+    final text = editController.text;
+    final rawText = editController.rawText;
+    final extraContent = getRichContent();
+    final title = _titleEditCtr.text;
+    final replyOption = _replyOption.value;
+    final isPrivate = _isPrivate.value;
+    final publishTime = _publishTime.value;
+    final topic = _topic.value;
+    final reserveId = _reserveCard.value?.id;
+    final images = pictureDraft;
+    bool isCurrent() =>
+        mounted &&
+        identical(account, Accounts.main) &&
+        editConfig == widget.editConfig;
+    _publishing.value = true;
+    feedBack();
+    try {
+      pictures ??= await uploadPictures(account: account);
+      if (!isCurrent()) return;
+      final LoadingState<String?> result;
+      if (editConfig != null) {
+        final edited = await DynamicsHttp.editDyn(
+          account: account,
+          dynId: editConfig.dynId,
+          repostDynId: editConfig.repostDynId,
+          rawText: extraContent == null ? text : null,
+          pics: pictures,
+          replyOption: replyOption,
+          privatePub: isPrivate ? 1 : null,
+          title: title,
+          topic: topic,
+          extraContent: extraContent,
+        );
+        result = edited is Error ? edited : const Success(null);
       } else {
-        res.toast();
-      }
-      return;
-    }
-
-    final reserveCard = _reserveCard.value;
-    final res = await DynamicsHttp.createDynamic(
-      mid: Accounts.main.mid,
-      rawText: hasRichText ? null : editController.text,
-      pics: pictures,
-      publishTime: _publishTime.value != null
-          ? _publishTime.value!.millisecondsSinceEpoch ~/ 1000
-          : null,
-      replyOption: _replyOption.value,
-      privatePub: _isPrivate.value ? 1 : null,
-      title: _titleEditCtr.text,
-      topic: _topic.value,
-      extraContent: extraContent,
-      attachCard: reserveCard == null
-          ? null
-          : {
-              "common_card": {
-                "type": 14,
-                "biz_id": reserveCard.id,
-                "reserve_source": 0,
-                "reserve_lottery": 0,
-              },
-            },
-    );
-    if (!mounted) return;
-    SmartDialog.dismiss();
-    if (res case Success(:final response)) {
-      hasPub = true;
-      Get.back();
-      SmartDialog.showToast('发布成功');
-      final id = response;
-      RequestUtils.insertCreatedDyn(id);
-      if (!_isPrivate.value && _publishTime.value == null) {
-        RequestUtils.checkCreatedDyn(
-          id: id,
-          dynText: editController.rawText,
+        result = await DynamicsHttp.createDynamic(
+          account: account,
+          mid: account.mid,
+          rawText: extraContent == null ? text : null,
+          pics: pictures,
+          publishTime: publishTime == null
+              ? null
+              : publishTime.millisecondsSinceEpoch ~/ 1000,
+          replyOption: replyOption,
+          privatePub: isPrivate ? 1 : null,
+          title: title,
+          topic: topic,
+          extraContent: extraContent,
+          attachCard: reserveId == null
+              ? null
+              : {
+                  'common_card': {
+                    'type': 14,
+                    'biz_id': reserveId,
+                    'reserve_source': 0,
+                    'reserve_lottery': 0,
+                  },
+                },
         );
       }
-    } else {
-      res.toast();
+      if (!isCurrent()) return;
+      if (result case Success(:final response)) {
+        const equality = DeepCollectionEquality();
+        hasPub =
+            text == editController.text &&
+            rawText == editController.rawText &&
+            equality.equals(extraContent, getRichContent()) &&
+            equality.equals(images, pictureDraft) &&
+            title == _titleEditCtr.text &&
+            replyOption == _replyOption.value &&
+            isPrivate == _isPrivate.value &&
+            publishTime == _publishTime.value &&
+            topic == _topic.value &&
+            reserveId == _reserveCard.value?.id;
+        if (mounted && hasPub && route?.isCurrent == true) {
+          Navigator.of(context).pop();
+        }
+        SmartDialog.showToast(hasPub ? '发布成功' : '发布成功，已保留新草稿');
+        try {
+          onSuccess?.call();
+        } catch (error, stackTrace) {
+          logger.w(
+            '动态发布后的页面更新失败',
+            error: error.runtimeType,
+            stackTrace: stackTrace,
+          );
+        }
+        if (response != null) {
+          unawaited(RequestUtils.insertCreatedDyn(response, account: account));
+          if (!isPrivate && publishTime == null) {
+            unawaited(
+              RequestUtils.checkCreatedDyn(
+                id: response,
+                dynText: rawText,
+                account: account,
+              ),
+            );
+          }
+        }
+      } else {
+        result.toast();
+      }
+    } catch (error, stackTrace) {
+      if (isCurrent()) {
+        (error is Error
+                ? error
+                : Error('发布准备失败，请重试', cause: error, stackTrace: stackTrace))
+            .toast();
+      }
+    } finally {
+      if (mounted) _publishing.value = false;
     }
   }
 
@@ -801,7 +861,7 @@ class _CreateDynPanelState extends CommonRichTextPubPageState<CreateDynPanel> {
       offset: _topicOffset,
       onCachePos: (offset) => _topicOffset = offset,
     );
-    if (res != null) {
+    if (mounted && res != null) {
       _topic.value = Pair(first: res.id, second: res.name);
     }
   }
@@ -866,7 +926,7 @@ class _CreateDynPanelState extends CommonRichTextPubPageState<CreateDynPanel> {
         page: () => CreateReservePage(sid: _reserveCard.value?.id),
       ),
     );
-    if (reserveInfo != null) {
+    if (mounted && reserveInfo != null) {
       _reserveCard.value = reserveInfo;
     }
   }

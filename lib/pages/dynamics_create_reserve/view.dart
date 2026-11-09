@@ -1,5 +1,6 @@
 import 'package:pili_aurora/common/widgets/scaffold/simple_scaffold.dart';
 import 'package:pili_aurora/common/widgets/time_picker.dart';
+import 'package:pili_aurora/http/loading_state.dart';
 import 'package:pili_aurora/pages/dynamics_create_reserve/controller.dart';
 import 'package:pili_aurora/utils/date_utils.dart';
 import 'package:pili_aurora/utils/utils.dart';
@@ -20,6 +21,7 @@ class CreateReservePage extends StatefulWidget {
 
 class _CreateReservePageState extends State<CreateReservePage> {
   late final CreateReserveController _controller;
+  final _tag = Utils.generateRandomString(6);
   late TextStyle _leadingStyle;
 
   @override
@@ -27,8 +29,30 @@ class _CreateReservePageState extends State<CreateReservePage> {
     super.initState();
     _controller = Get.put(
       CreateReserveController(widget.sid),
-      tag: Utils.generateRandomString(6),
+      tag: _tag,
     );
+  }
+
+  @override
+  void dispose() {
+    Get.delete<CreateReserveController>(tag: _tag);
+    super.dispose();
+  }
+
+  Future<void> _onCreate() async {
+    final route = ModalRoute.of(context);
+    final draft = _controller.draft;
+    final result = await _controller.onCreate();
+    if (!mounted || !_controller.isCurrent) return;
+    if (result case Success(:final response)) {
+      if (draft == _controller.draft && route?.isCurrent == true) {
+        Navigator.of(context).pop(response);
+      } else {
+        SmartDialog.showToast('预约已保存，已保留当前草稿');
+      }
+    } else {
+      result.toast();
+    }
   }
 
   @override
@@ -57,6 +81,21 @@ class _CreateReservePageState extends State<CreateReservePage> {
           bottom: padding.bottom + 100,
         ),
         children: [
+          Obx(() {
+            if (_controller.loading.value) {
+              return const LinearProgressIndicator();
+            }
+            final error = _controller.loadError.value;
+            return error == null
+                ? const SizedBox.shrink()
+                : ListTile(
+                    title: Text(error.toString()),
+                    trailing: TextButton(
+                      onPressed: _controller.queryData,
+                      child: const Text('重试'),
+                    ),
+                  );
+          }),
           Row(
             spacing: 12,
             children: [
@@ -114,7 +153,7 @@ class _CreateReservePageState extends State<CreateReservePage> {
                           _controller.date.value,
                         ),
                       );
-                      if (newTime != null) {
+                      if (newTime != null && mounted && _controller.isCurrent) {
                         final newEndtime = DateTime(
                           newDate.year,
                           newDate.month,
@@ -163,10 +202,11 @@ class _CreateReservePageState extends State<CreateReservePage> {
           const SizedBox(height: 25),
           Obx(() {
             return FilledButton.tonal(
-              onPressed: _controller.canCreate.value
-                  ? _controller.onCreate
+              onPressed:
+                  _controller.canCreate.value && !_controller.saving.value
+                  ? _onCreate
                   : null,
-              child: const Text('添加预约'),
+              child: Text(_controller.saving.value ? '保存中' : '添加预约'),
             );
           }),
         ],

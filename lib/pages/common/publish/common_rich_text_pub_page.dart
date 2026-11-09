@@ -16,6 +16,8 @@ import 'package:pili_aurora/models/remote/emote/emote.dart' as e;
 import 'package:pili_aurora/models/remote/live/live_emote/emoticon.dart';
 import 'package:pili_aurora/pages/common/publish/common_publish_page.dart';
 import 'package:pili_aurora/pages/dynamics_mention/view.dart';
+import 'package:pili_aurora/utils/accounts.dart';
+import 'package:pili_aurora/utils/accounts/account.dart';
 import 'package:pili_aurora/utils/cache_manager.dart';
 import 'package:pili_aurora/utils/extension/file_ext.dart';
 import 'package:pili_aurora/utils/extension/num_ext.dart';
@@ -53,10 +55,18 @@ abstract class CommonRichTextPubPage
 abstract class CommonRichTextPubPageState<T extends CommonRichTextPubPage>
     extends CommonPublishPageState<T> {
   CancelToken? _uploadToken;
+  bool _showingUploadProgress = false;
   final key = GlobalKey<RichTextFieldState>();
   late final imagePicker = ImagePicker();
   late final RxList<PicModel> imageList;
   int get limit => widget.imageLengthLimit ?? 9;
+  List<Object> get pictureDraft => [
+    for (final image in imageList)
+      switch (image) {
+        FilePicModel image => image.path,
+        OpusPicModel image => image.toJson(),
+      },
+  ];
 
   @override
   late final RichTextEditingController editController;
@@ -78,8 +88,8 @@ abstract class CommonRichTextPubPageState<T extends CommonRichTextPubPage>
     if (_uploadToken != null) {
       _uploadToken!.cancel();
       _uploadToken = null;
-      SmartDialog.dismiss();
     }
+    if (_showingUploadProgress) SmartDialog.dismiss(status: .loading);
     if (PlatformUtils.isMobile) {
       for (final img in imageList) {
         if (img is FilePicModel) {
@@ -501,9 +511,11 @@ abstract class CommonRichTextPubPageState<T extends CommonRichTextPubPage>
 
   Future<Map<String, dynamic>> uploadPicture(
     FilePicModel image,
-    CancelToken cancelToken,
-  ) async {
+    CancelToken cancelToken, {
+    Account? account,
+  }) async {
     final result = await MsgHttp.uploadBfs(
+      account: account,
       path: image.path,
       category: 'daily',
       biz: 'new_dyn',
@@ -518,39 +530,58 @@ abstract class CommonRichTextPubPageState<T extends CommonRichTextPubPage>
     };
   }
 
+  /// 上传使用提交时的图片与账号，表单可以继续编辑。
+  Future<List<Map<String, dynamic>>?> uploadPictures({
+    required Account account,
+  }) async {
+    final images = imageList.toList();
+    if (images.isEmpty) return null;
+    final cancelToken = _uploadToken = CancelToken();
+    try {
+      return await Future.wait<Map<String, dynamic>>(
+        images.map(
+          (image) => switch (image) {
+            FilePicModel image => uploadPicture(
+              image,
+              cancelToken,
+              account: account,
+            ),
+            OpusPicModel image => Future.value(image.toJson()),
+          },
+        ),
+        eagerError: true,
+      );
+    } catch (_) {
+      cancelToken.cancel();
+      rethrow;
+    } finally {
+      if (identical(_uploadToken, cancelToken)) _uploadToken = null;
+    }
+  }
+
   @override
   Future<void> onPublish() async {
     if (!mounted) return;
     feedBack();
+    final account = Accounts.main;
     List<Map<String, dynamic>>? pictures;
     if (imageList.isNotEmpty) {
+      _showingUploadProgress = true;
       SmartDialog.showLoading(msg: '正在上传图片...');
-      final cancelToken = _uploadToken = CancelToken();
       try {
-        pictures = await Future.wait<Map<String, dynamic>>(
-          imageList.map((img) async {
-            switch (img) {
-              case FilePicModel e:
-                return uploadPicture(e, cancelToken);
-              case OpusPicModel e:
-                return e.toJson();
-            }
-          }),
-          eagerError: true,
-        );
+        pictures = await uploadPictures(account: account);
         if (!mounted) return;
         SmartDialog.dismiss();
       } catch (e) {
-        cancelToken.cancel();
         if (!mounted) return;
         SmartDialog.dismiss();
         SmartDialog.showToast(e.toString());
         return;
       } finally {
-        _uploadToken = null;
+        _showingUploadProgress = false;
       }
     }
-    if (!mounted) return;
+    if (!mounted || !identical(account, Accounts.main)) return;
     return onCustomPublish(pictures: pictures);
   }
 }

@@ -218,6 +218,18 @@ void main() {
     }
   });
 
+  test('动态详情拒绝与请求目标不符的响应', () async {
+    body = {
+      'code': 0,
+      'data': {
+        'item': {'id_str': '2'},
+      },
+    };
+    final result = await DynamicsHttp.dynamicDetail(id: '1') as Error;
+    expect(result.cause, isA<FormatException>());
+    expect(result.stackTrace, isNotNull);
+  });
+
   test('投票和预约创建必须有有效 ID，编辑空回执可沿用已知 ID', () async {
     for (final id in [null, 0, -1, 'invalid']) {
       body = {

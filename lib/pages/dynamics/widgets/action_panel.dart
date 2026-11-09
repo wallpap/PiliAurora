@@ -114,6 +114,7 @@ class ActionPanel extends StatelessWidget {
                       (context as Element?)?.markNeedsBuild();
                     }
                   },
+                  context: context,
                 ),
                 icon: likeIcon,
                 style: btnStyle,

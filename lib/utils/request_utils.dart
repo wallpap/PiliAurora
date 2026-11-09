@@ -235,23 +235,31 @@ abstract final class RequestUtils {
     );
   }
 
-  static Future<void> insertCreatedDyn(dynamic id) async {
-    if (id != null) {
-      try {
-        await Future.pause(const Duration(milliseconds: 450));
-        final res = await DynamicsHttp.dynamicDetail(id: id);
-        if (res case final Success<DynamicItemModel> e) {
-          final ctr = Get.find<DynamicsTabController>(tag: 'all');
-          if (ctr.loadingState.value case Success(:final response?)) {
-            response.insert(0, e.response);
-            ctr.loadingState.refresh();
-            return;
-          }
-          ctr.loadingState.value = Success([e.response]);
-        }
-      } catch (e, stackTrace) {
-        logger.w('create dyn $e', error: e, stackTrace: stackTrace);
+  static Future<void> insertCreatedDyn(Object? id, {Account? account}) async {
+    account ??= Accounts.main;
+    if (id == null || !Get.isRegistered<DynamicsTabController>(tag: 'all')) {
+      return;
+    }
+    final controller = Get.find<DynamicsTabController>(tag: 'all');
+    final list = controller.loadingState.value.dataOrNull;
+    try {
+      await Future.pause(const Duration(milliseconds: 450));
+      if (controller.isClosed || !identical(account, Accounts.main)) return;
+      final result = await DynamicsHttp.dynamicDetail(id: id, account: account);
+      if (controller.isClosed ||
+          !identical(account, Accounts.main) ||
+          !identical(list, controller.loadingState.value.dataOrNull)) {
+        return;
       }
+      if (result case Success(:final response)) {
+        if (list == null) return;
+        list
+          ..removeWhere((item) => item.idStr.toString() == id.toString())
+          ..insert(0, response);
+        controller.loadingState.refresh();
+      }
+    } catch (error, stackTrace) {
+      logger.w('动态发布后的列表刷新失败', error: error, stackTrace: stackTrace);
     }
   }
 
@@ -259,18 +267,28 @@ abstract final class RequestUtils {
     dynamic id,
     String? dynText,
     bool isManual = false,
+    Account? account,
   }) async {
+    account ??= Accounts.main;
+    bool isCurrent() =>
+        identical(account, Accounts.main) && Get.context?.mounted == true;
     if (isManual || Pref.enableCreateDynAntifraud) {
       try {
         if (id != null) {
           if (!isManual) {
             await Future.pause(const Duration(seconds: 5));
           }
+          if (!isCurrent()) return;
           final res = await DynamicsHttp.dynamicDetail(
             id: id,
             clearCookie: true,
           );
-          final isSuccess = res.isSuccess;
+          if (!isCurrent()) return;
+          if (res is Error) {
+            SmartDialog.showToast('暂时无法确认动态可见性：$res');
+            return;
+          }
+          final isSuccess = res.data.visible != false;
           showDialog(
             context: Get.context!,
             barrierDismissible: isManual,
@@ -328,7 +346,7 @@ abstract final class RequestUtils {
                   ),
                 ),
                 content: SelectionText(
-                  '${isSuccess ? '无账号状态下找到了你的动态，动态正常！' : '你的动态被shadow ban（仅自己可见）！'}${dynText != null ? ' \n\n动态内容: $dynText' : ''}',
+                  '${isSuccess ? '未登录状态下可以查看该动态。' : '未登录状态下无法查看该动态，请检查可见范围。'}${dynText != null ? ' \n\n动态内容: $dynText' : ''}',
                 ),
                 actions: actions.isEmpty ? null : actions,
               );
@@ -341,35 +359,56 @@ abstract final class RequestUtils {
     }
   }
 
-  // 动态点赞
+  static final _likingDynamics = <DynamicItemModel>{};
+
+  // 同一动态共用在途状态，避免列表与详情入口重复写入。
   static Future<void> onLikeDynamic(
     DynamicItemModel item,
     bool uiStatus,
-    VoidCallback onSuccess,
-  ) async {
-    feedBack();
-
+    VoidCallback onSuccess, {
+    BuildContext? context,
+  }) async {
+    if (!_likingDynamics.add(item)) return;
+    final account = Accounts.main;
+    final dynamicId = item.idStr?.toString();
     final like = item.modules.moduleStat?.like;
     final status = like?.status ?? false;
-
-    if (status ^ uiStatus) {
-      SmartDialog.showToast(status ? '点赞成功' : '取消赞');
-      onSuccess();
-      return;
-    }
-
-    final res = await DynamicsHttp.thumbDynamic(
-      dynamicId: item.idStr!,
-      up: status ? 2 : 1, // 1 已点赞 2 不喜欢 0 未操作
-    );
-    if (res.isSuccess) {
-      SmartDialog.showToast(status ? '取消赞' : '点赞成功');
-      like
-        ?..count = (like.count ?? 0) + (status ? -1 : 1)
-        ..status = !status;
-      onSuccess();
-    } else {
-      res.toast();
+    feedBack();
+    try {
+      if (status ^ uiStatus) {
+        SmartDialog.showToast(status ? '点赞成功' : '取消赞');
+        onSuccess();
+        return;
+      }
+      if (dynamicId == null || dynamicId.isEmpty) {
+        SmartDialog.showToast('动态缺少 ID，请刷新后重试');
+        return;
+      }
+      final result = await DynamicsHttp.thumbDynamic(
+        account: account,
+        dynamicId: dynamicId,
+        up: status ? 2 : 1,
+      );
+      if (!identical(account, Accounts.main) ||
+          context?.mounted == false ||
+          item.idStr.toString() != dynamicId ||
+          !identical(like, item.modules.moduleStat?.like)) {
+        return;
+      }
+      if (result.isSuccess) {
+        SmartDialog.showToast(status ? '取消赞' : '点赞成功');
+        if (like != null) {
+          if (like.count case final count?) {
+            like.count = max(0, count + (status ? -1 : 1));
+          }
+          like.status = !status;
+        }
+        onSuccess();
+      } else {
+        result.toast();
+      }
+    } finally {
+      _likingDynamics.remove(item);
     }
   }
 

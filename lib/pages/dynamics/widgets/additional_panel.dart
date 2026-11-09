@@ -7,8 +7,10 @@ import 'package:pili_aurora/http/loading_state.dart';
 import 'package:pili_aurora/models/dynamics/result.dart';
 import 'package:pili_aurora/pages/dynamics/widgets/vote.dart';
 import 'package:pili_aurora/utils/app_scheme.dart';
+import 'package:pili_aurora/utils/accounts.dart';
 import 'package:pili_aurora/utils/num_utils.dart';
 import 'package:get/get.dart';
+import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:material_ui/material_ui.dart';
 
 Widget? addWidget(
@@ -143,67 +145,13 @@ Widget? addWidget(
                   ),
                   if (reserve.button != null) ...[
                     const SizedBox(width: 10),
-                    Builder(
-                      builder: (context) {
-                        final btn = reserve.button!;
-                        final isReserved = btn.status == btn.type;
-                        final bool canJump = btn.jumpUrl?.isNotEmpty == true;
-                        return FilledButton.tonal(
-                          style: FilledButton.styleFrom(
-                            foregroundColor: canJump
-                                ? null
-                                : isReserved
-                                ? theme.colorScheme.onSurface.withValues(
-                                    alpha: 0.38,
-                                  )
-                                : null,
-                            backgroundColor: canJump
-                                ? null
-                                : isReserved
-                                ? theme.colorScheme.onSurface.withValues(
-                                    alpha: 0.12,
-                                  )
-                                : null,
-                            visualDensity: VisualDensity.compact,
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 16,
-                            ),
-                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                          ),
-                          onPressed: canJump
-                              ? () => PiliScheme.routePushFromUrl(
-                                  btn.jumpUrl!,
-                                )
-                              : btn.disable == 1
-                              ? null
-                              : () async {
-                                  final res = await DynamicsHttp.dynReserve(
-                                    reserveId: reserve.rid,
-                                    curBtnStatus: btn.status,
-                                    dynamicIdStr: idStr,
-                                    reserveTotal: reserve.reserveTotal,
-                                  );
-                                  if (res case Success(:final response)) {
-                                    reserve
-                                      ..desc2?.text = response.descUpdate
-                                      ..reserveTotal = response.reserveUpdate
-                                      ..button!.status =
-                                          response.finalBtnStatus;
-                                    if (context.mounted) {
-                                      (context as Element?)?.markNeedsBuild();
-                                    }
-                                  } else {
-                                    res.toast();
-                                  }
-                                },
-                          child: Text(
-                            btn.jumpText != null
-                                ? btn.jumpText!
-                                : isReserved
-                                ? btn.checkText!
-                                : btn.uncheckText!,
-                          ),
-                        );
+                    _ReserveButton(
+                      reserve: reserve,
+                      dynamicId: idStr,
+                      onChanged: () {
+                        if (context.mounted) {
+                          (context as Element).markNeedsBuild();
+                        }
                       },
                     ),
                   ],
@@ -699,6 +647,102 @@ additional panel error
 id: $idStr
 type: $type
 err: $e''',
+      ),
+    );
+  }
+}
+
+class _ReserveButton extends StatefulWidget {
+  const _ReserveButton({
+    required this.reserve,
+    required this.dynamicId,
+    required this.onChanged,
+  });
+  final Reserve reserve;
+  final Object dynamicId;
+  final VoidCallback onChanged;
+
+  @override
+  State<_ReserveButton> createState() => _ReserveButtonState();
+}
+
+class _ReserveButtonState extends State<_ReserveButton> {
+  bool _saving = false;
+  final _account = Accounts.main;
+
+  Future<void> _onReserve() async {
+    if (_saving) return;
+    if (!identical(_account, Accounts.main)) {
+      SmartDialog.showToast('账号已切换，请刷新后重试');
+      return;
+    }
+    final reserve = widget.reserve;
+    final button = reserve.button;
+    if (button == null || reserve.rid == null) return;
+    final account = Accounts.main;
+    final dynamicId = widget.dynamicId;
+    setState(() => _saving = true);
+    try {
+      final result = await DynamicsHttp.dynReserve(
+        account: account,
+        reserveId: reserve.rid,
+        curBtnStatus: button.status,
+        dynamicIdStr: dynamicId,
+        reserveTotal: reserve.reserveTotal,
+      );
+      if (!mounted ||
+          !identical(account, Accounts.main) ||
+          !identical(reserve, widget.reserve) ||
+          !identical(button, reserve.button) ||
+          dynamicId != widget.dynamicId) {
+        return;
+      }
+      if (result case Success(:final response)) {
+        if (response.descUpdate case final desc?) reserve.desc2?.text = desc;
+        if (response.reserveUpdate case final total?) {
+          reserve.reserveTotal = total;
+        }
+        button.status = response.finalBtnStatus;
+        widget.onChanged();
+      } else {
+        result.toast();
+      }
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final button = widget.reserve.button;
+    if (button == null) return const SizedBox.shrink();
+    final canJump = button.jumpUrl?.isNotEmpty == true;
+    final isReserved = button.status != null && button.status == button.type;
+    return FilledButton.tonal(
+      style: FilledButton.styleFrom(
+        foregroundColor: !canJump && isReserved
+            ? theme.colorScheme.onSurface.withValues(alpha: 0.38)
+            : null,
+        backgroundColor: !canJump && isReserved
+            ? theme.colorScheme.onSurface.withValues(alpha: 0.12)
+            : null,
+        visualDensity: VisualDensity.compact,
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      ),
+      onPressed: _saving || button.disable == 1
+          ? null
+          : canJump
+          ? () => PiliScheme.routePushFromUrl(button.jumpUrl!)
+          : _onReserve,
+      child: Text(
+        _saving
+            ? '提交中'
+            : button.jumpText ??
+                  (isReserved
+                      ? button.checkText ?? '已预约'
+                      : button.uncheckText ?? '预约'),
       ),
     );
   }
