@@ -30,6 +30,7 @@ abstract final class DownloadHttp {
     return audioIds.contains(closestNumber) ? closestNumber : audioIds.first;
   }
 
+  /// 请求失败抛出保留业务码的 [Error]；响应缺少可下载媒体时抛出 [FormatException]。
   static Future<BiliDownloadMediaInfo> getVideoUrl({
     required BiliDownloadEntryInfo entry,
     int? preferredAudioQuality,
@@ -55,55 +56,62 @@ abstract final class DownloadHttp {
     if (res case Success(:final response)) {
       final dash = response.dash;
       if (dash != null) {
-        final targetVideoQa = response.findAvailableVideoQuality(
-          entry.preferedVideoQuality,
-        );
+        final videos = dash.video;
+        if (videos == null || videos.isEmpty) {
+          throw const FormatException('下载响应缺少视频流');
+        }
+        // accept_quality 可能列出账号无权下载的画质，只从实际返回的流中选择。
+        final targetVideoQa = videos
+            .map((e) => e.quality.code)
+            .toList()
+            .findClosestTarget(
+              (quality) => quality <= entry.preferedVideoQuality,
+              (a, b) => a > b ? a : b,
+            );
 
         /// 优先顺序 设置中指定解码格式 -> 当前可选的首个解码格式
-        final supportFormats = response.supportFormats!;
-        // 根据画质选编码格式
-        final targetSupportFormats = supportFormats.firstWhere(
+        final targetSupportFormats = response.supportFormats?.firstWhereOrNull(
           (e) => e.quality == targetVideoQa,
-          orElse: () => supportFormats.first,
         );
-
-        final currentDecodeFormats = VideoUtils.selectCodec(
-          targetSupportFormats.codecs!,
-          Pref.preferCodecs,
-        );
-
-        entry
-          ..typeTag = targetVideoQa.toString()
-          ..videoQuality = targetVideoQa
-          ..preferedVideoQuality = targetVideoQa
-          ..qualityPithyDescription =
-              targetSupportFormats.newDesc ??
-              VideoQuality.fromCode(targetVideoQa).desc;
 
         /// 取出符合当前画质的videoList
-        final videosList = dash.video!
+        final videosList = videos
             .where((e) => e.quality.code == targetVideoQa)
             .toList();
 
         /// 取出符合当前解码格式的videoItem
-        final videoDash = videosList.firstWhere(
-          (e) => currentDecodeFormats.codes.any(e.codecs!.startsWith),
-          orElse: () => videosList.first,
-        );
+        final codecs = videosList
+            .map((e) => e.codecs)
+            .whereType<String>()
+            .toList();
+        final currentDecodeFormats = codecs.isEmpty
+            ? null
+            : VideoUtils.selectCodec(codecs, Pref.preferCodecs);
+        final videoDash = currentDecodeFormats == null
+            ? videosList.first
+            : videosList.firstWhere(
+                (e) =>
+                    e.codecs != null &&
+                    currentDecodeFormats.codes.any(e.codecs!.startsWith),
+                orElse: () => videosList.first,
+              );
+        if (videoDash.playUrls.isEmpty) {
+          throw const FormatException('下载响应缺少视频地址');
+        }
 
         final videoUrl = VideoUtils.getCdnUrl(videoDash.playUrls);
 
         final Type2File videoFile = Type2File(
           id: videoDash.id,
           baseUrl: videoUrl,
-          bandwidth: videoDash.bandWidth!,
-          codecid: videoDash.codecid!,
+          bandwidth: videoDash.bandWidth ?? 0,
+          codecid: videoDash.codecid ?? 0,
           size: 0,
           md5: '',
           noRexcode: false,
           frameRate: videoDash.frameRate ?? '',
-          width: videoDash.width!,
-          height: videoDash.height!,
+          width: videoDash.width ?? 0,
+          height: videoDash.height ?? 0,
           dashDrmType: 0,
         );
         List<Type2File>? audioFileList;
@@ -117,6 +125,9 @@ abstract final class DownloadHttp {
           final AudioItem audioDash = audioDashList.firstWhere(
             (e) => e.id == closestNumber,
           );
+          if (audioDash.playUrls.isEmpty) {
+            throw const FormatException('下载响应缺少音频地址');
+          }
           final audioUrl = VideoUtils.getCdnUrl(
             audioDash.playUrls,
             isAudio: true,
@@ -125,28 +136,39 @@ abstract final class DownloadHttp {
             Type2File(
               id: audioDash.id,
               baseUrl: audioUrl,
-              bandwidth: audioDash.bandWidth!,
-              codecid: audioDash.codecid!,
+              bandwidth: audioDash.bandWidth ?? 0,
+              codecid: audioDash.codecid ?? 0,
               size: 0,
               md5: '',
               noRexcode: false,
-              frameRate: audioDash.frameRate!,
-              width: audioDash.width!,
-              height: audioDash.height!,
+              frameRate: audioDash.frameRate ?? '',
+              width: audioDash.width ?? 0,
+              height: audioDash.height ?? 0,
               dashDrmType: 0,
             ),
           ];
-          entry.hasDashAudio = true;
         }
+        entry
+          ..mediaType = 2
+          ..hasDashAudio = audioFileList != null
+          ..typeTag = targetVideoQa.toString()
+          ..videoQuality = targetVideoQa
+          ..preferedVideoQuality = targetVideoQa
+          ..qualityPithyDescription =
+              targetSupportFormats?.newDesc ??
+              VideoQuality.fromCode(targetVideoQa).desc;
         return Type2(
-          duration: dash.duration!,
+          duration: dash.duration ?? entry.totalTimeMilli ~/ 1000,
           video: [videoFile],
           audio: audioFileList,
           referer: referer,
           userAgent: userAgent,
         );
       } else {
-        final first = response.durl!.first;
+        final first = response.durl?.firstOrNull;
+        if (first == null || first.playUrls.isEmpty) {
+          throw const FormatException('下载响应缺少媒体地址');
+        }
         final List<Type1Segment> segmentList = [
           Type1Segment(
             backupUrls: [],
@@ -167,6 +189,7 @@ abstract final class DownloadHttp {
 
         entry
           ..mediaType = 1
+          ..hasDashAudio = false
           ..typeTag = targetVideoQa.toString()
           ..videoQuality = targetVideoQa
           ..preferedVideoQuality = targetVideoQa
@@ -208,7 +231,8 @@ abstract final class DownloadHttp {
         );
       }
     } else {
-      throw res.toString();
+      if (res is Error) throw res;
+      throw StateError('下载地址仍在加载，未取得媒体结果');
     }
   }
 }

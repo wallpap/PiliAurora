@@ -141,6 +141,34 @@ void main() {
     expect(await file.readAsBytes(), [1, 2, 3]);
   });
 
+  test('完成回调抛出时不再次报告传输失败', () async {
+    client.httpClientAdapter = _Adapter(
+      (_) async => ResponseBody.fromBytes(
+        [1, 2, 3],
+        200,
+        headers: {
+          'content-length': ['3'],
+        },
+      ),
+    );
+    final callbackError = StateError('consumer failed');
+    final calls = <Object?>[];
+    final manager = DownloadManager(
+      url: 'https://example.test/video',
+      path: '${directory.path}/callback.bin',
+      client: client,
+      onReceiveProgress: null,
+      onDone: ([error]) {
+        calls.add(error);
+        throw callbackError;
+      },
+    );
+    await expectLater(manager.task, throwsA(same(callbackError)));
+    expect(calls, [null]);
+    expect(manager.status, DownloadStatus.completed);
+    expect(await File(manager.path).readAsBytes(), [1, 2, 3]);
+  });
+
   test(
     'network idle timeout keeps partial bytes and reports failure once',
     () async {

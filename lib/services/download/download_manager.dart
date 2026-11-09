@@ -36,6 +36,7 @@ class DownloadManager {
 
   Future<void> _start() async {
     IOSink? sink;
+    Object? failure;
     try {
       final file = File(path);
       final received = file.existsSync() ? file.lengthSync() : 0;
@@ -76,7 +77,7 @@ class DownloadManager {
       final total = response.statusCode == 416
           ? received
           : declaredTotal ??
-              (data.contentLength >= 0 ? received + data.contentLength : 0);
+                (data.contentLength >= 0 ? received + data.contentLength : 0);
       onReceiveProgress?.call(received, total);
       var written = received;
       if (response.statusCode == 416) {
@@ -108,8 +109,8 @@ class DownloadManager {
       }
       onReceiveProgress?.call(written, written);
       _status = DownloadStatus.completed;
-      onDone();
     } catch (error) {
+      failure = error;
       // 保留所有已写入字节；失败与暂停都等待文件关闭后再通知状态所有者。
       if (!_cancelToken.isCancelled) _cancelToken.cancel(error);
       try {
@@ -118,8 +119,9 @@ class DownloadManager {
       if (_status == DownloadStatus.downloading) {
         _status = DownloadStatus.failDownload;
       }
-      onDone(error);
     }
+    // 消费者回调的异常属于调用方，不能再次报告为传输失败或重复推进队列。
+    onDone(failure);
   }
 
   Future<void> cancel({required bool isDelete}) {

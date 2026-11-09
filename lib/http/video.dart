@@ -278,7 +278,10 @@ abstract final class VideoHttp {
           cancelToken: cancelToken,
         );
       }
-      return Error(_parseVideoErr(res.data['code'], res.data['message']));
+      return Error(
+        _parseVideoErr(res.data['code'], res.data['message']),
+        code: res.data['code'],
+      );
     } catch (e, s) {
       return Error.fromException(e, s);
     }
