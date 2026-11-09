@@ -427,7 +427,7 @@ class _RepostPanelState extends CommonRichTextPubPageState<RepostPanel>
       Get.back();
       SmartDialog.showToast('转发成功');
       widget.onSuccess?.call();
-      final id = response?['dyn_id'];
+      final id = response;
       RequestUtils.insertCreatedDyn(id);
       RequestUtils.checkCreatedDyn(
         id: id,

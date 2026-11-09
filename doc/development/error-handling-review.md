@@ -46,6 +46,7 @@
 | 收藏详情、搜索、两种排序与批量迁移：`pages/fav_detail`、`fav_search`、`fav_sort`、`fav_folder_sort`、`RequestUtils.onCopyOrMove` | 写入绑定原账号与目标收藏夹。不同条目可并发取消，同项和重叠批量操作防重复；缺少详情信息时返回可重试错误。排序失败保留草稿，确认成功后提交副本；迁移失败保留选择与数量，提交状态留在弹窗内，取消后立即释放界面。切号、换列表或关闭页面后拒绝旧结果；删除只关闭所属页面。快速收藏的前置查询与写入均检查视频归属。 | `test/pages/fav/management_results_test.dart`、收藏操作与移除身份回归、收藏响应回归 |
 | 弹幕、评论与表情包：`http/danmaku.dart`、`reply.dart`、发送面板、赞踩／置顶、评论可见性检查和表情包页面 | 接入查询／写入结果契约，保留业务码和写入待确认。修正弹幕管理端点和赞踩防重入；发送按提交草稿回显，失败或关闭时保留新草稿，切号／换对象后拒绝旧结果。表情包分页固定账号并检查进度、总数与详情归属。举报在所属弹窗显示提交状态，取消后的结果不关闭新页面，举报成功与屏蔽同步失败分别反馈。可见性检查按 12022 业务码判断，查询故障和重复分页不误报不可见。 | `test/http/community_response_test.dart`、`test/pages/community/operation_results_test.dart`、表情包模型与评论生命周期回归 |
 | 搜索：`http/search.dart`、搜索首页与热搜控制器 | 查询接入统一契约，保留业务码、原始原因与堆栈，签名前固定推荐账号，无效风控凭据返回解析失败。搜索首页与热搜订阅账号变化并拒绝旧响应；已有结果分页保护保留。分 P 查询保留可空包装，空列表仍返回 null，损坏响应显示可读提示。 | `test/http/search_response_test.dart`、`test/pages/search/controller_test.dart`、搜索结果分页回归 |
+| 动态 HTTP：`http/dynamics.dart` | 32 个接口接入查询／写入结果契约，保留业务码、原始原因和待确认结果。跨页与签名前固定账号，过滤补页检查游标进展并有请求上限；话题等可选内容仍允许为空。投票和预约创建必须取得有效 ID，编辑允许沿用已知 ID；发布只返回调用方使用的可空动态 ID，定时发布可缺少 ID。 | `test/http/dynamics_response_test.dart`、文章内容重试回归 |
 
 ## 检查后保留的实现
 
@@ -100,3 +101,5 @@
 - 搜索响应、首页／热搜状态和结果分页共 38 项不同用例通过。首轮 HTTP 7 项与结果分页 14 项通过；修正账号夹具初始化和模拟时钟等待后，分 P 单项 1 项及首页／热搜 16 项通过（`build/search-contract-tests.log`、`build/search-pagelist-tests.log`、`build/search-state-tests.log`）。修改文件定向分析无问题（`build/community-search-analyze.log`）。未重跑完整 CI，真实服务与导航、动态话题调用方留待后续检查。
 
 - 补查账号路由时修正 HTTP 评论列表与楼中楼默认账号：继续沿用播放记录角色，显式绑定主账号的可见性检查保持原语义。新增的角色分离回归 1 项通过（`build/reply-account-tests.log`）。
+
+- 动态 HTTP 11 项与文章内容重试 2 项共 13 项不同用例通过。首批 11 项通过后只补跑完整投票与分页上限 2 项（`build/dynamics-response-tests.log`、`build/dynamics-extra-tests.log`）。修改文件的定向分析提示已修正（`build/dynamics-response-final-analyze.log`）。未重跑完整 CI，动态发布和管理调用方继续检查，真实账号写入尚未验收。

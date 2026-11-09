@@ -24,6 +24,7 @@ $ciTests = @(
     "test/http/sponsor_block_response_test.dart",
     "test/http/user_response_test.dart",
     "test/http/community_response_test.dart",
+    "test/http/dynamics_response_test.dart",
     "test/pages/community/operation_results_test.dart",
     "test/pages/history/operation_results_test.dart",
     "test/pages/sponsor_block/operation_results_test.dart",
