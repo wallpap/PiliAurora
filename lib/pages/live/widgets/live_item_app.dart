@@ -77,17 +77,36 @@ class LiveCardVApp extends StatelessWidget {
             child: IconButton(
               padding: .zero,
               onPressed: () {
+                final account = LiveHttp.recommend;
+                final roomId = item.roomid;
+                var submitting = false;
+                bool current() =>
+                    context.mounted &&
+                    identical(account, LiveHttp.recommend) &&
+                    identical((context.widget as LiveCardVApp).item, item) &&
+                    roomId == item.roomid;
                 Widget actionButton(Reason r) => SearchText(
-                  text: r.name!,
+                  text: r.name ?? '反馈原因',
                   onTap: (_) async {
+                    if (submitting || !current()) return;
+                    final id = r.id;
+                    final type = r.idType;
+                    if (roomId == null || id == null || type == null) {
+                      SmartDialog.showToast('反馈信息不完整，请刷新后重试');
+                      return;
+                    }
+                    submitting = true;
                     Get.back();
                     SmartDialog.showLoading(msg: '正在提交');
-                    final res = await LiveHttp.liveFeedback(
-                      item.roomid!,
-                      r.id!,
-                      r.idType!,
-                    );
-                    SmartDialog.dismiss();
+                    final res =
+                        await LiveHttp.liveFeedback(
+                          roomId,
+                          id,
+                          type,
+                        ).whenComplete(
+                          () => SmartDialog.dismiss(status: .loading),
+                        );
+                    if (!current()) return;
                     if (res.isSuccess) {
                       SmartDialog.showToast('提交成功');
                     } else {
@@ -125,7 +144,9 @@ class LiveCardVApp extends StatelessWidget {
                           Wrap(
                             spacing: 8.0,
                             runSpacing: 8.0,
-                            children: i.reasons!.map(actionButton).toList(),
+                            children: (i.reasons ?? const [])
+                                .map(actionButton)
+                                .toList(),
                           ),
                         ],
                         const Divider(),

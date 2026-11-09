@@ -4,6 +4,7 @@ import 'package:pili_aurora/models/common/live/live_contribution_rank_type.dart'
 import 'package:pili_aurora/models/remote/live/live_contribution_rank/data.dart';
 import 'package:pili_aurora/models/remote/live/live_contribution_rank/item.dart';
 import 'package:pili_aurora/pages/common/common_list_controller.dart';
+import 'package:pili_aurora/utils/accounts.dart';
 
 class ContributionRankController
     extends
@@ -22,10 +23,16 @@ class ContributionRankController
   });
 
   @override
+  Object get queryContext => Accounts.main;
+
+  @override
   void onInit() {
     super.onInit();
+    Accounts.mainChanges.addListener(_onAccountChanged);
     queryData();
   }
+
+  void _onAccountChanged() => onReload();
 
   @override
   List<LiveContributionRankItem>? getDataList(
@@ -42,4 +49,10 @@ class ContributionRankController
         page: page,
         type: type,
       );
+
+  @override
+  void onClose() {
+    Accounts.mainChanges.removeListener(_onAccountChanged);
+    super.onClose();
+  }
 }

@@ -6,6 +6,8 @@ import 'package:pili_aurora/models/remote/live/live_feed_index/card_data_list_it
 import 'package:pili_aurora/models/remote/live/live_second_list/data.dart';
 import 'package:pili_aurora/models/remote/live/live_second_list/tag.dart';
 import 'package:pili_aurora/pages/common/discovery_list_controller.dart';
+import 'package:pili_aurora/utils/accounts.dart';
+import 'package:pili_aurora/utils/accounts/account.dart';
 import 'package:get/get.dart';
 
 class LiveAreaChildController
@@ -21,11 +23,37 @@ class LiveAreaChildController
   // tag
   final RxInt tagIndex = 0.obs;
   List<LiveSecondTag>? newTags;
+  Account _contextMain = Accounts.main;
+  Account _contextRecommend = LiveHttp.recommend;
+  Object _queryContext = Object();
+
+  @override
+  Object get queryContext {
+    final main = Accounts.main;
+    final recommend = LiveHttp.recommend;
+    if (!identical(main, _contextMain) ||
+        !identical(recommend, _contextRecommend)) {
+      _contextMain = main;
+      _contextRecommend = recommend;
+      _queryContext = Object();
+    }
+    return _queryContext;
+  }
 
   @override
   void onInit() {
     super.onInit();
+    Accounts.mainChanges.addListener(_onAccountChanged);
+    Accounts.recommendChanges.addListener(_onAccountChanged);
     queryData();
+  }
+
+  void _onAccountChanged() {
+    final previous = _queryContext;
+    if (identical(previous, queryContext)) return;
+    count = null;
+    newTags = null;
+    onReload();
   }
 
   @override
@@ -63,5 +91,12 @@ class LiveAreaChildController
     this.sortType = sortType;
 
     onRefresh();
+  }
+
+  @override
+  void onClose() {
+    Accounts.mainChanges.removeListener(_onAccountChanged);
+    Accounts.recommendChanges.removeListener(_onAccountChanged);
+    super.onClose();
   }
 }

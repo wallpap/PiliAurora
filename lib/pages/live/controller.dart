@@ -7,16 +7,45 @@ import 'package:pili_aurora/models/remote/live/live_feed_index/data.dart';
 import 'package:pili_aurora/models/remote/live/live_second_list/data.dart';
 import 'package:pili_aurora/models/remote/live/live_second_list/tag.dart';
 import 'package:pili_aurora/pages/common/discovery_list_controller.dart';
-import 'package:pili_aurora/services/account_service.dart';
+import 'package:pili_aurora/utils/accounts.dart';
+import 'package:pili_aurora/utils/accounts/account.dart';
 import 'package:pili_aurora/utils/extension/scroll_controller_ext.dart';
 import 'package:flutter/widgets.dart' show ScrollController;
 import 'package:get/get.dart';
 
-class LiveController extends DiscoveryListController with AccountMixin {
+class LiveController extends DiscoveryListController {
+  Account _contextMain = Accounts.main;
+  Account _contextRecommend = LiveHttp.recommend;
+  Object _queryContext = Object();
+  int _topVersion = 0;
+
+  @override
+  Object get queryContext {
+    final main = Accounts.main;
+    final recommend = LiveHttp.recommend;
+    if (!identical(main, _contextMain) ||
+        !identical(recommend, _contextRecommend)) {
+      _contextMain = main;
+      _contextRecommend = recommend;
+      _queryContext = Object();
+    }
+    return _queryContext;
+  }
+
   @override
   void onInit() {
     super.onInit();
+    Accounts.mainChanges.addListener(_onAccountChanged);
+    Accounts.recommendChanges.addListener(_onAccountChanged);
     queryData();
+  }
+
+  void _onAccountChanged() {
+    final previous = _queryContext;
+    if (identical(previous, queryContext)) return;
+    topState.value = Pair(first: null, second: null);
+    newTags = null;
+    onReload();
   }
 
   int? count;
@@ -57,6 +86,7 @@ class LiveController extends DiscoveryListController with AccountMixin {
     if (isRefresh) {
       final res = response.response;
       if (res is LiveIndexData) {
+        _topVersion++;
         _filterFollowedRooms(res.followItem);
         topState.value = Pair(
           first: res.followItem,
@@ -108,19 +138,34 @@ class LiveController extends DiscoveryListController with AccountMixin {
   }
 
   Future<void> queryTop() async {
+    if (isClosed) return;
+    final context = queryContext;
+    final version = ++_topVersion;
+    final areaId = this.areaId;
+    final parentAreaId = this.parentAreaId;
     final res = await LiveHttp.liveFeedIndex(pn: page, moduleSelect: true);
+    if (isClosed ||
+        version != _topVersion ||
+        !identical(context, queryContext) ||
+        areaId != this.areaId ||
+        parentAreaId != this.parentAreaId) {
+      return;
+    }
     if (res case Success(:final response)) {
       _filterFollowedRooms(response.followItem);
       topState.value = Pair(
         first: response.followItem,
         second: response.areaItem,
       );
-      areaIndex.value =
-          (response.areaItem?.cardData?.areaEntranceV3?.list?.indexWhere(
-                (e) => e.areaV2Id == areaId && e.areaV2ParentId == parentAreaId,
-              ) ??
-              -2) +
-          1;
+      final index = response.areaItem?.cardData?.areaEntranceV3?.list
+          ?.indexWhere(
+            (e) => e.areaV2Id == areaId && e.areaV2ParentId == parentAreaId,
+          );
+      areaIndex.value = areaId == null
+          ? 0
+          : index != null && index >= 0
+          ? index + 1
+          : -1;
     }
   }
 
@@ -158,10 +203,10 @@ class LiveController extends DiscoveryListController with AccountMixin {
   }
 
   @override
-  void onChangeAccount(bool isLogin) => onReload();
-
-  @override
   void onClose() {
+    Accounts.mainChanges.removeListener(_onAccountChanged);
+    Accounts.recommendChanges.removeListener(_onAccountChanged);
+    _topVersion++;
     followController.dispose();
     super.onClose();
   }

@@ -52,6 +52,8 @@
 | 文章与文章收藏：正文、统计、点赞、收藏、分享／转发和历史上报 | 正文与统计固定账号、目标和查询代次，关闭或切号后淘汰旧结果；本人点赞读取真实状态，补齐标题。写入互斥，确认成功才更新，未知计数保持未知并淘汰早先的统计查询。收藏列表跟随凭据刷新；分享回调核对当前文章，历史上报固定正文加载前的 heartbeat。文集列表和文章搜索保留合理契约。 | `test/pages/article/controller_results_test.dart`、`content_retry_test.dart` |
 | 动态聚合主页、互动菜单、点赞／转发列表 | 聚合页与列表跟随主账号凭据变化，查询固定账号，重复游标终止分页且不追加重复页；全部关注列表持续去重，刷新等待两个面板。互动设置缺少来源时显示可读提示，旧查询和弹窗拒绝切号后的回调。举报确认成功后再拉黑，拉黑失败保留举报成功；用户关系写入接入统一契约，禁止自动重试，保留原有切号保护。举报弹窗支持调用方归属检查。 | `test/pages/dynamics/overview_results_test.dart`、举报弹窗与关注交互回归 |
 
+| 直播推荐／分区／榜单与菜单调用方：`pages/live`、`live_area_detail`、贡献榜与房间侧栏／聊天菜单 | 推荐与分区绑定主账号和推荐角色，拒绝旧请求与乱序顶部结果；未收藏分区继续沿原来源查询，分区标签重载时释放旧控制器。榜单切房释放旧注册，非空泛型保证注册／查找一致；舰长查询绑定账号。反馈与聊天屏蔽拒绝重复提交和失效结果。 | `test/pages/live/consumer_results_test.dart` |
+
 ## 检查后保留的实现
 
 - 消息 Session、聊天和分享已区分成功、失败与结果待确认。Session 保留传输不确定性，切号后拒绝旧结果，分享保留部分成功信息。统一 HTTP 与 gRPC 返回值时继续保留 unknown 语义。见[消息模块](../../lib/services/messaging/README.md)。
@@ -63,7 +65,7 @@
 
 ## 待检查
 
-- HTTP 传输、重试和其余业务适配器：逐接口核对响应结构、写入重试和调用方对可空返回值的处理。通用错误捕获的修正只覆盖部分问题，其余接口仍需逐一验收；剩余直播业务接口也在此范围内。
+- HTTP 传输、重试和其余业务适配器：逐接口核对响应结构、写入重试和调用方对可空返回值的处理。通用错误捕获的修正只覆盖部分问题，其余接口仍需逐一验收。
 - gRPC 各领域响应模型和调用方：请求、写入不确定性与解码契约已检查，模型字段和业务行为继续按领域核对。
 - 应用退出服务，以及启动中的后台账号与网络同步。桌面播放 IPC、直播消息连接和协议 worker 已检查。
 - 播放小窗异常退出后的声音归属和主窗口恢复行为。
@@ -115,3 +117,5 @@
 - 文章正文／统计、收藏／点赞、账号替换、历史上报与内容重试共 10 个不同用例通过。增强未知计数与成功写入淘汰旧查询断言后，仅复跑受影响前缀匹配的 3 项，均通过（`build/article-consumer-contract-tests.log`、`build/article-like-id-test.log`、`build/article-write-state-tests.log`）。8 个修改文件完成定向分析：文章文件的 5 条格式提示修正后无问题，共享 video.dart 并行改动缺失 import 修正后单文件复查无问题（`build/article-consumer-analyze.log`、`build/article-video-analyze.log`）。未重跑完整 CI，也未验证真实服务与完整文章渲染。
 
 - 动态聚合／互动菜单／点赞与转发列表新增 9 个不同用例，加举报弹窗和关注交互既有回归各 1 项，共 11 项通过。首轮 6 项通过后，只复跑缺失评论来源与举报用例，另补充切号后迟到举报成功回归（`build/dynamics-overview-tests.log`、`build/dynamics-overview-menu-retry.log`、`build/dynamics-overview-report-final.log`、`build/dynamics-report-dialog-regression.log`、`build/dynamics-relation-regression.log`）。9 个文件定向分析的 1 条提示和 1 条警告修正后，2 文件复查无问题（`build/dynamics-overview-analyze.log`、`build/dynamics-overview-final-analyze.log`）。未重跑完整 CI，也未进行真实服务写入与设备验收。
+
+- 直播推荐／分区／榜单与菜单新增 8 个不同用例。首轮 6 项通过、2 项失败；修正侧栏可空泛型注册及测试卸载清理后，仅复跑侧栏和屏蔽 2 项，均通过（`build/live-consumer-results-tests.log`、`build/live-consumer-widget-tests.log`）。8 文件定向分析无问题，后续变动的 2 文件复查通过（`build/live-consumer-analyze.log`、`build/live-consumer-widget-analyze.log`）；格式和 diff 检查通过。未重跑完整 CI，也未验证真实服务、完整播放流程与设备行为。

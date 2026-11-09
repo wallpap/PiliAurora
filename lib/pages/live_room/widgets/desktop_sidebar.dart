@@ -14,6 +14,7 @@ import 'package:pili_aurora/pages/live_room/contribution_rank/controller.dart';
 import 'package:pili_aurora/pages/live_room/widgets/live_list_sheet.dart';
 import 'package:pili_aurora/pages/live_room/controller.dart';
 import 'package:pili_aurora/pages/member_guard/view.dart';
+import 'package:pili_aurora/utils/accounts.dart';
 
 enum _SidebarTab { audience, guard }
 
@@ -52,6 +53,7 @@ class _DesktopLiveSidebarState extends State<DesktopLiveSidebar> {
   @override
   void initState() {
     super.initState();
+    Accounts.mainChanges.addListener(_onAccountChanged);
     _ensureRankController();
   }
 
@@ -60,7 +62,7 @@ class _DesktopLiveSidebarState extends State<DesktopLiveSidebar> {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.roomId != widget.roomId ||
         oldWidget.anchorUid != widget.anchorUid) {
-      _deleteRankController();
+      _deleteRankController(roomId: oldWidget.roomId);
       _rankController = null;
       _guardState = null;
       _guardGeneration++;
@@ -76,7 +78,7 @@ class _DesktopLiveSidebarState extends State<DesktopLiveSidebar> {
           tag: _rankTag,
         )
         ? Get.find<ContributionRankController>(tag: _rankTag)
-        : Get.put(
+        : Get.put<ContributionRankController>(
             ContributionRankController(
               ruid: anchorUid,
               roomId: widget.roomId,
@@ -89,15 +91,19 @@ class _DesktopLiveSidebarState extends State<DesktopLiveSidebar> {
     }
   }
 
-  void _deleteRankController() {
-    if (Get.isRegistered<ContributionRankController>(tag: _rankTag)) {
-      Get.delete<ContributionRankController>(tag: _rankTag, force: true);
+  void _deleteRankController({int? roomId}) {
+    final tag = 'desktop-live-${roomId ?? widget.roomId}';
+    if (Get.isRegistered<ContributionRankController>(tag: tag)) {
+      Get.delete<ContributionRankController>(tag: tag, force: true);
     }
   }
+
+  void _onAccountChanged() => unawaited(_loadGuard());
 
   Future<void> _loadGuard() async {
     final anchorUid = widget.anchorUid;
     if (anchorUid == null) return;
+    final account = Accounts.main;
     final generation = ++_guardGeneration;
     setState(() {
       _guardState = LoadingState<LiveGuardTopListData>.loading();
@@ -106,7 +112,11 @@ class _DesktopLiveSidebarState extends State<DesktopLiveSidebar> {
       roomId: widget.roomId,
       ruid: anchorUid,
     );
-    if (!mounted || generation != _guardGeneration) return;
+    if (!mounted ||
+        generation != _guardGeneration ||
+        !identical(account, Accounts.main)) {
+      return;
+    }
     setState(() {
       _guardState = state;
     });
@@ -114,6 +124,7 @@ class _DesktopLiveSidebarState extends State<DesktopLiveSidebar> {
 
   @override
   void dispose() {
+    Accounts.mainChanges.removeListener(_onAccountChanged);
     _guardGeneration++;
     _deleteRankController();
     super.dispose();

@@ -13,6 +13,7 @@ import 'package:pili_aurora/pages/live_room/superchat/superchat_card.dart';
 import 'package:pili_aurora/pages/live_room/widgets/chat_list.dart';
 import 'package:pili_aurora/pages/member/widget/medal_widget.dart';
 import 'package:pili_aurora/pages/video/widgets/header_control.dart';
+import 'package:pili_aurora/utils/accounts.dart';
 import 'package:pili_aurora/utils/extension/theme_ext.dart';
 import 'package:pili_aurora/utils/utils.dart';
 import 'package:flutter/foundation.dart' show kDebugMode;
@@ -321,6 +322,18 @@ class LiveRoomChatPanel extends StatelessWidget {
     TapUpDetails details,
     DanmakuMsg item,
   ) {
+    final account = Accounts.main;
+    final roomId = liveRoomController.roomId;
+    var shielding = false;
+    bool current() =>
+        context.mounted &&
+        !liveRoomController.isClosed &&
+        identical(account, Accounts.main) &&
+        identical(
+          (context.widget as LiveRoomChatPanel).liveRoomController,
+          liveRoomController,
+        ) &&
+        roomId == liveRoomController.roomId;
     final dx = details.globalPosition.dx;
     final renderBox = itemContext.findRenderObject() as RenderBox;
     final dy =
@@ -353,7 +366,7 @@ class LiveRoomChatPanel extends StatelessWidget {
           onTap: () => Get.toNamed('/member?mid=${item.extra.mid}'),
           child: const Text('去TA的个人空间', style: TextStyle(fontSize: 13)),
         ),
-        if (liveRoomController.isLogin) ...[
+        if (account.isLogin) ...[
           AppPopupMenuItem(
             height: 38,
             onTap: () => liveRoomController.onAtUser(item),
@@ -362,27 +375,38 @@ class LiveRoomChatPanel extends StatelessWidget {
           AppPopupMenuItem(
             height: 38,
             onTap: () async {
-              final res = await LiveHttp.liveShieldUser(
-                uid: item.extra.mid,
-                roomid: liveRoomController.roomId,
-                type: 1,
-              );
-              if (res.isSuccess) {
-                SmartDialog.showToast('屏蔽成功');
-              } else {
-                res.toast();
+              if (shielding || !current()) return;
+              shielding = true;
+              try {
+                final res = await LiveHttp.liveShieldUser(
+                  account: account,
+                  uid: item.extra.mid,
+                  roomid: roomId,
+                  type: 1,
+                );
+                if (!current()) return;
+                if (res.isSuccess) {
+                  SmartDialog.showToast('屏蔽成功');
+                } else {
+                  res.toast();
+                }
+              } finally {
+                shielding = false;
               }
             },
             child: const Text('屏蔽发送者', style: TextStyle(fontSize: 13)),
           ),
           AppPopupMenuItem(
             height: 38,
-            onTap: () => HeaderControl.reportLiveDanmaku(
-              context,
-              roomId: liveRoomController.roomId,
-              msg: item.text,
-              extra: item.extra,
-            ),
+            onTap: () {
+              if (!current()) return;
+              HeaderControl.reportLiveDanmaku(
+                context,
+                roomId: roomId,
+                msg: item.text,
+                extra: item.extra,
+              );
+            },
             child: const Text('举报选中弹幕', style: TextStyle(fontSize: 13)),
           ),
         ],

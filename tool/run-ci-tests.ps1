@@ -31,6 +31,7 @@ $ciTests = @(
     "test/pages/article/controller_results_test.dart",
     "test/pages/article/content_retry_test.dart",
     "test/http/live_response_test.dart",
+    "test/pages/live/consumer_results_test.dart",
     "test/pages/live_room/send_results_test.dart",
     "test/pages/live_emote/controller_test.dart",
     "test/pages/community/operation_results_test.dart",
