@@ -1,4 +1,5 @@
 import 'package:pili_aurora/http/api.dart';
+import 'package:pili_aurora/http/api_response.dart';
 import 'package:pili_aurora/http/init.dart';
 import 'package:pili_aurora/http/loading_state.dart';
 import 'package:pili_aurora/models/user/info.dart';
@@ -19,33 +20,26 @@ import 'package:pili_aurora/utils/accounts/account.dart';
 import 'package:pili_aurora/utils/app_sign.dart';
 import 'package:pili_aurora/utils/wbi_sign.dart';
 import 'package:dio/dio.dart';
-import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 
 abstract final class UserHttp {
   static Future<LoadingState<UserInfoData>> userInfo({Account? account}) async {
-    final res = await Request().get(
+    return await Request().requestApi(
       Api.userInfo,
+      kind: ApiCallKind.query,
+      decode: (body) => UserInfoData.fromJson(body['data']),
       options: Options(extra: {'account': account ?? Accounts.main}),
     );
-    if (res.data['code'] == 0) {
-      return Success(UserInfoData.fromJson(res.data['data']));
-    } else {
-      return Error(res.data['message']);
-    }
   }
 
   static Future<LoadingState<UserStat>> userStatOwner({
     Account? account,
   }) async {
-    final res = await Request().get(
+    return await Request().requestApi(
       Api.userStatOwner,
+      kind: ApiCallKind.query,
+      decode: (body) => UserStat.fromJson(body['data']),
       options: Options(extra: {'account': account ?? Accounts.main}),
     );
-    if (res.data['code'] == 0) {
-      return Success(UserStat.fromJson(res.data['data']));
-    } else {
-      return Error(res.data['message']);
-    }
   }
 
   // 稍后再看
@@ -54,23 +48,27 @@ abstract final class UserHttp {
     int viewed = 0,
     String keyword = '',
     bool asc = false,
+    Account? account,
   }) async {
-    final res = await Request().get(
-      Api.seeYouLater,
-      queryParameters: await WbiSign.makSign({
-        'pn': page,
-        'ps': 20,
-        'viewed': viewed,
-        'key': keyword,
-        'asc': asc,
-        'need_split': true,
-        'web_location': 333.881,
-      }),
-    );
-    if (res.data['code'] == 0) {
-      return Success(LaterData.fromJson(res.data['data']));
-    } else {
-      return Error(res.data['message']);
+    account ??= Accounts.main;
+    try {
+      return await Request().requestApi(
+        Api.seeYouLater,
+        kind: ApiCallKind.query,
+        decode: (body) => LaterData.fromJson(body['data']),
+        options: Options(extra: {'account': account}),
+        queryParameters: await WbiSign.makSign({
+          'pn': page,
+          'ps': 20,
+          'viewed': viewed,
+          'key': keyword,
+          'asc': asc,
+          'need_split': true,
+          'web_location': 333.881,
+        }),
+      );
+    } catch (error, stackTrace) {
+      return Error.fromException(error, stackTrace);
     }
   }
 
@@ -81,8 +79,10 @@ abstract final class UserHttp {
     int? viewAt,
     Account? account,
   }) async {
-    final res = await Request().get(
+    return await Request().requestApi(
       Api.historyList,
+      kind: ApiCallKind.query,
+      decode: (body) => HistoryData.fromJson(body['data']),
       queryParameters: {
         'type': type,
         'ps': 20,
@@ -91,11 +91,6 @@ abstract final class UserHttp {
       },
       options: Options(extra: {'account': account ?? Accounts.history}),
     );
-    if (res.data['code'] == 0) {
-      return Success(HistoryData.fromJson(res.data['data']));
-    } else {
-      return Error(res.data['message']);
-    }
   }
 
   // 暂停观看历史
@@ -105,8 +100,10 @@ abstract final class UserHttp {
   }) async {
     // 暂停switchStatus传true 否则false
     account ??= Accounts.history;
-    final res = await Request().post(
+    return await Request().requestApi<void>(
       Api.pauseHistory,
+      kind: ApiCallKind.mutation,
+      decode: (_) {},
       data: {
         'switch': switchStatus,
         'jsonp': 'jsonp',
@@ -117,31 +114,25 @@ abstract final class UserHttp {
         contentType: Headers.formUrlEncodedContentType,
       ),
     );
-    if (res.data['code'] == 0) {
-      return const Success(null);
-    } else {
-      return Error(res.data['message']);
-    }
   }
 
   // 观看历史暂停状态
   static Future<LoadingState<bool>> historyStatus({Account? account}) async {
-    final res = await Request().get(
+    return await Request().requestApi(
       Api.historyStatus,
+      kind: ApiCallKind.query,
+      decode: (body) => body['data'] as bool,
       options: Options(extra: {'account': account ?? Accounts.history}),
     );
-    if (res.data['code'] == 0) {
-      return Success(res.data['data']);
-    } else {
-      return Error(res.data['message']);
-    }
   }
 
   // 清空历史记录
   static Future<LoadingState<void>> clearHistory({Account? account}) async {
     account ??= Accounts.history;
-    final res = await Request().post(
+    return await Request().requestApi<void>(
       Api.clearHistory,
+      kind: ApiCallKind.mutation,
+      decode: (_) {},
       data: {
         'jsonp': 'jsonp',
         'csrf': account.csrf,
@@ -151,72 +142,79 @@ abstract final class UserHttp {
         contentType: Headers.formUrlEncodedContentType,
       ),
     );
-    if (res.data['code'] == 0) {
-      return const Success(null);
-    } else {
-      return Error(res.data['message']);
-    }
   }
 
   // 稍后再看
   static Future<LoadingState<void>> toViewLater({
     String? bvid,
     Object? aid,
+    Account? account,
   }) async {
-    assert(aid != null || bvid != null);
-    final res = await Request().post(
+    if (aid == null && (bvid == null || bvid.trim().isEmpty)) {
+      return const Error('视频标识无效');
+    }
+    account ??= Accounts.main;
+    return await Request().requestApi<void>(
       Api.toViewLater,
+      kind: ApiCallKind.mutation,
+      decode: (_) {},
       data: {
         'aid': ?aid,
         'bvid': ?bvid,
-        'csrf': Accounts.main.csrf,
+        'csrf': account.csrf,
       },
-      options: Options(contentType: Headers.formUrlEncodedContentType),
+      options: Options(
+        extra: {'account': account},
+        contentType: Headers.formUrlEncodedContentType,
+      ),
     );
-    if (res.data['code'] == 0) {
-      SmartDialog.showToast('yeah！稍后再看');
-      return const Success(null);
-    } else {
-      SmartDialog.showToast(res.data['message'].toString());
-      return const Error(null);
-    }
   }
 
   // 移除已观看
-  static Future<LoadingState<void>> toViewDel({required String aids}) async {
+  static Future<LoadingState<void>> toViewDel({
+    required String aids,
+    Account? account,
+  }) async {
+    if (aids.trim().isEmpty) return const Error('请选择要移除的视频');
+    account ??= Accounts.main;
     final Map<String, dynamic> params = {
-      'csrf': Accounts.main.csrf,
+      'csrf': account.csrf,
       'resources': aids,
     };
-    final res = await Request().post(
+    return await Request().requestApi<void>(
       Api.toViewDel,
+      kind: ApiCallKind.mutation,
+      decode: (_) {},
       data: params,
-      options: Options(contentType: Headers.formUrlEncodedContentType),
+      options: Options(
+        extra: {'account': account},
+        contentType: Headers.formUrlEncodedContentType,
+      ),
     );
-    if (res.data['code'] == 0) {
-      SmartDialog.showToast('yeah！成功移除');
-      return const Success(null);
-    } else {
-      SmartDialog.showToast(res.data['message'].toString());
-      return const Error(null);
-    }
   }
 
   // 清空稍后再看 // clean_type: null->all, 1->invalid, 2->viewed
-  static Future<LoadingState<void>> toViewClear([int? cleanType]) async {
-    final res = await Request().post(
+  static Future<LoadingState<void>> toViewClear({
+    int? cleanType,
+    Account? account,
+  }) async {
+    if (cleanType != null && cleanType != 1 && cleanType != 2) {
+      return const Error('无效的清空类型');
+    }
+    account ??= Accounts.main;
+    return await Request().requestApi<void>(
       Api.toViewClear,
+      kind: ApiCallKind.mutation,
+      decode: (_) {},
       data: {
         'clean_type': ?cleanType,
-        'csrf': Accounts.main.csrf,
+        'csrf': account.csrf,
       },
-      options: Options(contentType: Headers.formUrlEncodedContentType),
+      options: Options(
+        extra: {'account': account},
+        contentType: Headers.formUrlEncodedContentType,
+      ),
     );
-    if (res.data['code'] == 0) {
-      return const Success(null);
-    } else {
-      return Error(res.data['message']);
-    }
   }
 
   // 删除历史记录
@@ -224,9 +222,12 @@ abstract final class UserHttp {
     String kid, {
     Account? account,
   }) async {
+    if (kid.trim().isEmpty) return const Error('请选择要删除的记录');
     account ??= Accounts.history;
-    final res = await Request().post(
+    return await Request().requestApi<void>(
       Api.delHistory,
+      kind: ApiCallKind.mutation,
+      decode: (_) {},
       data: {
         'kid': kid,
         'jsonp': 'jsonp',
@@ -237,29 +238,21 @@ abstract final class UserHttp {
         contentType: Headers.formUrlEncodedContentType,
       ),
     );
-    if (res.data['code'] == 0) {
-      return const Success(null);
-    } else {
-      return Error(res.data['message']);
-    }
   }
 
   static Future<LoadingState<RelationData>> userRelation(
     int mid, {
     Account? account,
   }) async {
-    final res = await Request().get(
+    return await Request().requestApi(
       Api.relation,
+      kind: ApiCallKind.query,
+      decode: (body) => RelationData.fromJson(body['data']),
       options: Options(extra: {'account': account ?? Accounts.main}),
       queryParameters: {
         'fid': mid,
       },
     );
-    if (res.data['code'] == 0) {
-      return Success(RelationData.fromJson(res.data['data']));
-    } else {
-      return Error(res.data['message']);
-    }
   }
 
   // 搜索历史记录
@@ -268,8 +261,10 @@ abstract final class UserHttp {
     required String keyword,
     Account? account,
   }) async {
-    final res = await Request().get(
+    return await Request().requestApi(
       Api.searchHistory,
+      kind: ApiCallKind.query,
+      decode: (body) => HistoryData.fromJson(body['data']),
       queryParameters: {
         'pn': pn,
         'keyword': keyword,
@@ -277,11 +272,6 @@ abstract final class UserHttp {
       },
       options: Options(extra: {'account': account ?? Accounts.history}),
     );
-    if (res.data['code'] == 0) {
-      return Success(HistoryData.fromJson(res.data['data']));
-    } else {
-      return Error(res.data['message']);
-    }
   }
 
   // 我的订阅
@@ -290,8 +280,10 @@ abstract final class UserHttp {
     required int pn,
     required int ps,
   }) async {
-    final res = await Request().get(
+    return await Request().requestApi(
       Api.userSubFolder,
+      kind: ApiCallKind.query,
+      decode: (body) => SubData.fromJson(body['data']),
       queryParameters: {
         'up_mid': mid,
         'ps': ps,
@@ -299,30 +291,20 @@ abstract final class UserHttp {
         'platform': 'web',
       },
     );
-    if (res.data['code'] == 0 && res.data['data'] is Map) {
-      return Success(SubData.fromJson(res.data['data']));
-    } else {
-      return Error(res.data['message']);
-    }
   }
 
   static Future<LoadingState<List<VideoTagItem>?>> videoTags({
     required String bvid,
     Object? cid,
   }) async {
-    final res = await Request().get(
+    return await Request().requestApi(
       Api.videoTags,
+      kind: ApiCallKind.query,
+      decode: (body) => (body['data'] as List?)
+          ?.map((e) => VideoTagItem.fromJson(e))
+          .toList(),
       queryParameters: {'bvid': bvid, 'cid': ?cid},
     );
-    if (res.data['code'] == 0) {
-      return Success(
-        (res.data['data'] as List?)
-            ?.map((e) => VideoTagItem.fromJson(e))
-            .toList(),
-      );
-    } else {
-      return const Error(null);
-    }
   }
 
   // 稍后再看列表
@@ -337,8 +319,10 @@ abstract final class UserHttp {
     dynamic sortField = 1,
     bool direction = false,
   }) async {
-    final res = await Request().get(
+    return await Request().requestApi(
       Api.mediaList,
+      kind: ApiCallKind.query,
+      decode: (body) => MediaListData.fromJson(body['data']),
       queryParameters: {
         'mobi_app': 'web',
         'type': type,
@@ -353,23 +337,16 @@ abstract final class UserHttp {
         'with_current': withCurrent,
       },
     );
-    if (res.data['code'] == 0) {
-      return Success(MediaListData.fromJson(res.data['data']));
-    } else {
-      return Error(res.data['message']);
-    }
   }
 
   static Future<LoadingState<num?>> getCoin({Account? account}) async {
-    final res = await Request().get(
+    return await Request().requestApi(
       Api.getCoin,
+      kind: ApiCallKind.query,
+      decode: (body) =>
+          (body['data'] as Map<String, dynamic>?)?['money'] as num?,
       options: Options(extra: {'account': account ?? Accounts.main}),
     );
-    if (res.data['code'] == 0) {
-      return Success(res.data['data']?['money']);
-    } else {
-      return Error(res.data['message']);
-    }
   }
 
   static Future<LoadingState<void>> dynamicReport({
@@ -377,11 +354,15 @@ abstract final class UserHttp {
     required Object dynId,
     required int reasonType,
     String? reasonDesc,
+    Account? account,
   }) async {
-    final res = await Request().post(
+    account ??= Accounts.main;
+    return await Request().requestApi<void>(
       Api.dynamicReport,
+      kind: ApiCallKind.mutation,
+      decode: (_) {},
       queryParameters: {
-        'csrf': Accounts.main.csrf,
+        'csrf': account.csrf,
       },
       data: {
         "accused_uid": mid,
@@ -389,38 +370,35 @@ abstract final class UserHttp {
         "reason_type": reasonType,
         "reason_desc": reasonDesc,
       },
-      options: Options(contentType: Headers.formUrlEncodedContentType),
+      options: Options(
+        extra: {'account': account},
+        contentType: Headers.formUrlEncodedContentType,
+      ),
     );
-    if (res.data['code'] == 0) {
-      return const Success(null);
-    } else {
-      return Error(res.data['message']);
-    }
   }
 
   static Future<LoadingState<SpaceSettingData>> spaceSetting({
     required Account account,
   }) async {
-    final res = await Request().get(
+    return await Request().requestApi(
       Api.spaceSetting,
+      kind: ApiCallKind.query,
+      decode: (body) => SpaceSettingData.fromJson(body['data']),
       options: Options(extra: {'account': account}),
       queryParameters: {
         'mid': account.mid,
       },
     );
-    if (res.data['code'] == 0) {
-      return Success(SpaceSettingData.fromJson(res.data['data']));
-    } else {
-      return Error(res.data['message']);
-    }
   }
 
   static Future<LoadingState<void>> spaceSettingMod(
     Map<String, dynamic> data, {
     required Account account,
   }) async {
-    final res = await Request().post(
+    return await Request().requestApi<void>(
       Api.spaceSettingMod,
+      kind: ApiCallKind.mutation,
+      decode: (_) {},
       queryParameters: {
         'csrf': account.csrf,
       },
@@ -430,99 +408,84 @@ abstract final class UserHttp {
         contentType: Headers.formUrlEncodedContentType,
       ),
     );
-    if (res.data['code'] == 0) {
-      return const Success(null);
-    } else {
-      return Error(res.data['message']);
-    }
   }
 
-  static Future<LoadingState<void>> vipExpAdd() async {
-    final res = await Request().post(
+  static Future<LoadingState<void>> vipExpAdd({Account? account}) async {
+    account ??= Accounts.main;
+    return await Request().requestApi<void>(
       Api.vipExpAdd,
+      kind: ApiCallKind.mutation,
+      decode: (_) {},
+      options: Options(extra: {'account': account}),
       queryParameters: {
-        'mid': Accounts.main.mid,
-        'csrf': Accounts.main.csrf,
+        'mid': account.mid,
+        'csrf': account.csrf,
       },
     );
-    if (res.data['code'] == 0) {
-      return const Success(null);
-    } else {
-      return Error(res.data['message']);
-    }
   }
 
   static Future<LoadingState<CoinLogData>> coinLog({
     required Account account,
   }) async {
-    final res = await Request().get(
+    return await Request().requestApi(
       Api.coinLog,
+      kind: ApiCallKind.query,
+      decode: (body) => CoinLogData.fromJson(body['data']),
       options: Options(extra: {'account': account}),
       queryParameters: {
         'jsonp': 'jsonp',
         'web_location': '333.33',
       },
     );
-    if (res.data['code'] == 0) {
-      return Success(CoinLogData.fromJson(res.data['data']));
-    } else {
-      return Error(res.data['message']);
-    }
   }
 
   static Future<LoadingState<LoginLogData>> loginLog({
     required Account account,
   }) async {
-    final res = await Request().get(
+    return await Request().requestApi(
       Api.loginLog,
+      kind: ApiCallKind.query,
+      decode: (body) => LoginLogData.fromJson(body['data']),
       options: Options(extra: {'account': account}),
       queryParameters: {
         'jsonp': 'jsonp',
         'web_location': '333.33',
       },
     );
-    if (res.data['code'] == 0) {
-      return Success(LoginLogData.fromJson(res.data['data']));
-    } else {
-      return Error(res.data['message']);
-    }
   }
 
   static Future<LoadingState<CoinLogData>> expLog({
     required Account account,
   }) async {
-    final res = await Request().get(
+    return await Request().requestApi(
       Api.expLog,
+      kind: ApiCallKind.query,
+      decode: (body) => CoinLogData.fromJson(body['data']),
       options: Options(extra: {'account': account}),
       queryParameters: {
         'jsonp': 'jsonp',
         'web_location': '333.33',
       },
     );
-    if (res.data['code'] == 0) {
-      return Success(CoinLogData.fromJson(res.data['data']));
-    } else {
-      return Error(res.data['message']);
-    }
   }
 
   static Future<LoadingState<UserRealNameData>> getUserRealName(
-    Object mid,
-  ) async {
+    Object mid, {
+    Account? account,
+  }) async {
+    account ??= Accounts.main;
     final params = {
-      'access_key': Accounts.main.accessKey,
+      'access_key': ?account.accessKey,
       'up_mid': mid,
     };
     AppSign.appSign(params);
-    final res = await Request().get(
+    return await Request().requestApi(
       Api.userRealName,
+      kind: ApiCallKind.query,
+      decode: (body) => UserRealNameData.fromJson(body['data']),
+      options: Options(extra: {'account': account}),
       queryParameters: params,
     );
-    if (res.data['code'] == 0) {
-      return Success(UserRealNameData.fromJson(res.data['data']));
-    } else {
-      return Error(res.data['message']);
-    }
   }
 
   static Future<LoadingState<FollowData>> followedUp({
@@ -530,8 +493,10 @@ abstract final class UserHttp {
     required Account account,
     required int pn,
   }) async {
-    final res = await Request().get(
+    return await Request().requestApi(
       Api.followedUp,
+      kind: ApiCallKind.query,
+      decode: (body) => FollowData.fromJson(body['data']),
       options: Options(extra: {'account': account}),
       queryParameters: {
         'csrf': account.csrf,
@@ -542,11 +507,6 @@ abstract final class UserHttp {
             '{"platform":"web","device":"pc","spmid":"333.789"}',
       },
     );
-    if (res.data['code'] == 0) {
-      return Success(FollowData.fromJson(res.data['data']));
-    } else {
-      return Error(res.data['message']);
-    }
   }
 
   static Future<LoadingState<FollowData>> sameFollowing({
@@ -554,8 +514,10 @@ abstract final class UserHttp {
     required Account account,
     required int pn,
   }) async {
-    final res = await Request().get(
+    return await Request().requestApi(
       Api.sameFollowing,
+      kind: ApiCallKind.query,
+      decode: (body) => FollowData.fromJson(body['data']),
       options: Options(extra: {'account': account}),
       queryParameters: {
         'csrf': account.csrf,
@@ -566,29 +528,26 @@ abstract final class UserHttp {
             '{"platform":"web","device":"pc","spmid":"333.789"}',
       },
     );
-    if (res.data['code'] == 0) {
-      return Success(FollowData.fromJson(res.data['data']));
-    } else {
-      return Error(res.data['message']);
-    }
   }
 
   static Future<LoadingState<void>> spaceReserve({
     required Object sid,
     required bool isFollow,
+    Account? account,
   }) async {
-    final res = await Request().post(
+    account ??= Accounts.main;
+    return await Request().requestApi<void>(
       isFollow ? Api.spaceReserveCancel : Api.spaceReserve,
+      kind: ApiCallKind.mutation,
+      decode: (_) {},
       data: {
         'sid': sid,
-        'csrf': Accounts.main.csrf,
+        'csrf': account.csrf,
       },
-      options: Options(contentType: Headers.formUrlEncodedContentType),
+      options: Options(
+        extra: {'account': account},
+        contentType: Headers.formUrlEncodedContentType,
+      ),
     );
-    if (res.data['code'] == 0) {
-      return const Success(null);
-    } else {
-      return Error(res.data['message']);
-    }
   }
 }

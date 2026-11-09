@@ -1,8 +1,8 @@
+import 'package:pili_aurora/utils/request_utils.dart';
 import 'package:pili_aurora/common/style.dart';
 import 'package:pili_aurora/common/widgets/button/icon_button.dart';
 import 'package:pili_aurora/common/widgets/image/network_img_layer.dart';
 import 'package:pili_aurora/common/widgets/selection_text.dart';
-import 'package:pili_aurora/http/user.dart';
 import 'package:pili_aurora/pages/common/publish/publish_route.dart';
 import 'package:pili_aurora/utils/image_utils.dart';
 import 'package:pili_aurora/utils/platform_utils.dart';
@@ -69,7 +69,7 @@ void imageSaveDialog({
                           tooltip: '稍后再看',
                           onPressed: () => {
                             Get.back(),
-                            UserHttp.toViewLater(aid: aid, bvid: bvid),
+                            RequestUtils.addToWatchLater(aid: aid, bvid: bvid),
                           },
                           icon: const Icon(Icons.watch_later_outlined),
                         ),

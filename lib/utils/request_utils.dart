@@ -42,6 +42,21 @@ import 'package:get/get.dart';
 import 'package:material_ui/material_ui.dart';
 
 abstract final class RequestUtils {
+  static Future<void> addToWatchLater({String? bvid, Object? aid}) async {
+    final account = Accounts.main;
+    final result = await UserHttp.toViewLater(
+      bvid: bvid,
+      aid: aid,
+      account: account,
+    );
+    if (!identical(account, Accounts.main)) return;
+    if (result.isSuccess) {
+      SmartDialog.showToast('已添加到稍后再看');
+    } else {
+      result.toast();
+    }
+  }
+
   static int _historyStatusGeneration = 0;
   static Future<void> syncHistoryStatus() async {
     final generation = ++_historyStatusGeneration;

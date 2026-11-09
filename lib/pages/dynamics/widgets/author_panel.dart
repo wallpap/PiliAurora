@@ -296,7 +296,7 @@ class AuthorPanel extends StatelessWidget {
                 ListTile(
                   onTap: () {
                     Get.back();
-                    UserHttp.toViewLater(bvid: bvid);
+                    RequestUtils.addToWatchLater(bvid: bvid);
                   },
                   minLeadingWidth: 0,
                   leading: const Icon(Icons.watch_later_outlined, size: 19),

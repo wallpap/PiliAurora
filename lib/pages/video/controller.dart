@@ -491,12 +491,22 @@ class VideoDetailController extends GetxController
             sourceType == SourceType.watchLater ||
                 (sourceType == SourceType.fav && args['isOwner'] == true)
             ? (item, index) async {
+                final account = Accounts.main;
                 if (sourceType == SourceType.watchLater) {
                   final res = await UserHttp.toViewDel(
                     aids: item.aid.toString(),
+                    account: account,
                   );
+                  if (isClosed ||
+                      !identical(account, Accounts.main) ||
+                      !mediaList.contains(item)) {
+                    return;
+                  }
                   if (res.isSuccess) {
-                    mediaList.removeAt(index);
+                    mediaList.remove(item);
+                    SmartDialog.showToast('已移除稍后再看');
+                  } else {
+                    res.toast();
                   }
                 } else {
                   final res = await FavHttp.favVideo(

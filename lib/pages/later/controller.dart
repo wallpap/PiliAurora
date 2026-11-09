@@ -11,10 +11,12 @@ import 'package:pili_aurora/pages/common/multi_select/base.dart';
 import 'package:pili_aurora/pages/common/multi_select/multi_select_controller.dart';
 import 'package:pili_aurora/pages/later/base_controller.dart';
 import 'package:pili_aurora/utils/accounts.dart';
+import 'package:pili_aurora/utils/accounts/account.dart';
 import 'package:pili_aurora/utils/extension/scroll_controller_ext.dart';
 import 'package:pili_aurora/utils/page_utils.dart';
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:get/get.dart';
+import 'package:collection/collection.dart';
 import 'package:material_ui/material_ui.dart';
 
 mixin BaseLaterController
@@ -23,25 +25,55 @@ mixin BaseLaterController
         CommonMultiSelectMixin<LaterItemModel>,
         DeleteItemMixin<LaterData, LaterItemModel> {
   ValueChanged<int>? updateCount;
+  final Account laterAccount = Accounts.main;
+  bool _savingLater = false;
+
+  bool get isLaterCurrent =>
+      !isClosed && identical(laterAccount, Accounts.main);
+
+  @override
+  Object get queryContext => Accounts.main;
+
+  Future<void> removeLaterItems(Set<LaterItemModel> removeList) async {
+    final list = loadingState.value.dataOrNull;
+    if (_savingLater || !isLaterCurrent || list == null || removeList.isEmpty) {
+      return;
+    }
+    if (!list.toSet().containsAll(removeList) ||
+        removeList.any((item) => item.aid == null)) {
+      return;
+    }
+    _savingLater = true;
+    SmartDialog.showLoading(msg: '请求中');
+    try {
+      final result = await UserHttp.toViewDel(
+        aids: removeList.map((item) => item.aid).join(','),
+        account: laterAccount,
+      );
+      if (!isLaterCurrent || !identical(list, loadingState.value.dataOrNull)) {
+        return;
+      }
+      if (result.isSuccess) {
+        updateCount?.call(removeList.length);
+        await afterDelete(removeList);
+        SmartDialog.showToast('已移除稍后再看');
+      } else {
+        result.toast();
+      }
+    } finally {
+      _savingLater = false;
+      SmartDialog.dismiss(status: SmartStatus.loading);
+    }
+  }
 
   @override
   void onRemove() {
+    final removeList = allChecked.toSet();
     showConfirmDialog(
       context: Get.context!,
       title: const Text('提示'),
       content: const Text('确认删除所选稍后再看吗？'),
-      onConfirm: () async {
-        final removeList = allChecked.toSet();
-        SmartDialog.showLoading(msg: '请求中');
-        final res = await UserHttp.toViewDel(
-          aids: removeList.map((item) => item.aid).join(','),
-        );
-        if (res.isSuccess) {
-          updateCount?.call(removeList.length);
-          afterDelete(removeList);
-        }
-        SmartDialog.dismiss();
-      },
+      onConfirm: () => removeLaterItems(removeList),
     );
   }
 
@@ -50,6 +82,10 @@ mixin BaseLaterController
     BuildContext context,
     int? aid,
   ) {
+    final item = loadingState.value.dataOrNull?.firstWhereOrNull(
+      (item) => item.aid == aid,
+    );
+    if (item == null || aid == null) return;
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -66,14 +102,7 @@ mixin BaseLaterController
           TextButton(
             onPressed: () async {
               Get.back();
-              final res = await UserHttp.toViewDel(aids: aid.toString());
-              if (res.isSuccess) {
-                loadingState.value.data!.removeWhere(
-                  (item) => item.aid == aid,
-                );
-                loadingState.refresh();
-                updateCount?.call(1);
-              }
+              await removeLaterItems({item});
             },
             child: const Text('确认移除'),
           ),
@@ -88,7 +117,7 @@ class LaterController extends MultiSelectController<LaterData, LaterItemModel>
   LaterController(this.laterViewType);
   final LaterViewType laterViewType;
 
-  late final mid = Accounts.main.mid;
+  late final mid = laterAccount.mid;
 
   final RxBool asc = false.obs;
 
@@ -101,11 +130,14 @@ class LaterController extends MultiSelectController<LaterData, LaterItemModel>
   RxInt get rxCount => baseCtr.checkedCount;
 
   @override
-  Future<LoadingState<LaterData>> customGetData() => UserHttp.seeYouLater(
-    page: page,
-    viewed: laterViewType.type,
-    asc: asc.value,
-  );
+  Future<LoadingState<LaterData>> customGetData() async => isLaterCurrent
+      ? UserHttp.seeYouLater(
+          page: page,
+          viewed: laterViewType.type,
+          asc: asc.value,
+          account: laterAccount,
+        )
+      : const Error('账号已切换，请重新打开页面');
 
   @override
   void onInit() {
@@ -137,23 +169,35 @@ class LaterController extends MultiSelectController<LaterData, LaterItemModel>
       context: context,
       title: const Text('确认'),
       content: Text(content),
-      onConfirm: () async {
-        final res = await UserHttp.toViewClear(cleanType);
-        if (res.isSuccess) {
-          onReload();
-          final restTypes = List<LaterViewType>.from(LaterViewType.values)
-            ..remove(laterViewType);
-          for (final item in restTypes) {
-            try {
-              Get.find<LaterController>(tag: item.type.toString()).onReload();
-            } catch (_) {}
-          }
-          SmartDialog.showToast('已清空');
-        } else {
-          res.toast();
-        }
-      },
+      onConfirm: () => clearLater(cleanType: cleanType),
     );
+  }
+
+  Future<void> clearLater({int? cleanType}) async {
+    if (_savingLater || !isLaterCurrent) return;
+    _savingLater = true;
+    try {
+      final res = await UserHttp.toViewClear(
+        cleanType: cleanType,
+        account: laterAccount,
+      );
+      if (!isLaterCurrent) return;
+      if (res.isSuccess) {
+        onReload();
+        for (final item in LaterViewType.values) {
+          final tag = item.type.toString();
+          if (item != laterViewType &&
+              Get.isRegistered<LaterController>(tag: tag)) {
+            Get.find<LaterController>(tag: tag).onReload();
+          }
+        }
+        SmartDialog.showToast('已清空');
+      } else {
+        res.toast();
+      }
+    } finally {
+      _savingLater = false;
+    }
   }
 
   // 稍后再看播放全部

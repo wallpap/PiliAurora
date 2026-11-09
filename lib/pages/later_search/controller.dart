@@ -4,7 +4,8 @@ import 'package:pili_aurora/models/remote/later/data.dart';
 import 'package:pili_aurora/models/remote/later/list.dart';
 import 'package:pili_aurora/pages/common/multi_select/base.dart';
 import 'package:pili_aurora/pages/common/search/common_search_controller.dart';
-import 'package:pili_aurora/pages/later/controller.dart' show BaseLaterController;
+import 'package:pili_aurora/pages/later/controller.dart'
+    show BaseLaterController;
 import 'package:get/get.dart';
 
 class LaterSearchController
@@ -25,10 +26,13 @@ class LaterSearchController
   }
 
   @override
-  Future<LoadingState<LaterData>> customGetData() => UserHttp.seeYouLater(
-    page: page,
-    keyword: editController.value.text,
-  );
+  Future<LoadingState<LaterData>> customGetData() async => isLaterCurrent
+      ? UserHttp.seeYouLater(
+          page: page,
+          keyword: editController.value.text,
+          account: laterAccount,
+        )
+      : const Error('账号已切换，请重新打开页面');
 
   @override
   List<LaterItemModel>? getDataList(LaterData response) {

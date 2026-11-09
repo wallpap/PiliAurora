@@ -4,7 +4,9 @@
 
 检查已暂停，全仓检查尚未完成。
 
-风控、音乐／赛事与空降助手批次后的完整 CI：1218 项通过（`build/error-contract-ci-tests.log`）。`fvm flutter analyze --no-pub lib test tool` 只有上游控件副本中的 24 条既有 info，没有 error 或 warning。修改文件的格式检查无改动，`git diff --check` 通过。
+账号、历史与稍后再看批次的 37 项定向回归通过，修改文件的静态分析无问题。后续按改动运行必要回归，不逐批重跑完整 CI。
+
+此前风控、音乐／赛事与空降助手批次后的完整 CI：1218 项通过（`build/error-contract-ci-tests.log`）。`fvm flutter analyze --no-pub lib test tool` 只有上游控件副本中的 24 条既有 info，没有 error 或 warning。修改文件的格式检查无改动，`git diff --check` 通过。
 
 ## 检查原则
 
@@ -40,6 +42,7 @@
 | 风控校验：`http/validate.dart`、`models/login/gaia_result.dart`、`RequestUtils.validate` | 挑战参数改用明确类型，取代可空 Map。验证通过时携带非空 ID，区分明确拒绝和协议／传输不确定性。空参数不发请求，缺字段不进入 WebView 或提交校验。取消、失效结果和不完整证明不触发成功回调；异步消费者完成或失败都通过同一 Future 返回。 | `test/http/validate_response_test.dart`、`test/utils/gaia_validation_test.dart`、登录回归 |
 | 音乐与赛事：`http/music.dart`、`match.dart`、`pages/music`、`match_info` | 接入业务结果契约。音乐名称必需，封面、创作者、评论和赛事对象仍可缺失。重复加载、响应乱序、关闭和切号后不发布旧详情，旧评论绑定详情快照。音乐缺少评论来源时显示空状态，评论失败时保留详情；赛事详情和评论独立加载，非法路由显示可读错误。点赞显示在途状态，防止重复写入；确认成功后才更新当前账号快照，未知计数保持未知。 | `test/http/metadata_response_test.dart`、`test/pages/metadata/` |
 | 空降助手：`http/sponsor_block.dart`、`pages/sponsor_block`、视频片段提交与搬运绑定入口 | 保留独立 HTTP 状态协议。8 个接口的查询解析和传输失败都通过结果返回，明确拒绝保留状态码；写入断连、服务端错误和损坏的成功响应返回 UnknownResult。页面省去原始响应正文，自定义服务器不绑定 B 站账号。统计数据先校验再展示，无效片段和配置在本地返回失败。片段提交防重入，失败时保留草稿，成功后只处理本次草稿和所属视频／面板。投票拒绝并发提交和迟到提示，状态查询拒绝旧结果；搬运查询失败时不按尚未绑定处理。 | `test/http/sponsor_block_response_test.dart`、`test/pages/sponsor_block/operation_results_test.dart`、既有跳过行为与设置兼容回归 |
+| 账号、历史与稍后再看：`http/user.dart`、`pages/history*`、`pages/later*`、视频与卡片入口 | 28 个接口接入查询／写入契约，解析失败保留原因，写入待确认与明确拒绝分别交付。保留可空标签、余额和空列表语义，签名前固定账号；Cookie 登录缺少 App access key 时不再传入空签名参数。提示由调用方负责；删除和清空防重复，失败保留列表与数量，刷新、切号或换视频后拒绝旧结果。历史暂停成功后才更新状态，迟到查询不能覆盖已确认写入。 | `test/http/user_response_test.dart`、`test/pages/history/operation_results_test.dart`、收藏操作与账号查询／设置回归 |
 
 ## 检查后保留的实现
 
@@ -82,3 +85,5 @@
 - 风控响应、验证协调和登录组合回归 29 项通过，定向分析无问题（`build/validate-contract-tests.log`、`build/validate-contract-analyze.log`）。原生极验页面和真实平台校验仍需登录设备验收。
 - 音乐／赛事接口、控制器、真实音乐页面、番剧分享和成员信息流组合回归 33 项通过，定向分析无问题（`build/metadata-contract-tests.log`、`build/metadata-contract-analyze.log`）。账号写入和原生评论交互仍需登录设备验收。
 - 空降助手接口、真实提交／设置页面、投票、跳过／静音和设置兼容共 36 项回归通过。新增页面操作 7 项单独复验通过（`build/sponsor-block-operations.log`）。真实服务写入和 UGC 搬运绑定确认流尚未验证。
+
+- 账号接口 6 项回归、历史／稍后再看操作、收藏操作、账号资料生命周期、账号记录和空间设置共 37 项定向回归通过；只复跑了失败用例。修改源码与测试共 17 个文件的定向分析无问题（`build/user-contract-tests.log`、`build/user-response-tests.log`、`build/user-write-tests.log`、`build/user-contract-analyze.log`）。未重跑完整 CI，真实账号写入和设备交互尚未验收。

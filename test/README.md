@@ -88,6 +88,8 @@ fvm flutter test test/services/diagnostics/ test/pages/about/diagnostics_page_te
 
 `pages/scoped_search/controller_test.dart` 覆盖直播／空间搜索的页面实例与关键词隔离、账号角色、分页失败重试、旧响应失效、空间视频 gRPC 及动态游标补页，并检查搜索提交、输入替换和清空重查。
 
+`http/user_response_test.dart` 检查账号与历史等 28 个接口的拒绝码、解析失败、写入待确认和签名期间的账号绑定。`pages/history/operation_results_test.dart` 检查历史暂停查询与写入竞争、删除／清空互斥、列表快照与切号隔离，以及待确认时保留列表和数量；视频稍后再看操作复用 `pages/fav/operation_results_test.dart`。
+
 `pages/space_setting/controller_test.dart` 覆盖隐私草稿、反向字段、保存互斥、失败重试、切号与刷新隔离及返回保存。`pages/live_settings/controller_test.dart` 覆盖直播屏蔽规则的房间与账号绑定、过期编辑、标签排序保存、推荐账号隔离及成功快照回调。真实直播服务与两端播放器仍需登录验收。
 
 `pages/member_feed/controller_test.dart` 覆盖九类空间列表的账号与入口隔离、分页失败重试及去重、舰队前三名、迟到分页、专栏文集快照、充电排行和 PGC 筛选；`common/widgets/feed_pagination_test.dart` 另检查通知模式沿用父级滚动控制器。

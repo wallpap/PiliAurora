@@ -1,3 +1,4 @@
+import 'package:pili_aurora/utils/request_utils.dart';
 import 'package:pili_aurora/common/style.dart';
 import 'package:pili_aurora/common/widgets/badge.dart';
 import 'package:pili_aurora/common/widgets/custom_icon.dart';
@@ -5,7 +6,6 @@ import 'package:pili_aurora/common/widgets/image/image_save.dart';
 import 'package:pili_aurora/common/widgets/image/network_img_layer.dart';
 import 'package:pili_aurora/common/widgets/stat/stat.dart';
 import 'package:pili_aurora/grpc/bilibili/app/interfaces/v1.pb.dart' show Arc;
-import 'package:pili_aurora/http/user.dart';
 import 'package:pili_aurora/models/common/badge_type.dart';
 import 'package:pili_aurora/models/common/stat_type.dart';
 import 'package:pili_aurora/utils/date_utils.dart';
@@ -139,7 +139,7 @@ class SearchArchiveGrpc extends StatelessWidget {
                 ),
                 PopupMenuItem(
                   height: 45,
-                  onTap: () => UserHttp.toViewLater(bvid: bvid),
+                  onTap: () => RequestUtils.addToWatchLater(bvid: bvid),
                   child: const Row(
                     spacing: 6,
                     children: [

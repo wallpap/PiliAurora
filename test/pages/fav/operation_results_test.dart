@@ -161,6 +161,32 @@ void main() {
     await finish(tester);
   });
 
+  testWidgets('稍后再看防重复写入，待确认和切换视频后不修改当前状态', (tester) async {
+    await mount(tester);
+    final controller = _Intro()
+      ..bvid = 'BV1xx411c7mD'
+      ..hasLater = false.obs;
+    addTearDown(controller.onClose);
+    final add = controller.viewLater();
+    await dispatched(tester, 1);
+    await controller.viewLater();
+    expect(requests, hasLength(1));
+    requests[0].reply.complete({'code': '0'});
+    await settle(tester);
+    await add;
+    expect(controller.hasLater.value, isFalse);
+    expect(find.text('操作结果待确认，请先核对后再操作'), findsOneWidget);
+
+    final retry = controller.viewLater();
+    await dispatched(tester, 2);
+    controller.bvid = 'BV1newVideo';
+    requests[1].reply.complete({'code': 0});
+    await settle(tester);
+    await retry;
+    expect(controller.hasLater.value, isFalse);
+    await finish(tester);
+  });
+
   testWidgets('没有收藏夹时结束加载并提示创建，不发送无效写入', (tester) async {
     await mount(tester);
     final controller = _Intro();

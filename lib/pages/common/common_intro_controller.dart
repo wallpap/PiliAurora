@@ -155,11 +155,33 @@ abstract class CommonIntroController extends GetxController
     videoTags.value = result.dataOrNull;
   }
 
+  bool _savingLater = false;
+
   Future<void> viewLater() async {
-    final res = await (hasLater.value
-        ? UserHttp.toViewDel(aids: IdUtils.bv2av(bvid).toString())
-        : UserHttp.toViewLater(bvid: bvid));
-    if (res.isSuccess) hasLater.toggle();
+    if (_savingLater || isClosed) return;
+    final account = Accounts.main;
+    final video = bvid;
+    final removing = hasLater.value;
+    _savingLater = true;
+    try {
+      final res = await (removing
+          ? UserHttp.toViewDel(
+              aids: IdUtils.bv2av(video).toString(),
+              account: account,
+            )
+          : UserHttp.toViewLater(bvid: video, account: account));
+      if (isClosed || bvid != video || !identical(account, Accounts.main)) {
+        return;
+      }
+      if (res.isSuccess) {
+        hasLater.value = !removing;
+        SmartDialog.showToast(removing ? '已移除稍后再看' : '已添加到稍后再看');
+      } else {
+        res.toast();
+      }
+    } finally {
+      _savingLater = false;
+    }
   }
 }
 

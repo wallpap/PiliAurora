@@ -1,3 +1,4 @@
+import 'package:pili_aurora/utils/request_utils.dart';
 import 'package:pili_aurora/common/widgets/app_popup_menu_item.dart';
 import 'package:pili_aurora/common/style.dart';
 import 'package:pili_aurora/common/widgets/badge.dart';
@@ -5,7 +6,6 @@ import 'package:pili_aurora/common/widgets/image/network_img_layer.dart';
 import 'package:pili_aurora/common/widgets/progress_bar/video_progress_indicator.dart';
 import 'package:pili_aurora/common/widgets/select_mask.dart';
 import 'package:pili_aurora/http/search.dart';
-import 'package:pili_aurora/http/user.dart';
 import 'package:pili_aurora/models/common/badge_type.dart';
 import 'package:pili_aurora/models/remote/history/list.dart';
 import 'package:pili_aurora/models/remote/video/video_detail/dimension.dart';
@@ -238,7 +238,7 @@ class HistoryItem extends StatelessWidget {
                       business?.contains('article') != true)
                     AppPopupMenuItem(
                       onTap: () =>
-                          UserHttp.toViewLater(bvid: item.history.bvid),
+                          RequestUtils.addToWatchLater(bvid: item.history.bvid),
                       height: 38,
                       child: const Row(
                         children: [

@@ -9,16 +9,22 @@ import 'package:pili_aurora/utils/accounts.dart';
 import 'package:flutter/widgets.dart' show Text;
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:get/get.dart';
+import 'package:collection/collection.dart';
 
 class HistorySearchController
     extends CommonSearchController<HistoryData, HistoryItemModel>
     with CommonMultiSelectMixin<HistoryItemModel>, DeleteItemMixin {
   @override
-  Future<LoadingState<HistoryData>> customGetData() => UserHttp.searchHistory(
-    pn: page,
-    keyword: editController.value.text,
-    account: account,
-  );
+  Object get queryContext => Accounts.history;
+
+  @override
+  Future<LoadingState<HistoryData>> customGetData() async => _isCurrent
+      ? UserHttp.searchHistory(
+          pn: page,
+          keyword: editController.value.text,
+          account: account,
+        )
+      : const Error('账号已切换，请重新打开页面');
 
   @override
   List<HistoryItemModel>? getDataList(HistoryData response) {
@@ -27,52 +33,57 @@ class HistorySearchController
 
   final account = Accounts.history;
 
+  bool _deleting = false;
+  bool get _isCurrent => !isClosed && identical(account, Accounts.history);
+
   Future<void> onDelHistory(int index, kid, String business) async {
-    final list = loadingState.value.dataOrNull;
-    final res = await UserHttp.delHistory(
-      '${business}_$kid',
-      account: account,
+    final item = loadingState.value.dataOrNull?.firstWhereOrNull(
+      (item) => item.kid == kid && item.history.business == business,
     );
-    if (isClosed ||
+    if (item != null) await _deleteItems({item});
+  }
+
+  Future<void> _deleteItems(Set<HistoryItemModel> removeList) async {
+    final list = loadingState.value.dataOrNull;
+    if (_deleting ||
+        !_isCurrent ||
         list == null ||
-        !identical(list, loadingState.value.dataOrNull)) {
+        removeList.isEmpty ||
+        !list.toSet().containsAll(removeList)) {
       return;
     }
-    if (res.isSuccess) {
-      loadingState
-        ..value.data!.removeWhere(
-          (e) => e.kid == kid && e.history.business == business,
-        )
-        ..refresh();
-      SmartDialog.showToast('已删除');
-    } else {
-      res.toast();
+    _deleting = true;
+    SmartDialog.showLoading(msg: '请求中');
+    try {
+      final result = await UserHttp.delHistory(
+        removeList
+            .map((item) => '${item.history.business}_${item.kid}')
+            .join(','),
+        account: account,
+      );
+      if (!_isCurrent || !identical(list, loadingState.value.dataOrNull)) {
+        return;
+      }
+      if (result.isSuccess) {
+        await afterDelete(removeList);
+        SmartDialog.showToast('已删除');
+      } else {
+        result.toast();
+      }
+    } finally {
+      _deleting = false;
+      SmartDialog.dismiss(status: SmartStatus.loading);
     }
   }
 
   @override
   void onRemove() {
+    final removeList = allChecked.toSet();
     showConfirmDialog(
       context: Get.context!,
       title: const Text('提示'),
       content: const Text('确认删除所选历史记录吗？'),
-      onConfirm: () async {
-        SmartDialog.showLoading(msg: '请求中');
-        final removeList = allChecked.toSet();
-        final response = await UserHttp.delHistory(
-          removeList
-              .map((item) => '${item.history.business!}_${item.kid!}')
-              .join(','),
-          account: account,
-        );
-        if (response.isSuccess) {
-          afterDelete(removeList);
-          SmartDialog.showToast('已删除');
-        } else {
-          response.toast();
-        }
-        SmartDialog.dismiss();
-      },
+      onConfirm: () => _deleteItems(removeList),
     );
   }
 }

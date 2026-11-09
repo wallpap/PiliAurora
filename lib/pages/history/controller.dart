@@ -8,8 +8,7 @@ import 'package:pili_aurora/pages/common/multi_select/multi_select_controller.da
 import 'package:pili_aurora/pages/history/base_controller.dart';
 import 'package:pili_aurora/utils/accounts/account.dart';
 import 'package:pili_aurora/utils/extension/scroll_controller_ext.dart';
-import 'package:pili_aurora/utils/storage.dart';
-import 'package:pili_aurora/utils/storage_key.dart';
+import 'package:pili_aurora/utils/accounts.dart';
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:get/get.dart';
 import 'package:material_ui/material_ui.dart';
@@ -22,6 +21,9 @@ class HistoryController
   late final baseCtr = Get.put(HistoryBaseController());
 
   Account get account => baseCtr.account;
+
+  @override
+  Object get queryContext => Accounts.history;
 
   final String? type;
   TabController? tabController;
@@ -80,20 +82,10 @@ class HistoryController
   }
 
   // 观看历史暂停状态
-  Future<void> historyStatus() async {
-    final res = await UserHttp.historyStatus(account: account);
-    if (res case Success(:final response)) {
-      baseCtr.pauseStatus.value = response;
-      GStorage.localCache.put(LocalCacheKey.historyPause, response);
-    } else {
-      res.toast();
-    }
-  }
+  Future<void> historyStatus() => baseCtr.refreshHistoryStatus();
 
   // 删除某条历史记录
-  void delHistory(HistoryItemModel item) {
-    _onDelete({item});
-  }
+  Future<void> delHistory(HistoryItemModel item) => _onDelete({item});
 
   // 删除已看历史记录
   void onDelViewedHistory() {
@@ -107,20 +99,41 @@ class HistoryController
     }
   }
 
+  bool _deleting = false;
+
   Future<void> _onDelete(Set<HistoryItemModel> removeList) async {
+    final list = loadingState.value.dataOrNull;
+    if (_deleting ||
+        isClosed ||
+        !baseCtr.isCurrent ||
+        list == null ||
+        removeList.isEmpty ||
+        !list.toSet().containsAll(removeList)) {
+      return;
+    }
+    _deleting = true;
     SmartDialog.showLoading(msg: '请求中');
-    final res = await UserHttp.delHistory(
-      removeList
-          .map((item) => '${item.history.business}_${item.kid}')
-          .join(','),
-      account: account,
-    );
-    SmartDialog.dismiss();
-    if (res.isSuccess) {
-      afterDelete(removeList);
-      SmartDialog.showToast('已删除');
-    } else {
-      res.toast();
+    try {
+      final res = await UserHttp.delHistory(
+        removeList
+            .map((item) => '${item.history.business}_${item.kid}')
+            .join(','),
+        account: account,
+      );
+      if (isClosed ||
+          !baseCtr.isCurrent ||
+          !identical(list, loadingState.value.dataOrNull)) {
+        return;
+      }
+      if (res.isSuccess) {
+        await afterDelete(removeList);
+        SmartDialog.showToast('已删除');
+      } else {
+        res.toast();
+      }
+    } finally {
+      _deleting = false;
+      SmartDialog.dismiss(status: SmartStatus.loading);
     }
   }
 
@@ -136,12 +149,14 @@ class HistoryController
   }
 
   @override
-  Future<LoadingState<HistoryData>> customGetData() => UserHttp.historyList(
-    type: type ?? 'all',
-    max: max,
-    viewAt: viewAt,
-    account: account,
-  );
+  Future<LoadingState<HistoryData>> customGetData() async => baseCtr.isCurrent
+      ? UserHttp.historyList(
+          type: type ?? 'all',
+          max: max,
+          viewAt: viewAt,
+          account: account,
+        )
+      : const Error('账号已切换，请重新打开页面');
 
   @override
   void onClose() {
