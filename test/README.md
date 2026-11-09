@@ -17,6 +17,12 @@ fvm flutter test test/services/diagnostics/ test/pages/about/diagnostics_page_te
 
 ## 目录与夹具
 
+播放器的状态变量与不变量见[播放器状态模型](../doc/development/playback-model.md)。
+`plugin/pl_player/playback/playback_model_test.dart` 验证跨 owner 的结束事件与迟到的意图写入异常；
+`plugin/pl_player/fullscreen_model_test.dart` 在 Windows 验证全屏失败回滚及转换中的最新目标。
+`plugin/pl_player/fullscreen_system_ui_test.dart` 通过模拟系统通道验证方向和系统栏的失败重试。
+这些回归均接入 CI 的对应主机范围。
+
 | 目录 | 范围 |
 | --- | --- |
 | `architecture/` | 依赖政策、模块边界和发布工作流约束。 |
