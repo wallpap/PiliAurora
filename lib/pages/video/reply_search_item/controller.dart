@@ -10,18 +10,21 @@ class ReplySearchController extends GetxController
   ReplySearchController(this.type, this.oid);
   final int type;
   final int oid;
+  String keyword = '';
 
   late final FocusNode focusNode;
   late final TabController tabController;
   late final TextEditingController editingController;
+  final _videoTag = Utils.generateRandomString(8);
+  final _articleTag = Utils.generateRandomString(8);
 
   late final videoCtr = Get.put(
     ReplySearchChildController(this, ReplySearchType.video),
-    tag: Utils.generateRandomString(8),
+    tag: _videoTag,
   );
   late final articleCtr = Get.put(
     ReplySearchChildController(this, ReplySearchType.article),
-    tag: Utils.generateRandomString(8),
+    tag: _articleTag,
   );
 
   void onClear() {
@@ -43,6 +46,7 @@ class ReplySearchController extends GetxController
   }
 
   void submit() {
+    keyword = editingController.text;
     videoCtr
       ..scrollController.jumpToTop()
       ..onReload();
@@ -53,6 +57,9 @@ class ReplySearchController extends GetxController
 
   @override
   void onClose() {
+    Get
+      ..delete<ReplySearchChildController>(tag: _videoTag)
+      ..delete<ReplySearchChildController>(tag: _articleTag);
     focusNode.dispose();
     tabController.dispose();
     editingController.dispose();

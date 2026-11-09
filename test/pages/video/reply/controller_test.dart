@@ -29,7 +29,10 @@ class _TestVideoReplyController extends VideoReplyController {
 }
 
 void main() {
-  setUpAll(() => GStorage.setting = MemoryBox<dynamic>());
+  setUpAll(() {
+    GStorage.setting = MemoryBox<dynamic>();
+    GStorage.localCache = MemoryBox<dynamic>();
+  });
   setUp(() => GStorage.setting.clear());
 
   ReplyInfo withLevel(int id, int level, [List<ReplyInfo>? replies]) =>

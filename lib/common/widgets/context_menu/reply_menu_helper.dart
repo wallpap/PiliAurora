@@ -1,5 +1,82 @@
 part of 'package:pili_aurora/pages/video/reply/widgets/reply_item_grpc.dart';
 
+Future<void> showDeleteReplyDialog(
+  BuildContext context, {
+  required Account account,
+  required ReplyInfo item,
+  required bool Function() isCurrent,
+  required VoidCallback onDelete,
+}) {
+  bool submitting = false;
+  return showDialog(
+    context: context,
+    builder: (context) => StatefulBuilder(
+      builder: (context, setState) => AlertDialog(
+        title: const Text('删除评论'),
+        content: Text.rich(
+          TextSpan(
+            children: [
+              const TextSpan(text: '确定删除这条评论吗？\n\n'),
+              if (account.mid != item.member.mid.toInt())
+                TextSpan(
+                  text: '@${item.member.name}:\n',
+                  style: TextStyle(color: ColorScheme.of(context).primary),
+                ),
+              TextSpan(text: item.content.message),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('取消'),
+          ),
+          TextButton(
+            onPressed: submitting
+                ? null
+                : () async {
+                    if (submitting || !isCurrent()) return;
+                    final route = ModalRoute.of(context);
+                    setState(() => submitting = true);
+                    try {
+                      final result = await VideoHttp.replyDel(
+                        account: account,
+                        type: item.type.toInt(),
+                        oid: item.oid.toInt(),
+                        rpid: item.id.toInt(),
+                      );
+                      if (!context.mounted ||
+                          !isCurrent() ||
+                          route?.isCurrent != true) {
+                        return;
+                      }
+                      if (result.isSuccess) {
+                        Navigator.of(context).pop();
+                        SmartDialog.showToast('删除成功');
+                        try {
+                          onDelete();
+                        } catch (error, stackTrace) {
+                          logger.w(
+                            '评论已删除，页面更新失败',
+                            error: error.runtimeType,
+                            stackTrace: stackTrace,
+                          );
+                        }
+                      } else {
+                        result.toast();
+                      }
+                    } finally {
+                      if (context.mounted) setState(() => submitting = false);
+                    }
+                  },
+            child: Text(submitting ? '删除中' : '确定'),
+          ),
+        ],
+      ),
+    ),
+  );
+}
+
 void showReplyCopyDialog(
   BuildContext context,
   String message,

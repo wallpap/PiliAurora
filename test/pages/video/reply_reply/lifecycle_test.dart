@@ -6,7 +6,6 @@ void main() {
     'closing nested replies clears drafts and prevents later requests',
     () async {
       final controller = VideoReplyReplyController(
-        hasRoot: true,
         id: null,
         oid: 1,
         rpid: 2,

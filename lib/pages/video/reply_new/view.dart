@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 import 'dart:math' show max;
 
+import 'package:collection/collection.dart' show DeepCollectionEquality;
 import 'package:pili_aurora/common/widgets/button/toolbar_icon_button.dart';
 import 'package:pili_aurora/services/logger.dart';
 import 'package:pili_aurora/common/widgets/custom_icon.dart';
@@ -23,6 +24,7 @@ import 'package:pili_aurora/pages/emote/view.dart';
 import 'package:pili_aurora/pages/video/controller.dart';
 import 'package:pili_aurora/pages/video/reply_search_item/view.dart';
 import 'package:pili_aurora/utils/duration_utils.dart';
+import 'package:pili_aurora/utils/accounts.dart';
 import 'package:pili_aurora/utils/extension/context_ext.dart';
 import 'package:pili_aurora/utils/grid.dart';
 import 'package:pili_aurora/utils/latex_to_unicode.dart';
@@ -42,6 +44,7 @@ class ReplyPage extends CommonRichTextPubPage {
   final ReplyInfo? replyItem;
   final String? hint;
   final bool canUploadPic;
+  final ValueChanged<ReplyInfo?>? onSuccess;
 
   const ReplyPage({
     super.key,
@@ -55,6 +58,7 @@ class ReplyPage extends CommonRichTextPubPage {
     this.replyItem,
     this.hint,
     this.canUploadPic = true,
+    this.onSuccess,
   });
 
   @override
@@ -62,6 +66,7 @@ class ReplyPage extends CommonRichTextPubPage {
 }
 
 class _ReplyPageState extends CommonRichTextPubPageState<ReplyPage> {
+  final _publishing = false.obs;
   final RxBool _syncToDynamic = false.obs;
   final heroTag = Get.arguments?['heroTag'];
 
@@ -206,7 +211,9 @@ class _ReplyPageState extends CommonRichTextPubPageState<ReplyPage> {
             const Spacer(),
             Obx(
               () => FilledButton.tonal(
-                onPressed: enablePublish.value ? onPublishThrottle : null,
+                onPressed: enablePublish.value && !_publishing.value
+                    ? onPublishThrottle
+                    : null,
                 style: FilledButton.styleFrom(
                   tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                   padding: const EdgeInsets.symmetric(
@@ -289,7 +296,7 @@ class _ReplyPageState extends CommonRichTextPubPageState<ReplyPage> {
               final ({String title, String url})? res = await Get.to(
                 ReplySearchPage(type: widget.replyType, oid: widget.oid),
               );
-              if (res != null) {
+              if (mounted && res != null) {
                 onInsertText(
                   '${res.title} ',
                   RichTextType.common,
@@ -334,14 +341,22 @@ class _ReplyPageState extends CommonRichTextPubPageState<ReplyPage> {
                         .videoPlayerController
                         ?.screenshot();
                     if (res != null) {
-                      final png = await res.toByteData(format: .png);
-                      if (png != null) {
-                        final path =
-                            '$tmpDirPath/${Utils.generateRandomString(8)}.png';
-                        await File(path).writeAsBytes(png.buffer.asUint8List());
-                        imageList.add(FilePicModel(path: path));
+                      try {
+                        final png = await res.toByteData(format: .png);
+                        if (mounted && png != null) {
+                          final path =
+                              '$tmpDirPath/${Utils.generateRandomString(8)}.png';
+                          await File(path)
+                              .writeAsBytes(png.buffer.asUint8List());
+                          if (mounted && imageList.length < limit) {
+                            imageList.add(FilePicModel(path: path));
+                          } else {
+                            await File(path).delete();
+                          }
+                        }
+                      } finally {
+                        res.dispose();
                       }
-                      res.dispose();
                     } else {
                       logger.d('null screenshot');
                     }
@@ -363,34 +378,98 @@ class _ReplyPageState extends CommonRichTextPubPageState<ReplyPage> {
   }
 
   @override
+  Future<void> onPublish() => onCustomPublish();
+
+  @override
   Future<void> onCustomPublish({List? pictures}) async {
-    if (!mounted) return;
-    Map<String, int> atNameToMid = {};
-    for (final e in editController.items) {
-      if (e.type == RichTextType.at) {
-        atNameToMid[e.rawText] ??= int.parse(e.id!);
-      }
+    if (!mounted || _publishing.value) return;
+    final account = Accounts.main;
+    if (!account.isLogin) {
+      SmartDialog.showToast('账号未登录');
+      return;
     }
-    final message = editController.rawText;
-    final res = await VideoHttp.replyAdd(
-      type: widget.replyType,
-      oid: widget.oid,
-      root: widget.root,
-      parent: widget.parent,
-      message: widget.replyItem != null && widget.replyItem!.root != 0
-          ? ' 回复 @${widget.replyItem!.member.name} : $message'
-          : message,
-      atNameToMid: atNameToMid,
-      pictures: pictures,
-      syncToDynamic: _syncToDynamic.value,
-    );
-    if (!mounted) return;
-    if (res case Success(:final response)) {
-      hasPub = true;
-      SmartDialog.showToast('发送成功');
-      Get.back(result: response);
-    } else {
-      res.toast();
+    final target = widget;
+    final route = ModalRoute.of(context);
+    final text = editController.text;
+    final rawText = editController.rawText;
+    final draft = getRichContent();
+    final images = pictureDraft;
+    final syncToDynamic = _syncToDynamic.value;
+    final message = target.replyItem != null && target.replyItem!.root != 0
+        ? ' 回复 @${target.replyItem!.member.name} : $rawText'
+        : rawText;
+    final atNameToMid = <String, int>{};
+    bool isCurrent() =>
+        mounted &&
+        identical(account, Accounts.main) &&
+        target.oid == widget.oid &&
+        target.replyType == widget.replyType &&
+        target.root == widget.root &&
+        target.parent == widget.parent &&
+        identical(target.replyItem, widget.replyItem);
+    _publishing.value = true;
+    try {
+      for (final item in editController.items) {
+        if (item.type != RichTextType.at) continue;
+        final mid = int.tryParse(item.id ?? '');
+        if (mid == null || mid <= 0) {
+          throw const Error('提及信息不完整，请重新选择用户');
+        }
+        atNameToMid[item.rawText] = mid;
+      }
+      pictures ??= await uploadPictures(account: account);
+      if (!isCurrent()) return;
+      final result = await VideoHttp.replyAdd(
+        account: account,
+        type: target.replyType,
+        oid: target.oid,
+        root: target.root,
+        parent: target.parent,
+        message: message,
+        atNameToMid: atNameToMid,
+        pictures: pictures,
+        syncToDynamic: syncToDynamic,
+      );
+      if (!isCurrent()) return;
+      if (result case Success(:final response)) {
+        const equality = DeepCollectionEquality();
+        hasPub =
+            text == editController.text &&
+            rawText == editController.rawText &&
+            syncToDynamic == _syncToDynamic.value &&
+            equality.equals(draft, getRichContent()) &&
+            equality.equals(images, pictureDraft);
+        try {
+          target.onSuccess?.call(response);
+        } catch (error, stackTrace) {
+          logger.w(
+            '评论发送后的页面更新失败',
+            error: error.runtimeType,
+            stackTrace: stackTrace,
+          );
+        }
+        if (mounted && hasPub && route?.isCurrent == true) {
+          Navigator.of(context).pop(response);
+        }
+        SmartDialog.showToast(
+          !hasPub
+              ? '发送成功，已保留新草稿'
+              : response == null
+              ? '发送成功，请刷新评论列表查看'
+              : '发送成功',
+        );
+      } else {
+        result.toast();
+      }
+    } catch (error, stackTrace) {
+      if (isCurrent()) {
+        (error is Error
+                ? error
+                : Error('评论准备失败，请重试', cause: error, stackTrace: stackTrace))
+            .toast();
+      }
+    } finally {
+      if (mounted) _publishing.value = false;
     }
   }
 

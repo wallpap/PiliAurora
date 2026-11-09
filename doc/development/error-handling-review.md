@@ -51,8 +51,8 @@
 | 直播业务：`http/live.dart`、屏蔽规则、发送面板与表情查询 | 27 个接口接入统一结果契约，保留查询角色、签名账号、可选数据和明确业务码，GET 反馈也按写入禁重试。屏蔽规则保留原 Error／UnknownResult；文本和表情发送共用在途状态，保留新草稿，切号／换房／关闭后拒绝旧结果。表情查询跟随主账号凭据变化，刷新前释放旧页签。 | `test/http/live_response_test.dart`、直播设置、发送与表情回归 |
 | 文章与文章收藏：正文、统计、点赞、收藏、分享／转发和历史上报 | 正文与统计固定账号、目标和查询代次，关闭或切号后淘汰旧结果；本人点赞读取真实状态，补齐标题。写入互斥，确认成功才更新，未知计数保持未知并淘汰早先的统计查询。收藏列表跟随凭据刷新；分享回调核对当前文章，历史上报固定正文加载前的 heartbeat。文集列表和文章搜索保留合理契约。 | `test/pages/article/controller_results_test.dart`、`content_retry_test.dart` |
 | 动态聚合主页、互动菜单、点赞／转发列表 | 聚合页与列表跟随主账号凭据变化，查询固定账号，重复游标终止分页且不追加重复页；全部关注列表持续去重，刷新等待两个面板。互动设置缺少来源时显示可读提示，旧查询和弹窗拒绝切号后的回调。举报确认成功后再拉黑，拉黑失败保留举报成功；用户关系写入接入统一契约，禁止自动重试，保留原有切号保护。举报弹窗支持调用方归属检查。 | `test/pages/dynamics/overview_results_test.dart`、举报弹窗与关注交互回归 |
-
 | 直播推荐／分区／榜单与菜单调用方：`pages/live`、`live_area_detail`、贡献榜与房间侧栏／聊天菜单 | 推荐与分区绑定主账号和推荐角色，拒绝旧请求与乱序顶部结果；未收藏分区继续沿原来源查询，分区标签重载时释放旧控制器。榜单切房释放旧注册，非空泛型保证注册／查找一致；舰长查询绑定账号。反馈与聊天屏蔽拒绝重复提交和失效结果。 | `test/pages/live/consumer_results_test.dart` |
+| 评论发布／删除与列表、楼中楼和内容搜索：`http/video.dart`、`grpc/reply.dart`、`common/reply_controller.dart` 与评论页面 | 写请求固定账号／CSRF 并禁重试，保留拒绝与待确认；明确发送成功时允许无回显，缓存失败不覆盖远端结果。上传前固定草稿，阻止重复发送，成功回调更新列表且保留后来编辑的草稿；楼中楼沿用根 ID，草稿按完整目标隔离。列表按 ID 插入／删除，未知计数保持未知；换凭据重查并释放订阅。删除弹窗拥有自身在途状态，取消或切号后拒绝迟到结果；举报和翻译检查评论归属。内容搜索按已提交词分页，父子控制器按页面释放。 | `test/http/reply_write_results_test.dart`、`test/pages/community/reply_*_results_test.dart`、评论与文章关联回归 |
 
 ## 检查后保留的实现
 
@@ -70,7 +70,7 @@
 - 应用退出服务，以及启动中的后台账号与网络同步。桌面播放 IPC、直播消息连接和协议 worker 已检查。
 - 播放小窗异常退出后的声音归属和主窗口恢复行为。
 - 其余页面查询、收藏／历史／动态等写入，以及公共工具、模型的返回值和异常处理。
-- 评论发布／删除、评论投票等其余 gRPC 领域消费，以及原生表情输入。弹幕发送、HTTP 赞踩／置顶／举报、评论可见性检查和表情包管理已完成本轮检查。
+- 评论投票等其余 gRPC 领域模型的可选字段，以及原生表情输入、选图与裁剪失败／取消。评论发布／删除、内容搜索、弹幕发送、HTTP 赞踩／置顶／举报、评论可见性检查和表情包管理已完成本轮检查。
 - 搜索适配器之外的视频导航调用方，以及番剧／课程资料的领域消费。搜索首页、热搜、联想与结果分页已完成本轮检查。
 - 课程、话题、笔记和追番等其余收藏页面，以及订阅调用方。文章与文章收藏、收藏详情、收藏夹操作、两种排序、批量迁移和视频快速收藏已完成本轮检查。
 - 极验 WebView 自身的脚本失败、超时和取消结果。风控协调回归使用导航替身返回弹窗结果，未启动原生 WebView。
@@ -119,3 +119,5 @@
 - 动态聚合／互动菜单／点赞与转发列表新增 9 个不同用例，加举报弹窗和关注交互既有回归各 1 项，共 11 项通过。首轮 6 项通过后，只复跑缺失评论来源与举报用例，另补充切号后迟到举报成功回归（`build/dynamics-overview-tests.log`、`build/dynamics-overview-menu-retry.log`、`build/dynamics-overview-report-final.log`、`build/dynamics-report-dialog-regression.log`、`build/dynamics-relation-regression.log`）。9 个文件定向分析的 1 条提示和 1 条警告修正后，2 文件复查无问题（`build/dynamics-overview-analyze.log`、`build/dynamics-overview-final-analyze.log`）。未重跑完整 CI，也未进行真实服务写入与设备验收。
 
 - 直播推荐／分区／榜单与菜单新增 8 个不同用例。首轮 6 项通过、2 项失败；修正侧栏可空泛型注册及测试卸载清理后，仅复跑侧栏和屏蔽 2 项，均通过（`build/live-consumer-results-tests.log`、`build/live-consumer-widget-tests.log`）。8 文件定向分析无问题，后续变动的 2 文件复查通过（`build/live-consumer-analyze.log`、`build/live-consumer-widget-analyze.log`）；格式和 diff 检查通过。未重跑完整 CI，也未验证真实服务、完整播放流程与设备行为。
+
+- 评论写入 HTTP、列表、发布／删除弹窗、内容搜索及既有评论／文章关联回归共 21 个不同用例通过。首次夹具缺少必需参数、存储初始化和富文本项，修正后只复跑相关文件；HTTP 缓存、搜索和新增编辑器场景分别复验（`build/reply-write-tests.log`、`build/reply-consumer-retry-tests.log`、`build/reply-cache-retry-tests.log`、`build/reply-search-retry-tests.log`、`build/reply-editor-target-tests.log`、`build/reply-article-regression.log`、`build/reply-lifecycle-regression.log`）。20 个修改源码／测试文件完成定向分析，编译和格式提示按受影响文件逐一修正；最后单文件复查见 `build/reply-list-final-analyze.log`，前序记录见 `build/reply-consumer-analyze.log`、`build/reply-consumer-fix-analyze.log`、`build/reply-final-analyze.log`、`build/reply-final-test-analyze.log`、`build/reply-root-final-analyze.log`。未重跑完整 CI，也未验证原生选图／输入、真实服务写入及完整播放器页面。

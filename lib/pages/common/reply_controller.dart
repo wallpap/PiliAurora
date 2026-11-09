@@ -1,3 +1,4 @@
+import 'package:collection/collection.dart' show IterableExtension;
 import 'package:pili_aurora/common/widgets/flutter/text_field/controller.dart';
 import 'package:pili_aurora/grpc/bilibili/main/community/reply/v1.pb.dart'
     show MainListReply, ReplyInfo, SubjectControl, Mode;
@@ -66,6 +67,18 @@ abstract class ReplyController<R> extends CommonListController<R, ReplyInfo> {
     final cacheSortType = Pref.replySortType;
     sortType = cacheSortType.obs;
     mode = cacheSortType == .time ? Mode.MAIN_LIST_TIME : Mode.MAIN_LIST_HOT;
+    Accounts.mainChanges.addListener(onAccountChanged);
+  }
+
+  @override
+  Object get queryContext => Accounts.main;
+
+  void onAccountChanged() {
+    savedReplies.clear();
+    count.value = -1;
+    upMid = null;
+    hasUpTop = false;
+    onReload();
   }
 
   @override
@@ -160,7 +173,9 @@ abstract class ReplyController<R> extends CommonListController<R, ReplyInfo> {
     ReplyInfo? replyItem, {
     int? oid,
     int? replyType,
+    int? index,
   }) {
+    if (isClosed) return;
     if (loadingState.value case Error(:final errMsg, :final code)) {
       if (errMsg != null && (code == 12061 || code == 12002)) {
         SmartDialog.showToast(errMsg);
@@ -175,74 +190,99 @@ abstract class ReplyController<R> extends CommonListController<R, ReplyInfo> {
       return;
     }
 
-    final key = oid ?? replyItem!.oid + replyItem.id;
-    Get.key.currentState!
-        .push(
-          PublishRoute(
-            pageBuilder: (buildContext, animation, secondaryAnimation) {
-              return ReplyPage(
-                hint: hint,
-                oid: oid ?? replyItem!.oid.toInt(),
-                root: oid != null ? 0 : replyItem!.id.toInt(),
-                parent: oid != null ? 0 : replyItem!.id.toInt(),
-                replyType: replyItem?.type.toInt() ?? replyType!,
-                replyItem: replyItem,
-                items: savedReplies[key],
+    final account = Accounts.main;
+    final source = sourceId;
+    final targetOid = oid ?? replyItem!.oid.toInt();
+    final type = replyItem?.type.toInt() ?? replyType!;
+    final root = oid != null
+        ? 0
+        : replyItem!.root != Int64.ZERO
+        ? replyItem.root.toInt()
+        : replyItem.id.toInt();
+    final parent = oid != null ? 0 : replyItem!.id.toInt();
+    final key = (oid: targetOid, type: type, root: root, parent: parent);
+    bool isCurrent() =>
+        !isClosed && identical(account, Accounts.main) && source == sourceId;
+    Get.key.currentState!.push(
+      PublishRoute(
+        pageBuilder: (buildContext, animation, secondaryAnimation) {
+          return ReplyPage(
+            hint: hint,
+            oid: targetOid,
+            root: root,
+            parent: parent,
+            replyType: type,
+            replyItem: replyItem,
+            items: savedReplies[key],
 
-                /// hd api deprecated
-                // canUploadPic: canUploadPic,
-                onSave: (reply) {
-                  if (reply.isEmpty) {
-                    savedReplies.remove(key);
-                  } else {
-                    savedReplies[key] = reply.toList();
-                  }
-                },
-              );
-            },
-            settings: RouteSettings(arguments: Get.arguments),
-          ),
-        )
-        .then(
-          (replyInfo) {
-            if (replyInfo is ReplyInfo) {
-              savedReplies.remove(key);
-              if (loadingState.value case Success(:final response)) {
-                if (response == null) {
-                  loadingState.value = Success([replyInfo]);
-                } else {
-                  if (oid != null) {
-                    response.insert(hasUpTop ? 1 : 0, replyInfo);
-                  } else {
-                    replyItem!
-                      ..count += 1
-                      ..replies.add(replyInfo);
-                  }
-                  loadingState.refresh();
-                }
+            /// hd api deprecated
+            // canUploadPic: canUploadPic,
+            onSave: (reply) {
+              if (!isCurrent()) return;
+              if (reply.isEmpty) {
+                savedReplies.remove(key);
               } else {
-                loadingState.value = Success([replyInfo]);
+                savedReplies[key] = reply.toList();
               }
-              count.value += 1;
-
-              // check reply
-              if (enableCommAntifraud) {
+            },
+            onSuccess: (replyInfo) {
+              if (!isCurrent()) return;
+              savedReplies.remove(key);
+              onReplyPublished(replyInfo, parent: replyItem);
+              if (replyInfo != null && enableCommAntifraud) {
                 onCheckReply(replyInfo, isManual: false);
               }
-            }
-          },
-        );
+            },
+          );
+        },
+        settings: RouteSettings(arguments: Get.arguments),
+      ),
+    );
+  }
+
+  void onReplyPublished(ReplyInfo? replyInfo, {ReplyInfo? parent}) {
+    final list = loadingState.value.dataOrNull;
+    if (isClosed) return;
+    if (replyInfo == null || list == null || isLoading) {
+      onReload();
+      return;
+    }
+    if (parent == null) {
+      if (list.any((reply) => reply.id == replyInfo.id)) return;
+      list.insert(hasUpTop && list.isNotEmpty ? 1 : 0, replyInfo);
+    } else {
+      final current = list.firstWhereOrNull((reply) => reply.id == parent.id);
+      if (current == null) {
+        onReload();
+        return;
+      }
+      if (current.replies.any((reply) => reply.id == replyInfo.id)) return;
+      current
+        ..count += 1
+        ..replies.add(replyInfo);
+    }
+    if (count.value >= 0) count.value++;
+    loadingState.refresh();
   }
 
   void onRemove(int index, ReplyInfo item, int? subIndex) {
+    if (isClosed || isLoading) return;
+    final list = loadingState.value.dataOrNull;
+    final currentIndex = list?.indexWhere((reply) => reply.id == item.id) ?? -1;
+    if (list == null || currentIndex < 0) return;
     if (subIndex == null) {
-      loadingState.value.data!.removeAt(index);
+      list.removeAt(currentIndex);
+      hasUpTop = list.any((reply) => reply.replyControl.isUpTop);
     } else {
-      item
-        ..count -= 1
-        ..replies.removeAt(subIndex);
+      if (!identical(item, list[currentIndex]) ||
+          subIndex < 0 ||
+          subIndex >= item.replies.length) {
+        return;
+      }
+      item.replies.removeAt(subIndex);
+      if (item.count > 0) item.count -= 1;
     }
-    count.value -= 1;
+    if (count.value > 0) count.value--;
     loadingState.refresh();
   }
 
@@ -302,6 +342,7 @@ abstract class ReplyController<R> extends CommonListController<R, ReplyInfo> {
 
   @override
   void onClose() {
+    Accounts.mainChanges.removeListener(onAccountChanged);
     savedReplies.clear();
     super.onClose();
   }

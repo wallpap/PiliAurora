@@ -2,9 +2,7 @@ import 'package:pili_aurora/grpc/bilibili/main/community/reply/v1.pb.dart'
     show ReplyInfo, DetailListReply, Mode;
 import 'package:pili_aurora/grpc/reply.dart';
 import 'package:pili_aurora/http/loading_state.dart';
-import 'package:pili_aurora/pages/common/publish/publish_route.dart';
 import 'package:pili_aurora/pages/common/reply_controller.dart';
-import 'package:pili_aurora/pages/video/reply_new/view.dart';
 import 'package:pili_aurora/utils/id_utils.dart';
 import 'package:pili_aurora/utils/storage_pref.dart';
 import 'package:extended_nested_scroll_view/extended_nested_scroll_view.dart';
@@ -17,7 +15,6 @@ import 'package:super_sliver_list/super_sliver_list.dart';
 class VideoReplyReplyController extends ReplyController
     with GetSingleTickerProviderStateMixin {
   VideoReplyReplyController({
-    required this.hasRoot,
     required this.id,
     required this.oid,
     required this.rpid,
@@ -32,7 +29,6 @@ class VideoReplyReplyController extends ReplyController
   int rpid;
   int replyType;
 
-  bool hasRoot = false;
   final firstFloor = Rxn<ReplyInfo>();
 
   final index = RxnInt();
@@ -76,8 +72,8 @@ class VideoReplyReplyController extends ReplyController
     // reply2Reply // isDialogue.not
     if (data is DetailListReply) {
       count.value = data.root.count.toInt();
-      if (isRefresh && !hasRoot) {
-        firstFloor.value ??= data.root;
+      if (isRefresh) {
+        firstFloor.value = data.root;
       }
     }
 
@@ -111,6 +107,7 @@ class VideoReplyReplyController extends ReplyController
   @pragma('vm:notify-debugger-on-exception')
   void jumpToItem(int index) {
     SchedulerBinding.instance.addPostFrameCallback((_) {
+      if (isClosed) return;
       animController.forward(from: 0);
       try {
         // ignore: invalid_use_of_visible_for_testing_member
@@ -145,6 +142,12 @@ class VideoReplyReplyController extends ReplyController
         );
 
   @override
+  void onAccountChanged() {
+    firstFloor.value = null;
+    super.onAccountChanged();
+  }
+
+  @override
   Future<void> onReload() {
     if (loadingState.value.isSuccess) {
       index.value = null;
@@ -153,59 +156,23 @@ class VideoReplyReplyController extends ReplyController
   }
 
   @override
-  void onReply(
-    ReplyInfo? replyItem, {
-    int? oid,
-    int? replyType,
-    int? index,
-  }) {
-    assert(replyItem != null && index != null);
-
-    final (bool inputDisable, String? hint) = replyHint;
-    if (inputDisable) {
+  void onReplyPublished(ReplyInfo? replyInfo, {ReplyInfo? parent}) {
+    if (isClosed) return;
+    final list = loadingState.value.dataOrNull;
+    if (replyInfo == null || parent == null || list == null || isLoading) {
+      onReload();
       return;
     }
-
-    final oid = replyItem!.oid.toInt();
-    final root = replyItem.id.toInt();
-    final key = oid + root;
-
-    Get.key.currentState!
-        .push(
-          PublishRoute(
-            pageBuilder: (buildContext, animation, secondaryAnimation) {
-              return ReplyPage(
-                hint: hint,
-                oid: oid,
-                root: root,
-                parent: root,
-                replyType: this.replyType,
-                replyItem: replyItem,
-                items: savedReplies[key],
-                onSave: (reply) {
-                  if (reply.isEmpty) {
-                    savedReplies.remove(key);
-                  } else {
-                    savedReplies[key] = reply.toList();
-                  }
-                },
-              );
-            },
-          ),
-        )
-        .then((replyInfo) {
-          if (replyInfo is ReplyInfo) {
-            savedReplies.remove(key);
-
-            count.value += 1;
-            loadingState
-              ..value.dataOrNull?.insert(index! + 1, replyInfo)
-              ..refresh();
-            if (enableCommAntifraud) {
-              onCheckReply(replyInfo, isManual: false);
-            }
-          }
-        });
+    if (list.any((reply) => reply.id == replyInfo.id)) return;
+    final parentIndex = list.indexWhere((reply) => reply.id == parent.id);
+    final isRoot = parent.id.toInt() == rpid;
+    if (parentIndex < 0 && !isRoot) {
+      onReload();
+      return;
+    }
+    list.insert(parentIndex + 1, replyInfo);
+    if (count.value >= 0) count.value++;
+    loadingState.refresh();
   }
 
   @override

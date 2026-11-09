@@ -9,9 +9,11 @@ import 'package:pili_aurora/pages/video/reply_reply/controller.dart';
 import 'package:pili_aurora/utils/storage.dart';
 import 'package:pili_aurora/utils/storage_key.dart';
 
+import '../../../support/memory_box.dart';
+
 class _RepliesController extends VideoReplyReplyController {
   _RepliesController(this.response, {super.id, super.dialog})
-    : super(hasRoot: false, oid: 1, rpid: 2, replyType: 1);
+    : super(oid: 1, rpid: 2, replyType: 1);
 
   final LoadingState response;
   int? jumpedTo;
@@ -25,6 +27,7 @@ class _RepliesController extends VideoReplyReplyController {
 
 void main() {
   setUpAll(() async {
+    GStorage.localCache = MemoryBox();
     GStorage.setting = await Hive.openBox<dynamic>(
       'nested-reply-level',
       bytes: Uint8List(0),

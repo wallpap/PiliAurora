@@ -24,14 +24,21 @@ class ReplySearchPage extends StatefulWidget {
 
 class _ReplySearchPageState extends State<ReplySearchPage> {
   late final ReplySearchController _controller;
+  late final _tag = Utils.generateRandomString(8);
 
   @override
   void initState() {
     super.initState();
     _controller = Get.put(
       ReplySearchController(widget.type, widget.oid),
-      tag: Utils.generateRandomString(8),
+      tag: _tag,
     );
+  }
+
+  @override
+  void dispose() {
+    Get.delete<ReplySearchController>(tag: _tag);
+    super.dispose();
   }
 
   @override

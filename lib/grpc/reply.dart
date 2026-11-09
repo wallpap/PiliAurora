@@ -4,6 +4,8 @@ import 'package:pili_aurora/grpc/bilibili/pagination.pb.dart';
 import 'package:pili_aurora/grpc/grpc_req.dart';
 import 'package:pili_aurora/grpc/url.dart';
 import 'package:pili_aurora/http/loading_state.dart';
+import 'package:pili_aurora/utils/accounts.dart';
+import 'package:pili_aurora/utils/accounts/account.dart';
 import 'package:pili_aurora/utils/storage_pref.dart';
 import 'package:fixnum/fixnum.dart';
 
@@ -42,6 +44,7 @@ abstract final class ReplyGrpc {
   }
 
   static Future<LoadingState<MainListReply>> mainList({
+    Account? account,
     int type = 1,
     required int oid,
     required Mode mode,
@@ -63,6 +66,7 @@ abstract final class ReplyGrpc {
       ),
       MainListReply.fromBuffer,
       kind: .query,
+      account: account ?? Accounts.main,
     );
     if (res case Success(:final response)) {
       // keyword filter
@@ -84,6 +88,7 @@ abstract final class ReplyGrpc {
   }
 
   static Future<LoadingState<DetailListReply>> detailList({
+    Account? account,
     int type = 1,
     required int oid,
     required int root,
@@ -104,11 +109,13 @@ abstract final class ReplyGrpc {
       ),
       DetailListReply.fromBuffer,
       kind: .query,
+      account: account ?? Accounts.main,
     );
     return res..dataOrNull?.root.replies.removeWhere(needRemoveGrpc);
   }
 
   static Future<LoadingState<DialogListReply>> dialogList({
+    Account? account,
     int type = 1,
     required int oid,
     required int root,
@@ -126,11 +133,13 @@ abstract final class ReplyGrpc {
       ),
       DialogListReply.fromBuffer,
       kind: .query,
+      account: account ?? Accounts.main,
     );
     return res..dataOrNull?.replies.removeWhere(needRemoveGrpc);
   }
 
   static Future<LoadingState<SearchItemReply>> searchItem({
+    Account? account,
     required int page,
     required SearchItemType itemType,
     required int oid,
@@ -150,10 +159,12 @@ abstract final class ReplyGrpc {
       ),
       SearchItemReply.fromBuffer,
       kind: .query,
+      account: account ?? Accounts.main,
     );
   }
 
   static Future<LoadingState<TranslateReplyResp>> translateReply({
+    Account? account,
     required Int64 type,
     required Int64 oid,
     required Int64 rpid,
@@ -167,6 +178,7 @@ abstract final class ReplyGrpc {
       ),
       TranslateReplyResp.fromBuffer,
       kind: .query,
+      account: account ?? Accounts.main,
     );
   }
 }

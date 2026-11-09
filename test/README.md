@@ -64,6 +64,8 @@ fvm flutter test test/services/diagnostics/ test/pages/about/diagnostics_page_te
 
 `http/community_response_test.dart` 检查弹幕与评论业务码、解析原因、写入待确认、匿名查询、管理端点和表情包分页。`pages/community/operation_results_test.dart` 检查赞踩／置顶防重入、草稿快照、切号／关闭／更换对象后的迟到结果、评论可见性检查、表情包重试，以及举报成功但屏蔽同步未确认的反馈。真实服务写入、原生输入和播放器回显需设备验收。
 
+`http/reply_write_results_test.dart` 检查发布／删除的拒绝与待确认、账号和 CSRF 绑定、禁止重试、可空回显及本地缓存失败后保留已确认成功。`pages/community/reply_publish_results_test.dart` 检查上传前固定草稿、保留新草稿、楼中楼根 ID、重复提交和弹窗取消；`reply_list_results_test.dart` 检查按身份插入／删除、未知计数及账号订阅；`reply_search_results_test.dart` 检查已提交词与分页、凭据替换和子控制器释放。原生图片选择／裁剪和输入法仍需设备验收。
+
 `http/dynamics_response_test.dart` 检查动态接口的业务拒绝、解析原因和写入待确认、查询角色与签名期间账号绑定、过滤补页进展和上限、投票与预约的必需字段，以及定时发布等可空响应。
 
 `http/dynamic_media_response_test.dart` 检查图片读取失败、上传回执与删除的结果契约；`http/member_dynamics_response_test.dart` 检查空间动态补页进展与签名账号。`pages/dynamics/` 检查发布前的草稿快照、提交互斥、回调失败、切号／关闭／换对象后的结果隔离，及列表删除／置顶、话题折叠／收藏／点赞、投票与预约重试。图片使用本地临时文件，HTTP 使用受控响应；真实服务写入与原生输入需另行验收。

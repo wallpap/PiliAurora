@@ -29,6 +29,7 @@ import 'package:pili_aurora/models/remote/video/video_note_list/data.dart';
 import 'package:pili_aurora/models/remote/video/video_play_info/data.dart';
 import 'package:pili_aurora/models/remote/video/video_relation/data.dart';
 import 'package:pili_aurora/models/remote/video/video_shot/data.dart';
+import 'package:pili_aurora/services/logger.dart';
 import 'package:pili_aurora/utils/accounts.dart';
 import 'package:pili_aurora/utils/accounts/account.dart';
 import 'package:pili_aurora/utils/app_sign.dart';
@@ -557,6 +558,7 @@ abstract final class VideoHttp {
   // message	str	发送评论内容	必要	最大1000字符
   // plat	num	发送平台标识	非必要	1：web端 2：安卓客户端  3：ios客户端  4：wp客户端
   static Future<LoadingState<ReplyInfo?>> replyAdd({
+    Account? account,
     required int type,
     required int oid,
     required String message,
@@ -566,6 +568,7 @@ abstract final class VideoHttp {
     bool syncToDynamic = false,
     Map<String, int>? atNameToMid,
   }) async {
+    account ??= Accounts.main;
     final data = {
       'type': type,
       'oid': oid,
@@ -576,54 +579,90 @@ abstract final class VideoHttp {
         'at_name_to_mid': jsonEncode(atNameToMid), // {"name":uid}
       if (pictures != null) 'pictures': jsonEncode(pictures),
       if (syncToDynamic) 'sync_to_dynamic': 1,
-      'csrf': Accounts.main.csrf,
+      'csrf': account.csrf,
     };
-    final res = await Request().post(
+    final result = await Request().requestApi<ReplyInfo?>(
       Api.replyAdd,
+      kind: ApiCallKind.mutation,
+      decode: (body) {
+        // 成功码已确认发送；回显缺失或损坏时保留成功，交由列表重新查询。
+        try {
+          final reply = body['data']?['reply'];
+          if (reply == null) return null;
+          final info = RequestUtils.replyCast(reply);
+          if (info.id <= 0 || info.oid != oid || info.type != type) {
+            throw const FormatException('评论回显与目标不符');
+          }
+          return info;
+        } catch (error, stackTrace) {
+          logger.w(
+            '评论已发送，回显解析失败',
+            error: error.runtimeType,
+            stackTrace: stackTrace,
+          );
+          return null;
+        }
+      },
       data: data,
-      options: Options(contentType: Headers.formUrlEncodedContentType),
+      options: Options(
+        extra: {'account': account},
+        contentType: Headers.formUrlEncodedContentType,
+      ),
     );
-    if (res.data['code'] == 0) {
+    if (result case Success(response: final replyInfo?)) {
       try {
-        final replyInfo = RequestUtils.replyCast(res.data['data']['reply']);
-        GStorage.reply?.put(
+        await GStorage.reply?.put(
           replyInfo.id.toString(),
           (replyInfo.deepCopy()
                 ..unknownFields.clear()
                 ..clearTrackInfo())
               .writeToBuffer(),
         );
-        return Success(replyInfo);
-      } catch (e, s) {
-        Utils.reportError(e, s);
-        return const Success(null);
+      } catch (error, stackTrace) {
+        logger.w(
+          '评论已发送，本地保存失败',
+          error: error.runtimeType,
+          stackTrace: stackTrace,
+        );
       }
-    } else {
-      return Error(res.data['message']);
     }
+    return result;
   }
 
   static Future<LoadingState<void>> replyDel({
+    Account? account,
     required int type, //replyType
     required int oid,
     required int rpid,
   }) async {
-    final res = await Request().post(
+    account ??= Accounts.main;
+    final result = await Request().requestApi<void>(
       Api.replyDel,
+      kind: ApiCallKind.mutation,
+      decode: (_) {},
       data: {
         'type': type, //type.index
         'oid': oid,
         'rpid': rpid,
-        'csrf': Accounts.main.csrf,
+        'csrf': account.csrf,
       },
-      options: Options(contentType: Headers.formUrlEncodedContentType),
+      options: Options(
+        extra: {'account': account},
+        contentType: Headers.formUrlEncodedContentType,
+      ),
     );
-    if (res.data['code'] == 0) {
-      GStorage.reply?.delete(rpid.toString());
-      return const Success(null);
-    } else {
-      return const Error('请退出账号后重新登录');
+    if (result.isSuccess) {
+      try {
+        await GStorage.reply?.delete(rpid.toString());
+      } catch (error, stackTrace) {
+        logger.w(
+          '评论已删除，本地清理失败',
+          error: error.runtimeType,
+          stackTrace: stackTrace,
+        );
+      }
     }
+    return result;
   }
 
   // 操作用户关系

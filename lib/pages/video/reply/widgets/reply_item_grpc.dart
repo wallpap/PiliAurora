@@ -22,12 +22,14 @@ import 'package:pili_aurora/grpc/reply.dart';
 import 'package:pili_aurora/http/loading_state.dart';
 import 'package:pili_aurora/http/reply.dart';
 import 'package:pili_aurora/http/video.dart';
+import 'package:pili_aurora/services/logger.dart';
 import 'package:pili_aurora/pages/dynamics/widgets/vote.dart';
 import 'package:pili_aurora/pages/member/widget/medal_widget.dart';
 import 'package:pili_aurora/pages/save_panel/view.dart';
 import 'package:pili_aurora/pages/video/controller.dart';
 import 'package:pili_aurora/pages/video/reply/widgets/zan_grpc.dart';
 import 'package:pili_aurora/utils/accounts.dart';
+import 'package:pili_aurora/utils/accounts/account.dart';
 import 'package:pili_aurora/utils/app_scheme.dart';
 import 'package:pili_aurora/utils/bili_utils.dart';
 import 'package:pili_aurora/utils/color_utils.dart';
@@ -109,7 +111,7 @@ class ReplyItemGrpc extends StatelessWidget {
       constraints: BoxConstraints(
         maxWidth: min(640, context.mediaQueryShortestSide),
       ),
-      builder: (context) {
+      builder: (_) {
         return morePanel(
           context: context,
           item: replyItem,
@@ -435,11 +437,20 @@ class ReplyItemGrpc extends StatelessWidget {
               return;
             }
             isProcessing = true;
+            final account = Accounts.main;
+            final owner = context.widget;
             final res = await ReplyGrpc.translateReply(
+              account: account,
               type: replyItem.type,
               oid: replyItem.oid,
               rpid: replyItem.id,
             );
+            isProcessing = false;
+            if (!context.mounted ||
+                !identical(account, Accounts.main) ||
+                !identical(owner, context.widget)) {
+              return;
+            }
             if (res case Success(:final response)) {
               final item = response.translatedReplies[replyItem.id];
               if (item != null && item.hasTranslatedContent()) {
@@ -454,7 +465,6 @@ class ReplyItemGrpc extends StatelessWidget {
             } else if (res case Error(:final errMsg)) {
               SmartDialog.showToast('翻译失败: $errMsg');
             }
-            isProcessing = false;
           }
         },
         child: Row(
@@ -610,11 +620,18 @@ class ReplyItemGrpc extends StatelessWidget {
                   constraints: BoxConstraints(
                     maxWidth: min(640, context.mediaQueryShortestSide),
                   ),
-                  builder: (context) {
+                  builder: (_) {
                     return morePanel(
                       context: context,
                       item: childReply,
-                      onDelete: () => onDelete?.call(replyItem, index),
+                      onDelete: () {
+                        final currentIndex = replyItem.replies.indexWhere(
+                          (reply) => reply.id == childReply.id,
+                        );
+                        if (currentIndex >= 0) {
+                          onDelete?.call(replyItem, currentIndex);
+                        }
+                      },
                       isSubReply: true,
                     );
                   },
@@ -1025,6 +1042,15 @@ class ReplyItemGrpc extends StatelessWidget {
   }) {
     late String message = item.content.message;
     final account = Accounts.main;
+    final owner = context.widget;
+    final oid = item.oid;
+    final rpid = item.id;
+    bool isCurrent() =>
+        context.mounted &&
+        identical(owner, context.widget) &&
+        identical(account, Accounts.main) &&
+        item.oid == oid &&
+        item.id == rpid;
     final ownerMid = Int64(account.mid);
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
@@ -1106,65 +1132,16 @@ class ReplyItemGrpc extends StatelessWidget {
           ],
           if (ownerMid == upMid || ownerMid == item.member.mid)
             ListTile(
-              onTap: () async {
+              onTap: () {
                 Get.back();
-                bool? isDelete = await showDialog<bool>(
-                  context: context,
-                  builder: (context) {
-                    final colorScheme = ColorScheme.of(context);
-                    return AlertDialog(
-                      title: const Text('删除评论'),
-                      content: Text.rich(
-                        TextSpan(
-                          children: [
-                            const TextSpan(text: '确定删除这条评论吗？\n\n'),
-                            if (ownerMid != item.member.mid.toInt()) ...[
-                              TextSpan(
-                                text: '@${item.member.name}',
-                                style: TextStyle(
-                                  color: colorScheme.primary,
-                                ),
-                              ),
-                              const TextSpan(text: ':\n'),
-                            ],
-                            TextSpan(text: message),
-                          ],
-                        ),
-                      ),
-                      actions: [
-                        TextButton(
-                          onPressed: () => Get.back(result: false),
-                          child: Text(
-                            '取消',
-                            style: TextStyle(
-                              color: colorScheme.outline,
-                            ),
-                          ),
-                        ),
-                        TextButton(
-                          onPressed: () => Get.back(result: true),
-                          child: const Text('确定'),
-                        ),
-                      ],
-                    );
-                  },
+                if (!isCurrent()) return;
+                showDeleteReplyDialog(
+                  context,
+                  account: account,
+                  item: item,
+                  isCurrent: isCurrent,
+                  onDelete: onDelete,
                 );
-                if (isDelete == null || !isDelete) {
-                  return;
-                }
-                SmartDialog.showLoading(msg: '删除中...');
-                final res = await VideoHttp.replyDel(
-                  type: item.type.toInt(),
-                  oid: item.oid.toInt(),
-                  rpid: item.id.toInt(),
-                );
-                SmartDialog.dismiss();
-                if (res.isSuccess) {
-                  SmartDialog.showToast('删除成功');
-                  onDelete();
-                } else {
-                  SmartDialog.showToast('删除失败, $res');
-                }
               },
               minLeadingWidth: 0,
               leading: Icon(Icons.delete_outlined, color: errorColor, size: 19),
@@ -1181,13 +1158,14 @@ class ReplyItemGrpc extends StatelessWidget {
                 autoWrapReportDialog(
                   context,
                   ReportOptions.commentReport,
+                  isCurrent: isCurrent,
                   withContent: ReportOptions.withContentReply,
                   contentRequired: ReportOptions.contentRequiredReply,
                   reportUrl:
                       'https://www.bilibili.com/h5/comment/report?oid=$oid&pageType=${item.type}&rpid=$rpid&platform=android&build=8430300&${ThemeUtils.themeUrl(colorScheme.isDark)}',
                   (reasonType, reasonDesc, banUid) async {
-                    if (!identical(account, Accounts.main)) {
-                      return const Error('账号已切换，请重新打开举报页面');
+                    if (!isCurrent()) {
+                      return const Error('评论已变化，请重新打开举报页面');
                     }
                     final res = await ReplyHttp.report(
                       account: account,
@@ -1197,10 +1175,16 @@ class ReplyItemGrpc extends StatelessWidget {
                       reasonDesc: reasonDesc,
                       banUid: banUid,
                     );
-                    if (res.isSuccess &&
-                        context.mounted &&
-                        identical(account, Accounts.main)) {
-                      onDelete();
+                    if (res.isSuccess && isCurrent()) {
+                      try {
+                        onDelete();
+                      } catch (error, stackTrace) {
+                        logger.w(
+                          '评论举报成功，页面更新失败',
+                          error: error.runtimeType,
+                          stackTrace: stackTrace,
+                        );
+                      }
                     }
                     return res;
                   },
@@ -1216,6 +1200,7 @@ class ReplyItemGrpc extends StatelessWidget {
             ListTile(
               onTap: () async {
                 Get.back();
+                if (!isCurrent()) return;
                 final confirmed = await showConfirmDialog(
                   context: context,
                   title: const Text('拉黑用户'),
@@ -1223,17 +1208,14 @@ class ReplyItemGrpc extends StatelessWidget {
                     '确定拉黑 ${item.member.name}？\n可在黑名单管理中解除。',
                   ),
                 );
-                if (!confirmed) return;
-                if (!identical(account, Accounts.main)) {
-                  SmartDialog.showToast('账号已切换');
-                  return;
-                }
+                if (!confirmed || !isCurrent()) return;
                 final res = await VideoHttp.relationMod(
                   account: account,
                   mid: item.member.mid.toInt(),
                   act: 5,
                   reSrc: 11,
                 );
+                if (!isCurrent()) return;
                 if (res.isSuccess) {
                   SmartDialog.showToast('拉黑成功');
                 } else {

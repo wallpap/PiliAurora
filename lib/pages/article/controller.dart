@@ -93,7 +93,6 @@ class ArticleController extends CommonDynController {
     final params = Get.parameters;
     id = params['id']!;
     type = params['type']!;
-    Accounts.mainChanges.addListener(_onAccountChanged);
 
     // to opus
     if (type == 'read') {
@@ -117,7 +116,10 @@ class ArticleController extends CommonDynController {
     }
   }
 
-  void _onAccountChanged() {
+  @override
+  void onAccountChanged() {
+    savedReplies.clear();
+    count.value = -1;
     _contentVersion++;
     _infoVersion++;
     _contentLoading = false;
@@ -400,7 +402,6 @@ class ArticleController extends CommonDynController {
 
   @override
   void onClose() {
-    Accounts.mainChanges.removeListener(_onAccountChanged);
     _contentVersion++;
     _infoVersion++;
     super.onClose();

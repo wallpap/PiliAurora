@@ -226,11 +226,13 @@ abstract class CommonRichTextPubPageState<T extends CommonRichTextPubPage>
         ),
       ],
     );
-    if (croppedFile != null) {
+    if (mounted && croppedFile != null && imageList.contains(image)) {
       if (image is FilePicModel) {
         File(image.path).tryDel();
       }
-      imageList[index] = FilePicModel(path: croppedFile.path);
+      imageList[imageList.indexOf(image)] = FilePicModel(
+        path: croppedFile.path,
+      );
     }
   }
 
@@ -245,6 +247,7 @@ abstract class CommonRichTextPubPageState<T extends CommonRichTextPubPage>
             imageQuality: 100,
             requestFullMetadata: false,
           );
+          if (!mounted) return;
           if (pickedFiles.isNotEmpty) {
             for (int i = 0; i < pickedFiles.length; i++) {
               if (imageList.length == limit) {
@@ -345,7 +348,7 @@ abstract class CommonRichTextPubPageState<T extends CommonRichTextPubPage>
       offset: _mentionOffset,
       onCachePos: (offset) => _mentionOffset = offset,
     );
-    if (res != null) {
+    if (mounted && res != null) {
       if (res is MentionItem) {
         _onInsertUser(res, fromClick);
       } else if (res is Set<MentionItem>) {
