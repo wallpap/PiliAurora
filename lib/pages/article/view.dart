@@ -24,6 +24,7 @@ import 'package:pili_aurora/pages/article/widgets/opus_content.dart';
 import 'package:pili_aurora/pages/article/widgets/sliver_to_box_adapter.dart';
 import 'package:pili_aurora/pages/common/dyn/common_dyn_page.dart';
 import 'package:pili_aurora/pages/dynamics_repost/view.dart';
+import 'package:pili_aurora/utils/accounts.dart';
 import 'package:pili_aurora/utils/date_utils.dart';
 import 'package:pili_aurora/utils/extension/get_ext.dart';
 import 'package:pili_aurora/utils/extension/num_ext.dart';
@@ -266,8 +267,11 @@ class _ArticlePageState extends CommonDynPageState<ArticlePage> {
 
   PreferredSizeWidget _buildAppBar() => AppBar(
     title: Obx(() {
-      if (controller.isLoaded.value && controller.showTitle.value) {
-        return Text(controller.summary.title!);
+      final title = controller.summary.title;
+      if (controller.isLoaded.value &&
+          controller.showTitle.value &&
+          title != null) {
+        return Text(title);
       }
       return const SizedBox.shrink();
     }),
@@ -310,29 +314,37 @@ class _ArticlePageState extends CommonDynPageState<ArticlePage> {
             AppPopupMenuItem(
               onTap: () async {
                 final summary = controller.summary;
-                try {
-                  if (summary.cover == null) {
-                    if (!await controller.getArticleInfo(true)) {
-                      return;
-                    }
-                  }
-                  if (mounted) {
-                    PageUtils.pmShare(
-                      this.context,
-                      content: {
-                        "id": controller.commentId,
-                        "title": "- 哔哩哔哩专栏",
-                        "headline": summary.title!, // throw
-                        "source": 6,
-                        "thumb": summary.cover!,
-                        "author": summary.author!.name,
-                        "author_id": summary.author!.mid.toString(),
-                      },
-                    );
-                  }
-                } catch (e) {
-                  SmartDialog.showToast(e.toString());
+                final account = Accounts.main;
+                final articleId = controller.commentId;
+                if (summary.cover == null &&
+                    !await controller.getArticleInfo(true)) {
+                  return;
                 }
+                if (!mounted ||
+                    controller.isClosed ||
+                    !identical(account, Accounts.main) ||
+                    articleId != controller.commentId) {
+                  return;
+                }
+                final title = summary.title;
+                final cover = summary.cover;
+                final author = summary.author;
+                if (title == null || cover == null || author == null) {
+                  SmartDialog.showToast('文章分享信息不完整，请刷新后重试');
+                  return;
+                }
+                await PageUtils.pmShare(
+                  this.context,
+                  content: {
+                    "id": articleId,
+                    "title": "- 哔哩哔哩专栏",
+                    "headline": title,
+                    "source": 6,
+                    "thumb": cover,
+                    "author": author.name,
+                    "author_id": author.mid.toString(),
+                  },
+                );
               },
               child: const Row(
                 spacing: 10,
@@ -440,6 +452,9 @@ class _ArticlePageState extends CommonDynPageState<ArticlePage> {
                               return;
                             }
                             final summary = controller.summary;
+                            final account = Accounts.main;
+                            final articleId = controller.id;
+                            final articleType = controller.type;
                             showModalBottomSheet(
                               context: context,
                               isScrollControlled: true,
@@ -451,12 +466,19 @@ class _ArticlePageState extends CommonDynPageState<ArticlePage> {
                                 title: summary.title,
                                 uname: summary.author?.name,
                                 onSuccess: () {
-                                  if (forward != null) {
-                                    int count = forward.count ?? 0;
-                                    forward.count = count + 1;
-                                    if (btnContext.mounted) {
-                                      (btnContext as Element?)
-                                          ?.markNeedsBuild();
+                                  if (forward != null &&
+                                      btnContext.mounted &&
+                                      !controller.isClosed &&
+                                      identical(account, Accounts.main) &&
+                                      articleId == controller.id &&
+                                      articleType == controller.type &&
+                                      identical(
+                                        stats,
+                                        controller.stats.value,
+                                      )) {
+                                    if (forward.count case final count?) {
+                                      forward.count = count + 1;
+                                      controller.stats.refresh();
                                     }
                                   }
                                 },

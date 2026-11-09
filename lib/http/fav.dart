@@ -252,12 +252,14 @@ abstract final class FavHttp {
   }
 
   static Future<LoadingState<FavArticleData>> favArticle({
+    Account? account,
     required int page,
   }) async {
     return await Request().requestApi(
       Api.favArticle,
       kind: ApiCallKind.query,
       decode: (body) => FavArticleData.fromJson(body['data']),
+      options: Options(extra: {'account': account ?? Accounts.main}),
       queryParameters: {
         'page_size': 20,
         'page': page,
@@ -266,34 +268,40 @@ abstract final class FavHttp {
   }
 
   static Future<LoadingState<void>> addFavArticle({
+    Account? account,
     required Object id,
   }) async {
+    account ??= Accounts.main;
     return await Request().requestApi<void>(
       Api.addFavArticle,
       kind: ApiCallKind.mutation,
       decode: (_) {},
       data: {
         'id': id,
-        'csrf': Accounts.main.csrf,
+        'csrf': account.csrf,
       },
       options: Options(
+        extra: {'account': account},
         contentType: Headers.formUrlEncodedContentType,
       ),
     );
   }
 
   static Future<LoadingState<void>> delFavArticle({
+    Account? account,
     required Object id,
   }) async {
+    account ??= Accounts.main;
     return await Request().requestApi<void>(
       Api.delFavArticle,
       kind: ApiCallKind.mutation,
       decode: (_) {},
       data: {
         'id': id,
-        'csrf': Accounts.main.csrf,
+        'csrf': account.csrf,
       },
       options: Options(
+        extra: {'account': account},
         contentType: Headers.formUrlEncodedContentType,
       ),
     );
@@ -572,15 +580,17 @@ abstract final class FavHttp {
   }
 
   static Future<LoadingState<void>> communityAction({
+    Account? account,
     required Object opusId,
     required Object action,
   }) async {
+    account ??= Accounts.main;
     return await Request().requestApi<void>(
       Api.communityAction,
       kind: ApiCallKind.mutation,
       decode: (_) {},
       queryParameters: {
-        'csrf': Accounts.main.csrf,
+        'csrf': account.csrf,
       },
       data: {
         "entity": {
@@ -589,6 +599,7 @@ abstract final class FavHttp {
         },
         "action": action, // 3 fav, 4 unfav
       },
+      options: Options(extra: {'account': account}),
     );
   }
 

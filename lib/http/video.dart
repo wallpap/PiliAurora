@@ -689,13 +689,18 @@ abstract final class VideoHttp {
   }
 
   static Future<void> historyReport({
+    Account? account,
     required Object aid,
     required Object type,
   }) {
+    account ??= Accounts.heartbeat;
     return Request().post(
       Api.historyReport,
-      data: {'aid': aid, 'type': type, 'csrf': Accounts.heartbeat.csrf},
-      options: Options(contentType: Headers.formUrlEncodedContentType),
+      data: {'aid': aid, 'type': type, 'csrf': account.csrf},
+      options: Options(
+        extra: {'account': account},
+        contentType: Headers.formUrlEncodedContentType,
+      ),
     );
   }
 

@@ -28,6 +28,8 @@ $ciTests = @(
     "test/http/dynamic_media_response_test.dart",
     "test/http/member_dynamics_response_test.dart",
     "test/pages/dynamics/",
+    "test/pages/article/controller_results_test.dart",
+    "test/pages/article/content_retry_test.dart",
     "test/http/live_response_test.dart",
     "test/pages/live_room/send_results_test.dart",
     "test/pages/live_emote/controller_test.dart",
