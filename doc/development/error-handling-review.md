@@ -1,10 +1,12 @@
 # 异常处理与返回类型检查
 
-## 当前进度（2026-11-09）
+## 当前进度（2026-11-10）
 
-检查已按用户要求暂停，全仓检查尚未完成。最后收尾范围为后台账号同步、播放器音频激活与小窗异常退出后的声音归属。
+本轮只修复全量测试发现的失败，全仓异常处理检查尚未完成。Windows libmpv 已独立回退到 20261104（`10968442e`），没有保留应用层分片回退适配。
 
-最后两批共 21 个不同用例通过：后台同步 11 项，播放器焦点与小窗声音归属 10 项。按改动运行必要回归，没有重跑完整 CI；历史验证范围与未验证的设备行为见下文。
+失败均定位到测试环境或夹具：9 个语义回收用例需先准备 Windows Flutter 补丁；`e76272431` 新增上传账号参数后，旧生命周期测试未同步签名和缓存初始化；`4160a163d` 接入统一响应契约后，损坏弹幕响应会产生延迟诊断通知，测试需推进模拟时钟；`09b170f10` 的声音交接用例只等待连接，未等待新窗口就绪。修正没有更改生产逻辑，保留取消上传和迟到结果隔离断言，并加强声音消息序列断言。
+
+补齐环境及修复后，相关 35 个不同用例通过，3 个修改测试文件的定向分析无问题。按关联任务要求只做必要复验，未再次运行全量测试；完整首轮结果和验证边界见下文。上一阶段后台同步及播放器声音归属共 21 个用例的验证记录保留。
 
 此前风控、音乐／赛事与空降助手批次后的完整 CI：1218 项通过（`build/error-contract-ci-tests.log`）。`fvm flutter analyze --no-pub lib test tool` 只有上游控件副本中的 24 条既有 info，没有 error 或 warning。修改文件的格式检查无改动，`git diff --check` 通过。
 
@@ -82,6 +84,13 @@
 ## 验证记录
 
 新增关键回归已列入 `tool/run-ci-tests.ps1`。测试使用模拟 HTTP、文件选择器和平台输入；文件保存回归还用临时目录核对实际字节。Android 图库、真实账号登录、服务器写入、原生播放器、GPU 和窗口行为仍需设备验收，各次运行结果随提交记录。
+
+2026-11-10 全量检查及失败复验：
+
+- `fvm flutter test --no-pub --reporter json test third_party/flutter_inappwebview_windows/test/webview_environment_channel_test.dart`：首轮 1995 项通过、12 个失败项（含 1 个文件编译失败）；全量分析为同一签名错误和上游控件副本的 24 条既有 info。原始记录位于本地 `build/full-test-20261110/`。
+- 执行 `pwsh -NoProfile -File lib/scripts/patch.ps1 windows -SkipPubGet` 后，`pipeline_owner_semantics_test.dart` 与 `inactive_sliver_semantics_test.dart` 共 9 项通过，确认是 Windows 补丁准备问题。
+- 上传生命周期和弹幕池共 6 项通过（`upload-danmaku-retry.log`）；桌面播放整文件 20 项通过（`desktop-sound-file.log`）。声音交接在临时延迟 30ms 握手时先复现原失败，同条件修正后通过，临时延迟已移除；修改文件定向分析见 `fixes-analyze.log`。
+- Python 工具 68 项、Android 主机探针 8 项、Windows 采样／ANGLE 回滚／renderer 释放探针 3 项通过。固定 libmpv 的归档及许可校验通过，分片回退 3 项通过；原生媒体烟测通过，H.264／HEVC／AV1 各 30 帧 D3D11 硬解及像素对照通过。未重新构建安装包，未验证 Flutter 最终纹理呈现、扬声器输出、Android 真机及其他 GPU／驱动。
 
 2026-11-09 在 Windows 主机执行的阶段验证：
 

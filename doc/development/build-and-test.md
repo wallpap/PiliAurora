@@ -77,6 +77,8 @@ fvm flutter test --no-pub test/utils/app_release_test.dart
 
 提交时记录实际执行的命令和结果。测试位置、共享夹具和异步用例约定见[测试目录](../../test/README.md#目录与夹具)。
 
+Windows 主机首次运行测试或从 Android 环境切回后，先执行 `pwsh -NoProfile -File lib/scripts/patch.ps1 windows -SkipPubGet`（依赖须已准备）。全量测试包含依赖 Windows Flutter 补丁的隐藏页面语义回收回归；直接使用 Android 补丁状态会导致这些用例失败。
+
 ```powershell
 fvm flutter analyze --no-pub lib test tool
 fvm flutter test
