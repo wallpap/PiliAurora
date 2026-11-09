@@ -2294,52 +2294,119 @@ class PlPlayerController
 
   // 全屏
   bool _fsProcessing = false;
+  bool? _fsTarget;
+  Completer<void>? _fsDrain;
+  ({
+    bool status,
+    bool inAppFullScreen,
+    DeviceOrientation? orientation,
+    bool isManualFS,
+  })?
+  _fsPending;
+
   Future<void> triggerFullScreen({
     bool status = true,
     bool inAppFullScreen = false,
     DeviceOrientation? orientation,
     bool isManualFS = true,
   }) async {
+    final requested = (
+      status: status,
+      inAppFullScreen: inAppFullScreen,
+      orientation: orientation,
+      isManualFS: isManualFS,
+    );
+    if (_fsProcessing) {
+      // 同一目标不重复提交；反向请求保留到当前原生切换完成之后。
+      _fsPending = status == _fsTarget ? null : requested;
+      if (status != _fsTarget) await _fsDrain!.future;
+      return;
+    }
     if (isFullScreen.value == status) return;
-
-    if (_fsProcessing) return;
     _fsProcessing = true;
-    this.isManualFS = isManualFS;
+    final drain = _fsDrain = Completer<void>();
+    var next = requested;
     try {
-      if (Platform.isWindows && status && (isDesktopPip || !inAppFullScreen)) {
-        // 先提交隐藏详情面板的全屏布局，再放大原生窗口，避免旧布局被拉伸后又跳一次。
-        _setFullScreen(true);
-        await SchedulerBinding.instance.endOfFrame;
-      }
-      if (isDesktopPip) {
-        await DesktopWindowBackground.setFullscreen(status);
-        await windowManager.setFullScreen(status);
-      } else if (status) {
-        if (PlatformUtils.isMobile) {
-          hideSystemBar();
-          await changeOrientation(
-            isVertical: isVertical,
-            orientation: orientation,
-          );
-        } else {
-          await enterDesktopFullScreen(inAppFullScreen: inAppFullScreen);
-        }
-      } else {
-        if (PlatformUtils.isMobile) {
-          if (!removeSafeArea) {
-            showSystemBar();
+      while (true) {
+        _fsTarget = next.status;
+        final previous = isFullScreen.value;
+        if (previous != next.status) {
+          this.isManualFS = next.isManualFS;
+          var applied = false;
+          final previousSystemBar = showSystemBar_;
+          try {
+            if (Platform.isWindows &&
+                next.status &&
+                (isDesktopPip || !next.inAppFullScreen)) {
+              // 先提交全屏布局，再放大原生窗口，避免旧布局被拉伸。
+              _setFullScreen(true);
+              await SchedulerBinding.instance.endOfFrame;
+            }
+            if (isDesktopPip) {
+              await DesktopWindowBackground.setFullscreen(next.status);
+              try {
+                await windowManager.setFullScreen(next.status);
+              } catch (_) {
+                await DesktopWindowBackground.setFullscreen(previous);
+                rethrow;
+              }
+              applied = true;
+            } else if (next.status) {
+              if (PlatformUtils.isMobile) {
+                await hideSystemBar();
+                await changeOrientation(
+                  isVertical: isVertical,
+                  orientation: next.orientation,
+                );
+                applied = true;
+              } else {
+                applied = await enterDesktopFullScreen(
+                  inAppFullScreen: next.inAppFullScreen,
+                );
+              }
+            } else {
+              if (PlatformUtils.isMobile) {
+                if (!removeSafeArea) await showSystemBar();
+                if (next.orientation != null || mode != .none) {
+                  await resetScreenRotation();
+                }
+                applied = true;
+              } else {
+                applied = await exitDesktopFullScreen();
+              }
+            }
+          } catch (error, stackTrace) {
+            if (PlatformUtils.isMobile && showSystemBar_ != previousSystemBar) {
+              try {
+                if (previousSystemBar) {
+                  await showSystemBar();
+                } else {
+                  await hideSystemBar();
+                }
+              } catch (restoreError, restoreStack) {
+                logger.w(
+                  '恢复系统栏失败',
+                  error: restoreError,
+                  stackTrace: restoreStack,
+                );
+              }
+            }
+            logger.w('切换全屏失败', error: error, stackTrace: stackTrace);
+          } finally {
+            final confirmed = applied ? next.status : previous;
+            if (isFullScreen.value != confirmed) _setFullScreen(confirmed);
           }
-          if (orientation == null && mode == .none) {
-            return;
-          }
-          await resetScreenRotation();
-        } else {
-          await exitDesktopFullScreen();
         }
+        final pending = _fsPending;
+        _fsPending = null;
+        if (pending == null) break;
+        next = pending;
       }
     } finally {
-      if (isFullScreen.value != status) _setFullScreen(status);
+      _fsTarget = null;
       _fsProcessing = false;
+      _fsDrain = null;
+      drain.complete();
     }
   }
 

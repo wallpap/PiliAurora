@@ -10,7 +10,7 @@ import 'package:flutter/services.dart'
 bool _isDesktopFullScreen = false;
 
 @pragma('vm:notify-debugger-on-exception')
-Future<void> enterDesktopFullScreen({bool inAppFullScreen = false}) async {
+Future<bool> enterDesktopFullScreen({bool inAppFullScreen = false}) async {
   if (!inAppFullScreen && !_isDesktopFullScreen) {
     _isDesktopFullScreen = true;
     try {
@@ -26,12 +26,14 @@ Future<void> enterDesktopFullScreen({bool inAppFullScreen = false}) async {
         error: error,
         stackTrace: stackTrace,
       );
+      return false;
     }
   }
+  return true;
 }
 
 @pragma('vm:notify-debugger-on-exception')
-Future<void> exitDesktopFullScreen() async {
+Future<bool> exitDesktopFullScreen() async {
   if (_isDesktopFullScreen) {
     try {
       await DesktopWindowBackground.setFullscreen(false);
@@ -46,17 +48,28 @@ Future<void> exitDesktopFullScreen() async {
         error: error,
         stackTrace: stackTrace,
       );
+      return false;
     }
   }
+  return true;
 }
 
 List<DeviceOrientation>? _lastOrientation;
+int _orientationRevision = 0;
 Future<void>? _setPreferredOrientations(List<DeviceOrientation> orientations) {
   if (_lastOrientation == orientations) {
     return null;
   }
+  final previous = _lastOrientation;
+  final revision = ++_orientationRevision;
   _lastOrientation = orientations;
-  return SystemChrome.setPreferredOrientations(orientations);
+  return SystemChrome.setPreferredOrientations(orientations).catchError((
+    Object error,
+    StackTrace stack,
+  ) {
+    if (_orientationRevision == revision) _lastOrientation = previous;
+    Error.throwWithStackTrace(error, stack);
+  });
 }
 
 Future<void>? portraitUpMode() {
@@ -82,13 +95,19 @@ Future<void>? fullMode() {
 }
 
 bool _showSystemBar = true;
+int _systemBarRevision = 0;
 bool get showSystemBar_ => _showSystemBar;
 Future<void>? hideSystemBar() {
   if (!_showSystemBar) {
     return null;
   }
+  final revision = ++_systemBarRevision;
   _showSystemBar = false;
-  return SystemChrome.setEnabledSystemUIMode(.immersiveSticky);
+  return SystemChrome.setEnabledSystemUIMode(.immersiveSticky)
+      .catchError((Object error, StackTrace stack) {
+        if (_systemBarRevision == revision) _showSystemBar = true;
+        Error.throwWithStackTrace(error, stack);
+      });
 }
 
 //退出全屏显示
@@ -96,9 +115,13 @@ Future<void>? showSystemBar() {
   if (_showSystemBar) {
     return null;
   }
+  final revision = ++_systemBarRevision;
   _showSystemBar = true;
   return SystemChrome.setEnabledSystemUIMode(
     Platform.isAndroid && DeviceUtils.sdkInt < 29 ? .manual : .edgeToEdge,
     overlays: SystemUiOverlay.values,
-  );
+  ).catchError((Object error, StackTrace stack) {
+    if (_systemBarRevision == revision) _showSystemBar = false;
+    Error.throwWithStackTrace(error, stack);
+  });
 }
