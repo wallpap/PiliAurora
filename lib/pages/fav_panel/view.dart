@@ -43,7 +43,10 @@ class _FavPanelState extends State<FavPanel> {
       case Loading():
         return m3eLoading;
       case Success():
-        final list = widget.ctr.favFolderData.value.list!;
+        final list = widget.ctr.favFolderData.value.list;
+        if (list == null || list.isEmpty) {
+          return const Center(child: Text('暂无收藏夹，请先创建'));
+        }
         return ListView.builder(
           controller: widget.scrollController,
           itemCount: list.length,

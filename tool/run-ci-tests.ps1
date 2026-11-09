@@ -18,6 +18,8 @@ $ciTests = @(
     "test/http/loading_state_test.dart",
     "test/http/api_response_test.dart",
     "test/http/relationship_response_test.dart",
+    "test/http/fav_response_test.dart",
+    "test/pages/fav/operation_results_test.dart",
     "test/http/retry_interceptor_test.dart",
     "test/grpc/request_test.dart",
     "test/http/login_test.dart",

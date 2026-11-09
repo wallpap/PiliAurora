@@ -228,6 +228,8 @@ class Request {
       method: options?.method ?? (kind == ApiCallKind.query ? 'GET' : 'POST'),
       extra: {
         ...?options?.extra,
+        'account':
+            options?.extra?['account'] ?? AccountManager.resolveAccount(url),
         'noRetry':
             kind == ApiCallKind.mutation || options?.extra?['noRetry'] == true,
       },

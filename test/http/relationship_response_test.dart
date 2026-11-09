@@ -27,6 +27,7 @@ void main() {
   setUpAll(() {
     GStorage.setting = MemoryBox();
     GStorage.video = MemoryBox();
+    GStorage.localCache = MemoryBox();
     Request();
     Request.dio.interceptors
       ..clear()

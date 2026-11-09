@@ -8,6 +8,9 @@ import 'package:pili_aurora/common/widgets/view_insets_safe_area.dart';
 import 'package:pili_aurora/http/fav.dart';
 import 'package:pili_aurora/http/loading_state.dart';
 import 'package:pili_aurora/http/msg.dart';
+import 'package:pili_aurora/services/logger.dart';
+import 'package:pili_aurora/utils/accounts.dart';
+import 'package:pili_aurora/utils/accounts/account.dart';
 import 'package:pili_aurora/utils/bili_utils.dart';
 import 'package:pili_aurora/utils/extension/file_ext.dart';
 import 'package:pili_aurora/utils/extension/theme_ext.dart';
@@ -28,6 +31,10 @@ class CreateFavPage extends StatefulWidget {
 }
 
 class _CreateFavPageState extends State<CreateFavPage> {
+  final Account _account = Accounts.main;
+  bool _saving = false;
+  bool _uploading = false;
+  bool _loadingFolder = false;
   dynamic _mediaId;
   late final TextEditingController _titleController;
   late final TextEditingController _introController;
@@ -49,8 +56,17 @@ class _CreateFavPageState extends State<CreateFavPage> {
   }
 
   void _getFolderInfo() {
-    _errMsg = null;
-    FavHttp.favFolderInfo(mediaId: _mediaId).then((res) {
+    setState(() {
+      _errMsg = null;
+      _loadingFolder = true;
+    });
+    FavHttp.favFolderInfo(account: _account, mediaId: _mediaId).then((res) {
+      if (!mounted) return;
+      _loadingFolder = false;
+      if (!identical(_account, Accounts.main)) {
+        setState(() => _errMsg = '账号已切换，请重新打开页面');
+        return;
+      }
       if (res case Success(:final response)) {
         _titleController.text = response.title;
         _introController.text = response.intro ?? '';
@@ -62,6 +78,44 @@ class _CreateFavPageState extends State<CreateFavPage> {
       }
       setState(() {});
     });
+  }
+
+  Future<void> _saveFolder() async {
+    if (_saving || _uploading || _loadingFolder) return;
+    if (!identical(_account, Accounts.main)) {
+      SmartDialog.showToast('账号已切换，请重新打开页面');
+      return;
+    }
+    if (_titleController.text.isEmpty) {
+      SmartDialog.showToast('名称不能为空');
+      return;
+    }
+    setState(() => _saving = true);
+    try {
+      final res = await FavHttp.addOrEditFolder(
+        account: _account,
+        isAdd: _mediaId == null,
+        mediaId: _mediaId,
+        title: _titleController.text,
+        privacy: _isPublic ? 0 : 1,
+        cover: _cover ?? '',
+        intro: _introController.text,
+      );
+      if (!mounted || !identical(_account, Accounts.main)) return;
+      if (res case Success(:final response)) {
+        SmartDialog.showToast('${_mediaId != null ? '编辑' : '创建'}成功');
+        Get.back(result: response);
+      } else {
+        res.toast();
+      }
+    } catch (error, stackTrace) {
+      logger.w('保存收藏夹未完成', error: error.runtimeType, stackTrace: stackTrace);
+      if (mounted && identical(_account, Accounts.main)) {
+        SmartDialog.showToast('操作结果待确认，请核对收藏夹后再操作');
+      }
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
   }
 
   @override
@@ -79,45 +133,25 @@ class _CreateFavPageState extends State<CreateFavPage> {
         title: Text(_mediaId != null ? '编辑' : '创建'),
         actions: [
           TextButton(
-            onPressed: () {
-              if (_titleController.text.isEmpty) {
-                SmartDialog.showToast('名称不能为空');
-                return;
-              }
-              FavHttp.addOrEditFolder(
-                isAdd: _mediaId == null,
-                mediaId: _mediaId,
-                title: _titleController.text,
-                privacy: _isPublic ? 0 : 1,
-                cover: _cover ?? '',
-                intro: _introController.text,
-              ).then((res) {
-                if (res case Success(:final response)) {
-                  SmartDialog.showToast('${_mediaId != null ? '编辑' : '创建'}成功');
-                  if (mounted) {
-                    Get.back(result: response);
-                  }
-                } else {
-                  res.toast();
-                }
-              });
-            },
+            onPressed: _saving || _uploading || _loadingFolder
+                ? null
+                : _saveFolder,
             child: const Text('完成'),
           ),
           const SizedBox(width: 16),
         ],
       ),
-      body: _mediaId != null
-          ? _titleController.text.isNotEmpty
-                ? _buildBody(theme)
-                : _errMsg?.isNotEmpty == true
-                ? scrollErrorWidget(errMsg: _errMsg, onReload: _getFolderInfo)
-                : m3eLoading
+      body: _loadingFolder
+          ? m3eLoading
+          : _errMsg != null
+          ? scrollErrorWidget(errMsg: _errMsg, onReload: _getFolderInfo)
           : _buildBody(theme),
     );
   }
 
   Future<void> _pickImg(BuildContext context, ThemeData theme) async {
+    if (_saving || _uploading || !identical(_account, Accounts.main)) return;
+    String? temporaryPath;
     try {
       final pickedFile = await _imagePicker.pickImage(
         source: ImageSource.gallery,
@@ -127,6 +161,7 @@ class _CreateFavPageState extends State<CreateFavPage> {
       if (pickedFile != null && mounted) {
         String imgPath = pickedFile.path;
         if (PlatformUtils.isMobile) {
+          temporaryPath = imgPath;
           final croppedFile = await ImageCropper.platform.cropImage(
             sourcePath: imgPath,
             uiSettings: [
@@ -142,31 +177,37 @@ class _CreateFavPageState extends State<CreateFavPage> {
               ),
             ],
           );
-          if (croppedFile != null) {
-            File(imgPath).tryDel();
-            imgPath = croppedFile.path;
-          }
+          if (croppedFile == null) return;
+          await File(imgPath).tryDel();
+          temporaryPath = imgPath = croppedFile.path;
         }
-        MsgHttp.uploadImage(
+        if (!mounted || !identical(_account, Accounts.main)) return;
+        setState(() => _uploading = true);
+        final res = await MsgHttp.uploadImage(
+          account: _account,
           path: imgPath,
           bucket: 'medialist',
           dir: 'cover',
-        ).then((res) {
-          if (context.mounted) {
-            if (res case Success(:final response)) {
-              _cover = response['location'];
-              (context as Element).markNeedsBuild();
-            } else {
-              res.toast();
-            }
+        );
+        if (!mounted || !identical(_account, Accounts.main)) return;
+        if (res case Success(:final response)) {
+          final location = response['location'];
+          if (location is! String || location.isEmpty) {
+            throw const FormatException('上传响应缺少封面地址');
           }
-          if (PlatformUtils.isMobile) {
-            File(imgPath).tryDel();
-          }
-        });
+          setState(() => _cover = location);
+        } else {
+          res.toast();
+        }
       }
-    } catch (e) {
-      SmartDialog.showToast(e.toString());
+    } catch (error, stackTrace) {
+      logger.w('收藏夹封面更新失败', error: error.runtimeType, stackTrace: stackTrace);
+      if (mounted && identical(_account, Accounts.main)) {
+        SmartDialog.showToast('封面更新失败，请重试');
+      }
+    } finally {
+      if (temporaryPath != null) await File(temporaryPath).tryDel();
+      if (mounted) setState(() => _uploading = false);
     }
   }
 

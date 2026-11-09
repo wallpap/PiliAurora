@@ -1,5 +1,6 @@
 import 'package:pili_aurora/common/constants.dart';
 import 'package:pili_aurora/http/api.dart';
+import 'package:pili_aurora/http/api_response.dart';
 import 'package:pili_aurora/http/init.dart';
 import 'package:pili_aurora/http/loading_state.dart';
 import 'package:pili_aurora/models/common/fav_order_type.dart';
@@ -14,55 +15,56 @@ import 'package:pili_aurora/models/remote/space/space_cheese/data.dart';
 import 'package:pili_aurora/models/remote/space/space_fav/data.dart';
 import 'package:pili_aurora/models/remote/sub/sub_detail/data.dart';
 import 'package:pili_aurora/utils/accounts.dart';
+import 'package:pili_aurora/utils/accounts/account.dart';
 import 'package:pili_aurora/utils/app_sign.dart';
 import 'package:pili_aurora/utils/wbi_sign.dart';
 import 'package:dio/dio.dart';
 
 abstract final class FavHttp {
   static Future<LoadingState<bool>> subscriptionVideoAvailable(int aid) async {
-    final res = await Request().get(
-      Api.videoIntro,
-      queryParameters: await WbiSign.makSign({'aid': aid}),
-    );
-    // 与播放器的“视频不存在或已被删除”判定一致，权限和风控错误保留。
-    return switch (res.data['code']) {
-      0 when res.data['data'] is Map => const Success(true),
-      -404 => const Success(false),
-      final int code => Error(res.data['message'], code: code),
-      _ => const Error('视频状态响应不完整'),
-    };
+    try {
+      final result = await Request().requestApi<bool>(
+        Api.videoIntro,
+        kind: ApiCallKind.query,
+        decode: (body) {
+          if (body['data'] is! Map) throw const FormatException('视频状态响应不完整');
+          return true;
+        },
+        queryParameters: await WbiSign.makSign({'aid': aid}),
+      );
+      // 只有明确不存在才能清理订阅，权限、风控和网络失败继续保留。
+      return result is Error && result.code == -404
+          ? const Success(false)
+          : result;
+    } catch (error, stackTrace) {
+      return Error.fromException(error, stackTrace);
+    }
   }
 
   static Future<LoadingState<void>> favFavFolder(Object mediaId) async {
-    final res = await Request().post(
+    return await Request().requestApi<void>(
       Api.favFavFolder,
+      kind: ApiCallKind.mutation,
+      decode: (_) {},
       data: {
         'media_id': mediaId,
         'csrf': Accounts.main.csrf,
       },
       options: Options(contentType: Headers.formUrlEncodedContentType),
     );
-    if (res.data['code'] == 0) {
-      return const Success(null);
-    } else {
-      return Error(res.data['message']);
-    }
   }
 
   static Future<LoadingState<void>> unfavFavFolder(Object mediaId) async {
-    final res = await Request().post(
+    return await Request().requestApi<void>(
       Api.unfavFavFolder,
+      kind: ApiCallKind.mutation,
+      decode: (_) {},
       data: {
         'media_id': mediaId,
         'csrf': Accounts.main.csrf,
       },
       options: Options(contentType: Headers.formUrlEncodedContentType),
     );
-    if (res.data['code'] == 0) {
-      return const Success(null);
-    } else {
-      return Error(res.data['message']);
-    }
   }
 
   static Future<LoadingState<FavDetailData>> userFavFolderDetail({
@@ -73,8 +75,10 @@ abstract final class FavHttp {
     FavOrderType order = FavOrderType.mtime,
     int type = 0,
   }) async {
-    final res = await Request().get(
+    return await Request().requestApi(
       Api.favResourceList,
+      kind: ApiCallKind.query,
+      decode: (body) => FavDetailData.fromJson(body['data']),
       queryParameters: {
         'media_id': mediaId,
         'pn': pn,
@@ -86,11 +90,6 @@ abstract final class FavHttp {
         'platform': 'web',
       },
     );
-    if (res.data['code'] == 0) {
-      return Success(FavDetailData.fromJson(res.data['data']));
-    } else {
-      return Error(res.data['message']);
-    }
   }
 
   // 取消订阅
@@ -98,29 +97,22 @@ abstract final class FavHttp {
     required int id,
     required int type,
   }) async {
-    final res = type == 11
-        ? await Request().post(
-            Api.unfavFolder,
-            data: {
+    return await Request().requestApi<void>(
+      type == 11 ? Api.unfavFolder : Api.unfavSeason,
+      kind: ApiCallKind.mutation,
+      decode: (_) {},
+      data: type == 11
+          ? {
               'media_id': id,
               'csrf': Accounts.main.csrf,
-            },
-            options: Options(contentType: Headers.formUrlEncodedContentType),
-          )
-        : await Request().post(
-            Api.unfavSeason,
-            data: {
+            }
+          : {
               'platform': 'web',
               'season_id': id,
               'csrf': Accounts.main.csrf,
             },
-            options: Options(contentType: Headers.formUrlEncodedContentType),
-          );
-    if (res.data['code'] == 0) {
-      return const Success(null);
-    } else {
-      return Error(res.data['message']);
-    }
+      options: Options(contentType: Headers.formUrlEncodedContentType),
+    );
   }
 
   static Future<LoadingState<SubDetailData>> favSeasonList({
@@ -128,27 +120,26 @@ abstract final class FavHttp {
     required int pn,
     required int ps,
   }) async {
-    final res = await Request().get(
+    return await Request().requestApi(
       Api.favSeasonList,
+      kind: ApiCallKind.query,
+      decode: (body) => SubDetailData.fromJson(body['data']),
       queryParameters: {
         'season_id': id,
         'ps': ps,
         'pn': pn,
       },
     );
-    if (res.data['code'] == 0) {
-      return Success(SubDetailData.fromJson(res.data['data']));
-    } else {
-      return Error(res.data['message']);
-    }
   }
 
   static Future<LoadingState<SpaceCheeseData>> favPugv({
     required int mid,
     required int page,
   }) async {
-    final res = await Request().get(
+    return await Request().requestApi(
       Api.favPugv,
+      kind: ApiCallKind.query,
+      decode: (body) => SpaceCheeseData.fromJson(body['data']),
       queryParameters: {
         'mid': mid,
         'ps': 20,
@@ -156,101 +147,83 @@ abstract final class FavHttp {
         'web_location': 333.1387,
       },
     );
-    if (res.data['code'] == 0) {
-      return Success(SpaceCheeseData.fromJson(res.data['data']));
-    } else {
-      return Error(res.data['message']);
-    }
   }
 
   static Future<LoadingState<void>> addFavPugv(Object seasonId) async {
-    final res = await Request().post(
+    return await Request().requestApi<void>(
       Api.addFavPugv,
+      kind: ApiCallKind.mutation,
+      decode: (_) {},
       data: {
         'season_id': seasonId,
         'csrf': Accounts.main.csrf,
       },
       options: Options(contentType: Headers.formUrlEncodedContentType),
     );
-    if (res.data['code'] == 0) {
-      return const Success(null);
-    } else {
-      return Error(res.data['message']);
-    }
   }
 
   static Future<LoadingState<void>> delFavPugv(Object seasonId) async {
-    final res = await Request().post(
+    return await Request().requestApi<void>(
       Api.delFavPugv,
+      kind: ApiCallKind.mutation,
+      decode: (_) {},
       data: {
         'season_id': seasonId,
         'csrf': Accounts.main.csrf,
       },
       options: Options(contentType: Headers.formUrlEncodedContentType),
     );
-    if (res.data['code'] == 0) {
-      return const Success(null);
-    } else {
-      return Error(res.data['message']);
-    }
   }
 
   static Future<LoadingState<FavTopicData>> favTopic({
     required int page,
   }) async {
-    final res = await Request().get(
+    return await Request().requestApi(
       Api.favTopicList,
+      kind: ApiCallKind.query,
+      decode: (body) => FavTopicData.fromJson(body['data']),
       queryParameters: {
         'page_size': 24,
         'page_num': page,
         'web_location': 333.1387,
       },
     );
-    if (res.data['code'] == 0) {
-      return Success(FavTopicData.fromJson(res.data['data']));
-    } else {
-      return Error(res.data['message']);
-    }
   }
 
   static Future<LoadingState<void>> addFavTopic(Object topicId) async {
-    final res = await Request().post(
+    return await Request().requestApi<void>(
       Api.addFavTopic,
+      kind: ApiCallKind.mutation,
+      decode: (_) {},
       data: {
         'topic_id': topicId,
         'csrf': Accounts.main.csrf,
       },
       options: Options(contentType: Headers.formUrlEncodedContentType),
     );
-    if (res.data['code'] == 0) {
-      return const Success(null);
-    } else {
-      return Error(res.data['message']);
-    }
   }
 
   static Future<LoadingState<void>> delFavTopic(Object topicId) async {
-    final res = await Request().post(
+    return await Request().requestApi<void>(
       Api.delFavTopic,
+      kind: ApiCallKind.mutation,
+      decode: (_) {},
       data: {
         'topic_id': topicId,
         'csrf': Accounts.main.csrf,
       },
       options: Options(contentType: Headers.formUrlEncodedContentType),
     );
-    if (res.data['code'] == 0) {
-      return const Success(null);
-    } else {
-      return Error(res.data['message']);
-    }
   }
 
   static Future<LoadingState<void>> likeTopic(
     Object topicId,
     bool isLike,
   ) async {
-    final res = await Request().post(
+    return await Request().requestApi<void>(
       Api.likeTopic,
+      kind: ApiCallKind.mutation,
+      decode: (_) {},
       data: {
         'action': isLike ? 'cancel_like' : 'like',
         'up_mid': Accounts.main.mid,
@@ -260,35 +233,29 @@ abstract final class FavHttp {
       },
       options: Options(contentType: Headers.formUrlEncodedContentType),
     );
-    if (res.data['code'] == 0) {
-      return const Success(null);
-    } else {
-      return Error(res.data['message']);
-    }
   }
 
   static Future<LoadingState<FavArticleData>> favArticle({
     required int page,
   }) async {
-    final res = await Request().get(
+    return await Request().requestApi(
       Api.favArticle,
+      kind: ApiCallKind.query,
+      decode: (body) => FavArticleData.fromJson(body['data']),
       queryParameters: {
         'page_size': 20,
         'page': page,
       },
     );
-    if (res.data['code'] == 0) {
-      return Success(FavArticleData.fromJson(res.data['data']));
-    } else {
-      return Error(res.data['message']);
-    }
   }
 
   static Future<LoadingState<void>> addFavArticle({
     required Object id,
   }) async {
-    final res = await Request().post(
+    return await Request().requestApi<void>(
       Api.addFavArticle,
+      kind: ApiCallKind.mutation,
+      decode: (_) {},
       data: {
         'id': id,
         'csrf': Accounts.main.csrf,
@@ -297,18 +264,15 @@ abstract final class FavHttp {
         contentType: Headers.formUrlEncodedContentType,
       ),
     );
-    if (res.data['code'] == 0) {
-      return const Success(null);
-    } else {
-      return Error(res.data['message']);
-    }
   }
 
   static Future<LoadingState<void>> delFavArticle({
     required Object id,
   }) async {
-    final res = await Request().post(
+    return await Request().requestApi<void>(
       Api.delFavArticle,
+      kind: ApiCallKind.mutation,
+      decode: (_) {},
       data: {
         'id': id,
         'csrf': Accounts.main.csrf,
@@ -317,61 +281,50 @@ abstract final class FavHttp {
         contentType: Headers.formUrlEncodedContentType,
       ),
     );
-    if (res.data['code'] == 0) {
-      return const Success(null);
-    } else {
-      return Error(res.data['message']);
-    }
   }
 
   static Future<LoadingState<List<FavNoteItemModel>?>> userNoteList({
     required int page,
   }) async {
-    final res = await Request().get(
+    return await Request().requestApi(
       Api.userNoteList,
+      kind: ApiCallKind.query,
+      decode: (body) => (body['data']?['list'] as List?)
+          ?.map((item) => FavNoteItemModel.fromJson(item))
+          .toList(),
       queryParameters: {
         'pn': page,
         'ps': 10,
         'csrf': Accounts.main.csrf,
       },
     );
-    if (res.data['code'] == 0) {
-      List<FavNoteItemModel>? list = (res.data['data']?['list'] as List?)
-          ?.map((e) => FavNoteItemModel.fromJson(e))
-          .toList();
-      return Success(list);
-    } else {
-      return Error(res.data['message']);
-    }
   }
 
   static Future<LoadingState<List<FavNoteItemModel>?>> noteList({
     required int page,
   }) async {
-    final res = await Request().get(
+    return await Request().requestApi(
       Api.noteList,
+      kind: ApiCallKind.query,
+      decode: (body) => (body['data']?['list'] as List?)
+          ?.map((item) => FavNoteItemModel.fromJson(item))
+          .toList(),
       queryParameters: {
         'pn': page,
         'ps': 10,
         'csrf': Accounts.main.csrf,
       },
     );
-    if (res.data['code'] == 0) {
-      List<FavNoteItemModel>? list = (res.data['data']?['list'] as List?)
-          ?.map((e) => FavNoteItemModel.fromJson(e))
-          .toList();
-      return Success(list);
-    } else {
-      return Error(res.data['message']);
-    }
   }
 
   static Future<LoadingState<void>> delNote({
     required bool isPublish,
     required String noteIds,
   }) async {
-    final res = await Request().post(
+    return await Request().requestApi<void>(
       isPublish ? Api.delPublishNote : Api.delNote,
+      kind: ApiCallKind.mutation,
+      decode: (_) {},
       data: {
         isPublish ? 'cvids' : 'note_ids': noteIds,
         'csrf': Accounts.main.csrf,
@@ -380,11 +333,6 @@ abstract final class FavHttp {
         contentType: Headers.formUrlEncodedContentType,
       ),
     );
-    if (res.data['code'] == 0) {
-      return const Success(null);
-    } else {
-      return Error(res.data['message']);
-    }
   }
 
   static Future<LoadingState<FavPgcData>> favPgc({
@@ -393,8 +341,10 @@ abstract final class FavHttp {
     int? followStatus,
     Object? mid,
   }) async {
-    final res = await Request().get(
+    return await Request().requestApi(
       Api.favPgc,
+      kind: ApiCallKind.query,
+      decode: (body) => FavPgcData.fromJson(body['data']),
       queryParameters: {
         'vmid': mid ?? Accounts.main.mid,
         'type': type,
@@ -402,11 +352,6 @@ abstract final class FavHttp {
         'pn': pn,
       },
     );
-    if (res.data['code'] == 0) {
-      return Success(FavPgcData.fromJson(res.data['data']));
-    } else {
-      return Error(res.data['message']);
-    }
   }
 
   // 收藏夹
@@ -415,19 +360,16 @@ abstract final class FavHttp {
     required int ps,
     required dynamic mid,
   }) async {
-    final res = await Request().get(
+    return await Request().requestApi(
       Api.userFavFolder,
+      kind: ApiCallKind.query,
+      decode: (body) => FavFolderData.fromJson(body['data']),
       queryParameters: {
         'pn': pn,
         'ps': ps,
         'up_mid': mid,
       },
     );
-    if (res.data['code'] == 0) {
-      return Success(FavFolderData.fromJson(res.data['data']));
-    } else {
-      return Error(res.data['message'] ?? '账号未登录');
-    }
   }
 
   static Future<LoadingState<void>> sortFavFolder({
@@ -438,18 +380,15 @@ abstract final class FavHttp {
       'csrf': Accounts.main.csrf,
     };
     AppSign.appSign(data);
-    final res = await Request().post(
+    return await Request().requestApi<void>(
       Api.sortFavFolder,
+      kind: ApiCallKind.mutation,
+      decode: (_) {},
       data: data,
       options: Options(
         contentType: Headers.formUrlEncodedContentType,
       ),
     );
-    if (res.data['code'] == 0) {
-      return const Success(null);
-    } else {
-      return Error(res.data['message']);
-    }
   }
 
   static Future<LoadingState<void>> sortFav({
@@ -462,25 +401,24 @@ abstract final class FavHttp {
       'csrf': Accounts.main.csrf,
     };
     AppSign.appSign(data);
-    final res = await Request().post(
+    return await Request().requestApi<void>(
       Api.sortFav,
+      kind: ApiCallKind.mutation,
+      decode: (_) {},
       data: data,
       options: Options(
         contentType: Headers.formUrlEncodedContentType,
       ),
     );
-    if (res.data['code'] == 0) {
-      return const Success(null);
-    } else {
-      return Error(res.data['message']);
-    }
   }
 
   static Future<LoadingState<void>> cleanFav({
     required Object mediaId,
   }) async {
-    final res = await Request().post(
+    return await Request().requestApi<void>(
       Api.cleanFav,
+      kind: ApiCallKind.mutation,
+      decode: (_) {},
       data: {
         'media_id': mediaId,
         'platform': 'web',
@@ -490,18 +428,15 @@ abstract final class FavHttp {
         contentType: Headers.formUrlEncodedContentType,
       ),
     );
-    if (res.data['code'] == 0) {
-      return const Success(null);
-    } else {
-      return Error(res.data['message']);
-    }
   }
 
   static Future<LoadingState<void>> deleteFolder({
     required String mediaIds,
   }) async {
-    final res = await Request().post(
+    return await Request().requestApi<void>(
       Api.deleteFolder,
+      kind: ApiCallKind.mutation,
+      decode: (_) {},
       data: {
         'media_ids': mediaIds,
         'platform': 'web',
@@ -511,14 +446,10 @@ abstract final class FavHttp {
         contentType: Headers.formUrlEncodedContentType,
       ),
     );
-    if (res.data['code'] == 0) {
-      return const Success(null);
-    } else {
-      return Error(res.data['message']);
-    }
   }
 
   static Future<LoadingState<FavFolderInfo>> addOrEditFolder({
+    Account? account,
     required bool isAdd,
     dynamic mediaId,
     required String title,
@@ -526,49 +457,49 @@ abstract final class FavHttp {
     required String cover,
     required String intro,
   }) async {
-    final res = await Request().post(
+    account ??= Accounts.main;
+    return await Request().requestApi(
       isAdd ? Api.addFolder : Api.editFolder,
+      kind: ApiCallKind.mutation,
+      decode: _decodeFolder,
       data: {
         'title': title,
         'intro': intro,
         'privacy': privacy,
         'cover': cover.isNotEmpty ? Uri.encodeFull(cover) : cover,
-        'csrf': Accounts.main.csrf,
+        'csrf': account.csrf,
         'media_id': ?mediaId,
       },
       options: Options(
+        extra: {'account': account},
         contentType: Headers.formUrlEncodedContentType,
       ),
     );
-    if (res.data['code'] == 0) {
-      return Success(FavFolderInfo.fromJson(res.data['data']));
-    } else {
-      return Error(res.data['message']);
-    }
   }
 
   static Future<LoadingState<FavFolderInfo>> favFolderInfo({
+    Account? account,
     required Object mediaId,
   }) async {
-    final res = await Request().get(
+    return await Request().requestApi(
       Api.favFolderInfo,
+      kind: ApiCallKind.query,
+      decode: _decodeFolder,
+      options: Options(extra: {'account': account ?? Accounts.main}),
       queryParameters: {
         'media_id': mediaId,
       },
     );
-    if (res.data['code'] == 0) {
-      return Success(FavFolderInfo.fromJson(res.data['data']));
-    } else {
-      return Error(res.data['message']);
-    }
   }
 
   static Future<LoadingState<void>> seasonFav({
     required bool isFav,
     required dynamic seasonId,
   }) async {
-    final res = await Request().post(
+    return await Request().requestApi<void>(
       isFav ? Api.unfavSeason : Api.favSeason,
+      kind: ApiCallKind.mutation,
+      decode: (_) {},
       data: {
         'platform': 'web',
         'season_id': seasonId,
@@ -578,11 +509,6 @@ abstract final class FavHttp {
         contentType: Headers.formUrlEncodedContentType,
       ),
     );
-    if (res.data['code'] == 0) {
-      return const Success(null);
-    } else {
-      return Error(res.data['message']);
-    }
   }
 
   static Future<LoadingState<List<SpaceFavData>?>> spaceFav({
@@ -599,8 +525,12 @@ abstract final class FavHttp {
       'statistics': Constants.statisticsApp,
       'up_mid': mid,
     };
-    final res = await Request().get(
+    return await Request().requestApi(
       Api.spaceFav,
+      kind: ApiCallKind.query,
+      decode: (body) => (body['data'] as List?)
+          ?.map((e) => SpaceFavData.fromJson(e))
+          .toList(),
       queryParameters: params,
       options: Options(
         headers: {
@@ -609,23 +539,16 @@ abstract final class FavHttp {
         },
       ),
     );
-    if (res.data['code'] == 0) {
-      return Success(
-        (res.data['data'] as List?)
-            ?.map((e) => SpaceFavData.fromJson(e))
-            .toList(),
-      );
-    } else {
-      return Error(res.data['message']);
-    }
   }
 
   static Future<LoadingState<void>> communityAction({
     required Object opusId,
     required Object action,
   }) async {
-    final res = await Request().post(
+    return await Request().requestApi<void>(
       Api.communityAction,
+      kind: ApiCallKind.mutation,
+      decode: (_) {},
       queryParameters: {
         'csrf': Accounts.main.csrf,
       },
@@ -637,55 +560,54 @@ abstract final class FavHttp {
         "action": action, // 3 fav, 4 unfav
       },
     );
-    if (res.data['code'] == 0) {
-      return const Success(null);
-    } else {
-      return Error(res.data['message']);
-    }
   }
 
   // （取消）收藏
   static Future<LoadingState<void>> favVideo({
+    Account? account,
     required String resources,
     String? addIds,
     String? delIds,
   }) async {
-    final res = await Request().post(
+    account ??= Accounts.main;
+    return await Request().requestApi<void>(
       Api.favVideo,
+      kind: ApiCallKind.mutation,
+      decode: (_) {},
       data: {
         'resources': resources,
         'add_media_ids': addIds ?? '',
         'del_media_ids': delIds ?? '',
-        'csrf': Accounts.main.csrf,
+        'csrf': account.csrf,
       },
-      options: Options(contentType: Headers.formUrlEncodedContentType),
+      options: Options(
+        contentType: Headers.formUrlEncodedContentType,
+        extra: {'account': account},
+      ),
     );
-    if (res.data['code'] == 0) {
-      return const Success(null);
-    } else {
-      return Error(res.data['message']);
-    }
   }
 
   // （取消）收藏
   static Future<LoadingState<void>> unfavAll({
+    Account? account,
     required Object rid,
     required Object type,
   }) async {
-    final res = await Request().post(
+    account ??= Accounts.main;
+    return await Request().requestApi<void>(
       Api.unfavAll,
+      kind: ApiCallKind.mutation,
+      decode: (_) {},
       data: {
         'rid': rid,
         'type': type,
-        'csrf': Accounts.main.csrf,
+        'csrf': account.csrf,
       },
-      options: Options(contentType: Headers.formUrlEncodedContentType),
+      options: Options(
+        contentType: Headers.formUrlEncodedContentType,
+        extra: {'account': account},
+      ),
     );
-    if (res.data['code'] == 0) {
-      return const Success(null);
-    } else {
-      return Error(res.data['message']);
-    }
   }
 
   static Future<LoadingState<void>> copyOrMoveFav({
@@ -696,7 +618,7 @@ abstract final class FavHttp {
     dynamic mid,
     required String resources,
   }) async {
-    final res = await Request().post(
+    return await Request().requestApi<void>(
       isFav
           ? isCopy
                 ? Api.copyFav
@@ -704,6 +626,8 @@ abstract final class FavHttp {
           : isCopy
           ? Api.copyToview
           : Api.moveToview,
+      kind: ApiCallKind.mutation,
+      decode: (_) {},
       data: {
         'src_media_id': ?srcMediaId,
         'tar_media_id': tarMediaId,
@@ -714,43 +638,46 @@ abstract final class FavHttp {
       },
       options: Options(contentType: Headers.formUrlEncodedContentType),
     );
-    if (res.data['code'] == 0) {
-      return const Success(null);
-    } else {
-      return Error(res.data['message']);
-    }
   }
 
   static Future<LoadingState<FavFolderData>> allFavFolders(Object mid) async {
-    final res = await Request().get(
+    return await Request().requestApi(
       Api.favFolder,
+      kind: ApiCallKind.query,
+      decode: (body) => FavFolderData.fromJson(body['data']),
       queryParameters: {'up_mid': mid},
     );
-    if (res.data['code'] == 0) {
-      return Success(FavFolderData.fromJson(res.data['data']));
-    } else {
-      return Error(res.data['message']);
-    }
   }
 
   // 查看视频被收藏在哪个文件夹
   static Future<LoadingState<FavFolderData>> videoInFolder({
+    Account? account,
     dynamic mid,
     dynamic rid,
     dynamic type,
   }) async {
-    final res = await Request().get(
+    return await Request().requestApi(
       Api.favFolder,
+      kind: ApiCallKind.query,
+      decode: (body) => FavFolderData.fromJson(body['data']),
+      options: Options(extra: {'account': account ?? Accounts.main}),
       queryParameters: {
         'up_mid': mid,
         'rid': rid,
         'type': ?type,
       },
     );
-    if (res.data['code'] == 0) {
-      return Success(FavFolderData.fromJson(res.data['data']));
-    } else {
-      return Error(res.data['message']);
+  }
+
+  static FavFolderInfo _decodeFolder(Map<String, dynamic> body) {
+    final data = body['data'];
+    if (data is! Map<String, dynamic> ||
+        data['title'] is! String ||
+        data['attr'] is! int) {
+      throw const FormatException('收藏夹信息缺少名称或属性');
     }
+    final folder = FavFolderInfo.fromJson(data);
+    if (folder.id <= 0) throw const FormatException('收藏夹响应缺少有效 ID');
+    return folder;
   }
 }

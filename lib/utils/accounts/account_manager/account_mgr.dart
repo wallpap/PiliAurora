@@ -220,7 +220,8 @@ class AccountManager extends Interceptor {
         path.contains('biliimg.com');
   }
 
-  static Account _findAccount(String path) => ApiType.loginApi.contains(path)
+  /// 在发起操作时固定账号，避免等待拦截器期间切号导致 CSRF 与 Cookie 不一致。
+  static Account resolveAccount(String path) => ApiType.loginApi.contains(path)
       ? AnonymousAccount()
       : Accounts.get(
           AccountType.values.firstWhere(
@@ -231,7 +232,7 @@ class AccountManager extends Interceptor {
 
   static Account _bindRequestAccount(RequestOptions options) {
     assert(options.extra['account'] is Account?);
-    return options.extra['account'] ??= _findAccount(options.path);
+    return options.extra['account'] ??= resolveAccount(options.path);
   }
 
   static Account? _boundRequestAccount(RequestOptions options) {
