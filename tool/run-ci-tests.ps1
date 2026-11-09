@@ -15,6 +15,8 @@ $ciTests = @(
     "test/architecture/dependency_rules_test.dart",
     "test/app/startup_test.dart",
     "test/app/startup_failure_test.dart",
+    "test/services/app_exit_test.dart",
+    "test/services/audio_session_initialization_test.dart",
     "test/http/loading_state_test.dart",
     "test/http/api_response_test.dart",
     "test/http/relationship_response_test.dart",

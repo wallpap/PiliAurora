@@ -7,6 +7,11 @@ import 'package:pili_aurora/plugin/pl_player/playback/playback_session.dart';
 import 'package:pili_aurora/utils/utils.dart';
 
 class AudioSessionHandler {
+  AudioSessionHandler({Future<AudioSession> Function()? loadSession})
+    : _loadSession = loadSession ?? (() => AudioSession.instance);
+
+  final Future<AudioSession> Function() _loadSession;
+  Future<void>? _initialization;
   late AudioSession session;
   final PlaybackFocusInhibitor _focusInhibitor = PlaybackFocusInhibitor(
     onError: Utils.reportError,
@@ -15,14 +20,25 @@ class AudioSessionHandler {
     onError: Utils.reportError,
   );
 
-  Future<bool> setActive(bool active) => session.setActive(active);
-
-  AudioSessionHandler() {
-    initSession();
+  Future<bool> setActive(bool active) async {
+    await initSession();
+    return session.setActive(active);
   }
 
-  Future<void> initSession() async {
-    session = await AudioSession.instance;
+  /// 启动和首次激活共用初始化 Future，配置失败后允许再次尝试。
+  Future<void> initSession() => _initialization ??= _initialize();
+
+  Future<void> _initialize() async {
+    try {
+      await _configureSession();
+    } catch (_) {
+      _initialization = null;
+      rethrow;
+    }
+  }
+
+  Future<void> _configureSession() async {
+    session = await _loadSession();
     await session.configure(const AudioSessionConfiguration.music());
 
     session.interruptionEventStream.listen((event) {

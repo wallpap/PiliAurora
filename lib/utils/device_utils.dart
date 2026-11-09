@@ -1,7 +1,8 @@
+import 'package:pili_aurora/services/app_exit.dart';
 import 'package:pili_aurora/services/diagnostics/diagnostics.dart';
 import 'package:pili_aurora/services/desktop_playback_windows.dart';
 
-import 'dart:io' show Platform, exit;
+import 'dart:io' show OSError, Platform, exit;
 
 import 'package:pili_aurora/utils/android/bindings.g.dart';
 import 'package:pili_aurora/utils/platform_utils.dart';
@@ -9,14 +10,22 @@ import 'package:flutter/widgets.dart' show WidgetsBinding, Size;
 import 'package:win32/win32.dart' as kernel32;
 
 abstract final class DeviceUtils {
-  static Future<void> exitApp() async {
-    if (Platform.isWindows) {
-      await DesktopPlaybackWindows.instance.closeAll();
-    }
-    await Diagnostics.instance.flush();
+  static final _exit = AppExit(
+    cleanup: [
+      if (Platform.isWindows)
+        ('windows', DesktopPlaybackWindows.instance.closeAll),
+    ],
+    flushDiagnostics: Diagnostics.instance.flush,
+    terminate: _terminate,
+  );
+
+  static Future<void> exitApp() => _exit.close();
+
+  static void _terminate() {
     if (Platform.isWindows) {
       // WebView2 的退出清理可能阻塞，沿用主窗口的原生退出方式。
-      kernel32.TerminateProcess(kernel32.GetCurrentProcess(), 0);
+      final result = kernel32.TerminateProcess(kernel32.GetCurrentProcess(), 0);
+      if (!result.value) throw OSError('结束应用进程失败', result.error);
     } else {
       exit(0);
     }

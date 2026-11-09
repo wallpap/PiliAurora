@@ -1,10 +1,11 @@
 // 定时关闭服务
 
-import 'dart:async' show Timer;
+import 'dart:async' show Timer, unawaited;
 
 import 'package:pili_aurora/models/common/enum_with_label.dart';
 import 'package:pili_aurora/pages/video/introduction/ugc/widgets/menu_row.dart';
 import 'package:pili_aurora/plugin/pl_player/controller.dart';
+import 'package:pili_aurora/services/app_exit.dart';
 import 'package:pili_aurora/utils/device_utils.dart';
 import 'package:pili_aurora/utils/duration_utils.dart';
 import 'package:pili_aurora/utils/page_utils.dart';
@@ -44,6 +45,24 @@ class ShutdownTimerService {
   int _durationInMinutes = 0;
   int get durationInMinutes => _durationInMinutes;
   _ShutdownType _shutdownType = .pause;
+
+  late final _exit = AppExit(
+    cleanup: [
+      (
+        'progress',
+        () async {
+          if (PlPlayerController.instance case final player?) {
+            await player.makeHeartBeat(
+              player.position.value,
+              type: .completed,
+              isManual: true,
+            );
+          }
+        },
+      ),
+    ],
+    terminate: DeviceUtils.exitApp,
+  );
 
   bool _isWaiting = false;
   bool get isWaiting => _isWaiting;
@@ -119,18 +138,11 @@ class ShutdownTimerService {
   }
 
   void _syncProgressAndExit() {
-    if (PlPlayerController.instance case final player?) {
-      final res = player.makeHeartBeat(
-        player.position.value,
-        type: .completed,
-        isManual: true,
-      );
-      if (res != null) {
-        res.whenComplete(DeviceUtils.exitApp);
-        return;
-      }
-    }
-    DeviceUtils.exitApp();
+    unawaited(
+      _exit.close().catchError((Object error, StackTrace stackTrace) {
+        SmartDialog.showToast('退出应用失败，请重试');
+      }),
+    );
   }
 
   static (int hour, int minute) _parseMinutes(int minutes) =>

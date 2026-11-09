@@ -17,7 +17,9 @@ import 'package:pili_aurora/pages/main/controller.dart';
 import 'package:pili_aurora/plugin/pl_player/controller.dart';
 import 'package:pili_aurora/plugin/pl_player/playback/playback_contracts.dart';
 import 'package:pili_aurora/plugin/pl_player/playback/playback_session.dart';
+import 'package:pili_aurora/services/app_exit.dart';
 import 'package:pili_aurora/services/desktop_playback_windows.dart';
+import 'package:pili_aurora/services/logger.dart';
 import 'package:pili_aurora/services/windows_update_exit.dart';
 import 'package:pili_aurora/utils/android/android_helper.dart';
 import 'package:pili_aurora/utils/app_scheme.dart';
@@ -30,6 +32,7 @@ import 'package:pili_aurora/utils/platform_utils.dart';
 import 'package:pili_aurora/utils/storage.dart';
 import 'package:pili_aurora/utils/storage_key.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:get/get.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:tray_manager/tray_manager.dart' as tray;
@@ -55,7 +58,41 @@ class _MainAppState extends PopScopeState<MainApp>
   tray.Menu? _trayMenu;
   tray.MenuItem? _trayShowItem;
   tray.MenuItem? _trayExitItem;
-  bool _isClosing = false;
+  late final _exit = AppExit(
+    cleanup: [
+      ('tray', _disposeTray),
+      // 小窗会回传播放进度和窗口位置，先关闭小窗再关闭主进程存储。
+      if (Platform.isWindows) ...[
+        ('windows', DesktopPlaybackWindows.instance.closeAll),
+        (
+          'progress',
+          () async {
+            final player = PlPlayerController.instance;
+            if (player != null && player.isFileSource && player.cid != null) {
+              await GStorage.watchProgress.put(
+                player.cid.toString(),
+                player.positionInMilliseconds,
+              );
+            }
+          },
+        ),
+        (
+          'player',
+          () async {
+            final result = await PlPlayerController.instance
+                ?.shutdownPlaybackFacade();
+            if (result?.outcome == PlaybackShutdownOutcome.cleanupIncomplete) {
+              logger.w('主窗口播放器退出清理未完成', error: result?.failure);
+            }
+          },
+        ),
+      ],
+      ('compact', GStorage.compact),
+      ('storage', GStorage.close),
+    ],
+    terminate: DeviceUtils.exitApp,
+  );
+  bool get _isClosing => _exit.isClosing;
   PlaybackOwner? _minimizeOwner;
   PlaybackInhibitorToken? _minimizeToken;
 
@@ -175,32 +212,18 @@ class _MainAppState extends PopScopeState<MainApp>
       _hide();
       _onHideWindow();
     } else {
-      _onClose();
+      _requestClose();
     }
   }
 
-  Future<void> _onClose() async {
-    if (_isClosing) return;
-    _isClosing = true;
-    _disposeTray();
-    if (Platform.isWindows) {
-      // 小窗关闭会回传播放进度和窗口位置，先处理完再关闭存储。
-      await DesktopPlaybackWindows.instance.closeAll();
-      final player = PlPlayerController.instance;
-      if (player != null) {
-        // 主窗口退出不会经过视频页面卸载，先保存本地进度再释放播放器。
-        if (player.isFileSource && player.cid != null) {
-          await GStorage.watchProgress.put(
-            player.cid.toString(),
-            player.positionInMilliseconds,
-          );
-        }
-        await player.shutdownPlaybackFacade();
-      }
-    }
-    await GStorage.compact();
-    await GStorage.close();
-    await DeviceUtils.exitApp();
+  Future<void> _onClose() => _exit.close();
+
+  void _requestClose() {
+    unawaited(
+      _onClose().catchError((Object error, StackTrace stackTrace) {
+        if (mounted) SmartDialog.showToast('退出应用失败，请重试');
+      }),
+    );
   }
 
   @override
@@ -271,7 +294,7 @@ class _MainAppState extends PopScopeState<MainApp>
   void _scheduleClose() {
     if (_isClosing) return;
     // Windows 在原生菜单回调中派发菜单项事件，先让回调返回再释放菜单和关闭存储。
-    Timer.run(() => unawaited(_onClose()));
+    Timer.run(_requestClose);
   }
 
   void _disposeTray() {
