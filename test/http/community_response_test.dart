@@ -21,6 +21,7 @@ void main() {
   );
   final main = account(1);
   final replacement = account(2);
+  final heartbeat = account(3);
   Object? body;
   var failTransport = false;
   var switchAccount = false;
@@ -102,6 +103,7 @@ void main() {
   });
   setUp(() {
     Accounts.accountMode[AccountType.main.index] = main;
+    Accounts.accountMode[AccountType.heartbeat.index] = heartbeat;
     requests.clear();
     pages.clear();
     body = null;
@@ -162,6 +164,37 @@ void main() {
       expect(request.headers['cookie'], '');
       expect(request.queryParameters.containsKey('csrf'), isFalse);
     }
+  });
+
+  test('评论查询默认沿用播放记录账号，显式可绑定主账号', () async {
+    body = {'code': 0, 'data': <String, dynamic>{}};
+    await ReplyHttp.replyList(
+      isLogin: true,
+      oid: 1,
+      nextOffset: '',
+      type: 1,
+      page: 1,
+    );
+    expect(requests.last.extra['account'], same(heartbeat));
+    await ReplyHttp.replyReplyList(
+      isLogin: true,
+      oid: 1,
+      root: 2,
+      pageNum: 1,
+      type: 1,
+    );
+    expect(requests.last.extra['account'], same(heartbeat));
+    expect(requests.last.queryParameters['csrf'], heartbeat.csrf);
+    await ReplyHttp.replyReplyList(
+      account: main,
+      isLogin: true,
+      oid: 1,
+      root: 2,
+      pageNum: 1,
+      type: 1,
+    );
+    expect(requests.last.extra['account'], same(main));
+    expect(requests.last.queryParameters['csrf'], main.csrf);
   });
 
   test('弹幕点赞状态要求数值，发送可缺少 dmid，管理使用正确端点', () async {

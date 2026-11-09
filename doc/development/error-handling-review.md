@@ -98,3 +98,5 @@
 - 弹幕／评论响应、表情包模型、页面操作及评论控制器／生命周期共 29 项不同用例通过。修正只读 protobuf 默认对象与测试夹具后复验页面 9 项；新增评论管理 4 项和举报部分成功 1 项分别通过（`build/community-response-tests.log`、`build/community-operations-tests.log`、`build/community-retry-tests.log`、`build/community-management-tests.log`、`build/community-report-retry.log`）。修改源码与测试定向分析的 3 条提示修正后无问题（`build/community-final-analyze.log`、`build/community-search-analyze.log`）。未重跑完整 CI，真实账号写入和播放器回显仍需设备验收。
 
 - 搜索响应、首页／热搜状态和结果分页共 38 项不同用例通过。首轮 HTTP 7 项与结果分页 14 项通过；修正账号夹具初始化和模拟时钟等待后，分 P 单项 1 项及首页／热搜 16 项通过（`build/search-contract-tests.log`、`build/search-pagelist-tests.log`、`build/search-state-tests.log`）。修改文件定向分析无问题（`build/community-search-analyze.log`）。未重跑完整 CI，真实服务与导航、动态话题调用方留待后续检查。
+
+- 补查账号路由时修正 HTTP 评论列表与楼中楼默认账号：继续沿用播放记录角色，显式绑定主账号的可见性检查保持原语义。新增的角色分离回归 1 项通过（`build/reply-account-tests.log`）。

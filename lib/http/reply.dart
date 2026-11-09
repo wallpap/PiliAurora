@@ -11,6 +11,7 @@ import 'package:pili_aurora/models/remote/reply2reply/data.dart';
 import 'package:pili_aurora/models/remote/reply_interaction/data.dart';
 import 'package:pili_aurora/utils/accounts.dart';
 import 'package:pili_aurora/utils/accounts/account.dart';
+import 'package:pili_aurora/utils/accounts/account_manager/account_mgr.dart';
 import 'package:dio/dio.dart';
 
 abstract final class ReplyHttp {
@@ -45,7 +46,12 @@ abstract final class ReplyHttp {
         },
       },
       options: isLogin
-          ? Options(extra: {'account': account ?? Accounts.main})
+          ? Options(
+              extra: {
+                'account':
+                    account ?? AccountManager.resolveAccount(Api.replyList),
+              },
+            )
           : options,
     );
   }
@@ -58,7 +64,7 @@ abstract final class ReplyHttp {
     required int pageNum,
     required int type,
   }) {
-    account ??= Accounts.main;
+    account ??= AccountManager.resolveAccount(Api.replyReplyList);
     return Request().requestApi(
       Api.replyReplyList,
       kind: ApiCallKind.query,
