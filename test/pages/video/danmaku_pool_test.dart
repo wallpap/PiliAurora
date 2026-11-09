@@ -339,6 +339,8 @@ void main() {
       await tester.tap(find.text('已点赞'));
       await tester.pump();
       expect(toggles, 1);
+      // 损坏响应会记录诊断，在框架检查剩余 Timer 前排空延迟通知。
+      await tester.pump(const Duration(milliseconds: 300));
     });
   }
 }
