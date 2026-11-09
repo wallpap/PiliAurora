@@ -1,3 +1,4 @@
+import 'dart:async' show FutureOr;
 import 'dart:math';
 
 import 'package:pili_aurora/services/logger.dart';
@@ -13,7 +14,7 @@ import 'package:pili_aurora/http/user.dart';
 import 'package:pili_aurora/http/validate.dart';
 import 'package:pili_aurora/http/video.dart';
 import 'package:pili_aurora/models/dynamics/result.dart';
-import 'package:pili_aurora/models/login/model.dart';
+import 'package:pili_aurora/models/login/gaia_result.dart';
 import 'package:pili_aurora/models/remote/fav/fav_detail/media.dart';
 import 'package:pili_aurora/models/remote/later/list.dart';
 import 'package:pili_aurora/models/remote/relation/data.dart';
@@ -462,7 +463,7 @@ abstract final class RequestUtils {
 
   static Future<void> validate(
     String vVoucher,
-    ValueChanged<String> onSuccess, {
+    FutureOr<void> Function(String) onSuccess, {
     required Account account,
     required bool Function() isCurrent,
   }) async {
@@ -473,68 +474,56 @@ abstract final class RequestUtils {
     );
     if (!isCurrent()) return;
     if (!res.isSuccess) {
-      res.toast();
-      return;
-    }
-
-    final resData = res.data;
-    if (resData == null) {
-      SmartDialog.showToast("null data");
-      return;
-    }
-
-    CaptchaDataModel captchaData = CaptchaDataModel();
-
-    final geetest = resData['geetest'];
-    String? gt = geetest?['gt'];
-    String? challenge = geetest?['challenge'];
-    captchaData.token = resData['token'];
-
-    bool isGeeArgumentValid() {
-      return gt?.isNotEmpty == true &&
-          challenge?.isNotEmpty == true &&
-          captchaData.token?.isNotEmpty == true;
-    }
-
-    if (!isGeeArgumentValid()) {
-      SmartDialog.showToast("参数为空");
-      return;
-    }
-
-    Future<void> gaiaVgateValidate() async {
-      if (!isCurrent()) return;
-      final res = await ValidateHttp.gaiaVgateValidate(
-        account: account,
-        challenge: captchaData.geetest?.challenge,
-        seccode: captchaData.seccode,
-        token: captchaData.token,
-        validate: captchaData.validate,
-      );
-      if (!isCurrent()) return;
-      if (res case Success(:final response?)) {
-        if (response['is_valid'] == 1) {
-          final griskId = response['grisk_id'];
-          if (griskId is String) {
-            onSuccess(griskId);
-          }
-        } else {
-          SmartDialog.showToast('invalid');
-        }
+      if (res is UnknownResult) {
+        SmartDialog.showToast('验证响应未能确认，请重新打开验证');
       } else {
         res.toast();
       }
+      return;
     }
 
-    final json = await GeetestWebviewDialog.geetest(gt!, challenge!);
-    if (isCurrent() && json != null) {
-      captchaData
-        ..validate = json['geetest_validate']
-        ..seccode = json['geetest_seccode']
-        ..geetest = GeetestData(
-          challenge: json['geetest_challenge'],
-          gt: gt,
-        );
-      await gaiaVgateValidate();
+    final registration = res.data;
+    final Map<String, dynamic>? json;
+    try {
+      json = await GeetestWebviewDialog.geetest(
+        registration.gt,
+        registration.challenge,
+      );
+    } catch (error, stackTrace) {
+      logger.w('打开风控验证失败', error: error.runtimeType, stackTrace: stackTrace);
+      if (isCurrent()) SmartDialog.showToast('无法打开验证，请重试');
+      return;
+    }
+    if (!isCurrent() || json == null) return;
+    final challenge = json['geetest_challenge'];
+    final seccode = json['geetest_seccode'];
+    final validate = json['geetest_validate'];
+    if (challenge is! String ||
+        seccode is! String ||
+        validate is! String ||
+        [challenge, seccode, validate].any((value) => value.trim().isEmpty)) {
+      SmartDialog.showToast('验证结果不完整，请重新打开验证');
+      return;
+    }
+    final result = await ValidateHttp.gaiaVgateValidate(
+      account: account,
+      challenge: challenge,
+      seccode: seccode,
+      token: registration.token,
+      validate: validate,
+    );
+    if (!isCurrent()) return;
+    switch (result) {
+      case Success(response: GaiaVerified(:final riskId)):
+        await onSuccess(riskId);
+      case Success(response: GaiaRejected()):
+        SmartDialog.showToast('验证未通过，请重试');
+      case UnknownResult():
+        SmartDialog.showToast('验证响应未能确认，请重新打开验证');
+      case Error():
+        result.toast();
+      case Loading():
+        break;
     }
   }
 

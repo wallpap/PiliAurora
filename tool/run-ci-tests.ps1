@@ -19,6 +19,8 @@ $ciTests = @(
     "test/http/api_response_test.dart",
     "test/http/relationship_response_test.dart",
     "test/http/fav_response_test.dart",
+    "test/http/validate_response_test.dart",
+    "test/utils/gaia_validation_test.dart",
     "test/pages/fav/operation_results_test.dart",
     "test/http/retry_interceptor_test.dart",
     "test/grpc/request_test.dart",
