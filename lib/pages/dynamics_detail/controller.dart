@@ -1,11 +1,13 @@
 import 'dart:async';
 
-import 'package:pili_aurora/common/widgets/scroll_physics.dart' show ReloadMixin;
+import 'package:pili_aurora/common/widgets/scroll_physics.dart'
+    show ReloadMixin;
 import 'package:pili_aurora/http/dynamics.dart';
 import 'package:pili_aurora/http/loading_state.dart';
 import 'package:pili_aurora/http/reply.dart';
 import 'package:pili_aurora/models/dynamics/result.dart';
 import 'package:pili_aurora/pages/common/dyn/common_dyn_controller.dart';
+import 'package:pili_aurora/utils/accounts.dart';
 import 'package:pili_aurora/utils/id_utils.dart';
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:get/get.dart';
@@ -18,6 +20,7 @@ class DynamicDetailController extends CommonDynController with ReloadMixin {
   @override
   late int replyType;
   late DynamicItemModel dynItem;
+  bool _changingReplySubject = false;
 
   @override
   dynamic get sourceId => replyType == 1 ? IdUtils.av2bv(oid) : oid;
@@ -65,17 +68,44 @@ class DynamicDetailController extends CommonDynController with ReloadMixin {
   }
 
   Future<void> onSetReplySubject(int action) async {
-    final res = await ReplyHttp.replySubjectModify(
-      oid: oid,
-      type: replyType,
-      action: action,
-    );
-    if (res.isSuccess) {
-      Timer(const Duration(milliseconds: 500), () {
-        if (!isClosed) {
-          onReload();
-        }
-      });
+    if (_changingReplySubject) return;
+    _changingReplySubject = true;
+    final account = Accounts.main;
+    final item = dynItem;
+    final oid = this.oid;
+    final type = replyType;
+    try {
+      final res = await ReplyHttp.replySubjectModify(
+        account: account,
+        oid: oid,
+        type: type,
+        action: action,
+      );
+      if (isClosed ||
+          !identical(account, Accounts.main) ||
+          !identical(item, dynItem) ||
+          oid != this.oid ||
+          type != replyType) {
+        return;
+      }
+      if (res case Success(:final response)) {
+        SmartDialog.showToast(
+          response?.trim().isNotEmpty == true ? response! : '设置成功',
+        );
+        Timer(const Duration(milliseconds: 500), () {
+          if (!isClosed &&
+              identical(account, Accounts.main) &&
+              identical(item, dynItem) &&
+              oid == this.oid &&
+              type == replyType) {
+            onReload();
+          }
+        });
+      } else {
+        res.toast();
+      }
+    } finally {
+      _changingReplySubject = false;
     }
   }
 

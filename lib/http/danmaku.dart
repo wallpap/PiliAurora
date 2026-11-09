@@ -1,4 +1,5 @@
 import 'package:pili_aurora/http/api.dart';
+import 'package:pili_aurora/http/api_response.dart';
 import 'package:pili_aurora/http/init.dart';
 import 'package:pili_aurora/http/loading_state.dart';
 import 'package:pili_aurora/models/remote/danmaku/post.dart';
@@ -11,27 +12,24 @@ abstract final class DanmakuHttp {
     required int cid,
     required int id,
     required Account account,
-  }) async {
-    final res = await Request().get(
+  }) {
+    return Request().requestApi(
       Api.danmakuLikeStats,
+      kind: ApiCallKind.query,
+      decode: (body) {
+        final stat = (body['data'] as Map<String, dynamic>)['$id'] as Map;
+        return (
+          likes: (stat['likes'] as num).toInt(),
+          isLike: (stat['user_like'] as num) != 0,
+        );
+      },
       queryParameters: {'oid': cid, 'ids': '$id'},
       options: Options(extra: {'account': account}),
     );
-    final data = res.data;
-    if (data['code'] != 0) {
-      return Error(data['message'], code: data['code']);
-    }
-    final stat = (data['data'] as Map?)?['$id'];
-    if (stat is! Map || stat['likes'] is! num || stat['user_like'] is! num) {
-      return const Error('未能获取弹幕点赞状态，请重试');
-    }
-    return Success((
-      likes: (stat['likes'] as num).toInt(),
-      isLike: stat['user_like'] != 0,
-    ));
   }
 
   static Future<LoadingState<DanmakuPost>> shootDanmaku({
+    Account? account,
     int type = 1, //弹幕类选择(1：视频弹幕 2：漫画弹幕)
     required int oid, // 视频cid
     required String msg, //弹幕文本(长度小于 100 字符)
@@ -49,11 +47,8 @@ abstract final class DanmakuHttp {
     int? checkboxType, //是否带 UP 身份标识（0：普通；4：带有标识）
     // String? csrf,//CSRF Token（位于 Cookie）	Cookie 方式必要
     // String? access_key,//	APP 登录 Token		APP 方式必要
-  }) async {
-    // 构建参数对象
-    // assert(aid != null || bvid != null);
-    // assert(csrf != null || access_key != null);
-    // 构建参数对象
+  }) {
+    account ??= Accounts.main;
     final data = <String, Object>{
       'type': type,
       'oid': oid,
@@ -68,28 +63,29 @@ abstract final class DanmakuHttp {
       'rnd': DateTime.now().microsecondsSinceEpoch,
       'colorful': ?colorful ? 60001 : null,
       'checkbox_type': ?checkboxType,
-      'csrf': Accounts.main.csrf,
+      'csrf': account.csrf,
       // 'access_key': access_key,
     };
 
-    final res = await Request().post(
+    return Request().requestApi(
       Api.shootDanmaku,
+      kind: ApiCallKind.mutation,
+      decode: (body) => DanmakuPost.fromJson(body['data']),
       data: data,
-      options: Options(contentType: Headers.formUrlEncodedContentType),
+      options: Options(
+        extra: {'account': account},
+        contentType: Headers.formUrlEncodedContentType,
+      ),
     );
-
-    if (res.data['code'] == 0) {
-      return Success(DanmakuPost.fromJson(res.data['data']));
-    } else {
-      return Error(res.data['message'], code: res.data['code']);
-    }
   }
 
   static Future<LoadingState<void>> danmakuLike({
+    Account? account,
     required bool isLike,
     required int cid,
     required int id,
-  }) async {
+  }) {
+    account ??= Accounts.main;
     final data = {
       'op': isLike ? 1 : 2,
       'dmid': id,
@@ -100,27 +96,29 @@ abstract final class DanmakuHttp {
       'spmid': '333.788.0.0',
       'from_spmid': '333.788.0.0',
       'statistics': '{"appId":100,"platform":5,"abtest":"","version":""}',
-      'csrf': Accounts.main.csrf,
+      'csrf': account.csrf,
     };
-    final res = await Request().post(
+    return Request().requestApi<void>(
       Api.danmakuLike,
+      kind: ApiCallKind.mutation,
+      decode: (_) {},
       data: data,
-      options: Options(contentType: Headers.formUrlEncodedContentType),
+      options: Options(
+        extra: {'account': account},
+        contentType: Headers.formUrlEncodedContentType,
+      ),
     );
-    if (res.data['code'] == 0) {
-      return const Success(null);
-    } else {
-      return Error(res.data['message'], code: res.data['code']);
-    }
   }
 
   static Future<LoadingState<void>> danmakuReport({
+    Account? account,
     required int reason,
     required int cid,
     required int id,
     bool block = false,
     String? content,
-  }) async {
+  }) {
+    account ??= Accounts.main;
     final data = {
       'cid': cid,
       'dmid': id,
@@ -133,19 +131,18 @@ abstract final class DanmakuHttp {
       'spmid': '333.788.0.0',
       'from_spmid': '333.788.0.0',
       'statistics': '{"appId":100,"platform":5,"abtest":"","version":""}',
-      'csrf': Accounts.main.csrf,
+      'csrf': account.csrf,
     };
-    final res = await Request().post(
+    return Request().requestApi<void>(
       Api.danmakuReport,
+      kind: ApiCallKind.mutation,
+      decode: (_) {},
       data: data,
-      options: Options(contentType: Headers.formUrlEncodedContentType),
+      options: Options(
+        extra: {'account': account},
+        contentType: Headers.formUrlEncodedContentType,
+      ),
     );
-
-    if (res.data['code'] == 0) {
-      return const Success(null);
-    } else {
-      return Error(res.data['message']);
-    }
 
     /// res.data['data']['block']
     /// {
@@ -160,32 +157,37 @@ abstract final class DanmakuHttp {
   }
 
   static Future<LoadingState<String?>> danmakuRecall({
+    Account? account,
     required int cid,
     required int id,
-  }) async {
+  }) {
+    account ??= Accounts.main;
     final data = {
       'dmid': id,
       'cid': cid,
       'type': 1,
-      'csrf': Accounts.main.csrf,
+      'csrf': account.csrf,
     };
-    final res = await Request().post(
+    return Request().requestApi(
       Api.danmakuRecall,
+      kind: ApiCallKind.mutation,
+      decode: (body) => body['message'] as String?,
       data: data,
-      options: Options(contentType: Headers.formUrlEncodedContentType),
+      options: Options(
+        extra: {'account': account},
+        contentType: Headers.formUrlEncodedContentType,
+      ),
     );
-    if (res.data['code'] == 0) {
-      return Success(res.data['message']);
-    } else {
-      return Error(res.data['message']);
-    }
   }
 
   static Future<LoadingState<String?>> danmakuEditState({
+    Account? account,
     required int oid,
     required Iterable<int> ids,
     required int state,
-  }) async {
+  }) {
+    account ??= Accounts.main;
+
     /// 0: 取消删除
     /// 1：删除弹幕
     /// 2：弹幕保护
@@ -195,17 +197,17 @@ abstract final class DanmakuHttp {
       'oid': oid,
       'state': state,
       'type': 1,
-      'csrf': Accounts.main.csrf,
+      'csrf': account.csrf,
     };
-    final res = await Request().post(
-      Api.danmakuRecall,
+    return Request().requestApi(
+      Api.danmakuEditState,
+      kind: ApiCallKind.mutation,
+      decode: (body) => body['message'] as String?,
       data: data,
-      options: Options(contentType: Headers.formUrlEncodedContentType),
+      options: Options(
+        extra: {'account': account},
+        contentType: Headers.formUrlEncodedContentType,
+      ),
     );
-    if (res.data['code'] == 0) {
-      return Success(res.data['message']);
-    } else {
-      return Error(res.data['message']);
-    }
   }
 }

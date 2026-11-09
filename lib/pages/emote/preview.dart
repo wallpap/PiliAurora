@@ -7,6 +7,7 @@ import 'package:pili_aurora/http/reply.dart';
 import 'package:pili_aurora/models/common/image_type.dart';
 import 'package:pili_aurora/models/remote/emote/emote.dart';
 import 'package:pili_aurora/models/remote/emote/package.dart';
+import 'package:pili_aurora/utils/accounts.dart';
 
 class EmotePackagePreviewPage extends StatefulWidget {
   const EmotePackagePreviewPage({super.key, required this.package});
@@ -20,6 +21,7 @@ class EmotePackagePreviewPage extends StatefulWidget {
 
 class _EmotePackagePreviewPageState extends State<EmotePackagePreviewPage> {
   LoadingState<Package> _state = LoadingState.loading();
+  int _generation = 0;
 
   @override
   void initState() {
@@ -27,15 +29,31 @@ class _EmotePackagePreviewPageState extends State<EmotePackagePreviewPage> {
     _load();
   }
 
+  @override
+  void didUpdateWidget(EmotePackagePreviewPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.package.id != widget.package.id) _load();
+  }
+
   Future<void> _load() async {
+    final generation = ++_generation;
+    final account = Accounts.main;
     final id = widget.package.id;
     if (id == null) {
       setState(() => _state = const Error('表情包信息缺失'));
       return;
     }
     setState(() => _state = LoadingState.loading());
-    final result = await ReplyHttp.getEmotePackageDetail(packageId: id);
-    if (mounted) setState(() => _state = result);
+    final result = await ReplyHttp.getEmotePackageDetail(
+      packageId: id,
+      account: account,
+    );
+    if (!mounted || generation != _generation) return;
+    setState(
+      () => _state = identical(account, Accounts.main)
+          ? result
+          : const Error('账号已切换，请刷新重试'),
+    );
   }
 
   @override

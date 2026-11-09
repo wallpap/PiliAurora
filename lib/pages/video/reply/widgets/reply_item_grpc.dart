@@ -1186,14 +1186,20 @@ class ReplyItemGrpc extends StatelessWidget {
                   reportUrl:
                       'https://www.bilibili.com/h5/comment/report?oid=$oid&pageType=${item.type}&rpid=$rpid&platform=android&build=8430300&${ThemeUtils.themeUrl(colorScheme.isDark)}',
                   (reasonType, reasonDesc, banUid) async {
+                    if (!identical(account, Accounts.main)) {
+                      return const Error('账号已切换，请重新打开举报页面');
+                    }
                     final res = await ReplyHttp.report(
+                      account: account,
                       rpid: rpid,
                       oid: oid,
                       reasonType: reasonType,
                       reasonDesc: reasonDesc,
                       banUid: banUid,
                     );
-                    if (res.isSuccess) {
+                    if (res.isSuccess &&
+                        context.mounted &&
+                        identical(account, Accounts.main)) {
                       onDelete();
                     }
                     return res;

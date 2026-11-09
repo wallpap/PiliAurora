@@ -2,7 +2,6 @@ import 'package:pili_aurora/common/widgets/button/icon_button.dart';
 import 'package:pili_aurora/common/widgets/radio_widget.dart';
 import 'package:pili_aurora/http/loading_state.dart';
 import 'package:pili_aurora/utils/extension/string_ext.dart';
-import 'package:pili_aurora/utils/utils.dart';
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:get/get.dart';
 import 'package:material_design_icons_flutter/material_design_icons_flutter.dart';
@@ -30,6 +29,7 @@ Future<void> autoWrapReportDialog(
   int? reasonType;
   String? reasonDesc;
   bool banUid = false;
+  bool submitting = false;
   late final key = GlobalKey<FormFieldState<String>>();
 
   bool isWithContent = withContent(reasonType);
@@ -63,119 +63,132 @@ Future<void> autoWrapReportDialog(
 
   return showDialog(
     context: context,
-    builder: (context) => AlertDialog(
-      title: title,
-      titlePadding: const .only(left: 22, top: 16, right: 22),
-      contentPadding: const .symmetric(vertical: 5),
-      actionsPadding: const .only(left: 16, right: 16, bottom: 10),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Flexible(
-            child: SingleChildScrollView(
-              child: AnimatedSize(
-                duration: const Duration(milliseconds: 200),
-                child: Builder(
-                  builder: (context) => Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Padding(
-                        padding: .only(left: 22, right: 22, bottom: 5),
-                        child: Text('请选择举报的理由：'),
-                      ),
-                      RadioGroup(
-                        onChanged: (value) {
-                          updateReasonType(value);
-                          (context as Element).markNeedsBuild();
-                        },
-                        groupValue: reasonType,
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: options.entries.map((entry) {
-                            return WrapRadioOptionsGroup<int>(
-                              groupTitle: entry.key,
-                              options: entry.value,
-                            );
-                          }).toList(),
+    builder: (context) => StatefulBuilder(
+      builder: (context, setState) => AlertDialog(
+        title: title,
+        titlePadding: const .only(left: 22, top: 16, right: 22),
+        contentPadding: const .symmetric(vertical: 5),
+        actionsPadding: const .only(left: 16, right: 16, bottom: 10),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Flexible(
+              child: SingleChildScrollView(
+                child: AnimatedSize(
+                  duration: const Duration(milliseconds: 200),
+                  child: Builder(
+                    builder: (context) => Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Padding(
+                          padding: .only(left: 22, right: 22, bottom: 5),
+                          child: Text('请选择举报的理由：'),
                         ),
-                      ),
-                      if (isWithContent)
-                        Padding(
-                          padding: const .only(left: 22, top: 5, right: 22),
-                          child: TextFormField(
-                            key: key,
-                            minLines: 2,
-                            maxLines: 4,
-                            initialValue: reasonDesc,
-                            autofocus: isContentRequired,
-                            decoration: const InputDecoration(
-                              labelText: '为帮助审核人员更快处理，请补充问题类型和出现位置等详细信息',
-                              border: OutlineInputBorder(),
-                              contentPadding: .all(10),
-                              labelStyle: TextStyle(fontSize: 14),
-                              floatingLabelStyle: TextStyle(fontSize: 14),
-                            ),
-                            onChanged: (value) => reasonDesc = value,
-                            validator: (value) =>
-                                isContentRequired && value.isNullOrEmpty
-                                ? '理由不能为空'
-                                : null,
+                        RadioGroup(
+                          onChanged: (value) {
+                            updateReasonType(value);
+                            (context as Element).markNeedsBuild();
+                          },
+                          groupValue: reasonType,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: options.entries.map((entry) {
+                              return WrapRadioOptionsGroup<int>(
+                                groupTitle: entry.key,
+                                options: entry.value,
+                              );
+                            }).toList(),
                           ),
                         ),
-                    ],
+                        if (isWithContent)
+                          Padding(
+                            padding: const .only(left: 22, top: 5, right: 22),
+                            child: TextFormField(
+                              key: key,
+                              minLines: 2,
+                              maxLines: 4,
+                              initialValue: reasonDesc,
+                              autofocus: isContentRequired,
+                              decoration: const InputDecoration(
+                                labelText: '为帮助审核人员更快处理，请补充问题类型和出现位置等详细信息',
+                                border: OutlineInputBorder(),
+                                contentPadding: .all(10),
+                                labelStyle: TextStyle(fontSize: 14),
+                                floatingLabelStyle: TextStyle(fontSize: 14),
+                              ),
+                              onChanged: (value) => reasonDesc = value,
+                              validator: (value) =>
+                                  isContentRequired && value.isNullOrEmpty
+                                  ? '理由不能为空'
+                                  : null,
+                            ),
+                          ),
+                      ],
+                    ),
                   ),
                 ),
               ),
             ),
-          ),
-          if (ban)
-            Padding(
-              padding: const EdgeInsets.only(left: 14, top: 6),
-              child: CheckBoxText(
-                text: '拉黑该用户',
-                onChanged: (value) => banUid = value,
+            if (ban)
+              Padding(
+                padding: const EdgeInsets.only(left: 14, top: 6),
+                child: CheckBoxText(
+                  text: '拉黑该用户',
+                  onChanged: (value) => banUid = value,
+                ),
               ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: Text(
+              '取消',
+              style: TextStyle(color: ColorScheme.of(context).outline),
             ),
+          ),
+          TextButton(
+            onPressed: submitting
+                ? null
+                : () async {
+                    if (submitting) return;
+                    if (reasonType == null ||
+                        (isContentRequired &&
+                            key.currentState?.validate() != true)) {
+                      return;
+                    }
+                    final route = ModalRoute.of(context);
+                    setState(() => submitting = true);
+                    try {
+                      final res = await onReport(
+                        reasonType!,
+                        isWithContent ? reasonDesc : null,
+                        banUid,
+                      );
+                      if (!context.mounted || route?.isCurrent != true) return;
+                      if (res.isSuccess) {
+                        Navigator.of(context).pop();
+                        SmartDialog.showToast(switch (res) {
+                          Success(response: final String message) => message,
+                          _ => '举报成功',
+                        });
+                      } else {
+                        res.toast();
+                      }
+                    } catch (e, s) {
+                      final error = Error.fromException(e, s);
+                      if (context.mounted && route?.isCurrent == true) {
+                        error.toast();
+                      }
+                    } finally {
+                      if (context.mounted) setState(() => submitting = false);
+                    }
+                  },
+            child: Text(submitting ? '提交中' : '确定'),
+          ),
         ],
       ),
-      actions: [
-        TextButton(
-          onPressed: Get.back,
-          child: Text(
-            '取消',
-            style: TextStyle(color: ColorScheme.of(context).outline),
-          ),
-        ),
-        TextButton(
-          onPressed: () async {
-            if (reasonType == null ||
-                (isContentRequired && key.currentState?.validate() != true)) {
-              return;
-            }
-            SmartDialog.showLoading();
-            try {
-              final res = await onReport(
-                reasonType!,
-                isWithContent ? reasonDesc : null,
-                banUid,
-              );
-              SmartDialog.dismiss();
-              if (res.isSuccess) {
-                Get.back();
-                SmartDialog.showToast('举报成功');
-              } else {
-                res.toast();
-              }
-            } catch (e, s) {
-              SmartDialog.dismiss();
-              SmartDialog.showToast('提交失败：$e');
-              Utils.reportError(e, s);
-            }
-          },
-          child: const Text('确定'),
-        ),
-      ],
     ),
   );
 }

@@ -183,16 +183,19 @@ class HeaderControl extends StatefulWidget {
   State<HeaderControl> createState() => HeaderControlState();
 
   static Future<bool> likeDanmaku(VideoDanmaku extra, int cid) async {
-    if (!Accounts.main.isLogin) {
+    final account = Accounts.main;
+    if (!account.isLogin) {
       SmartDialog.showToast('请先登录');
       return false;
     }
     final isLike = !extra.isLike;
     final res = await DanmakuHttp.danmakuLike(
+      account: account,
       isLike: isLike,
       cid: cid,
       id: extra.id,
     );
+    if (!identical(account, Accounts.main)) return false;
     if (res.isSuccess) {
       extra.isLike = isLike;
       if (isLike) {
@@ -219,10 +222,13 @@ class HeaderControl extends StatefulWidget {
   }
 
   static Future<bool> deleteDanmaku(int id, int cid) async {
+    final account = Accounts.main;
     final res = await DanmakuHttp.danmakuRecall(
+      account: account,
       cid: cid,
       id: id,
     );
+    if (!identical(account, Accounts.main)) return false;
     if (res.isSuccess) {
       SmartDialog.showToast('删除成功');
       return true;
@@ -237,32 +243,56 @@ class HeaderControl extends StatefulWidget {
     required VideoDanmaku extra,
     required PlPlayerController ctr,
   }) {
-    if (Accounts.main.isLogin) {
+    final account = Accounts.main;
+    final cid = ctr.cid;
+    if (cid == null) return SmartDialog.showToast('视频信息缺失，请重试');
+    if (account.isLogin) {
       return autoWrapReportDialog(
         context,
         ReportOptions.danmakuReport,
         withContent: ReportOptions.danmakuReportCheck,
         contentRequired: ReportOptions.danmakuReportCheck,
-        (reasonType, reasonDesc, banUid) {
-          if (banUid) {
-            final filter = ctr.filters;
-            if (filter.dmUid.add(extra.mid)) {
-              filter.count++;
-              ctr.filters = filter;
-              GStorage.localCache.put(LocalCacheKey.danmakuFilterRules, filter);
-            }
-            DanmakuFilterHttp.danmakuFilterAdd(
-              account: Accounts.main,
-              filter: extra.mid,
-              type: 2,
-            );
+        (reasonType, reasonDesc, banUid) async {
+          if (!identical(account, Accounts.main) || cid != ctr.cid) {
+            return const Error('账号或视频已切换，请重新打开举报页面');
           }
-          return DanmakuHttp.danmakuReport(
+          final result = await DanmakuHttp.danmakuReport(
+            account: account,
             reason: reasonType,
-            cid: ctr.cid!,
+            cid: cid,
             id: extra.id,
             content: reasonDesc,
           );
+          if (!result.isSuccess ||
+              !identical(account, Accounts.main) ||
+              cid != ctr.cid) {
+            return result;
+          }
+          if (banUid) {
+            try {
+              final filter = ctr.filters;
+              if (filter.dmUid.add(extra.mid)) {
+                filter.count++;
+                ctr.filters = filter;
+                await GStorage.localCache.put(
+                  LocalCacheKey.danmakuFilterRules,
+                  filter,
+                );
+              }
+              final blockResult = await DanmakuFilterHttp.danmakuFilterAdd(
+                account: account,
+                filter: extra.mid,
+                type: 2,
+              );
+              if (blockResult is Error) {
+                return Success('举报成功；屏蔽规则同步：$blockResult');
+              }
+            } catch (error, stackTrace) {
+              final failure = Error.fromException(error, stackTrace);
+              return Success('举报成功；本地屏蔽保存失败：$failure');
+            }
+          }
+          return result;
         },
       );
     } else {

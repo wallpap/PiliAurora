@@ -8,6 +8,7 @@ import 'package:pili_aurora/models/common/reply/reply_sort_type.dart';
 import 'package:pili_aurora/pages/common/common_list_controller.dart';
 import 'package:pili_aurora/pages/common/publish/publish_route.dart';
 import 'package:pili_aurora/pages/video/reply_new/view.dart';
+import 'package:pili_aurora/utils/accounts.dart';
 import 'package:pili_aurora/utils/feed_back.dart';
 import 'package:pili_aurora/utils/reply_utils.dart';
 import 'package:pili_aurora/utils/reply_filter.dart';
@@ -32,6 +33,7 @@ abstract class ReplyController<R> extends CommonListController<R, ReplyInfo> {
   SubjectControl? subjectControl;
   FeedPaginationReply? paginationReply;
   late bool hasUpTop = false;
+  bool _togglingTop = false;
 
   @override
   bool? get hasFooter => true;
@@ -260,32 +262,41 @@ abstract class ReplyController<R> extends CommonListController<R, ReplyInfo> {
     int type,
   ) async {
     final list = loadingState.value.dataOrNull;
+    if (_togglingTop || list == null) return;
+    _togglingTop = true;
+    final account = Accounts.main;
     bool isUpTop = item.replyControl.isUpTop;
-    final res = await ReplyHttp.replyTop(
-      oid: oid,
-      type: type,
-      rpid: item.id,
-      isUpTop: isUpTop,
-    );
-    if (isClosed ||
-        list == null ||
-        !identical(list, loadingState.value.dataOrNull)) {
-      return;
-    }
-    final currentIndex = list.indexWhere((reply) => reply.id == item.id);
-    if (currentIndex < 0) return;
-    item = list[currentIndex];
-    if (res.isSuccess) {
-      item.replyControl.isUpTop = !isUpTop;
-      if (!isUpTop && currentIndex != 0) {
-        list
-          ..first.replyControl.isUpTop = false
-          ..insert(0, list.removeAt(currentIndex));
+    try {
+      final res = await ReplyHttp.replyTop(
+        account: account,
+        oid: oid,
+        type: type,
+        rpid: item.id,
+        isUpTop: isUpTop,
+      );
+      if (isClosed ||
+          !identical(account, Accounts.main) ||
+          !identical(list, loadingState.value.dataOrNull)) {
+        return;
       }
-      loadingState.refresh();
-      SmartDialog.showToast('${isUpTop ? '取消' : ''}置顶成功');
-    } else {
-      res.toast();
+      final currentIndex = list.indexWhere((reply) => reply.id == item.id);
+      if (currentIndex < 0) return;
+      item = list[currentIndex];
+      if (res.isSuccess) {
+        item.ensureReplyControl().isUpTop = !isUpTop;
+        hasUpTop = !isUpTop;
+        if (!isUpTop && currentIndex != 0) {
+          list
+            ..first.ensureReplyControl().isUpTop = false
+            ..insert(0, list.removeAt(currentIndex));
+        }
+        loadingState.refresh();
+        SmartDialog.showToast('${isUpTop ? '取消' : ''}置顶成功');
+      } else {
+        res.toast();
+      }
+    } finally {
+      _togglingTop = false;
     }
   }
 

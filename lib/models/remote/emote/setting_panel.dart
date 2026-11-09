@@ -15,9 +15,7 @@ class EmoteSettingPanel {
         allPackages: _parsePackages(json['all_packages']),
       );
 
-  static List<Package> _parsePackages(Object? value) => value is List
-      ? value
-            .map((item) => Package.fromJson(item as Map<String, dynamic>))
-            .toList()
-      : [];
+  static List<Package> _parsePackages(Object? value) => (value as List? ?? [])
+      .map((item) => Package.fromJson(item as Map<String, dynamic>))
+      .toList();
 }

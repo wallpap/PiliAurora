@@ -10,7 +10,6 @@ import 'package:pili_aurora/models/common/reply/reply_sort_type.dart';
 import 'package:pili_aurora/utils/accounts.dart';
 import 'package:pili_aurora/utils/accounts/account.dart';
 import 'package:pili_aurora/utils/android/android_helper.dart';
-import 'package:pili_aurora/utils/extension/iterable_ext.dart';
 import 'package:pili_aurora/utils/extension/theme_ext.dart';
 import 'package:pili_aurora/utils/id_utils.dart';
 import 'package:pili_aurora/utils/theme_utils.dart';
@@ -20,14 +19,14 @@ import 'package:get/get.dart';
 import 'package:material_ui/material_ui.dart';
 
 abstract final class ReplyUtils {
-  static void onCheckReply({
+  static Future<void> onCheckReply({
     required ReplyInfo replyInfo,
     required bool biliSendCommAntifraud,
     required sourceId,
     required bool isManual,
-  }) {
+  }) async {
     try {
-      _checkReply(
+      await _checkReply(
         oid: replyInfo.oid.toInt(),
         type: replyInfo.type.toInt(),
         id: replyInfo.id.toInt(),
@@ -45,8 +44,8 @@ abstract final class ReplyUtils {
         biliSendCommAntifraud: biliSendCommAntifraud,
         sourceId: sourceId,
       );
-    } catch (e) {
-      SmartDialog.showToast(e.toString());
+    } catch (error, stackTrace) {
+      Error.fromException(error, stackTrace).toast();
     }
   }
 
@@ -65,10 +64,13 @@ abstract final class ReplyUtils {
     required bool biliSendCommAntifraud,
     required sourceId,
   }) async {
+    final account = Accounts.main;
+    bool isCurrent() =>
+        identical(account, Accounts.main) && Get.context?.mounted == true;
     // biliSendCommAntifraud
     if (Platform.isAndroid && biliSendCommAntifraud) {
       try {
-        final cookieString = Accounts.main.cookieJar
+        final cookieString = account.cookieJar
             .toJson()
             .entries
             .map((i) => '${i.key}=${i.value}')
@@ -97,7 +99,9 @@ abstract final class ReplyUtils {
     if (!isManual) {
       await Future.pause(const Duration(seconds: 8));
     }
+    if (!isCurrent()) return;
     void showReplyCheckResult(String message, {bool isBan = false}) {
+      if (!isCurrent()) return;
       showDialog(
         context: Get.context!,
         barrierDismissible: isManual,
@@ -181,9 +185,10 @@ abstract final class ReplyUtils {
         sort: ReplySortType.time.index,
         page: 1,
       );
+      if (!isCurrent()) return;
 
-      if (res case Error(:final errMsg)) {
-        SmartDialog.showToast('获取评论主列表时发生错误：$errMsg');
+      if (res is Error) {
+        SmartDialog.showToast('获取评论主列表时发生错误：$res');
         return;
       } else if (res case Success(:final response)) {
         final index =
@@ -196,14 +201,20 @@ abstract final class ReplyUtils {
 
           // cookie check
           final res1 = await ReplyHttp.replyReplyList(
+            account: account,
             isLogin: true,
             oid: oid,
             root: id,
             pageNum: 1,
             type: type,
           );
+          if (!isCurrent()) return;
 
           if (res1 is Error) {
+            if (res1.code != 12022) {
+              SmartDialog.showToast('评论检查失败：$res1');
+              return;
+            }
             // not found
             showReplyCheckResult('无法找到你的评论。\n\n你的评论：$message', isBan: true);
           } else {
@@ -216,15 +227,17 @@ abstract final class ReplyUtils {
               root: id,
               pageNum: 1,
               type: type,
-              isCheck: true,
             );
+            if (!isCurrent()) return;
 
             if (res2 is Error) {
+              if (res2.code != 12022) {
+                SmartDialog.showToast('评论检查失败：$res2');
+                return;
+              }
               // not found
               showReplyCheckResult(
-                res2.errMsg?.startsWith('12022') == true
-                    ? '你的评论被shadow ban（仅自己可见）！\n\n你的评论: $message'
-                    : '评论不可见(${res2.errMsg}): $message',
+                '你的评论被shadow ban（仅自己可见）！\n\n你的评论: $message',
                 isBan: true,
               );
             } else {
@@ -244,61 +257,66 @@ https://api.bilibili.com/x/v2/reply/reply?oid=$oid&pn=1&ps=20&root=$id&type=$typ
         }
       }
     } else {
-      for (int i = 1; ; i++) {
-        final res3 = await ReplyHttp.replyReplyList(
-          isLogin: false,
-          oid: oid,
-          root: root,
-          pageNum: i,
-          type: type,
-          isCheck: true,
-        );
-        if (res3 is Error) {
-          break;
-        } else {
-          final data = res3.data;
-          if (data.replies.isNullOrEmpty) {
-            break;
+      Future<LoadingState<bool>> containsReply({required bool isLogin}) async {
+        final seen = <int?>{};
+        for (var page = 1; page <= 100; page++) {
+          final result = await ReplyHttp.replyReplyList(
+            account: account,
+            isLogin: isLogin,
+            oid: oid,
+            root: root,
+            pageNum: page,
+            type: type,
+          );
+          if (!isCurrent()) return const Error('评论检查已失效');
+          if (result is Error) {
+            return result.code == 12022 ? const Success(false) : result;
           }
-          int index = data.replies!.indexWhere((item) => item.rpid == id);
-          if (index == -1) {
-            // not found
-          } else {
-            // found
-            showReplyCheckResult('无账号状态下找到了你的评论，评论正常！\n\n你的评论：$message');
-            return;
+          final data = result.data;
+          final replies = data.replies;
+          if (replies == null || replies.isEmpty) return const Success(false);
+          if (replies.any((item) => item.rpid == id)) {
+            return const Success(true);
+          }
+          final before = seen.length;
+          seen.addAll(replies.map((item) => item.rpid));
+          if (seen.length == before || seen.contains(null)) {
+            return const Error('评论列表未能继续加载，暂时无法确认评论状态');
+          }
+          final count = data.page?.count;
+          final size = data.page?.size;
+          if (count != null &&
+              size != null &&
+              size > 0 &&
+              page * size >= count) {
+            return const Success(false);
           }
         }
+        return const Error('评论列表超出检查上限，请稍后重试');
       }
 
-      for (int i = 1; ; i++) {
-        final res4 = await ReplyHttp.replyReplyList(
-          isLogin: true,
-          oid: oid,
-          root: root,
-          pageNum: i,
-          type: type,
-          isCheck: true,
+      final anonymous = await containsReply(isLogin: false);
+      if (!isCurrent()) return;
+      if (anonymous is Error) {
+        SmartDialog.showToast('评论检查失败：$anonymous');
+        return;
+      }
+      if (anonymous.data) {
+        showReplyCheckResult('无账号状态下找到了你的评论，评论正常！\n\n你的评论：$message');
+        return;
+      }
+      final loggedIn = await containsReply(isLogin: true);
+      if (!isCurrent()) return;
+      if (loggedIn is Error) {
+        SmartDialog.showToast('评论检查失败：$loggedIn');
+        return;
+      }
+      if (loggedIn.data) {
+        showReplyCheckResult(
+          '你的评论被shadow ban（仅自己可见）！\n\n你的评论: $message',
+          isBan: true,
         );
-        if (res4 is Error) {
-          break;
-        } else {
-          final data = res4.data;
-          if (data.replies.isNullOrEmpty) {
-            break;
-          }
-          int index = data.replies!.indexWhere((item) => item.rpid == id);
-          if (index == -1) {
-            // not found
-          } else {
-            // found
-            showReplyCheckResult(
-              '你的评论被shadow ban（仅自己可见）！\n\n你的评论: $message',
-              isBan: true,
-            );
-            return;
-          }
-        }
+        return;
       }
 
       showReplyCheckResult('评论不可见: $message', isBan: true);

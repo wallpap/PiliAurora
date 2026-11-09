@@ -11,6 +11,7 @@ import 'package:pili_aurora/pages/common/publish/common_text_pub_page.dart';
 import 'package:pili_aurora/pages/danmaku/danmaku_model.dart';
 import 'package:pili_aurora/pages/setting/slide_color_picker.dart';
 import 'package:pili_aurora/plugin/pl_player/controller.dart';
+import 'package:pili_aurora/utils/accounts.dart';
 import 'package:pili_aurora/utils/storage_pref.dart';
 import 'package:canvas_danmaku/models/danmaku_content_item.dart';
 import 'package:flutter/services.dart' show LengthLimitingTextInputFormatter;
@@ -50,6 +51,7 @@ class _SendDanmakuPanelState extends CommonTextPubPageState<SendDanmakuPanel> {
   late final RxInt _mode;
   late final RxInt _fontSize;
   late final Rx<Color> _color;
+  final _sending = false.obs;
 
   final List<Color> _colorList = [
     Colors.white,
@@ -393,12 +395,14 @@ class _SendDanmakuPanelState extends CommonTextPubPageState<SendDanmakuPanel> {
           const SizedBox(width: 12),
           Obx(
             () => iconButton(
-              tooltip: '发送',
+              tooltip: _sending.value ? '发送中' : '发送',
               iconSize: 22,
               iconColor: enablePublish.value
                   ? theme.colorScheme.primary
                   : theme.colorScheme.outline,
-              onPressed: enablePublish.value ? onPublishThrottle : null,
+              onPressed: enablePublish.value && !_sending.value
+                  ? onPublishThrottle
+                  : null,
               icon: const Icon(Icons.send),
             ),
           ),
@@ -428,46 +432,71 @@ class _SendDanmakuPanelState extends CommonTextPubPageState<SendDanmakuPanel> {
 
   @override
   Future<void> onCustomPublish({List? pictures}) async {
-    SmartDialog.showLoading(msg: '发送中...');
-    bool isColorful = _color.value == Colors.transparent;
-    final res = await DanmakuHttp.shootDanmaku(
-      oid: widget.cid,
-      bvid: widget.bvid,
-      progress: widget.progress,
-      msg: editController.text,
-      mode: _mode.value,
-      fontSize: _fontSize.value,
-      color: isColorful ? null : _color.value.toARGB32() & 0xFFFFFF,
-      colorful: isColorful,
-    );
-    SmartDialog.dismiss();
-    if (res case Success(:final response)) {
-      hasPub = true;
-      Get.back();
-      SmartDialog.showToast('发送成功');
-      VideoDanmaku? extra;
-      if (response.dmid case final dmid?) {
-        extra = VideoDanmaku(
-          id: dmid,
-          mid: PlPlayerController.instance!.midHash,
-        );
-      }
-      widget.onSuccess(
-        DanmakuContentItem(
-          editController.text,
-          color: isColorful ? Colors.white : _color.value,
-          type: switch (_mode.value) {
-            5 => DanmakuItemType.top,
-            4 => DanmakuItemType.bottom,
-            _ => DanmakuItemType.scroll,
-          },
-          selfSend: true,
-          isColorful: isColorful,
-          extra: extra,
-        ),
+    if (_sending.value) return;
+    final account = Accounts.main;
+    final cid = widget.cid;
+    final bvid = widget.bvid;
+    final text = editController.text;
+    final mode = _mode.value;
+    final fontSize = _fontSize.value;
+    final color = _color.value;
+    final isColorful = color == Colors.transparent;
+    final player = PlPlayerController.instance;
+    final midHash = player?.midHash;
+    final route = ModalRoute.of(context);
+    _sending.value = true;
+    try {
+      final res = await DanmakuHttp.shootDanmaku(
+        account: account,
+        oid: cid,
+        bvid: bvid,
+        progress: widget.progress,
+        msg: text,
+        mode: mode,
+        fontSize: fontSize,
+        color: isColorful ? null : color.toARGB32() & 0xFFFFFF,
+        colorful: isColorful,
       );
-    } else {
-      res.toast();
+      if (!mounted ||
+          !identical(account, Accounts.main) ||
+          cid != widget.cid ||
+          bvid != widget.bvid ||
+          (player != null &&
+              (!identical(player, PlPlayerController.instance) ||
+                  player.cid != cid))) {
+        return;
+      }
+      if (res case Success(:final response)) {
+        hasPub =
+            text == editController.text &&
+            mode == _mode.value &&
+            fontSize == _fontSize.value &&
+            color == _color.value;
+        widget.onSuccess(
+          DanmakuContentItem(
+            text,
+            color: isColorful ? Colors.white : color,
+            type: switch (mode) {
+              5 => DanmakuItemType.top,
+              4 => DanmakuItemType.bottom,
+              _ => DanmakuItemType.scroll,
+            },
+            selfSend: true,
+            isColorful: isColorful,
+            extra: response.dmid != null && midHash != null
+                ? VideoDanmaku(id: response.dmid!, mid: midHash)
+                : null,
+          ),
+        );
+        if (mounted && hasPub && route?.isCurrent == true) {
+          Navigator.of(context).pop();
+        }
+        SmartDialog.showToast('发送成功');
+      } else {
+        res.toast();
+      }
+    } finally {
+      if (mounted) _sending.value = false;
     }
   }
 }

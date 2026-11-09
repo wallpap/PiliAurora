@@ -1,5 +1,6 @@
 import 'package:pili_aurora/common/constants.dart';
 import 'package:pili_aurora/http/api.dart';
+import 'package:pili_aurora/http/api_response.dart';
 import 'package:pili_aurora/http/init.dart';
 import 'package:pili_aurora/http/loading_state.dart';
 import 'package:pili_aurora/models/remote/emote/data.dart';
@@ -11,7 +12,6 @@ import 'package:pili_aurora/models/remote/reply_interaction/data.dart';
 import 'package:pili_aurora/utils/accounts.dart';
 import 'package:pili_aurora/utils/accounts/account.dart';
 import 'package:dio/dio.dart';
-import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 
 abstract final class ReplyHttp {
   static final Options options = Options(
@@ -20,275 +20,294 @@ abstract final class ReplyHttp {
   );
 
   static Future<LoadingState<ReplyData>> replyList({
+    Account? account,
     required bool isLogin,
     required int oid,
     required String nextOffset,
     required int type,
     required int page,
     int sort = 1,
-  }) async {
-    final res = !isLogin
-        ? await Request().get(
-            '${Api.replyList}/main',
-            queryParameters: {
-              'oid': oid,
-              'type': type,
-              'pagination_str':
-                  '{"offset":"${nextOffset.replaceAll('"', '\\"')}"}',
-              'mode': sort + 2, //2:按时间排序；3：按热度排序
-            },
-            options: !isLogin ? options : null,
-          )
-        : await Request().get(
-            Api.replyList,
-            queryParameters: {
-              'oid': oid,
-              'type': type,
-              'sort': sort,
-              'pn': page,
-              'ps': 20,
-            },
-            options: !isLogin ? options : null,
-          );
-    if (res.data['code'] == 0) {
-      return Success(ReplyData.fromJson(res.data['data']));
-    } else {
-      return Error(res.data['message']);
-    }
+  }) {
+    return Request().requestApi(
+      isLogin ? Api.replyList : '${Api.replyList}/main',
+      kind: ApiCallKind.query,
+      decode: (body) => ReplyData.fromJson(body['data']),
+      queryParameters: {
+        'oid': oid,
+        'type': type,
+        if (isLogin) ...{
+          'sort': sort,
+          'pn': page,
+          'ps': 20,
+        } else ...{
+          'pagination_str': '{"offset":"${nextOffset.replaceAll('"', '\\"')}"}',
+          'mode': sort + 2, // 2：按时间排序；3：按热度排序
+        },
+      },
+      options: isLogin
+          ? Options(extra: {'account': account ?? Accounts.main})
+          : options,
+    );
   }
 
   static Future<LoadingState<ReplyReplyData>> replyReplyList({
+    Account? account,
     required bool isLogin,
     required int oid,
     required int root,
     required int pageNum,
     required int type,
-    bool isCheck = false,
-  }) async {
-    final res = await Request().get(
+  }) {
+    account ??= Accounts.main;
+    return Request().requestApi(
       Api.replyReplyList,
+      kind: ApiCallKind.query,
+      decode: (body) => ReplyReplyData.fromJson(body['data']),
       queryParameters: {
         'oid': oid,
         'root': root,
         'pn': pageNum,
         'type': type,
         'sort': 1,
-        if (isLogin) 'csrf': Accounts.main.csrf,
+        if (isLogin) 'csrf': account.csrf,
       },
-      options: !isLogin ? options : null,
+      options: isLogin ? Options(extra: {'account': account}) : options,
     );
-    if (res.data['code'] == 0) {
-      ReplyReplyData replyData = ReplyReplyData.fromJson(res.data['data']);
-      return Success(replyData);
-    } else {
-      return Error(
-        isCheck
-            ? '${res.data['code']}${res.data['message']}'
-            : res.data['message'],
-      );
-    }
   }
 
   static Future<LoadingState<void>> hateReply({
+    Account? account,
     required int type,
     required int action,
     required int oid,
     required int rpid,
-  }) async {
-    final res = await Request().post(
+  }) {
+    account ??= Accounts.main;
+    return Request().requestApi<void>(
       Api.hateReply,
+      kind: ApiCallKind.mutation,
+      decode: (_) {},
       data: {
         'type': type,
         'oid': oid,
         'rpid': rpid,
         'action': action,
-        'csrf': Accounts.main.csrf,
+        'csrf': account.csrf,
       },
-      options: Options(contentType: Headers.formUrlEncodedContentType),
+      options: Options(
+        extra: {'account': account},
+        contentType: Headers.formUrlEncodedContentType,
+      ),
     );
-    if (res.data['code'] == 0) {
-      return const Success(null);
-    } else {
-      return Error(res.data['message']);
-    }
   }
 
   // 评论点赞
   static Future<LoadingState<void>> likeReply({
+    Account? account,
     required int type,
     required int oid,
     required int rpid,
     required int action,
-  }) async {
-    final res = await Request().post(
+  }) {
+    account ??= Accounts.main;
+    return Request().requestApi<void>(
       Api.likeReply,
+      kind: ApiCallKind.mutation,
+      decode: (_) {},
       data: {
         'type': type,
         'oid': oid,
         'rpid': rpid,
         'action': action,
-        'csrf': Accounts.main.csrf,
+        'csrf': account.csrf,
       },
-      options: Options(contentType: Headers.formUrlEncodedContentType),
+      options: Options(
+        extra: {'account': account},
+        contentType: Headers.formUrlEncodedContentType,
+      ),
     );
-    if (res.data['code'] == 0) {
-      return const Success(null);
-    } else {
-      return Error(res.data['message']);
-    }
   }
 
   static Future<LoadingState<List<Package>?>> getEmoteList({
     String? business,
-  }) async {
-    final res = await Request().get(
+  }) {
+    return Request().requestApi(
       Api.myEmote,
+      kind: ApiCallKind.query,
+      decode: (body) => EmoteModelData.fromJson(body['data']).packages,
       queryParameters: {
         'business': business ?? 'reply',
         'web_location': '333.1245',
       },
     );
-    if (res.data['code'] == 0) {
-      return Success(EmoteModelData.fromJson(res.data['data']).packages);
-    } else {
-      return Error(res.data['message']);
-    }
   }
 
   static Future<LoadingState<EmoteSettingPanel>> getEmoteSettingPanel({
+    Account? account,
     String business = 'reply',
-  }) async {
-    final res = await Request().get(
+  }) {
+    return Request().requestApi(
       Api.emoteSettingPanel,
+      kind: ApiCallKind.query,
+      decode: (body) => EmoteSettingPanel.fromJson(body['data']),
       queryParameters: {'business': business},
+      options: Options(extra: {'account': account ?? Accounts.main}),
     );
-    if (res.data['code'] == 0) {
-      return Success(
-        EmoteSettingPanel.fromJson(res.data['data'] as Map<String, dynamic>),
-      );
-    } else {
-      return Error(res.data['message']);
-    }
   }
 
   static Future<LoadingState<List<Package>>> getMyEmotePackages({
+    Account? account,
     required int type,
   }) async {
+    account ??= Accounts.main;
     final packages = <Package>[];
-    for (var page = 1; ; page++) {
-      final res = await Request().get(
+    final ids = <int>{};
+    for (var page = 1; page <= 100; page++) {
+      final result = await Request().requestApi(
         Api.myEmotePackages,
+        kind: ApiCallKind.query,
+        decode: (body) {
+          final data = body['data'] as Map<String, dynamic>;
+          final total = data['total'] as int;
+          if (total < 0) throw const FormatException('表情包总数无效');
+          final items = (data['packages'] as List? ?? [])
+              .map((item) => Package.fromJson(item as Map<String, dynamic>))
+              .toList();
+          if (items.any((item) => (item.id ?? 0) <= 0)) {
+            throw const FormatException('表情包缺少有效 ID');
+          }
+          return (items: items, total: total);
+        },
         queryParameters: {
           'business': 'reply',
           'type': type,
           'pn': page,
           'ps': 100,
         },
+        options: Options(extra: {'account': account}),
       );
-      if (res.data['code'] != 0) return Error(res.data['message']);
-      final data = res.data['data'] as Map<String, dynamic>;
-      final items = (data['packages'] as List?) ?? [];
-      packages.addAll(
-        items.map((item) => Package.fromJson(item as Map<String, dynamic>)),
-      );
-      if (items.isEmpty || packages.length >= (data['total'] as num)) {
+      if (result is Error) return result;
+      final (:items, :total) = result.data;
+      if (items.isEmpty) {
+        return packages.length >= total
+            ? Success(packages)
+            : const Error('表情包列表未能完整加载，请刷新重试');
+      }
+      final fresh = items.where((item) => ids.add(item.id!)).toList();
+      if (fresh.isEmpty) return const Error('表情包列表未能继续加载，请刷新重试');
+      packages.addAll(fresh);
+      if (packages.length >= total) {
         return Success(packages);
       }
     }
+    return const Error('表情包列表超出加载上限，请稍后重试');
   }
 
   static Future<LoadingState<Package>> getEmotePackageDetail({
+    Account? account,
     required int packageId,
     String business = 'reply',
-  }) async {
-    final res = await Request().get(
+  }) {
+    return Request().requestApi(
       Api.emotePackageDetail,
+      kind: ApiCallKind.query,
+      decode: (body) {
+        final package = Package.fromJson(body['data']['package']);
+        if (package.id != packageId) throw const FormatException('表情包 ID 不匹配');
+        return package;
+      },
       queryParameters: {'id': packageId, 'business': business},
+      options: Options(extra: {'account': account ?? Accounts.main}),
     );
-    if (res.data['code'] == 0) {
-      return Success(
-        Package.fromJson(res.data['data']['package'] as Map<String, dynamic>),
-      );
-    } else {
-      return Error(res.data['message']);
-    }
   }
 
   static Future<LoadingState<void>> addEmotePackage({
+    Account? account,
     required int packageId,
     String business = 'reply',
   }) => _changeEmotePackage(
     Api.addEmotePackage,
+    account: account,
     packageId: packageId,
     business: business,
   );
 
   static Future<LoadingState<void>> removeEmotePackage({
+    Account? account,
     required int packageId,
     String business = 'reply',
   }) => _changeEmotePackage(
     Api.removeEmotePackage,
+    account: account,
     packageId: packageId,
     business: business,
   );
 
   static Future<LoadingState<void>> _changeEmotePackage(
     String api, {
+    Account? account,
     required int packageId,
     required String business,
-  }) async {
-    final res = await Request().post(
+  }) {
+    account ??= Accounts.main;
+    return Request().requestApi<void>(
       api,
+      kind: ApiCallKind.mutation,
+      decode: (_) {},
       data: {
         'package_id': packageId,
         'business': business,
-        'csrf': Accounts.main.csrf,
+        'csrf': account.csrf,
       },
-      options: Options(contentType: Headers.formUrlEncodedContentType),
+      options: Options(
+        extra: {'account': account},
+        contentType: Headers.formUrlEncodedContentType,
+      ),
     );
-    if (res.data['code'] == 0) {
-      return const Success(null);
-    } else {
-      return Error(res.data['message']);
-    }
   }
 
   static Future<LoadingState<void>> replyTop({
+    Account? account,
     required Object oid,
     required Object type,
     required Object rpid,
     required bool isUpTop,
-  }) async {
-    final res = await Request().post(
+  }) {
+    account ??= Accounts.main;
+    return Request().requestApi<void>(
       Api.replyTop,
+      kind: ApiCallKind.mutation,
+      decode: (_) {},
       data: {
         'oid': oid,
         'type': type,
         'rpid': rpid,
         'action': isUpTop ? 0 : 1,
-        'csrf': Accounts.main.csrf,
+        'csrf': account.csrf,
       },
-      options: Options(contentType: Headers.formUrlEncodedContentType),
+      options: Options(
+        extra: {'account': account},
+        contentType: Headers.formUrlEncodedContentType,
+      ),
     );
-    if (res.data['code'] == 0) {
-      return const Success(null);
-    } else {
-      return Error(res.data['message']);
-    }
   }
 
   static Future<LoadingState<void>> report({
+    Account? account,
     required Object rpid,
     required Object oid,
     required int reasonType,
     bool banUid = true,
     String? reasonDesc,
-  }) async {
-    final res = await Request().post(
+  }) {
+    account ??= Accounts.main;
+    return Request().requestApi<void>(
       Api.replyReport,
+      kind: ApiCallKind.mutation,
+      decode: (_) {},
       data: {
         'add_blacklist': banUid,
-        'csrf': Accounts.main.csrf,
+        'csrf': account.csrf,
         'gaia_source': 'main_h5',
         'oid': oid,
         'platform': 'android',
@@ -298,62 +317,50 @@ abstract final class ReplyHttp {
         'type': 1,
         'content': ?reasonDesc,
       },
-      options: Options(contentType: Headers.formUrlEncodedContentType),
+      options: Options(
+        extra: {'account': account},
+        contentType: Headers.formUrlEncodedContentType,
+      ),
     );
-
-    if (res.data['code'] == 0) {
-      return const Success(null);
-    } else {
-      return Error(res.data['message']);
-    }
   }
 
   static Future<LoadingState<ReplyInteractData>> replyInteraction({
     required Object oid,
     required Object type,
-  }) async {
-    final res = await Request().get(
+  }) {
+    return Request().requestApi(
       Api.replyInteraction,
+      kind: ApiCallKind.query,
+      decode: (body) => ReplyInteractData.fromJson(body['data']),
       queryParameters: {
         'oid': oid,
         'type': type,
         'web_location': 333.1369,
       },
     );
-    if (res.data['code'] == 0) {
-      try {
-        return Success(ReplyInteractData.fromJson(res.data['data']));
-      } catch (e, s) {
-        return Error.fromException(e, s);
-      }
-    } else {
-      return Error(res.data['message']);
-    }
   }
 
-  static Future<LoadingState<void>> replySubjectModify({
+  static Future<LoadingState<String?>> replySubjectModify({
+    Account? account,
     required int oid,
     required int type,
     required int action,
-  }) async {
-    final res = await Request().post(
+  }) {
+    account ??= Accounts.main;
+    return Request().requestApi(
       Api.replySubjectModify,
+      kind: ApiCallKind.mutation,
+      decode: (body) => body['data']?['action_toast'] as String?,
       data: {
         'oid': oid,
         'type': type,
         'action': action,
-        'csrf': Accounts.main.csrf,
+        'csrf': account.csrf,
       },
-      options: Options(contentType: Headers.formUrlEncodedContentType),
+      options: Options(
+        extra: {'account': account},
+        contentType: Headers.formUrlEncodedContentType,
+      ),
     );
-    if (res.data['code'] == 0) {
-      if (res.data['data']?['action_toast'] case final String toast) {
-        SmartDialog.showToast(toast);
-      }
-      return const Success(null);
-    } else {
-      SmartDialog.showToast(res.data['message'].toString());
-      return const Error(null);
-    }
   }
 }
