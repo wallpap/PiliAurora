@@ -52,6 +52,21 @@ class RetryInterceptor extends Interceptor {
       }
       return handler.next(err);
     } else {
+      final options = err.requestOptions;
+      // 默认只重试安全读取；gRPC 的 POST 读取通过 noRetry: false 显式选择重试。
+      // 发送超时不能证明服务端尚未执行，普通写请求因此不能自动重放。
+      if (options.extra['noRetry'] != false &&
+          !const {
+            'GET',
+            'HEAD',
+            'OPTIONS',
+          }.contains(options.method.toUpperCase())) {
+        return handler.next(err);
+      }
+      if (err.type == DioExceptionType.unknown &&
+          (err.error is FormatException || err.error is Error)) {
+        return handler.next(err);
+      }
       switch (err.type) {
         case DioExceptionType.connectionError:
         case DioExceptionType.connectionTimeout:
