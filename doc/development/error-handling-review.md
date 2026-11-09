@@ -32,6 +32,7 @@
 - 诊断导出：已有 DiagnosticExportResult 和带阶段的 DiagnosticExportException，结果拥有临时目录并携带不完整信息，保留原实现。
 - 播放会话对外结果：LoadResult、CommandResult 和 PlaybackShutdownResult 已区分就绪、失效、关闭、失败及清理不完整，保留现有类型。原生输出与设备行为仍按[构建与测试](build-and-test.md)验收。
 - 黑名单／合作作者补查：可选查询失败时保留完整缓存或已知作者；null 及短暂失败缓存属于明确的降级语义，保留原实现。
+- 直播协议解析：无效包头返回 null，单包损坏不阻断同帧内后续合法消息；worker 关闭或失败时结束在途 Future，连接持有者处理解析失败并释放连接。保留 `live_packet.dart` 和 `live_packet_decoder.dart` 的既有契约。
 
 ## 后续检查范围
 
@@ -40,6 +41,7 @@
 - HTTP 传输、重试和其余业务适配器：逐接口核对响应形状、写入重试及调用方对可空返回值的判断；现有通用捕获的修正不等同于所有 HTTP 接口已验收。
 - gRPC 各领域响应模型及业务调用方：请求、写入不确定性与解码契约已检查；模型字段和业务行为继续随各领域核对。
 - 桌面播放进程和启动／退出装配；直播消息连接与协议 worker 已检查，剩余直播业务接口仍随 HTTP 模块核对。
+- 启动装配已定位一项问题：`app/bootstrap.dart` 在主进程存储初始化失败时复制异常到剪贴板并调用 exit(0)，会覆盖用户剪贴板且将启动失败报告为成功。后续需完善可见的失败交付与进程结果，并验证平台窗口初始化前的路径。
 - 其余页面查询、收藏／历史／动态等写入，以及公共工具与模型的返回值和异常消费。
 
 ## 验证范围
@@ -48,7 +50,8 @@
 
 2026-11-09 在 Windows 主机实际执行：
 
-- `pwsh -NoProfile -File tool/run-ci-tests.ps1`：1024 项通过。
+- `pwsh -NoProfile -File tool/run-ci-tests.ps1`：1048 项通过，包含 gRPC 请求契约和本机 WebSocket 连接回归。
 - `fvm flutter analyze --no-pub lib/plugin/pl_player lib/pages/danmaku test tool`：无问题。
-- `fvm flutter analyze --no-pub lib test tool`：24 条 info，全部位于本轮未修改的 `lib/common/widgets/flutter/` 上游控件副本；没有 error 或 warning。随后新增的重试与设置恢复变更另经定向分析，无问题。
+- `fvm flutter analyze --no-pub lib test tool`：24 条 info，全部位于未修改的 `lib/common/widgets/flutter/` 上游控件副本；没有 error 或 warning。
 - 登录、公共错误／搜索／消息、下载、图片、账号和设置／重试分别执行过对应目录或文件的定向回归。完整范围见本页及[测试目录](../../test/README.md)。
+- gRPC、消息、弹幕、空间搜索与空间列表组合回归 100 项通过，随后补充状态元数据场景后的 gRPC 请求契约 12 项通过；直播连接、页面与加载组合回归 35 项通过。两组源码和测试的定向分析均无问题。
