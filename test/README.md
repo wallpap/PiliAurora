@@ -56,6 +56,8 @@ fvm flutter test test/services/diagnostics/ test/pages/about/diagnostics_page_te
 
 `http/loading_state_test.dart` 和 `http/search_response_test.dart` 检查成功取值、加载中误用、失败提示兜底及解析错误原因与展示文案的分离。`http/download_response_test.dart` 检查下载失败保留业务码、按实际媒体流选择画质，以及可选元数据缺失和无可下载媒体的区别。
 
+搜索响应回归还检查业务码、签名前账号固定、风控凭据类型和分 P 的空列表／损坏响应。`pages/search/controller_test.dart` 检查推荐账号切换时重载首页与热搜并拒绝迟到结果，已有搜索结果分页回归保留。
+
 `app/startup_test.dart` 和 `app/startup_failure_test.dart` 检查启动阶段、原始原因和堆栈保留，以及存储未就绪时的错误页、按需复制和关闭事件；`app/platform_setup_test.dart` 在 Windows 通过模拟通道检查初始化等待窗口显示与聚焦，并沿同一个 Future 交付窗口失败。真实进程退出码和设备窗口行为需另行验收。
 
 `http/api_response_test.dart` 和 `http/relationship_response_test.dart` 检查业务码、损坏响应、领域空数据、原始异常和写入待确认；同时检查操作语义对应的重试策略、未分发取消、账号／CSRF 和屏蔽规则 ID。弹幕屏蔽页面另检查删除已确认但添加待确认时保留部分成功与待确认类型。

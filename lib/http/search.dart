@@ -1,8 +1,10 @@
 import 'package:pili_aurora/utils/accounts/account.dart';
 import 'package:pili_aurora/http/api.dart';
+import 'package:pili_aurora/http/api_response.dart';
 import 'package:pili_aurora/http/init.dart';
 import 'package:pili_aurora/http/loading_state.dart';
 import 'package:pili_aurora/models/common/search/search_type.dart';
+import 'package:pili_aurora/models/common/account_type.dart';
 import 'package:pili_aurora/models/search/result.dart';
 import 'package:pili_aurora/models/search/suggest.dart';
 import 'package:pili_aurora/models/remote/dynamic/dyn_topic_pub_search/data.dart';
@@ -11,9 +13,9 @@ import 'package:pili_aurora/models/remote/pgc/pgc_info_model/result.dart';
 import 'package:pili_aurora/models/remote/search/search_rcmd/data.dart';
 import 'package:pili_aurora/models/remote/search/search_trending/data.dart';
 import 'package:pili_aurora/utils/extension/iterable_ext.dart';
+import 'package:pili_aurora/utils/accounts.dart';
 import 'package:pili_aurora/utils/wbi_sign.dart';
 import 'package:dio/dio.dart';
-import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 
 class SearchVerificationRequired extends Error {
   const SearchVerificationRequired(this.voucher) : super('触发风控，请完成验证');
@@ -25,30 +27,25 @@ abstract final class SearchHttp {
   @pragma('vm:notify-debugger-on-exception')
   static Future<LoadingState<SearchSuggestModel>> searchSuggest({
     required String term,
+    Account? account,
   }) async {
-    final res = await Request().get(
-      Api.searchSuggest,
-      queryParameters: await WbiSign.makSign({
-        'term': term,
-        'highlight': 0,
-        'spmid': 333.1365,
-        'web_location': 333.1365,
-      }),
-    );
-    final resData = res.data;
-    if (resData is Map && resData['code'] == 0) {
-      try {
-        return Success(SearchSuggestModel.fromJson(resData['data']['result']));
-      } catch (e, s) {
-        return Error.fromException(e, s);
-      }
+    account ??= Accounts.get(AccountType.recommend);
+    try {
+      return await Request().requestApi(
+        Api.searchSuggest,
+        kind: ApiCallKind.query,
+        decode: (body) => SearchSuggestModel.fromJson(body['data']['result']),
+        queryParameters: await WbiSign.makSign({
+          'term': term,
+          'highlight': 0,
+          'spmid': 333.1365,
+          'web_location': 333.1365,
+        }),
+        options: Options(extra: {'account': account}),
+      );
+    } catch (error, stackTrace) {
+      return Error.fromException(error, stackTrace);
     }
-    return resData is Map
-        ? Error(
-            resData['message'] is String ? resData['message'] : null,
-            code: resData['code'] is int ? resData['code'] : null,
-          )
-        : const Error('搜索服务返回的数据无效，请重试');
   }
 
   // 分类搜索
@@ -68,63 +65,59 @@ abstract final class SearchHttp {
     int? pubEnd,
     String? gaiaVtoken,
   }) async {
-    final params = await WbiSign.makSign({
-      'search_type': searchType.name,
-      'keyword': keyword,
-      'page': page,
-      if (order != null && order.isNotEmpty) 'order': order,
-      'duration': ?duration,
-      'tids': ?tids,
-      'order_sort': ?orderSort,
-      'user_type': ?userType,
-      'category_id': ?categoryId,
-      'pubtime_begin_s': ?pubBegin,
-      'pubtime_end_s': ?pubEnd,
-      'page_size': 20,
-      'platform': 'pc',
-      'web_location': 1430654,
-      'gaia_vtoken': ?gaiaVtoken,
-    });
-    final res = await Request().get(
-      searchType.api,
-      queryParameters: params,
-      options: Options(
-        extra: {'account': account},
-        headers: {
-          if (gaiaVtoken != null) 'cookie': 'x-bili-gaia-vtoken=$gaiaVtoken',
-          'origin': 'https://search.bilibili.com',
-          'referer':
-              'https://search.bilibili.com/${searchType.name}?keyword=${Uri.encodeFull(keyword)}',
-        },
-      ),
-    );
-    final resData = res.data;
-    if (resData is Map) {
-      if (resData['code'] == 0) {
-        try {
-          final Map<String, dynamic> dataData = resData['data'];
-          final vVoucher = dataData['v_voucher'];
-          if (vVoucher != null) {
-            return SearchVerificationRequired(vVoucher.toString());
-          }
-          return Success(
-            switch (searchType) {
-              .all => SearchVideoData.fromSearchAll(dataData),
-              .video => SearchVideoData.fromJson(dataData),
-              .media_bangumi || .media_ft => SearchPgcData.fromJson(dataData),
-              .live_room => SearchLiveData.fromJson(dataData),
-              .bili_user => SearchUserData.fromJson(dataData),
-              .article => SearchArticleData.fromJson(dataData),
-            } as R,
-          );
-        } catch (e, s) {
-          return Error.fromException(e, s);
+    try {
+      final params = await WbiSign.makSign({
+        'search_type': searchType.name,
+        'keyword': keyword,
+        'page': page,
+        if (order != null && order.isNotEmpty) 'order': order,
+        'duration': ?duration,
+        'tids': ?tids,
+        'order_sort': ?orderSort,
+        'user_type': ?userType,
+        'category_id': ?categoryId,
+        'pubtime_begin_s': ?pubBegin,
+        'pubtime_end_s': ?pubEnd,
+        'page_size': 20,
+        'platform': 'pc',
+        'web_location': 1430654,
+        'gaia_vtoken': ?gaiaVtoken,
+      });
+      final result = await Request().requestApi<Map<String, dynamic>>(
+        searchType.api,
+        kind: ApiCallKind.query,
+        decode: (body) => body['data'] as Map<String, dynamic>,
+        queryParameters: params,
+        options: Options(
+          extra: {'account': account},
+          headers: {
+            if (gaiaVtoken != null) 'cookie': 'x-bili-gaia-vtoken=$gaiaVtoken',
+            'origin': 'https://search.bilibili.com',
+            'referer':
+                'https://search.bilibili.com/${searchType.name}?keyword=${Uri.encodeFull(keyword)}',
+          },
+        ),
+      );
+      if (result is Error) return result;
+      final data = result.data;
+      if (data['v_voucher'] case final voucher?) {
+        if (voucher is! String || voucher.trim().isEmpty) {
+          throw const FormatException('搜索验证凭据无效');
         }
-      } else {
-        return Error(resData['message'], code: resData['code']);
+        return SearchVerificationRequired(voucher);
       }
-    } else {
-      return const Error('服务器错误');
+      return Success(
+        switch (searchType) {
+          .all => SearchVideoData.fromSearchAll(data),
+          .video => SearchVideoData.fromJson(data),
+          .media_bangumi || .media_ft => SearchPgcData.fromJson(data),
+          .live_room => SearchLiveData.fromJson(data),
+          .bili_user => SearchUserData.fromJson(data),
+          .article => SearchArticleData.fromJson(data),
+        } as R,
+      );
+    } catch (error, stackTrace) {
+      return Error.fromException(error, stackTrace);
     }
   }
 
@@ -137,84 +130,75 @@ abstract final class SearchHttp {
     dynamic bvid,
     int? part,
   }) async {
-    final res = await Request().get(
+    final result = await Request().requestApi<PageItem?>(
       Api.ab2c,
-      queryParameters: {'aid': ?aid, 'bvid': ?bvid},
-    );
-    if (res.data['code'] == 0) {
-      if (res.data['data'] case List list) {
+      kind: ApiCallKind.query,
+      decode: (body) {
+        final list = body['data'] as List;
         final target = part != null
             ? (list.getOrNull(part - 1) ?? list.firstOrNull)
             : list.firstOrNull;
-        if (target != null) {
-          return PageItem.fromJson(target);
-        }
-      }
-      return null;
-    } else {
-      SmartDialog.showToast("ab2c error: ${res.data['message']}");
-      return null;
-    }
+        if (target == null) return null;
+        final page = PageItem.fromJson(target);
+        if (page.cid <= 0) throw const FormatException('视频分 P 缺少有效 cid');
+        return page;
+      },
+      queryParameters: {'aid': ?aid, 'bvid': ?bvid},
+    );
+    if (result is Error) result.toast();
+    return result.dataOrNull;
   }
 
   static Future<LoadingState<PgcInfoModel>> pgcInfo({
     dynamic seasonId,
     dynamic epId,
-  }) async {
-    final res = await Request().get(
+  }) {
+    return Request().requestApi(
       Api.pgcInfo,
+      kind: ApiCallKind.query,
+      decode: (body) => PgcInfoModel.fromJson(body['result']),
       queryParameters: {
         'season_id': ?seasonId,
         'ep_id': ?epId,
       },
     );
-    if (res.data['code'] == 0) {
-      return Success(PgcInfoModel.fromJson(res.data['result']));
-    } else {
-      return Error(res.data['message']);
-    }
   }
 
   static Future<LoadingState<PgcInfoModel>> pugvInfo({
     dynamic seasonId,
     dynamic epId,
-  }) async {
-    final res = await Request().get(
+  }) {
+    return Request().requestApi(
       Api.pugvInfo,
+      kind: ApiCallKind.query,
+      decode: (body) => PgcInfoModel.fromJson(body['data']),
       queryParameters: {
         'season_id': ?seasonId,
         'ep_id': ?epId,
       },
     );
-    if (res.data['code'] == 0) {
-      return Success(PgcInfoModel.fromJson(res.data['data']));
-    } else {
-      return Error(res.data['message']);
-    }
   }
 
   static Future<LoadingState<SearchTrendingData>> searchTrending({
     int limit = 30,
     bool needsTop = false,
-  }) async {
-    final res = await Request().get(
+  }) {
+    return Request().requestApi(
       Api.searchTrending,
+      kind: ApiCallKind.query,
+      decode: (body) =>
+          SearchTrendingData.fromJson(body['data'], needsTop: needsTop),
       queryParameters: {
         'limit': limit,
       },
     );
-    if (res.data['code'] == 0) {
-      return Success(
-        SearchTrendingData.fromJson(res.data['data'], needsTop: needsTop),
-      );
-    } else {
-      return Error(res.data['message']);
-    }
   }
 
-  static Future<LoadingState<SearchRcmdData>> searchRecommend() async {
-    final res = await Request().get(
+  static Future<LoadingState<SearchRcmdData>> searchRecommend() {
+    return Request().requestApi(
       Api.searchRecommend,
+      kind: ApiCallKind.query,
+      decode: (body) => SearchRcmdData.fromJson(body['data']),
       queryParameters: {
         'build': 8430300,
         'channel': 'master',
@@ -226,20 +210,17 @@ abstract final class SearchHttp {
         'from': 2,
       },
     );
-    if (res.data['code'] == 0) {
-      return Success(SearchRcmdData.fromJson(res.data['data']));
-    } else {
-      return Error(res.data['message']);
-    }
   }
 
   static Future<LoadingState<TopicPubSearchData>> topicPubSearch({
     required String keywords,
     String content = '',
     required int pageNum,
-  }) async {
-    final res = await Request().get(
+  }) {
+    return Request().requestApi(
       Api.topicPubSearch,
+      kind: ApiCallKind.query,
+      decode: (body) => TopicPubSearchData.fromJson(body['data']),
       queryParameters: {
         'keywords': keywords,
         'content': content,
@@ -251,10 +232,5 @@ abstract final class SearchHttp {
         'web_location': 333.1365,
       },
     );
-    if (res.data['code'] == 0) {
-      return Success(TopicPubSearchData.fromJson(res.data['data']));
-    } else {
-      return Error(res.data['message']);
-    }
   }
 }

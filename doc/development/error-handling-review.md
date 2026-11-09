@@ -4,7 +4,7 @@
 
 检查进行中，全仓检查尚未完成。主线继续检查动态模块，子代理并行检查直播业务接口；共享文档与提交由主线统一处理。
 
-账号、历史与稍后再看批次的 37 项定向回归通过；收藏详情、排序和迁移批次的 66 项通过；弹幕、评论与表情包批次的 29 项通过。后续按改动运行必要回归，不逐批重跑完整 CI。
+账号、历史与稍后再看批次的 37 项定向回归通过；收藏详情、排序和迁移批次的 66 项通过；弹幕、评论与表情包批次的 29 项通过；搜索批次的 38 项通过。后续按改动运行必要回归，不逐批重跑完整 CI。
 
 此前风控、音乐／赛事与空降助手批次后的完整 CI：1218 项通过（`build/error-contract-ci-tests.log`）。`fvm flutter analyze --no-pub lib test tool` 只有上游控件副本中的 24 条既有 info，没有 error 或 warning。修改文件的格式检查无改动，`git diff --check` 通过。
 
@@ -45,6 +45,7 @@
 | 账号、历史与稍后再看：`http/user.dart`、`pages/history*`、`pages/later*`、视频与卡片入口 | 28 个接口接入查询／写入契约，解析失败保留原因，写入待确认与明确拒绝分别交付。保留可空标签、余额和空列表语义，签名前固定账号；Cookie 登录缺少 App access key 时不再传入空签名参数。提示由调用方负责；删除和清空防重复，失败保留列表与数量，刷新、切号或换视频后拒绝旧结果。历史暂停成功后才更新状态，迟到查询不能覆盖已确认写入。 | `test/http/user_response_test.dart`、`test/pages/history/operation_results_test.dart`、收藏操作与账号查询／设置回归 |
 | 收藏详情、搜索、两种排序与批量迁移：`pages/fav_detail`、`fav_search`、`fav_sort`、`fav_folder_sort`、`RequestUtils.onCopyOrMove` | 写入绑定原账号与目标收藏夹。不同条目可并发取消，同项和重叠批量操作防重复；缺少详情信息时返回可重试错误。排序失败保留草稿，确认成功后提交副本；迁移失败保留选择与数量，提交状态留在弹窗内，取消后立即释放界面。切号、换列表或关闭页面后拒绝旧结果；删除只关闭所属页面。快速收藏的前置查询与写入均检查视频归属。 | `test/pages/fav/management_results_test.dart`、收藏操作与移除身份回归、收藏响应回归 |
 | 弹幕、评论与表情包：`http/danmaku.dart`、`reply.dart`、发送面板、赞踩／置顶、评论可见性检查和表情包页面 | 接入查询／写入结果契约，保留业务码和写入待确认。修正弹幕管理端点和赞踩防重入；发送按提交草稿回显，失败或关闭时保留新草稿，切号／换对象后拒绝旧结果。表情包分页固定账号并检查进度、总数与详情归属。举报在所属弹窗显示提交状态，取消后的结果不关闭新页面，举报成功与屏蔽同步失败分别反馈。可见性检查按 12022 业务码判断，查询故障和重复分页不误报不可见。 | `test/http/community_response_test.dart`、`test/pages/community/operation_results_test.dart`、表情包模型与评论生命周期回归 |
+| 搜索：`http/search.dart`、搜索首页与热搜控制器 | 查询接入统一契约，保留业务码、原始原因与堆栈，签名前固定推荐账号，无效风控凭据返回解析失败。搜索首页与热搜订阅账号变化并拒绝旧响应；已有结果分页保护保留。分 P 查询保留可空包装，空列表仍返回 null，损坏响应显示可读提示。 | `test/http/search_response_test.dart`、`test/pages/search/controller_test.dart`、搜索结果分页回归 |
 
 ## 检查后保留的实现
 
@@ -63,6 +64,7 @@
 - 播放小窗异常退出后的声音归属和主窗口恢复行为。
 - 其余页面查询、收藏／历史／动态等写入，以及公共工具、模型的返回值和异常处理。
 - 评论发布／删除、投票等其余 gRPC 领域消费，以及动态话题选择和原生表情输入。弹幕发送、HTTP 赞踩／置顶／举报、评论可见性检查和表情包管理已完成本轮检查。
+- 搜索适配器之外的视频导航调用方，以及番剧／课程资料的领域消费。搜索首页、热搜、联想与结果分页已完成本轮检查。
 - 文章、课程、话题、笔记和追番等其余收藏页面，以及订阅调用方。收藏详情、收藏夹操作、两种排序、批量迁移和视频快速收藏已完成本轮检查。
 - 极验 WebView 自身的脚本失败、超时和取消结果。风控协调回归使用导航替身返回弹窗结果，未启动原生 WebView。
 - 赛事卡片中可选字段的降级处理。已完成的检查覆盖接口、详情／评论生命周期和失败重试。
@@ -94,3 +96,5 @@
 - 收藏详情、排序／迁移、快速收藏及响应契约共 66 项定向回归通过。取消迁移后全局加载遮罩未释放的场景修正后，复跑迁移 2 项通过；新增收藏夹排序与删除 2 项通过。源码与测试定向分析无问题（`build/fav-operations-tests.log`、`build/fav-move-tests.log`、`build/fav-folder-tests.log`、`build/fav-operations-analyze.log`、`build/fav-final-analyze.log`）。未重跑完整 CI，真实服务写入尚未验收。
 
 - 弹幕／评论响应、表情包模型、页面操作及评论控制器／生命周期共 29 项不同用例通过。修正只读 protobuf 默认对象与测试夹具后复验页面 9 项；新增评论管理 4 项和举报部分成功 1 项分别通过（`build/community-response-tests.log`、`build/community-operations-tests.log`、`build/community-retry-tests.log`、`build/community-management-tests.log`、`build/community-report-retry.log`）。修改源码与测试定向分析的 3 条提示修正后无问题（`build/community-final-analyze.log`、`build/community-search-analyze.log`）。未重跑完整 CI，真实账号写入和播放器回显仍需设备验收。
+
+- 搜索响应、首页／热搜状态和结果分页共 38 项不同用例通过。首轮 HTTP 7 项与结果分页 14 项通过；修正账号夹具初始化和模拟时钟等待后，分 P 单项 1 项及首页／热搜 16 项通过（`build/search-contract-tests.log`、`build/search-pagelist-tests.log`、`build/search-state-tests.log`）。修改文件定向分析无问题（`build/community-search-analyze.log`）。未重跑完整 CI，真实服务与导航、动态话题调用方留待后续检查。

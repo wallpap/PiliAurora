@@ -3,9 +3,12 @@ import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pili_aurora/http/loading_state.dart';
 import 'package:pili_aurora/http/search.dart';
+import 'package:pili_aurora/models/common/account_type.dart';
 import 'package:pili_aurora/models/search/suggest.dart';
 import 'package:pili_aurora/models/remote/search/search_rcmd/data.dart';
 import 'package:pili_aurora/models/remote/search/search_trending/data.dart';
+import 'package:pili_aurora/services/account_providers.dart';
+import 'package:pili_aurora/utils/accounts.dart';
 import 'package:pili_aurora/utils/storage.dart';
 import 'package:pili_aurora/utils/storage_key.dart';
 import 'package:pili_aurora/utils/storage_pref.dart';
@@ -90,9 +93,13 @@ class SearchNotifier extends Notifier<SearchState> {
   bool _alive = true;
   @override
   SearchState build() {
+    ref.watch(recommendAccountProvider);
     _alive = true;
     ref.onDispose(() {
       _alive = false;
+      ++_suggestVersion;
+      ++_trendingVersion;
+      ++_recommendVersion;
       _timer?.cancel();
     });
     if (Pref.enableTrending) unawaited(refreshTrending());
@@ -127,9 +134,17 @@ class SearchNotifier extends Notifier<SearchState> {
   }
 
   Future<void> _suggest(String text, int version) async {
+    final account = Accounts.get(AccountType.recommend);
     try {
-      final result = await SearchHttp.searchSuggest(term: text);
-      if (!_alive || version != _suggestVersion) return;
+      final result = await SearchHttp.searchSuggest(
+        term: text,
+        account: account,
+      );
+      if (!_alive ||
+          version != _suggestVersion ||
+          !identical(account, Accounts.get(AccountType.recommend))) {
+        return;
+      }
       if (result case Success(:final response)) {
         state = state.copyWith(
           suggestions: List.unmodifiable(response.tag ?? const []),
@@ -142,26 +157,32 @@ class SearchNotifier extends Notifier<SearchState> {
 
   Future<void> refreshTrending() async {
     final version = ++_trendingVersion;
+    final account = Accounts.get(AccountType.recommend);
     LoadingState<SearchTrendingData> result;
     try {
       result = await SearchHttp.searchTrending(limit: 10);
-    } catch (_) {
-      result = const Error('加载失败，请重试');
+    } catch (error, stackTrace) {
+      result = Error.fromException(error, stackTrace);
     }
-    if (_alive && version == _trendingVersion) {
+    if (_alive &&
+        version == _trendingVersion &&
+        identical(account, Accounts.get(AccountType.recommend))) {
       state = state.copyWith(trending: result);
     }
   }
 
   Future<void> refreshRecommend() async {
     final version = ++_recommendVersion;
+    final account = Accounts.get(AccountType.recommend);
     LoadingState<SearchRcmdData> result;
     try {
       result = await SearchHttp.searchRecommend();
-    } catch (_) {
-      result = const Error('加载失败，请重试');
+    } catch (error, stackTrace) {
+      result = Error.fromException(error, stackTrace);
     }
-    if (_alive && version == _recommendVersion) {
+    if (_alive &&
+        version == _recommendVersion &&
+        identical(account, Accounts.get(AccountType.recommend))) {
       state = state.copyWith(recommend: result);
     }
   }
