@@ -100,6 +100,8 @@ Windows 保活页面内存回归：先执行 `pwsh -File lib/scripts/patch.ps1 w
 
 `services/messaging/settings_test.dart` 检查同键串行、最后确认值回滚、不同键并发、刷新及失效。下载服务测试覆盖准备期间暂停、删除、切换、地址快照和文件提交排空；直播连接测试使用本地主机 HTTP/WebSocket 检查挂起握手取消、超时后备及认证。
 
+`services/live_stream/live_stream_test.dart` 还检查 init 返回的认证成功／失败／主动关闭结果、认证拒绝与超时不发送心跳、原始握手错误与连接关闭；页面回归检查初始化失败后重新取得令牌、共享在途连接，以及旧连接的迟到失败不会清除新连接。
+
 `services/diagnostics/diagnostics_test.dart` 另检查 Windows 512 块检查点的独立快照预算、缓存去重及跳号后的检查点恢复，以及导出脱敏、本地原文保留和快照隔离；`redact_test.dart` 覆盖长普通文本与带前缀 token 键。VirtualQuery 与视频资源生命周期回归见平台探针，不能由 Dart 模拟通道测试替代。
 
 ## 播放会话与平台输出

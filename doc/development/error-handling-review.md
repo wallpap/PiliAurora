@@ -23,6 +23,7 @@
 | HTTP 重试：`http/retry_interceptor.dart` | 默认只重试 GET／HEAD／OPTIONS，gRPC POST 读取保留显式选择；解析和程序错误不重试 | `test/http/retry_interceptor_test.dart` |
 | 设置恢复：`services/settings/settings_backup.dart` | JSON 解析与后续持久化失败统一沿返回的 Future 交付，格式损坏时不修改存储 | `test/services/settings/settings_backup_test.dart` |
 | gRPC：`grpc/grpc_req.dart` 及 audio／dm／dyn／im／reply／space 调用 | 强制声明查询或写入；查询传输失败统一返回 Error；写入禁用重试，传输或响应无法确认时返回 UnknownResult；保留业务拒绝码及可读状态消息；解码错误保留原因，取消消费返回失效并归还额度 | `test/grpc/request_test.dart`、`test/grpc/decode_policy_test.dart`、消息、弹幕、空间搜索和空间列表回归 |
+| 直播消息连接：`services/live_stream/live.dart`、`pages/live_room/controller.dart` | init 明确区分成功认证、失败及主动关闭；拒绝认证不启动心跳，等待认证有超时；保留节点真实错误；失败后释放连接与缓存令牌，迟到结果不影响当前房间，已断开的连接可重试 | `test/services/live_stream/`、`test/pages/live_room/controller_test.dart`、直播加载回归 |
 
 ## 已检查且保留的契约
 
@@ -38,7 +39,7 @@
 
 - HTTP 传输、重试和其余业务适配器：逐接口核对响应形状、写入重试及调用方对可空返回值的判断；现有通用捕获的修正不等同于所有 HTTP 接口已验收。
 - gRPC 各领域响应模型及业务调用方：请求、写入不确定性与解码契约已检查；模型字段和业务行为继续随各领域核对。
-- 直播连接的 init／关闭结果、桌面播放进程和启动／退出装配。
+- 桌面播放进程和启动／退出装配；直播消息连接与协议 worker 已检查，剩余直播业务接口仍随 HTTP 模块核对。
 - 其余页面查询、收藏／历史／动态等写入，以及公共工具与模型的返回值和异常消费。
 
 ## 验证范围

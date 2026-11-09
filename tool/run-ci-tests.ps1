@@ -74,6 +74,7 @@ $ciTests = @(
     "test/pages/setting/decoder_test_process_test.dart",
     "test/pages/setting/decoder_test_dialog_test.dart",
     "test/pages/live_room/controller_test.dart",
+    "test/services/live_stream/live_stream_test.dart",
     "test/services/audio_session_test.dart",
     "test/services/audio_handler_lifecycle_test.dart",
     "test/plugin/pl_player/playback/playback_session_test.dart",

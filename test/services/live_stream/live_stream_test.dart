@@ -59,7 +59,10 @@ void main() {
           if (ids.length == 3) delivered.complete();
         }
       });
-      await live.init();
+      expect(
+        (await live.init()).outcome,
+        LiveMessageConnectionOutcome.connected,
+      );
       socket = await accepted.future.timeout(const Duration(seconds: 5));
       expect(await auth.future.timeout(const Duration(seconds: 5)), {
         'roomid': 123,
@@ -121,7 +124,10 @@ void main() {
       expect(identical(live.init(), initializing), isTrue);
       await requested.future.timeout(const Duration(seconds: 5));
       live.close();
-      await initializing.timeout(const Duration(seconds: 1));
+      expect(
+        (await initializing.timeout(const Duration(seconds: 1))).outcome,
+        LiveMessageConnectionOutcome.closed,
+      );
       await live.init();
       expect(requests, 1);
     } finally {
@@ -141,6 +147,7 @@ void main() {
       socket = await WebSocketTransformer.upgrade(request);
       socket!.listen((_) {
         if (!authenticated.isCompleted) authenticated.complete();
+        socket!.add(_packet('{"code":0}', version: 1, operation: 8));
       });
     });
     final live = LiveMessageStream(
@@ -154,7 +161,10 @@ void main() {
       connectionTimeout: const Duration(milliseconds: 200),
     );
     try {
-      await live.init();
+      expect(
+        (await live.init()).outcome,
+        LiveMessageConnectionOutcome.connected,
+      );
       await authenticated.future.timeout(const Duration(seconds: 5));
       expect(paths, ['/stalled', '/ready']);
     } finally {
@@ -176,9 +186,128 @@ void main() {
     );
     try {
       live.close();
-      await live.init();
+      expect((await live.init()).outcome, LiveMessageConnectionOutcome.closed);
       expect(requests, 0);
     } finally {
+      await server.close(force: true);
+    }
+  });
+
+  test('全部节点失败返回明确结果并结束连接生命周期', () async {
+    final live = LiveMessageStream(
+      streamToken: 'synthetic',
+      roomId: 1,
+      uid: 0,
+      servers: [],
+    );
+    final result = await live.init();
+    expect(result.outcome, LiveMessageConnectionOutcome.failed);
+    expect(result.message, contains('重试'));
+    expect(result.cause, isNotNull);
+    expect(live.isActive, isFalse);
+  });
+
+  test('所有握手失败时保留实际原因与堆栈', () async {
+    final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+    server.listen((request) {
+      request.response.statusCode = HttpStatus.forbidden;
+      unawaited(request.response.close());
+    });
+    final live = LiveMessageStream(
+      streamToken: 'synthetic',
+      roomId: 1,
+      uid: 0,
+      servers: ['ws://127.0.0.1:${server.port}'],
+    );
+    try {
+      final result = await live.init();
+      expect(result.outcome, LiveMessageConnectionOutcome.failed);
+      expect(result.cause, isA<WebSocketException>());
+      expect(result.stackTrace, isNotNull);
+      expect(live.isActive, isFalse);
+    } finally {
+      live.close();
+      await server.close(force: true);
+    }
+  });
+
+  for (final reject in [true, false]) {
+    test(reject ? '认证拒绝返回失败且不发送心跳' : '认证没有回执时有界返回失败且不发送心跳', () async {
+      final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+      final disconnected = Completer<void>();
+      WebSocket? socket;
+      var heartbeats = 0;
+      server.listen((request) async {
+        socket = await WebSocketTransformer.upgrade(request);
+        socket!.listen(
+          (dynamic bytes) {
+            final header = PackageHeaderRes.fromBytesData(
+              Uint8List.fromList(bytes as List<int>),
+            )!;
+            if (header.operationCode == 7 && reject) {
+              socket!.add(_packet('{"code":-101}', version: 1, operation: 8));
+            }
+            if (header.operationCode == 2) heartbeats++;
+          },
+          onDone: () {
+            if (!disconnected.isCompleted) disconnected.complete();
+          },
+        );
+      });
+      final live = LiveMessageStream(
+        streamToken: 'synthetic',
+        roomId: 1,
+        uid: 0,
+        servers: ['ws://127.0.0.1:${server.port}'],
+        authenticationTimeout: reject
+            ? const Duration(seconds: 5)
+            : const Duration(milliseconds: 200),
+        heartbeatInterval: const Duration(milliseconds: 10),
+      );
+      try {
+        final result = await live.init();
+        expect(result.outcome, LiveMessageConnectionOutcome.failed);
+        expect(result.message, contains(reject ? '认证失败' : '认证超时'));
+        if (reject) expect(result.code, -101);
+        if (!reject) expect(result.cause, isA<TimeoutException>());
+        await disconnected.future.timeout(const Duration(seconds: 5));
+        expect(heartbeats, 0);
+        expect(live.isActive, isFalse);
+      } finally {
+        live.close();
+        await socket?.close();
+        await server.close(force: true);
+      }
+    });
+  }
+
+  test('等待认证期间主动关闭返回 closed', () async {
+    final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+    final authReceived = Completer<void>();
+    WebSocket? socket;
+    server.listen((request) async {
+      socket = await WebSocketTransformer.upgrade(request);
+      socket!.listen((_) {
+        if (!authReceived.isCompleted) authReceived.complete();
+      });
+    });
+    final live = LiveMessageStream(
+      streamToken: 'synthetic',
+      roomId: 1,
+      uid: 0,
+      servers: ['ws://127.0.0.1:${server.port}'],
+    );
+    try {
+      final initializing = live.init();
+      await authReceived.future.timeout(const Duration(seconds: 5));
+      live.close();
+      expect(
+        (await initializing.timeout(const Duration(seconds: 1))).outcome,
+        LiveMessageConnectionOutcome.closed,
+      );
+    } finally {
+      live.close();
+      await socket?.close();
       await server.close(force: true);
     }
   });

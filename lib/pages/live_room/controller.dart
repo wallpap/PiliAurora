@@ -7,6 +7,7 @@ import 'dart:math' as math;
 import 'package:pili_aurora/common/widgets/dialog/report.dart';
 import 'package:pili_aurora/common/widgets/flutter/text_field/controller.dart';
 import 'package:pili_aurora/http/live.dart';
+import 'package:pili_aurora/services/logger.dart';
 import 'package:pili_aurora/http/loading_state.dart';
 import 'package:pili_aurora/http/video.dart';
 import 'package:pili_aurora/models/common/super_chat_type.dart';
@@ -746,11 +747,16 @@ class LiveRoomController extends GetxController {
         }
       }
     }
-    if (_msgStream != null && _streamGeneration == generation) {
-      return Future<void>.value();
-    }
     if (_connecting != null && _connectingGeneration == generation) {
       return _connecting!;
+    }
+    if (_msgStream?.isActive == true && _streamGeneration == generation) {
+      return Future<void>.value();
+    }
+    if (_msgStream?.isActive == false) {
+      _msgStream = null;
+      _streamGeneration = null;
+      dmInfo = null;
     }
     late final Future<void> connection;
     connection = _establishLiveMessageConnection(generation, targetRoomId)
@@ -804,13 +810,13 @@ class LiveRoomController extends GetxController {
     final currentInfo = info;
     if (_isCurrentMessageTask(generation, targetRoomId)) {
       try {
-        _initDm(
+        await _initDm(
           currentInfo,
           generation: generation,
           targetRoomId: targetRoomId,
         );
       } catch (_) {
-        // 页面调用方有意不等待连接建立；同步初始化失败不能变成未处理异步错误。
+        // 页面调用方可能不等待连接建立；失败不能变成未处理异步错误。
       }
     }
   }
@@ -873,27 +879,48 @@ class LiveRoomController extends GetxController {
     return queryLiveUrl();
   }
 
-  void _initDm(
+  Future<void> _initDm(
     LiveDmInfoData info, {
     required int generation,
     required int targetRoomId,
-  }) {
-    if (info.hostList.isEmpty ||
-        !_isCurrentMessageTask(generation, targetRoomId)) {
+  }) async {
+    if (!_isCurrentMessageTask(generation, targetRoomId)) {
       return;
     }
     final stream = createLiveMessageStream(info: info, roomId: targetRoomId);
     _msgStream = stream;
     _streamGeneration = generation;
-    stream
-      ..addEventListener((obj) {
-        if (!_isCurrentMessageTask(generation, targetRoomId) ||
-            !identical(_msgStream, stream)) {
-          return;
-        }
-        _danmakuListener(obj);
-      })
-      ..init();
+    stream.addEventListener((obj) {
+      if (!_isCurrentMessageTask(generation, targetRoomId) ||
+          !identical(_msgStream, stream)) {
+        return;
+      }
+      _danmakuListener(obj);
+    });
+    late final LiveMessageConnectionResult result;
+    try {
+      result = await stream.init();
+    } catch (error, stack) {
+      logger.w('直播消息初始化失败', error: error.runtimeType, stackTrace: stack);
+      result = LiveMessageConnectionResult.failed(
+        '直播消息连接失败，请重试',
+        cause: error,
+        stackTrace: stack,
+      );
+    }
+    if (!_isCurrentMessageTask(generation, targetRoomId) ||
+        !identical(_msgStream, stream)) {
+      return;
+    }
+    if (result.outcome != LiveMessageConnectionOutcome.connected) {
+      stream.close();
+      _msgStream = null;
+      _streamGeneration = null;
+      if (result.outcome == LiveMessageConnectionOutcome.failed) {
+        dmInfo = null;
+        SmartDialog.showToast(result.message ?? '直播消息连接失败，请重试');
+      }
+    }
   }
 
   void addDm(dynamic msg, [DanmakuContentItem<DanmakuExtra>? item]) {

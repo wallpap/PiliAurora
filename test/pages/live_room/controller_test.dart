@@ -21,6 +21,7 @@ import 'package:pili_aurora/utils/storage.dart';
 import 'package:pili_aurora/utils/storage_key.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:get/get.dart';
 import 'package:material_ui/material_ui.dart' as ui;
 
@@ -33,6 +34,7 @@ class _TestController extends LiveRoomController {
   final historyRequests = <Completer<LoadingState<List<DanmakuMsg>?>>>[];
   final messageStreams = <_TestMessageStream>[];
   final routeQueryPolicies = <PlaybackStartPolicy?>[];
+  Completer<LiveMessageConnectionResult>? nextInitialization;
 
   @override
   Future<void> queryLiveUrl({
@@ -66,7 +68,9 @@ class _TestController extends LiveRoomController {
     required LiveDmInfoData info,
     required int roomId,
   }) {
-    final stream = _TestMessageStream(roomId);
+    final stream = _TestMessageStream(roomId)
+      ..initialization = nextInitialization;
+    nextInitialization = null;
     messageStreams.add(stream);
     return stream;
   }
@@ -78,15 +82,21 @@ class _TestMessageStream extends LiveMessageStream {
 
   void Function(dynamic)? listener;
   bool isClosed = false;
+  Completer<LiveMessageConnectionResult>? initialization;
 
   @override
   void addEventListener(void Function(dynamic) func) => listener = func;
 
   @override
-  Future<void> init() async {}
+  Future<LiveMessageConnectionResult> init() =>
+      initialization?.future ??
+      Future.value(const LiveMessageConnectionResult.connected());
 
   @override
-  void close() => isClosed = true;
+  void close() {
+    isClosed = true;
+    super.close();
+  }
 
   void emit(dynamic value) => listener?.call(value);
 }
@@ -407,6 +417,66 @@ void main() {
       expect(controller.dmInfo?.token, 'retry');
     },
   );
+
+  for (final throws in [false, true]) {
+    testWidgets('消息初始化${throws ? '抛出异常' : '返回失败'}后释放连接并重新获取令牌', (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(builder: FlutterSmartDialog.init(), home: const SizedBox()),
+      );
+      final initializing = Completer<LiveMessageConnectionResult>();
+      final controller = createController()..nextInitialization = initializing;
+      final first = controller.startLiveMsg();
+      controller.historyRequests.single.complete(const Success(null));
+      controller.tokenRequests.single.complete(Success(_messageInfo('first')));
+      await tester.pump();
+      expect(controller.messageStreams, hasLength(1));
+      expect(identical(controller.startLiveMsg(), first), isTrue);
+      if (throws) {
+        initializing.completeError(
+          StateError('synthetic initialization failure'),
+        );
+      } else {
+        initializing.complete(
+          const LiveMessageConnectionResult.failed('认证失败，请重试'),
+        );
+      }
+      await tester.pumpAndSettle();
+      await first;
+      expect(controller.messageStreams.single.isClosed, isTrue);
+      expect(controller.dmInfo, isNull);
+
+      final retry = controller.startLiveMsg();
+      expect(controller.tokenRequests, hasLength(2));
+      controller.tokenRequests.last.complete(Success(_messageInfo('retry')));
+      await tester.pumpAndSettle();
+      await retry;
+      expect(controller.messageStreams, hasLength(2));
+      expect(controller.messageStreams.last.isActive, isTrue);
+      expect(controller.dmInfo?.token, 'retry');
+      controller.onDelete();
+      final dismissal = SmartDialog.dismiss(status: SmartStatus.allToast);
+      await tester.pumpAndSettle();
+      await dismissal;
+    });
+  }
+
+  testWidgets('旧连接的迟到认证失败不会清除恢复后的连接或令牌', (tester) async {
+    final initializing = Completer<LiveMessageConnectionResult>();
+    final controller = createController()..nextInitialization = initializing;
+    final first = controller.startLiveMsg();
+    controller.historyRequests.single.complete(const Success(null));
+    controller.tokenRequests.single.complete(Success(_messageInfo('retained')));
+    await tester.pump();
+    controller.closeLiveMsg();
+    await controller.startLiveMsg();
+    expect(controller.messageStreams, hasLength(2));
+    initializing.complete(const LiveMessageConnectionResult.failed('过期认证失败'));
+    await tester.pump();
+    await first;
+    expect(controller.messageStreams.last.isActive, isTrue);
+    expect(controller.dmInfo?.token, 'retained');
+    controller.onDelete();
+  });
 
   test(
     'pause invalidates late token and history results before resume',
