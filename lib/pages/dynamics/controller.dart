@@ -17,7 +17,7 @@ import 'package:material_ui/material_ui.dart' show TabController;
 
 class DynamicsController
     extends CommonDataController<FollowUpModel, FollowUpModel>
-    with GetSingleTickerProviderStateMixin, AccountMixin {
+    with GetSingleTickerProviderStateMixin {
   late final TabController tabController;
 
   final Set<int> tempBannedList = <int>{};
@@ -32,8 +32,13 @@ class DynamicsController
 
   final upPanelPosition = Pref.upPanelPosition;
 
-  @override
   final AccountService accountService = Get.find<AccountService>();
+
+  @override
+  Object get queryContext => Accounts.main;
+
+  @override
+  bool get canLoadMore => !_isEnd && loadingState.value.dataOrNull != null;
 
   DynamicsTabController? get controller {
     try {
@@ -53,7 +58,13 @@ class DynamicsController
       length: DynamicsTabType.values.length,
       initialIndex: Pref.defaultDynamicTypeIndex,
     );
+    Accounts.mainChanges.addListener(_onAccountChanged);
     queryData();
+  }
+
+  void _onAccountChanged() {
+    loadingState.value = LoadingState.loading();
+    singleRefresh();
   }
 
   void _jumpToTab(int mid) {
@@ -94,13 +105,12 @@ class DynamicsController
   }
 
   @override
-  Future<void> onRefresh() {
+  Future<void> onRefresh() async {
     final controller = this.controller;
-    if (controller != null) {
-      singleRefresh();
-      return controller.onRefresh();
-    }
-    return singleRefresh();
+    await Future.wait([
+      singleRefresh(),
+      if (controller != null) controller.onRefresh(),
+    ]);
   }
 
   @override
@@ -133,27 +143,27 @@ class DynamicsController
 
   @override
   void onClose() {
+    Accounts.mainChanges.removeListener(_onAccountChanged);
     tabController.dispose();
     super.onClose();
   }
 
   @override
-  void onChangeAccount(bool isLogin) => onReload();
-
-  @override
   Future<LoadingState<FollowUpModel>> customGetData() {
+    final account = Accounts.main;
     if (_offset == null) {
-      return DynamicsHttp.followUp();
+      return DynamicsHttp.followUp(account: account);
     }
     if (_showAllUp) {
       return DynamicsHttp.followings(
-        vmid: Accounts.main.mid,
+        account: account,
+        vmid: account.mid,
         pn: _page,
         orderType: 'attention',
         ps: 50,
       );
     } else {
-      return DynamicsHttp.dynUpList(_offset);
+      return DynamicsHttp.dynUpList(_offset, account: account);
     }
   }
 
@@ -172,8 +182,14 @@ class DynamicsController
         _isEnd = true;
       }
     } else {
+      if (!isRefresh && _offset != null && res.offset == _offset) {
+        _isEnd = true;
+        return true;
+      }
       _offset = res.offset;
-      if (res.hasMore != true || _offset.isNullOrEmpty) {
+      if (res.hasMore != true ||
+          _offset.isNullOrEmpty ||
+          res.upList?.isNotEmpty != true) {
         _isEnd = true;
       }
     }
@@ -181,7 +197,7 @@ class DynamicsController
     if (isRefresh) {
       if (_showAllUp) {
         _offset = '';
-        _cacheUpList = res.upList?.toSet();
+        _cacheUpList = res.upList?.toSet() ?? <UpItem>{};
       }
       loadingState.value = response;
     } else {
@@ -192,6 +208,7 @@ class DynamicsController
       if (res.upList case final upList? when upList.isNotEmpty) {
         if (_showAllUp && _cacheUpList != null) {
           upList.removeWhere(_cacheUpList!.contains);
+          _cacheUpList!.addAll(upList);
         }
         loadingState
           ..value.data.addAllUpList(upList)

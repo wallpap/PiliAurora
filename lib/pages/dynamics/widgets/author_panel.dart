@@ -38,7 +38,7 @@ class AuthorPanel extends StatelessWidget {
   final ValueChanged<Object>? onRemove;
   final void Function(bool isTop, Object dynId)? onSetTop;
   final VoidCallback? onBlock;
-  final Future<LoadingState> Function(bool isPrivate, Object dynId)?
+  final Future<LoadingState<void>> Function(bool isPrivate, Object dynId)?
   onSetPubSetting;
   final VoidCallback? onEdit;
   final ValueChanged<int>? onSetReplySubject;
@@ -242,6 +242,14 @@ class AuthorPanel extends StatelessWidget {
   }
 
   void morePanel(BuildContext context) {
+    final account = Accounts.main;
+    final owner = context.widget;
+    final dynamicId = item.idStr.toString();
+    bool ownsTarget() =>
+        context.mounted &&
+        identical(context.widget, owner) &&
+        identical(account, Accounts.main) &&
+        dynamicId == item.idStr.toString();
     String? bvid;
     try {
       String? getBvid(String? type, DynamicMajorModel? major) => switch (type) {
@@ -328,8 +336,8 @@ class AuthorPanel extends StatelessWidget {
                 },
                 minLeadingWidth: 0,
               ),
-              if ((item.basic!.commentType == 17 ||
-                      item.basic!.commentType == 11) &&
+              if ((item.basic?.commentType == 17 ||
+                      item.basic?.commentType == 11) &&
                   item.modules.moduleDynamic?.major?.blocked == null)
                 ListTile(
                   title: Text(
@@ -405,6 +413,7 @@ class AuthorPanel extends StatelessWidget {
                   ListTile(
                     onTap: () {
                       Get.back();
+                      if (!ownsTarget()) return;
                       onSetTop!(moduleAuthor.isTop ?? false, item.idStr);
                     },
                     minLeadingWidth: 0,
@@ -418,10 +427,28 @@ class AuthorPanel extends StatelessWidget {
                   ListTile(
                     onTap: () async {
                       Get.back();
+                      if (!ownsTarget()) return;
+                      final oid = int.tryParse(item.basic?.commentIdStr ?? '');
+                      final type = item.basic?.commentType;
+                      if (oid == null ||
+                          oid <= 0 ||
+                          type == null ||
+                          type <= 0) {
+                        SmartDialog.showToast('动态缺少有效的评论来源，请刷新后重试');
+                        return;
+                      }
                       final res = await ReplyHttp.replyInteraction(
-                        oid: item.basic!.commentIdStr!,
-                        type: item.basic!.commentType!,
+                        account: account,
+                        oid: oid,
+                        type: type,
                       );
+                      if (!context.mounted ||
+                          !ownsTarget() ||
+                          ModalRoute.of(context)?.isCurrent != true ||
+                          oid.toString() != item.basic?.commentIdStr ||
+                          type != item.basic?.commentType) {
+                        return;
+                      }
                       if (res case Success(:final response)) {
                         if (context.mounted) {
                           showDialog(
@@ -445,7 +472,8 @@ class AuthorPanel extends StatelessWidget {
                                       style: const TextStyle(fontSize: 14),
                                     ),
                                     onTap: () {
-                                      Get.back();
+                                      Navigator.of(context).pop();
+                                      if (!ownsTarget()) return;
                                       onSetReplySubject!(
                                         enableSelection ? 2 : 1,
                                       );
@@ -459,7 +487,8 @@ class AuthorPanel extends StatelessWidget {
                                       style: const TextStyle(fontSize: 14),
                                     ),
                                     onTap: () {
-                                      Get.back();
+                                      Navigator.of(context).pop();
+                                      if (!ownsTarget()) return;
                                       onSetReplySubject!(enableReply ? 3 : 4);
                                     },
                                   ),
@@ -486,15 +515,17 @@ class AuthorPanel extends StatelessWidget {
                   ListTile(
                     onTap: () {
                       Get.back();
+                      if (!ownsTarget()) return;
 
                       final isPrivate = moduleAuthor.badgeText != null;
-                      Future<void> onTap() async {
-                        Get.back();
+                      Future<void> onTap(BuildContext dialogContext) async {
+                        Navigator.of(dialogContext).pop();
+                        if (!ownsTarget()) return;
                         if ((await onSetPubSetting!(
                           isPrivate,
                           item.idStr,
                         )).isSuccess) {
-                          if (context.mounted) {
+                          if (ownsTarget()) {
                             (context as Element).markNeedsBuild();
                           }
                         }
@@ -513,7 +544,7 @@ class AuthorPanel extends StatelessWidget {
                                 '所有用户可见',
                                 style: TextStyle(fontSize: 14),
                               ),
-                              onTap: onTap,
+                              onTap: () => onTap(context),
                             ),
                             ListTile(
                               dense: true,
@@ -522,7 +553,7 @@ class AuthorPanel extends StatelessWidget {
                                 '仅自己可见',
                                 style: TextStyle(fontSize: 14),
                               ),
-                              onTap: onTap,
+                              onTap: () => onTap(context),
                             ),
                           ],
                         ),
@@ -536,6 +567,7 @@ class AuthorPanel extends StatelessWidget {
                   ListTile(
                     onTap: () {
                       Get.back();
+                      if (!ownsTarget()) return;
                       onEdit!();
                     },
                     minLeadingWidth: 0,
@@ -546,6 +578,7 @@ class AuthorPanel extends StatelessWidget {
                   ListTile(
                     onTap: () {
                       Get.back();
+                      if (!ownsTarget()) return;
                       showDialog(
                         context: context,
                         builder: (context) => AlertDialog(
@@ -562,7 +595,8 @@ class AuthorPanel extends StatelessWidget {
                             ),
                             TextButton(
                               onPressed: () {
-                                Get.back();
+                                Navigator.of(context).pop();
+                                if (!ownsTarget()) return;
                                 onRemove!(item.idStr);
                               },
                               child: const Text('确定'),
@@ -600,23 +634,35 @@ class AuthorPanel extends StatelessWidget {
                   ),
                   onTap: () {
                     Get.back();
+                    if (!ownsTarget()) return;
                     autoWrapReportDialog(
                       context,
                       ReportOptions.dynamicReport,
-                      (reasonType, reasonDesc, banUid) {
-                        if (banUid) {
-                          VideoHttp.relationMod(
-                            mid: moduleAuthor.mid!,
-                            act: 5,
-                            reSrc: 11,
-                          );
+                      isCurrent: ownsTarget,
+                      (reasonType, reasonDesc, banUid) async {
+                        if (!ownsTarget()) {
+                          return const Error('账号或动态已变更，请重新打开举报页面');
                         }
-                        return UserHttp.dynamicReport(
+                        final result = await UserHttp.dynamicReport(
+                          account: account,
                           mid: moduleAuthor.mid!,
-                          dynId: item.idStr,
+                          dynId: dynamicId,
                           reasonType: reasonType,
                           reasonDesc: reasonDesc,
                         );
+                        if (!result.isSuccess || !banUid || !ownsTarget()) {
+                          return result;
+                        }
+                        final blockResult = await VideoHttp.relationMod(
+                          account: account,
+                          mid: moduleAuthor.mid!,
+                          act: 5,
+                          reSrc: 11,
+                        );
+                        if (blockResult is Error) {
+                          return Success('举报成功；拉黑用户：$blockResult');
+                        }
+                        return result;
                       },
                     );
                   },

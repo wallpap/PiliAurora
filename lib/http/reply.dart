@@ -331,6 +331,7 @@ abstract final class ReplyHttp {
   }
 
   static Future<LoadingState<ReplyInteractData>> replyInteraction({
+    Account? account,
     required Object oid,
     required Object type,
   }) {
@@ -343,6 +344,7 @@ abstract final class ReplyHttp {
         'type': type,
         'web_location': 333.1369,
       },
+      options: Options(extra: {'account': account ?? Accounts.main}),
     );
   }
 

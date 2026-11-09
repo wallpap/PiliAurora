@@ -4,6 +4,7 @@ import 'package:pili_aurora/common/constants.dart';
 import 'package:pili_aurora/grpc/bilibili/main/community/reply/v1.pb.dart'
     show ReplyInfo;
 import 'package:pili_aurora/http/api.dart';
+import 'package:pili_aurora/http/api_response.dart';
 import 'package:pili_aurora/http/browser_ua.dart';
 import 'package:pili_aurora/http/constants.dart';
 import 'package:pili_aurora/http/init.dart';
@@ -633,8 +634,10 @@ abstract final class VideoHttp {
     required int reSrc,
   }) async {
     final requestAccount = account ?? Accounts.main;
-    final res = await Request().post(
+    final res = await Request().requestApi<void>(
       Api.relationMod,
+      kind: ApiCallKind.mutation,
+      decode: (_) {},
       queryParameters: {
         'statistics': '{"appId":100,"platform":5}',
         'x-bili-device-req-json':
@@ -654,7 +657,7 @@ abstract final class VideoHttp {
         'csrf': requestAccount.csrf,
       },
       options: Options(
-        extra: {'account': ?account, if (account != null) 'noRetry': true},
+        extra: {'account': requestAccount},
         contentType: Headers.formUrlEncodedContentType,
         headers: {
           'origin': 'https://space.bilibili.com',
@@ -663,7 +666,7 @@ abstract final class VideoHttp {
         },
       ),
     );
-    if (res.data['code'] == 0) {
+    if (res.isSuccess) {
       if (!identical(requestAccount, Accounts.main)) {
         return const Error('账号已切换');
       }
@@ -674,10 +677,8 @@ abstract final class VideoHttp {
         // unblock
         BlockedAuthors.setBlocked(mid, false);
       }
-      return const Success(null);
-    } else {
-      return Error(res.data['message']);
     }
+    return res;
   }
 
   static Future<void> roomEntryAction({required Object roomId}) {

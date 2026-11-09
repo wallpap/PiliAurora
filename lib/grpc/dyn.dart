@@ -13,6 +13,8 @@ import 'package:pili_aurora/grpc/bilibili/app/dynamic/v2.pb.dart'
 import 'package:pili_aurora/grpc/grpc_req.dart';
 import 'package:pili_aurora/grpc/url.dart';
 import 'package:pili_aurora/http/loading_state.dart';
+import 'package:pili_aurora/utils/accounts.dart';
+import 'package:pili_aurora/utils/accounts/account.dart';
 import 'package:fixnum/fixnum.dart';
 
 abstract final class DynGrpc {
@@ -42,6 +44,7 @@ abstract final class DynGrpc {
   }
 
   static Future<LoadingState<LikeListReply>> likeList({
+    Account? account,
     required String dynamicId,
     Int64? dynType,
     Int64? rid,
@@ -59,10 +62,12 @@ abstract final class DynGrpc {
       ),
       LikeListReply.fromBuffer,
       kind: .query,
+      account: account ?? Accounts.main,
     );
   }
 
   static Future<LoadingState<RepostListRsp>> repostList({
+    Account? account,
     required String dynamicId,
     Int64? dynType,
     Int64? rid,
@@ -81,6 +86,7 @@ abstract final class DynGrpc {
       ),
       RepostListRsp.fromBuffer,
       kind: .query,
+      account: account ?? Accounts.main,
     );
   }
 }

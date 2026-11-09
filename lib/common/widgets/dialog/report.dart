@@ -22,6 +22,7 @@ Future<void> autoWrapReportDialog(
   Map<String, Map<int, String>> options,
   OnReport onReport, {
   bool ban = true,
+  bool Function()? isCurrent,
   String? reportUrl,
   ReasonCheck withContent = _kReportCheck,
   ReasonCheck contentRequired = _kReportCheck,
@@ -166,7 +167,11 @@ Future<void> autoWrapReportDialog(
                         isWithContent ? reasonDesc : null,
                         banUid,
                       );
-                      if (!context.mounted || route?.isCurrent != true) return;
+                      if (!context.mounted ||
+                          route?.isCurrent != true ||
+                          isCurrent?.call() == false) {
+                        return;
+                      }
                       if (res.isSuccess) {
                         Navigator.of(context).pop();
                         SmartDialog.showToast(switch (res) {
@@ -178,7 +183,9 @@ Future<void> autoWrapReportDialog(
                       }
                     } catch (e, s) {
                       final error = Error.fromException(e, s);
-                      if (context.mounted && route?.isCurrent == true) {
+                      if (context.mounted &&
+                          route?.isCurrent == true &&
+                          isCurrent?.call() != false) {
                         error.toast();
                       }
                     } finally {

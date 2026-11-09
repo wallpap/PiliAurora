@@ -70,6 +70,8 @@ fvm flutter test test/services/diagnostics/ test/pages/about/diagnostics_page_te
 
 `pages/article/controller_results_test.dart` 检查文章正文／统计的目标与账号归属、本人点赞状态、写入互斥、未知计数保留、成功写入淘汰旧查询、收藏列表和历史上报账号；`content_retry_test.dart` 检查内容加载失败后的重试。真实文章渲染与服务写入需另行验收。
 
+`pages/dynamics/overview_results_test.dart` 检查聚合页的凭据替换、分页去重／游标停滞和刷新等待，点赞／转发列表的账号隔离，以及互动设置的缺失来源、迟到弹窗与举报后拉黑的部分成功。举报弹窗可由调用方传入归属检查，切号后的结果不提示当前账号。
+
 `http/fav_response_test.dart` 覆盖收藏接口及分支的成功、业务拒绝、损坏响应和传输不确定性，并保留可空列表语义、确认后的收藏夹 ID 和账号绑定。`pages/fav/operation_results_test.dart` 检查快速收藏的 Future／重复提交／空收藏夹／切号，以及创建草稿、编辑加载、迟到查询和操作锁释放；原生封面选择与裁剪不由这些模拟测试证明。
 
 `http/validate_response_test.dart` 检查风控挑战与通过／拒绝结果、缺失证明、业务码和传输待确认；`utils/gaia_validation_test.dart` 通过导航替身返回验证结果，检查取消、过期操作、字段校验、一次性成功通知及等待异步消费者，消费者失败不重发请求。原生极验 WebView 的加载、脚本与设备行为需单独验证。

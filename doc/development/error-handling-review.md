@@ -50,6 +50,7 @@
 | 动态发布与管理：发布／转发、投票／预约、动态列表、话题与提及，以及图片上传／删除 | 上传前固定账号与提交草稿，确认成功后只关闭所属页面；新草稿保留，切号或换对象后拒绝旧结果。投票与预约加载失败可重试，提交互斥，选项上传按对象回写；点赞、预约和可见范围仅在确认成功后更新。动态详情拒绝错配 ID，可见性查询失败不误报不可见。列表删除／置顶防重入，话题收藏／点赞与查询账号一致；补页检查进展，折叠项按位置替换并保留后续页。发布后的页面回调失败不改变已确认的成功结果。 | `test/http/dynamic_media_response_test.dart`、`member_dynamics_response_test.dart`、`test/pages/dynamics/` |
 | 直播业务：`http/live.dart`、屏蔽规则、发送面板与表情查询 | 27 个接口接入统一结果契约，保留查询角色、签名账号、可选数据和明确业务码，GET 反馈也按写入禁重试。屏蔽规则保留原 Error／UnknownResult；文本和表情发送共用在途状态，保留新草稿，切号／换房／关闭后拒绝旧结果。表情查询跟随主账号凭据变化，刷新前释放旧页签。 | `test/http/live_response_test.dart`、直播设置、发送与表情回归 |
 | 文章与文章收藏：正文、统计、点赞、收藏、分享／转发和历史上报 | 正文与统计固定账号、目标和查询代次，关闭或切号后淘汰旧结果；本人点赞读取真实状态，补齐标题。写入互斥，确认成功才更新，未知计数保持未知并淘汰早先的统计查询。收藏列表跟随凭据刷新；分享回调核对当前文章，历史上报固定正文加载前的 heartbeat。文集列表和文章搜索保留合理契约。 | `test/pages/article/controller_results_test.dart`、`content_retry_test.dart` |
+| 动态聚合主页、互动菜单、点赞／转发列表 | 聚合页与列表跟随主账号凭据变化，查询固定账号，重复游标终止分页且不追加重复页；全部关注列表持续去重，刷新等待两个面板。互动设置缺少来源时显示可读提示，旧查询和弹窗拒绝切号后的回调。举报确认成功后再拉黑，拉黑失败保留举报成功；用户关系写入接入统一契约，禁止自动重试，保留原有切号保护。举报弹窗支持调用方归属检查。 | `test/pages/dynamics/overview_results_test.dart`、举报弹窗与关注交互回归 |
 
 ## 检查后保留的实现
 
@@ -68,7 +69,6 @@
 - 播放小窗异常退出后的声音归属和主窗口恢复行为。
 - 其余页面查询、收藏／历史／动态等写入，以及公共工具、模型的返回值和异常处理。
 - 评论发布／删除、评论投票等其余 gRPC 领域消费，以及原生表情输入。弹幕发送、HTTP 赞踩／置顶／举报、评论可见性检查和表情包管理已完成本轮检查。
-- 动态聚合主页、详情互动菜单及其余列表查询的账号生命周期。发布／转发、动态列表删除／置顶、话题管理与选择、提及、动态投票／预约已完成本轮检查。
 - 搜索适配器之外的视频导航调用方，以及番剧／课程资料的领域消费。搜索首页、热搜、联想与结果分页已完成本轮检查。
 - 课程、话题、笔记和追番等其余收藏页面，以及订阅调用方。文章与文章收藏、收藏详情、收藏夹操作、两种排序、批量迁移和视频快速收藏已完成本轮检查。
 - 极验 WebView 自身的脚本失败、超时和取消结果。风控协调回归使用导航替身返回弹窗结果，未启动原生 WebView。
@@ -113,3 +113,5 @@
 - 动态上传／删除、发布／转发、投票／预约、点赞／可见范围、详情目标和列表／话题管理共 29 个不同用例通过。文件异步等待、输入控件存储和 toast 队列清理夹具修正后，仅复跑相关用例；新增发布回调失败断言已单独通过。日志：`build/dynamics-publish-contract-retry.log`（HTTP 3 项及表单 3 项）、`build/dynamics-publish-callback-tests.log`（发布 1 项）、`build/dynamics-publish-remaining-tests.log`（表单与可见性 2 项）、`build/dynamics-repost-retry.log`（转发 1 项）、`build/dynamics-operation-tests.log`（互动 2 项）、`build/dynamics-operation-retry.log`（互动 2 项）、`build/dynamics-detail-target-tests.log`（详情 1 项）、`build/dynamics-management-contract-retry.log`（管理 14 项）。27 个源码／测试文件完成定向分析，唯一的测试依赖提示修正后，单文件复查无问题（`build/dynamics-contract-final-analyze.log`、`build/dynamics-publish-final-analyze.log`）。未重跑完整 CI，也未进行真实账号写入与设备交互验收。
 
 - 文章正文／统计、收藏／点赞、账号替换、历史上报与内容重试共 10 个不同用例通过。增强未知计数与成功写入淘汰旧查询断言后，仅复跑受影响前缀匹配的 3 项，均通过（`build/article-consumer-contract-tests.log`、`build/article-like-id-test.log`、`build/article-write-state-tests.log`）。8 个修改文件完成定向分析：文章文件的 5 条格式提示修正后无问题，共享 video.dart 并行改动缺失 import 修正后单文件复查无问题（`build/article-consumer-analyze.log`、`build/article-video-analyze.log`）。未重跑完整 CI，也未验证真实服务与完整文章渲染。
+
+- 动态聚合／互动菜单／点赞与转发列表新增 9 个不同用例，加举报弹窗和关注交互既有回归各 1 项，共 11 项通过。首轮 6 项通过后，只复跑缺失评论来源与举报用例，另补充切号后迟到举报成功回归（`build/dynamics-overview-tests.log`、`build/dynamics-overview-menu-retry.log`、`build/dynamics-overview-report-final.log`、`build/dynamics-report-dialog-regression.log`、`build/dynamics-relation-regression.log`）。9 个文件定向分析的 1 条提示和 1 条警告修正后，2 文件复查无问题（`build/dynamics-overview-analyze.log`、`build/dynamics-overview-final-analyze.log`）。未重跑完整 CI，也未进行真实服务写入与设备验收。
