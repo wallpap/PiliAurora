@@ -28,8 +28,19 @@ fvm flutter test tool/experiments/
 | `danmaku/frame_rate_workload_test.dart` | 模拟同步更新耗时和额外 UI 帧，检查更新间隔及停止后的调度释放。 |
 | `danmaku/native_video_frame_phase_test.dart` | 对照 Android 与隔离时序模型、mpv 同步和纹理相位，输出锁定状态检查。 |
 | `windows/process_metrics_test.dart` | 在 Windows 上检查进程内存与 CPU 采样；其他平台会明确标记跳过。 |
+| `diagnostics/redactor_benchmark.dart` | 对照普通日志、签名链接、长键名与重复 buvid 的脱敏耗时，可选读取本地 JSONL 诊断文件；只输出聚合统计。 |
 
 测量使用 Flutter 测试宿主，pump 时间反映本机 CPU 侧重建和缓存状态；GPU 帧耗时在目标设备测量。主测试集保留 `test/pages/danmaku/frame_rate_ticker_test.dart` 和 `native_video_frame_sync_test.dart` 的核心调度与相位回归，扩大矩阵只在实验目录按需运行。
+
+日志脱敏基准使用独立 Dart 入口。比较发布模式 CPU 成本时，先编译 AOT，再运行同一组输入：
+
+```powershell
+fvm dart compile exe tool/experiments/diagnostics/redactor_benchmark.dart -o build/redactor-benchmark.exe
+./build/redactor-benchmark.exe
+./build/redactor-benchmark.exe <runtime.jsonl> <player.jsonl>
+```
+
+每项预热 3 次，再取 7 次测量的中位数。可选文件的测量包含生产脱敏和 JSON 重新编码，不包含文件读取、JSON 解码、快照协调和 ZIP 压缩；文件内容不会回显或改写。耗时用于同机对照，不作为自动化测试阈值；Android 设备速度需另行测量。
 
 实际呈现分析的输入为已分段的 `presentation-stage-*.json`，包含 `summary`（`run/stage/target`）与 `matched` 数组；每帧字段为 `index/targetUs/positionUs/presentNs`，其中 `presentNs` 必须来自该弹幕更新帧的实际屏幕呈现。暂停、切档和媒体代次分别输入；缺帧、时间倒退和位置回退会中断窗口，首尾采用完整窗口，不补点。一般场景使用滚动＋顶部固定＋底部固定，覆盖固定弹幕进入、驻留和到期。
 

@@ -11,12 +11,17 @@ abstract final class DiagnosticRedactor {
   // mpv 的音轨标题可能只含文件名和签名查询串，没有 URL scheme。
   // 整段查询一并移除，不能只枚举已知 token 名称而漏掉其他签名参数。
   static final _query = RegExp(r'''\?[^\s<>"']+''');
-  static final _assignment = RegExp(
-    r'''((?:authorization|cookie|set-cookie|\b[\w-]*token|access[_-]?key|api[_-]?key|password|passwd|secret|credential|private[_-]?key|SESSDATA|bili_jct|csrf|buvid\w*|DedeUserID|sign(?:ature)?|w_rid|upsig|auth[_-]?(?:code|key)|ticket)["']?\s*[=:]\s*)([^\r\n,;}]+)''',
+  // 先定位固定敏感词，再检查赋值尾部，避免长键名和连字符触发重复回溯。
+  static final _assignmentKey = RegExp(
+    r'authorization|cookie|set-cookie|token|access[_-]?key|api[_-]?key|password|passwd|secret|credential|private[_-]?key|SESSDATA|bili_jct|csrf|(buvid)|DedeUserID|sign(?:ature)?|w_rid|upsig|auth[_-]?(?:code|key)|ticket',
     caseSensitive: false,
   );
+  static final _keySuffix = RegExp(r'\w*', caseSensitive: false);
+  static final _assignmentValue = RegExp(
+    r'''(["']?\s*[=:]\s*)([^\r\n,;}]+)''',
+  );
   static final _bearer = RegExp(
-    r'\b(?:Bearer|Basic)\s+[^\s,;]+',
+    r'\b(Bearer|Basic)\s+[^\s,;]+',
     caseSensitive: false,
   );
   static final _header = RegExp(
@@ -26,41 +31,98 @@ abstract final class DiagnosticRedactor {
   static final _privateKey = RegExp(
     r'-----BEGIN (?:[A-Z]+ )*PRIVATE KEY-----[\s\S]*?(?:-----END (?:[A-Z]+ )*PRIVATE KEY-----|$)',
   );
+  static final _windowsPath = RegExp(r'\b[A-Za-z]:[\\/][^\r\n"<>]+');
+  static final _unixUserPath = RegExp(r'/(?:Users|home)/[^\s/]+');
+  // 覆盖所有规则的必要入口；普通字段只扫描一次，后续仍按原顺序脱敏。
+  static final _textMarker = RegExp(
+    r'[:=?/]|-----BEGIN |\b(?:Bearer|Basic)\s',
+    caseSensitive: false,
+  );
 
   static String text(Object? value, {int maxLength = 4096}) {
     final input = value.toString();
-    var result = (input.length > 1048576 ? input.substring(0, 1048576) : input)
-        .replaceAll(_privateKey, '<private-key>')
-        .replaceAllMapped(_url, (match) {
-          final uri = Uri.tryParse(match[0]!);
-          if (uri == null) return '<url>';
-          final endpoint = Uri(
-            scheme: uri.scheme,
-            host: uri.host,
-            port: uri.hasPort ? uri.port : null,
-            path: uri.path,
-          );
-          return '$endpoint${uri.hasQuery ? '?<redacted>' : ''}';
-        })
-        .replaceAll(_query, '?<redacted>')
-        .replaceAllMapped(_header, (match) => '${match[1]}<redacted>')
-        .replaceAllMapped(_assignment, (match) => '${match[1]}<redacted>')
-        .replaceAllMapped(
-          _bearer,
-          (match) => '${match[0]!.split(RegExp(r'\s')).first} <redacted>',
+    var result = input.length > 1048576 ? input.substring(0, 1048576) : input;
+    if (!_textMarker.hasMatch(result)) {
+      return boundedText(result, maxLength: maxLength);
+    }
+    if (result.contains('-----BEGIN ')) {
+      result = result.replaceAll(_privateKey, '<private-key>');
+    }
+    if (result.contains('://')) {
+      result = result.replaceAllMapped(_url, (match) {
+        final uri = Uri.tryParse(match[0]!);
+        if (uri == null) return '<url>';
+        final endpoint = Uri(
+          scheme: uri.scheme,
+          host: uri.host,
+          port: uri.hasPort ? uri.port : null,
+          path: uri.path,
         );
+        return '$endpoint${uri.hasQuery ? '?<redacted>' : ''}';
+      });
+    }
+    if (result.contains('?')) {
+      result = result.replaceAll(_query, '?<redacted>');
+    }
+    final hasColon = result.contains(':');
+    if (hasColon || result.contains('=')) {
+      result = result.replaceAllMapped(
+        _header,
+        (match) => '${match[1]}<redacted>',
+      );
+      result = _redactAssignments(result);
+    }
+    result = result.replaceAllMapped(
+      _bearer,
+      (match) => '${match[1]} <redacted>',
+    );
     // 本机用户名及目录不是诊断指标。
-    result = result.replaceAll(
-      RegExp(r'\b[A-Za-z]:[\\/][^\r\n"<>]+'),
-      '<local-path>',
-    );
-    result = result.replaceAll(
-      RegExp(r'/(?:Users|home)/[^\s/]+'),
-      '/<user>',
-    );
-    return result.length <= maxLength
-        ? result
-        : '${result.substring(0, maxLength)}…<truncated>';
+    if (hasColon) {
+      result = result.replaceAll(_windowsPath, '<local-path>');
+    }
+    if (result.contains('/')) {
+      result = result.replaceAll(_unixUserPath, '/<user>');
+    }
+    return boundedText(result, maxLength: maxLength);
+  }
+
+  static String _redactAssignments(String input) {
+    StringBuffer? output;
+    var copied = 0;
+    var cursor = 0;
+    var buvidEnd = -1;
+    Match? buvidValue;
+    while (cursor < input.length) {
+      final key = _assignmentKey.allMatches(input, cursor).firstOrNull;
+      if (key == null) break;
+      cursor = key.end;
+      var valueStart = cursor;
+      final Match? value;
+      if (key[1] != null) {
+        // 同一词的后缀和赋值只检查一次，仍保留 buvidapi-key 等重叠候选。
+        if (cursor > buvidEnd) {
+          buvidEnd = _keySuffix.matchAsPrefix(input, cursor)!.end;
+          buvidValue = _assignmentValue.matchAsPrefix(input, buvidEnd);
+        }
+        valueStart = buvidEnd;
+        value = buvidValue;
+      } else {
+        value = _assignmentValue.matchAsPrefix(input, cursor);
+      }
+      if (value == null) {
+        // 固定词也可能重叠，例如 secretoken；失败后仅推进一个字符。
+        cursor = key.start + 1;
+        continue;
+      }
+      (output ??= StringBuffer())
+        ..write(input.substring(copied, valueStart))
+        ..write(value[1])
+        ..write('<redacted>');
+      cursor = copied = value.end;
+    }
+    if (output == null) return input;
+    output.write(input.substring(copied));
+    return output.toString();
   }
 
   static Object? clean(

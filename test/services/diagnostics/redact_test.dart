@@ -31,6 +31,68 @@ void main() {
     expect(DiagnosticRedactor.text(once), once);
     expect(once, 'GET https://example.test:8443/path?<redacted>');
   });
+  test(
+    'credential suffixes retain long prefixes and skip ordinary mentions',
+    () {
+      final prefix = 'segment-' * 1024;
+      final ordinary = '${'buvid' * 512} ordinary=value';
+      final input =
+          '$ordinary\n'
+          '${prefix}ToKeN="token-secret"; safe=1\n'
+          'buvidMention buvidOther_3 = buvid-secret; safe=2\n'
+          'notBuvid before-token-word my-access_token: token-two; safe=3\n'
+          'tokenMention apiKeyMention authCodeMention signMention\n'
+          'prefixBuvid_3: device-secret; safe=4';
+      expect(
+        DiagnosticRedactor.text(input, maxLength: 65536),
+        '$ordinary\n'
+        '${prefix}ToKeN=<redacted>; safe=1\n'
+        'buvidMention buvidOther_3 = <redacted>; safe=2\n'
+        'notBuvid before-token-word my-access_token: <redacted>; safe=3\n'
+        'tokenMention apiKeyMention authCodeMention signMention\n'
+        'prefixBuvid_3: <redacted>; safe=4',
+      );
+    },
+  );
+  test('redacts standalone markers without assignment delimiters', () {
+    final cases = {
+      'bEaReR\tstandalone-secret': 'bEaReR <redacted>',
+      'BASIC\u2003standalone-secret': 'BASIC <redacted>',
+      '/home/PrivateUser/file': '/<user>/file',
+      '/Users/PrivateUser/file': '/<user>/file',
+      '-----BEGIN RSA PRIVATE KEY-----\nunclosed-secret': '<private-key>',
+      "track.m4s?unknown=standalone-secret": 'track.m4s?<redacted>',
+    };
+    for (final entry in cases.entries) {
+      expect(DiagnosticRedactor.text(entry.key), entry.value);
+    }
+  });
+  test('buvid mentions do not hide overlapping hyphenated credential keys', () {
+    for (final key in ['api-key', 'access-key', 'private-key', 'auth-code']) {
+      expect(
+        DiagnosticRedactor.text('buvid$key=overlap-secret; safe=1'),
+        'buvid$key=<redacted>; safe=1',
+      );
+    }
+  });
+  test(
+    'ordinary keyword mentions do not hide overlapping credential names',
+    () {
+      for (final key in [
+        'secretoken',
+        'secreticket',
+        'tickeToken',
+        'passworDedeUserID',
+        'SESSDATApi-key',
+        'w_riDedeUserID',
+      ]) {
+        expect(
+          DiagnosticRedactor.text('$key=overlap-secret; safe=1'),
+          '$key=<redacted>; safe=1',
+        );
+      }
+    },
+  );
   test('redacts signatures, auth parameters and websocket credentials', () {
     final output = jsonEncode(
       DiagnosticRedactor.clean({
