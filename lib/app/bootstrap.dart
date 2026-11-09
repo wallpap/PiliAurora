@@ -5,6 +5,8 @@ import 'package:pili_aurora/plugin/pl_player/playback/presentation_profile.dart'
 import 'package:pili_aurora/app/app.dart';
 import 'package:pili_aurora/app/app_paths.dart';
 import 'package:pili_aurora/app/platform_setup.dart';
+import 'package:pili_aurora/app/startup.dart';
+import 'package:pili_aurora/app/startup_failure.dart';
 import 'package:pili_aurora/services/desktop_playback_windows.dart';
 import 'package:pili_aurora/plugin/pl_player/controller.dart';
 import 'package:pili_aurora/plugin/pl_player/playback/playback_contracts.dart'
@@ -28,7 +30,6 @@ import 'package:pili_aurora/utils/request_utils.dart';
 import 'package:pili_aurora/utils/storage.dart';
 import 'package:pili_aurora/utils/storage_pref.dart';
 import 'package:pili_aurora/utils/theme_utils.dart';
-import 'package:pili_aurora/utils/utils.dart';
 import 'package:catcher_2/catcher_2.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
@@ -36,24 +37,63 @@ import 'package:get/get.dart';
 import 'package:media_kit/media_kit.dart';
 
 /// 初始化本地资源和平台服务，配置异常捕获后挂载应用根 Widget。
-Future<void> bootstrapApplication([List<String> arguments = const []]) async {
-  try {
-    await _bootstrapApplication(arguments);
-  } catch (error, stackTrace) {
-    logger.e('应用启动失败', error: error, stackTrace: stackTrace);
-    await Diagnostics.instance.flush();
-    rethrow;
+Future<StartupResult> bootstrapApplication([
+  List<String> arguments = const [],
+]) async {
+  final progress = StartupProgress();
+  final result = await progress.run(
+    () => _bootstrapApplication(arguments, progress),
+  );
+  if (result is StartupFailure) {
+    exitCode = 1;
+    logger.e(
+      '应用启动失败：${result.phase.label}',
+      error: result.cause.runtimeType,
+      stackTrace: result.stackTrace,
+    );
+    final playerWindow =
+        Platform.isWindows &&
+        arguments.firstOrNull == DesktopPlaybackWindows.argument;
+    if (playerWindow) {
+      try {
+        DesktopPlaybackWindows.instance.playerFailed();
+      } catch (error, stackTrace) {
+        logger.w('通知主窗口失败', error: error.runtimeType, stackTrace: stackTrace);
+      }
+    }
+    try {
+      await Diagnostics.instance.flush().timeout(const Duration(seconds: 2));
+    } catch (error, stackTrace) {
+      logger.w(
+        '启动失败后的日志刷新未完成',
+        error: error.runtimeType,
+        stackTrace: stackTrace,
+      );
+    }
+    if (playerWindow) exit(1);
+    try {
+      await showStartupFailure(result);
+    } catch (error, stackTrace) {
+      logger.e('启动错误页显示失败', error: error.runtimeType, stackTrace: stackTrace);
+      Error.throwWithStackTrace(result, result.stackTrace);
+    }
   }
+  return result;
 }
 
-Future<void> _bootstrapApplication(List<String> arguments) async {
+Future<void> _bootstrapApplication(
+  List<String> arguments,
+  StartupProgress progress,
+) async {
   initializePresentationEngineConfiguration();
   ScaledWidgetsFlutterBinding.ensureInitialized();
+  progress.phase = StartupPhase.supportPath;
   await initializeSupportPath();
   final windows = DesktopPlaybackWindows.instance;
   final playerWindow =
       Platform.isWindows &&
       arguments.firstOrNull == DesktopPlaybackWindows.argument;
+  progress.phase = StartupPhase.diagnostics;
   await LoggerUtils.prepare(
     windowId: playerWindow
         ? int.parse(Platform.environment['PILIAURORA_WINDOW_ID']!)
@@ -66,29 +106,21 @@ Future<void> _bootstrapApplication(List<String> arguments) async {
       ..clearChildren = windows.clearWindowDiagnostics
       ..resumeChildren = windows.resumeWindowDiagnostics;
   }
+  progress.phase = StartupPhase.playerConnection;
   final initialization = playerWindow ? await windows.connectPlayer() : null;
   if (playerWindow) {
     Diagnostics.instance.forwardRecord = windows.sendDiagnosticRecord;
     Diagnostics.instance.forwardFlush = windows.flushDiagnostics;
   }
+  progress.phase = StartupPhase.engine;
   MediaKit.ensureInitialized();
+  progress.phase = StartupPhase.storage;
+  await GStorage.init(memorySnapshot: initialization?.storage);
+  AppIcon.load();
   try {
-    await GStorage.init(memorySnapshot: initialization?.storage);
-    AppIcon.load();
-    try {
-      await AppIcon.syncLauncher();
-    } catch (error, stack) {
-      logger.w('同步桌面图标失败', error: error, stackTrace: stack);
-    }
-  } catch (e, stack) {
-    logger.e('GStorage init error', error: e, stackTrace: stack);
-    await Diagnostics.instance.flush();
-    if (playerWindow) {
-      windows.playerFailed();
-      exit(1);
-    }
-    await Utils.copyText(e.toString(), needToast: false);
-    exit(0);
+    await AppIcon.syncLauncher();
+  } catch (error, stack) {
+    logger.w('同步桌面图标失败', error: error.runtimeType, stackTrace: stack);
   }
   if (playerWindow) {
     await GStorage.setting.putAll({
@@ -103,8 +135,10 @@ Future<void> _bootstrapApplication(List<String> arguments) async {
     });
   }
   ScaledWidgetsFlutterBinding.instance.scaleFactor = Pref.uiScale;
+  progress.phase = StartupPhase.diagnostics;
   await LoggerUtils.initialize();
   if (playerWindow) await windows.applyDiagnosticSettings();
+  progress.phase = StartupPhase.resources;
   await Future.wait([
     initializeDownloadPath(),
     initializeTemporaryPath(),
@@ -132,8 +166,10 @@ Future<void> _bootstrapApplication(List<String> arguments) async {
   }
 
   // Windows Cookie 同步依赖 WebView 环境，因此先完成平台服务初始化。
+  progress.phase = StartupPhase.platformServices;
   if (!playerWindow) await initializePlatformServices();
 
+  progress.phase = StartupPhase.requests;
   Request();
   Request.setCookie(syncWebView: !playerWindow);
   if (!playerWindow) RequestUtils.syncHistoryStatus();
@@ -143,6 +179,7 @@ Future<void> _bootstrapApplication(List<String> arguments) async {
 
   SmartDialog.config.toast = SmartConfigToast(displayType: .onlyRefresh);
 
+  progress.phase = StartupPhase.window;
   await initializePlatformWindow();
   if (playerWindow) {
     await windows.watchPlayerWindow();
@@ -181,6 +218,7 @@ Future<void> _bootstrapApplication(List<String> arguments) async {
     };
   }
 
+  progress.phase = StartupPhase.application;
   if (Pref.dynamicColor) {
     await ThemeUtils.initPlatformState();
   }

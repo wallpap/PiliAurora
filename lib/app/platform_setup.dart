@@ -4,6 +4,7 @@ import 'package:pili_aurora/app/back_navigation.dart';
 import 'package:pili_aurora/common/constants.dart';
 import 'package:pili_aurora/plugin/pl_player/utils/fullscreen.dart';
 import 'package:pili_aurora/services/service_locator.dart';
+import 'package:pili_aurora/services/logger.dart';
 import 'package:pili_aurora/services/desktop_playback_windows.dart';
 import 'package:pili_aurora/services/webview_environment.dart';
 import 'package:pili_aurora/utils/calc_window_position.dart';
@@ -41,7 +42,7 @@ Future<void> initializePlatformServices() async {
 /// 配置移动端系统 UI，或创建并显示桌面应用窗口。
 Future<void> initializePlatformWindow() async {
   if (PlatformUtils.isMobile) {
-    SystemChrome.setEnabledSystemUIMode(.edgeToEdge);
+    await SystemChrome.setEnabledSystemUIMode(.edgeToEdge);
     SystemChrome.setSystemUIOverlayStyle(
       const SystemUiOverlayStyle(
         systemNavigationBarColor: Colors.transparent,
@@ -51,7 +52,8 @@ Future<void> initializePlatformWindow() async {
       ),
     );
     if (Platform.isAndroid) {
-      FlutterDisplayMode.supported.then((mode) {
+      try {
+        final mode = await FlutterDisplayMode.supported;
         final String? storageDisplay = GStorage.setting.get(
           SettingBoxKey.displayMode,
         );
@@ -61,10 +63,15 @@ Future<void> initializePlatformWindow() async {
             (e) => e.toString() == storageDisplay,
           );
         }
-        FlutterDisplayMode.setPreferredMode(displayMode ?? DisplayMode.auto);
-      });
+        await FlutterDisplayMode.setPreferredMode(
+          displayMode ?? DisplayMode.auto,
+        );
+      } catch (error, stackTrace) {
+        // 刷新率选择是可选能力，失败时保留系统模式并继续启动。
+        logger.w('设置显示模式失败', error: error.runtimeType, stackTrace: stackTrace);
+      }
     } else {
-      ScreenBrightnessPlatform.instance.setAutoReset(false);
+      await ScreenBrightnessPlatform.instance.setAutoReset(false);
     }
   } else if (PlatformUtils.isDesktop) {
     FocusManager.instance.addEarlyKeyEventHandler(handleAppKeyEvent);
@@ -92,11 +99,9 @@ Future<void> initializePlatformWindow() async {
           title: 'PiliAurora Player',
           backgroundColor: Color(0xFF000000),
         ),
-        () async {
-          await windowManager.setBounds(windows.initialBounds!);
-          await windowManager.setAlwaysOnTop(true);
-        },
       );
+      await windowManager.setBounds(windows.initialBounds!);
+      await windowManager.setAlwaysOnTop(true);
       return;
     }
 
@@ -108,14 +113,13 @@ Future<void> initializePlatformWindow() async {
           : TitleBarStyle.hidden,
       title: Constants.appName,
     );
-    windowManager.waitUntilReadyToShow(windowOptions, () async {
-      final windowSize = Pref.windowSize;
-      await windowManager.setBounds(
-        await calcWindowPosition(windowSize) & windowSize,
-      );
-      if (Pref.isWindowMaximized) await windowManager.maximize();
-      await windowManager.show();
-      await windowManager.focus();
-    });
+    await windowManager.waitUntilReadyToShow(windowOptions);
+    final windowSize = Pref.windowSize;
+    await windowManager.setBounds(
+      await calcWindowPosition(windowSize) & windowSize,
+    );
+    if (Pref.isWindowMaximized) await windowManager.maximize();
+    await windowManager.show();
+    await windowManager.focus();
   }
 }

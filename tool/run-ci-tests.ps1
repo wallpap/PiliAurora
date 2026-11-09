@@ -13,6 +13,8 @@ $ciTests = @(
     # 架构与账号、数据安全
     "test/architecture/dependency_policy_test.dart",
     "test/architecture/dependency_rules_test.dart",
+    "test/app/startup_test.dart",
+    "test/app/startup_failure_test.dart",
     "test/http/loading_state_test.dart",
     "test/http/retry_interceptor_test.dart",
     "test/grpc/request_test.dart",
@@ -121,6 +123,7 @@ $ciTests = @(
 if ($IsWindows) {
     $ciTests += @(
         "test/app/desktop_theme_test.dart",
+        "test/app/platform_setup_test.dart",
         "test/utils/desktop_window_background_test.dart",
         "test/app/desktop_playback_launch_test.dart",
         "test/plugin/pl_player/fullscreen_transition_test.dart",

@@ -24,6 +24,7 @@
 | 设置恢复：`services/settings/settings_backup.dart` | JSON 解析与后续持久化失败统一沿返回的 Future 交付，格式损坏时不修改存储 | `test/services/settings/settings_backup_test.dart` |
 | gRPC：`grpc/grpc_req.dart` 及 audio／dm／dyn／im／reply／space 调用 | 强制声明查询或写入；查询传输失败统一返回 Error；写入禁用重试，传输或响应无法确认时返回 UnknownResult；保留业务拒绝码及可读状态消息；解码错误保留原因，取消消费返回失效并归还额度 | `test/grpc/request_test.dart`、`test/grpc/decode_policy_test.dart`、消息、弹幕、空间搜索和空间列表回归 |
 | 直播消息连接：`services/live_stream/live.dart`、`pages/live_room/controller.dart` | init 明确区分成功认证、失败及主动关闭；拒绝认证不启动心跳，等待认证有超时；保留节点真实错误；失败后释放连接与缓存令牌，迟到结果不影响当前房间，已断开的连接可重试 | `test/services/live_stream/`、`test/pages/live_room/controller_test.dart`、直播加载回归 |
+| 启动装配：`app/bootstrap.dart`、`platform_setup.dart` | StartupResult 区分成功与失败，失败保留阶段、原始原因和堆栈；存储不可用时显示独立错误页，用户点击后才复制脱敏摘要；主窗口关闭和播放子进程失败使用非零退出码；日志刷新有界且不覆盖原始失败；窗口显示与聚焦沿初始化 Future 返回，可选刷新率失败保留系统模式 | `test/app/startup_test.dart`、`startup_failure_test.dart`、`platform_setup_test.dart` |
 
 ## 已检查且保留的契约
 
@@ -41,7 +42,6 @@
 - HTTP 传输、重试和其余业务适配器：逐接口核对响应形状、写入重试及调用方对可空返回值的判断；现有通用捕获的修正不等同于所有 HTTP 接口已验收。
 - gRPC 各领域响应模型及业务调用方：请求、写入不确定性与解码契约已检查；模型字段和业务行为继续随各领域核对。
 - 桌面播放进程和启动／退出装配；直播消息连接与协议 worker 已检查，剩余直播业务接口仍随 HTTP 模块核对。
-- 启动装配已定位一项问题：`app/bootstrap.dart` 在主进程存储初始化失败时复制异常到剪贴板并调用 exit(0)，会覆盖用户剪贴板且将启动失败报告为成功。后续需完善可见的失败交付与进程结果，并验证平台窗口初始化前的路径。
 - 其余页面查询、收藏／历史／动态等写入，以及公共工具与模型的返回值和异常消费。
 
 ## 验证范围
@@ -55,3 +55,4 @@
 - `fvm flutter analyze --no-pub lib test tool`：24 条 info，全部位于未修改的 `lib/common/widgets/flutter/` 上游控件副本；没有 error 或 warning。
 - 登录、公共错误／搜索／消息、下载、图片、账号和设置／重试分别执行过对应目录或文件的定向回归。完整范围见本页及[测试目录](../../test/README.md)。
 - gRPC、消息、弹幕、空间搜索与空间列表组合回归 100 项通过，随后补充状态元数据场景后的 gRPC 请求契约 12 项通过；直播连接、页面与加载组合回归 35 项通过。两组源码和测试的定向分析均无问题。
+- 启动结果、独立错误页、平台窗口等待、小窗加载与架构约束组合回归 17 项通过。错误页测试不初始化 Hive，窗口和剪贴板使用模拟通道；真实 Windows 关闭退出码和 Android 系统返回仍需设备验收。
