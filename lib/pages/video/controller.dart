@@ -510,11 +510,17 @@ class VideoDetailController extends GetxController
                   }
                 } else {
                   final res = await FavHttp.favVideo(
+                    account: account,
                     resources: '${item.aid}:${item.type}',
                     delIds: '${args['mediaId']}',
                   );
+                  if (isClosed ||
+                      !identical(account, Accounts.main) ||
+                      !mediaList.contains(item)) {
+                    return;
+                  }
                   if (res.isSuccess) {
-                    mediaList.removeAt(index);
+                    mediaList.remove(item);
                     SmartDialog.showToast('取消收藏');
                   } else {
                     res.toast();

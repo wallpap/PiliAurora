@@ -6,7 +6,12 @@ import 'package:pili_aurora/pages/common/common_list_controller.dart';
 import 'package:pili_aurora/utils/accounts.dart';
 
 class FavController extends CommonListController<FavFolderData, FavFolderInfo> {
-  late final account = Accounts.main;
+  final account = Accounts.main;
+
+  bool get isCurrent => !isClosed && identical(account, Accounts.main);
+
+  @override
+  Object get queryContext => Accounts.main;
 
   @override
   void onInit() {
@@ -32,9 +37,12 @@ class FavController extends CommonListController<FavFolderData, FavFolderInfo> {
   }
 
   @override
-  Future<LoadingState<FavFolderData>> customGetData() => FavHttp.userfavFolder(
-    pn: page,
-    ps: 20,
-    mid: account.mid,
-  );
+  Future<LoadingState<FavFolderData>> customGetData() async => isCurrent
+      ? FavHttp.userfavFolder(
+          account: account,
+          pn: page,
+          ps: 20,
+          mid: account.mid,
+        )
+      : const Error('账号已切换，请重新打开页面');
 }

@@ -3,6 +3,7 @@ import 'package:pili_aurora/common/widgets/scroll_physics.dart' show tabBarView;
 import 'package:pili_aurora/common/widgets/view_safe_area.dart';
 import 'package:pili_aurora/http/loading_state.dart';
 import 'package:pili_aurora/models/common/fav_type.dart';
+import 'package:pili_aurora/models/remote/fav/fav_folder/list.dart';
 import 'package:pili_aurora/pages/fav/article/controller.dart';
 import 'package:pili_aurora/pages/fav/cheese/controller.dart';
 import 'package:pili_aurora/pages/fav/topic/controller.dart';
@@ -61,10 +62,15 @@ class _FavPageState extends State<FavPage> with SingleTickerProviderStateMixin {
                 ? IconButton(
                     onPressed: () => Get.toNamed('/createFav')?.then(
                       (data) {
-                        if (data != null) {
+                        if (mounted &&
+                            _favController.isCurrent &&
+                            data is FavFolderInfo) {
                           final list =
                               _favController.loadingState.value.dataOrNull;
                           if (list != null && list.isNotEmpty) {
+                            if (list.any((folder) => folder.id == data.id)) {
+                              return;
+                            }
                             list.insert(1, data);
                             _favController.loadingState.refresh();
                           } else {

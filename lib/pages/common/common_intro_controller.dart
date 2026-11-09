@@ -212,6 +212,7 @@ mixin FavMixin on TripleMixin {
     );
     if (isClosed ||
         !identical(account, Accounts.main) ||
+        getFavRidType != (rid, type) ||
         version != _favQueryVersion) {
       return const Error('收藏夹或账号已更新，请重新打开');
     }
@@ -278,7 +279,11 @@ mixin FavMixin on TripleMixin {
   Future<void> actionFavVideo({bool isQuick = false}) async {
     if (_savingFav || isClosed) return;
     final account = Accounts.main;
-    bool current() => !isClosed && identical(account, Accounts.main);
+    final target = getFavRidType;
+    bool current() =>
+        !isClosed &&
+        identical(account, Accounts.main) &&
+        getFavRidType == target;
     if (!account.isLogin) {
       SmartDialog.showToast('账号未登录');
       return;
@@ -286,7 +291,7 @@ mixin FavMixin on TripleMixin {
     _savingFav = true;
     var showingLoading = false;
     try {
-      final (rid, type) = getFavRidType;
+      final (rid, type) = target;
       // 收藏至默认文件夹
       if (isQuick) {
         SmartDialog.showLoading(msg: '请求中');

@@ -20,6 +20,8 @@ import 'package:pili_aurora/models/remote/later/list.dart';
 import 'package:pili_aurora/models/remote/relation/data.dart';
 import 'package:pili_aurora/pages/common/multi_select/base.dart';
 import 'package:pili_aurora/pages/dynamics_tab/controller.dart';
+import 'package:pili_aurora/pages/later/controller.dart'
+    show BaseLaterController;
 import 'package:pili_aurora/pages/fav_detail/controller.dart'
     show BaseFavController;
 import 'package:pili_aurora/pages/group_panel/view.dart';
@@ -371,109 +373,136 @@ abstract final class RequestUtils {
     }
   }
 
-  static void onCopyOrMove<T extends MultiSelectData>({
+  static Future<void> onCopyOrMove<T extends MultiSelectData>({
     required BuildContext context,
     required bool isCopy,
     required CommonMultiSelectMixin<T> ctr,
     required dynamic mediaId,
     required dynamic mid,
-  }) {
-    FavHttp.allFavFolders(mid).then((res) {
-      if (!context.mounted) return;
-      if (res case Success(:final response)) {
-        final list = response.list;
-        if (list == null || list.isEmpty) return;
-        int? checkedId;
-        showDialog(
-          context: context,
-          builder: (context) {
-            return AlertDialog(
-              title: Text('${isCopy ? '复制' : '移动'}到'),
-              contentPadding: const EdgeInsets.only(top: 5),
-              content: SingleChildScrollView(
-                child: RadioGroup(
-                  onChanged: (value) {
-                    checkedId = value;
-                    (context as Element).markNeedsBuild();
-                  },
-                  groupValue: checkedId,
-                  child: Column(
-                    children: list.map((item) {
-                      return RadioListTile<int>(
-                        dense: true,
-                        title: Text(item.title),
-                        value: item.id,
-                      );
-                    }).toList(),
-                  ),
+  }) async {
+    final account = switch (ctr) {
+      BaseFavController controller => controller.account,
+      BaseLaterController controller => controller.laterAccount,
+      _ => Accounts.main,
+    };
+    final source = ctr.loadingState.value.dataOrNull;
+    if (source == null) return;
+    final removeList = ctr.allChecked.toSet();
+    if (removeList.isEmpty) return;
+    bool current() =>
+        context.mounted &&
+        identical(account, Accounts.main) &&
+        identical(source, ctr.loadingState.value.dataOrNull) &&
+        (ctr is! GetxController || !(ctr as GetxController).isClosed);
+    if (!current()) return;
+    final result = await FavHttp.allFavFolders(mid, account: account);
+    if (!context.mounted || !current()) return;
+    if (result case Success(:final response)) {
+      final list = response.list;
+      if (list == null || list.isEmpty) {
+        SmartDialog.showToast('暂无可用收藏夹，请先创建');
+        return;
+      }
+      int? checkedId;
+      var saving = false;
+      final isFav = ctr is BaseFavController;
+      final resources = (isFav ? removeList.toList().reversed : removeList)
+          .map(
+            (item) => switch (item) {
+              LaterItemModel(:final aid?) => aid,
+              FavDetailItemModel(id: final id?, type: final type?) =>
+                '$id:$type',
+              _ => null,
+            },
+          )
+          .toList();
+      if (resources.contains(null)) {
+        SmartDialog.showToast('所选内容缺少有效标识');
+        return;
+      }
+      await showDialog<void>(
+        context: context,
+        builder: (dialogContext) => StatefulBuilder(
+          builder: (context, setState) => AlertDialog(
+            title: Text('${isCopy ? '复制' : '移动'}到'),
+            contentPadding: const EdgeInsets.only(top: 5),
+            content: SingleChildScrollView(
+              child: RadioGroup<int>(
+                onChanged: (value) {
+                  if (!saving) setState(() => checkedId = value);
+                },
+                groupValue: checkedId,
+                child: Column(
+                  children: list
+                      .map(
+                        (item) => RadioListTile<int>(
+                          dense: true,
+                          title: Text(item.title),
+                          value: item.id,
+                        ),
+                      )
+                      .toList(),
                 ),
               ),
-              actions: [
-                TextButton(
-                  onPressed: Get.back,
-                  child: Text(
-                    '取消',
-                    style: TextStyle(
-                      color: Theme.of(context).colorScheme.outline,
-                    ),
-                  ),
-                ),
-                TextButton(
-                  onPressed: () {
-                    if (checkedId != null) {
-                      final isFav = ctr is BaseFavController;
-                      final removeList = isFav
-                          ? ctr.allChecked.toList().reversed.toSet()
-                          : ctr.allChecked.toSet();
-                      SmartDialog.showLoading();
-                      FavHttp.copyOrMoveFav(
-                        isCopy: isCopy,
-                        isFav: isFav,
-                        srcMediaId: mediaId,
-                        tarMediaId: checkedId,
-                        resources: removeList
-                            .map(
-                              (e) => switch (e) {
-                                LaterItemModel _ => e.aid,
-                                FavDetailItemModel _ => '${e.id}:${e.type}',
-                                _ => throw UnsupportedError(e.toString()),
-                              },
-                            )
-                            .join(','),
-                        mid: isCopy ? mid : null,
-                      ).then((res) {
-                        if (res.isSuccess) {
-                          ctr.handleSelect(checked: false);
-                          if (!isCopy) {
-                            ctr.loadingState
-                              ..value.data!.removeWhere(removeList.contains)
-                              ..refresh();
-                            if (isFav) {
-                              (ctr as BaseFavController).updateCount?.call(
-                                removeList.length,
-                              );
-                            }
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(),
+                child: const Text('取消'),
+              ),
+              TextButton(
+                onPressed: saving || checkedId == null
+                    ? null
+                    : () async {
+                        if (!current()) return;
+                        setState(() => saving = true);
+                        try {
+                          final result = await FavHttp.copyOrMoveFav(
+                            account: account,
+                            isCopy: isCopy,
+                            isFav: isFav,
+                            srcMediaId: mediaId,
+                            tarMediaId: checkedId,
+                            resources: resources.join(','),
+                            mid: isCopy ? mid : null,
+                          );
+                          if (!current() ||
+                              !dialogContext.mounted ||
+                              ModalRoute.of(dialogContext)?.isCurrent != true) {
+                            return;
                           }
-                          SmartDialog.dismiss();
-                          SmartDialog.showToast('${isCopy ? '复制' : '移动'}成功');
-                          Get.back();
-                        } else {
-                          SmartDialog.dismiss();
-                          res.toast();
+                          if (result.isSuccess) {
+                            if (!isCopy) {
+                              final before = source.length;
+                              source.removeWhere(removeList.contains);
+                              final removed = before - source.length;
+                              switch (ctr) {
+                                case BaseFavController controller:
+                                  controller.updateCount?.call(removed);
+                                case BaseLaterController controller:
+                                  controller.updateCount?.call(removed);
+                              }
+                              ctr.loadingState.refresh();
+                            }
+                            ctr.handleSelect(checked: false);
+                            SmartDialog.showToast('${isCopy ? '复制' : '移动'}成功');
+                            Navigator.of(dialogContext).pop();
+                          } else {
+                            result.toast();
+                          }
+                        } finally {
+                          if (context.mounted) setState(() => saving = false);
                         }
-                      });
-                    }
-                  },
-                  child: const Text('确认'),
-                ),
-              ],
-            );
-          },
-        );
-      } else {
-        res.toast();
-      }
-    });
+                      },
+                child: Text(saving ? '提交中' : '确认'),
+              ),
+            ],
+          ),
+        ),
+      );
+    } else {
+      result.toast();
+    }
   }
 
   static Future<void> validate(

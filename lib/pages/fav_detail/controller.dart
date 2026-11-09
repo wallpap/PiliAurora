@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:pili_aurora/common/widgets/dialog/dialog.dart';
 import 'package:pili_aurora/http/fav.dart';
 import 'package:pili_aurora/http/loading_state.dart';
@@ -15,12 +13,14 @@ import 'package:pili_aurora/pages/common/page_order_mixin.dart';
 import 'package:pili_aurora/pages/fav_sort/view.dart';
 import 'package:pili_aurora/pages/subscription/hidden_media.dart';
 import 'package:pili_aurora/utils/accounts.dart';
+import 'package:pili_aurora/utils/accounts/account.dart';
+import 'package:collection/collection.dart';
 import 'package:pili_aurora/utils/extension/scroll_controller_ext.dart';
 import 'package:pili_aurora/utils/page_utils.dart';
 import 'package:pili_aurora/utils/storage.dart';
 import 'package:pili_aurora/utils/storage_key.dart';
 import 'package:pili_aurora/utils/storage_pref.dart';
-import 'package:flutter/widgets.dart' show Text, ValueChanged;
+import 'package:flutter/widgets.dart' show Text, ValueChanged, VoidCallback;
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:get/get.dart';
 
@@ -35,51 +35,67 @@ mixin BaseFavController
 
   void onViewFav(FavDetailItemModel item, int? index);
 
+  final Account account = Accounts.main;
+  final _removing = <(int?, int?)>{};
+
+  bool get isFavCurrent => !isClosed && identical(account, Accounts.main);
+
+  @override
+  Object get queryContext => Accounts.main;
+
   Future<void> onCancelFav(int index, int id, int type) async {
-    final list = loadingState.value.dataOrNull;
-    final res = await FavHttp.favVideo(
-      resources: '$id:$type',
-      delIds: mediaId.toString(),
+    final item = loadingState.value.dataOrNull?.firstWhereOrNull(
+      (item) => item.id == id && item.type == type,
     );
-    if (isClosed ||
+    if (item != null) await removeFavorites({item});
+  }
+
+  Future<void> removeFavorites(Set<FavDetailItemModel> removeList) async {
+    final list = loadingState.value.dataOrNull;
+    if (!isFavCurrent ||
         list == null ||
-        !identical(list, loadingState.value.dataOrNull)) {
+        removeList.isEmpty ||
+        !list.toSet().containsAll(removeList)) {
       return;
     }
-    if (res.isSuccess) {
-      final before = list.length;
-      loadingState
-        ..value.data!.removeWhere((e) => e.id == id && e.type == type)
-        ..refresh();
-      if (list.length < before) updateCount?.call(before - list.length);
-      SmartDialog.showToast('取消收藏');
-    } else {
-      res.toast();
+    final ids = removeList.map((item) => (item.id, item.type)).toSet();
+    if (ids.any(_removing.contains)) return;
+    _removing.addAll(ids);
+    final folder = mediaId;
+    try {
+      final result = await FavHttp.favVideo(
+        account: account,
+        resources: removeList
+            .map((item) => '${item.id}:${item.type}')
+            .join(','),
+        delIds: folder.toString(),
+      );
+      if (!isFavCurrent ||
+          mediaId != folder ||
+          !identical(list, loadingState.value.dataOrNull)) {
+        return;
+      }
+      if (result.isSuccess) {
+        final removed = list.where(removeList.contains).toSet();
+        updateCount?.call(removed.length);
+        await afterDelete(removed);
+        SmartDialog.showToast('取消收藏');
+      } else {
+        result.toast();
+      }
+    } finally {
+      _removing.removeAll(ids);
     }
   }
 
   @override
   void onRemove() {
+    final removeList = allChecked.toSet();
     showConfirmDialog(
       context: Get.context!,
       title: const Text('提示'),
       content: const Text('确认删除所选收藏吗？'),
-      onConfirm: () async {
-        final removeList = allChecked.toSet();
-        final res = await FavHttp.favVideo(
-          resources: removeList
-              .map((item) => '${item.id}:${item.type}')
-              .join(','),
-          delIds: mediaId.toString(),
-        );
-        if (res.isSuccess) {
-          updateCount?.call(removeList.length);
-          afterDelete(removeList);
-          SmartDialog.showToast('取消收藏');
-        } else {
-          res.toast();
-        }
-      },
+      onConfirm: () => removeFavorites(removeList),
     );
   }
 }
@@ -96,8 +112,6 @@ class FavDetailController
 
   @override
   bool get isOwner => _isOwner.value;
-
-  late final account = Accounts.main;
 
   late double dx = 0;
   late final RxBool isPlayAll = Pref.enablePlayAll.obs;
@@ -120,8 +134,12 @@ class FavDetailController
   void onInit() {
     super.onInit();
 
-    mediaId = int.parse(Get.parameters['mediaId']!);
-    heroTag = Get.parameters['heroTag']!;
+    mediaId = int.tryParse(Get.parameters['mediaId'] ?? '') ?? 0;
+    heroTag = Get.parameters['heroTag'] ?? '';
+    if (mediaId <= 0) {
+      loadingState.value = const Error('收藏夹标识无效，请重新打开页面');
+      return;
+    }
 
     queryData();
   }
@@ -181,8 +199,11 @@ class FavDetailController
   bool customHandleResponse(bool isRefresh, Success<FavDetailData> response) {
     if (isRefresh) {
       FavDetailData data = response.response;
-      folderInfo.value = data.info!;
-      _isOwner.value = data.info?.mid == account.mid;
+      final info = data.info;
+      if (info != null) {
+        folderInfo.value = info;
+        _isOwner.value = info.mid == account.mid;
+      }
     }
     return false;
   }
@@ -194,13 +215,20 @@ class FavDetailController
         ..refresh();
 
   @override
-  Future<LoadingState<FavDetailData>> customGetData() =>
-      FavHttp.userFavFolderDetail(
-        pn: page,
-        ps: _ps,
-        mediaId: mediaId,
-        order: order.value,
-      );
+  Future<LoadingState<FavDetailData>> customGetData() async {
+    if (!isFavCurrent) return const Error('账号已切换，请重新打开页面');
+    final result = await FavHttp.userFavFolderDetail(
+      account: account,
+      pn: page,
+      ps: _ps,
+      mediaId: mediaId,
+      order: order.value,
+    );
+    if (result case Success(response: FavDetailData(info: null))) {
+      return const Error('收藏夹信息不完整，请重试');
+    }
+    return result;
+  }
 
   void toViewPlayAll() {
     if (loadingState.value case Success(:final response)) {
@@ -223,32 +251,70 @@ class FavDetailController
     return super.onReload();
   }
 
+  bool _savingFolder = false;
+
   Future<void> onFav(bool isFav) async {
+    if (_savingFolder || !isFavCurrent) return;
     if (!account.isLogin) {
       SmartDialog.showToast('账号未登录');
       return;
     }
-    final res = isFav
-        ? await FavHttp.unfavFavFolder(mediaId)
-        : await FavHttp.favFavFolder(mediaId);
-
-    if (res.isSuccess) {
-      folderInfo
-        ..value.favState = isFav ? 0 : 1
-        ..refresh();
-      SmartDialog.showToast('${isFav ? '取消' : ''}收藏成功');
-    } else {
-      res.toast();
+    final folder = mediaId;
+    _savingFolder = true;
+    try {
+      final result = isFav
+          ? await FavHttp.unfavFavFolder(folder, account: account)
+          : await FavHttp.favFavFolder(folder, account: account);
+      if (!isFavCurrent || mediaId != folder) return;
+      if (result.isSuccess) {
+        folderInfo
+          ..value.favState = isFav ? 0 : 1
+          ..refresh();
+        SmartDialog.showToast('${isFav ? '取消' : ''}收藏成功');
+      } else {
+        result.toast();
+      }
+    } finally {
+      _savingFolder = false;
     }
   }
 
   Future<void> cleanFav() async {
-    final res = await FavHttp.cleanFav(mediaId: mediaId);
-    if (res.isSuccess) {
-      SmartDialog.showToast('清除成功');
-      Timer(const Duration(milliseconds: 200), onReload);
-    } else {
-      res.toast();
+    if (_savingFolder || !isFavCurrent) return;
+    final folder = mediaId;
+    _savingFolder = true;
+    try {
+      final result = await FavHttp.cleanFav(mediaId: folder, account: account);
+      if (!isFavCurrent || mediaId != folder) return;
+      if (result.isSuccess) {
+        SmartDialog.showToast('清除成功');
+        await onReload();
+      } else {
+        result.toast();
+      }
+    } finally {
+      _savingFolder = false;
+    }
+  }
+
+  Future<void> deleteFolder(VoidCallback onSuccess) async {
+    if (_savingFolder || !isFavCurrent) return;
+    final folder = mediaId;
+    _savingFolder = true;
+    try {
+      final result = await FavHttp.deleteFolder(
+        account: account,
+        mediaIds: folder.toString(),
+      );
+      if (!isFavCurrent || mediaId != folder) return;
+      if (result.isSuccess) {
+        SmartDialog.showToast('删除成功');
+        onSuccess();
+      } else {
+        result.toast();
+      }
+    } finally {
+      _savingFolder = false;
     }
   }
 

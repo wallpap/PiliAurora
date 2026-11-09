@@ -18,9 +18,10 @@ import '../../support/memory_box.dart';
 
 class _Intro extends CommonIntroController {
   int favoriteChanges = 0;
+  Object resource = 42;
 
   @override
-  (Object, int) get getFavRidType => (42, 2);
+  (Object, int) get getFavRidType => (resource, 2);
   @override
   int get copyright => 1;
   @override
@@ -203,6 +204,29 @@ void main() {
     expect(requests, hasLength(1));
     expect(find.text('暂无可用收藏夹，请先创建'), findsOneWidget);
     expect(controller.favFolderId, isNull);
+    await finish(tester);
+  });
+
+  testWidgets('快速收藏的前置查询在切换视频后失效，不继续发送写入', (tester) async {
+    await mount(tester);
+    final controller = _Intro();
+    addTearDown(controller.onClose);
+    final action = controller.actionFavVideo(isQuick: true);
+    await dispatched(tester, 1);
+    controller.resource = 99;
+    requests[0].reply.complete({
+      'code': 0,
+      'data': {
+        'list': [
+          {'id': 7},
+        ],
+      },
+    });
+    await settle(tester);
+    await action;
+    expect(requests, hasLength(1));
+    expect(controller.favoriteChanges, 0);
+    expect(controller.isProcessing, isFalse);
     await finish(tester);
   });
 

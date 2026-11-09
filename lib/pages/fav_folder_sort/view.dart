@@ -6,7 +6,7 @@ import 'package:pili_aurora/models/remote/fav/fav_folder/list.dart';
 import 'package:pili_aurora/pages/fav/video/controller.dart';
 import 'package:pili_aurora/pages/fav/video/widgets/item.dart';
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
-import 'package:get/get.dart';
+import 'package:flutter/foundation.dart' show listEquals;
 import 'package:material_ui/material_ui.dart';
 
 class FavFolderSortPage extends StatefulWidget {
@@ -22,9 +22,47 @@ class _FavFolderSortPageState extends State<FavFolderSortPage>
     with ReorderMixin {
   FavController get _favController => widget.favController;
 
-  late List<FavFolderInfo> sortList = List<FavFolderInfo>.from(
-    _favController.loadingState.value.data!,
-  );
+  late final _source = _favController.loadingState.value.dataOrNull;
+  late final _original = List<FavFolderInfo>.of(_source ?? []);
+  late final sortList = List<FavFolderInfo>.of(_original);
+  bool _saving = false;
+
+  bool get _current =>
+      mounted &&
+      _favController.isCurrent &&
+      identical(_source, _favController.loadingState.value.dataOrNull) &&
+      listEquals(_original, _source);
+
+  Future<void> _save() async {
+    if (_saving) return;
+    if (!_current) {
+      SmartDialog.showToast('收藏夹已更新，请重新打开排序');
+      return;
+    }
+    if (listEquals(sortList, _original)) {
+      Navigator.of(context).pop();
+      return;
+    }
+    setState(() => _saving = true);
+    try {
+      final result = await FavHttp.sortFavFolder(
+        account: _favController.account,
+        sort: sortList.map((item) => item.id).join(','),
+      );
+      if (!mounted || !_current) return;
+      if (result.isSuccess) {
+        _favController.loadingState.value = Success(List.of(sortList));
+        SmartDialog.showToast('排序完成');
+        if (ModalRoute.of(context)?.isCurrent == true) {
+          Navigator.of(context).pop();
+        }
+      } else {
+        result.toast();
+      }
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -33,20 +71,7 @@ class _FavFolderSortPageState extends State<FavFolderSortPage>
         title: const Text('收藏夹排序'),
         actions: [
           TextButton(
-            onPressed: () async {
-              final res = await FavHttp.sortFavFolder(
-                sort: sortList.map((item) => item.id).join(','),
-              );
-              if (res.isSuccess) {
-                SmartDialog.showToast('排序完成');
-                _favController.loadingState.value = Success(sortList);
-                if (mounted) {
-                  Get.back();
-                }
-              } else {
-                res.toast();
-              }
-            },
+            onPressed: _saving ? null : _save,
             child: const Text('完成'),
           ),
           const SizedBox(width: 16),
@@ -57,6 +82,7 @@ class _FavFolderSortPageState extends State<FavFolderSortPage>
   }
 
   void onReorderItem(int oldIndex, int newIndex) {
+    if (_saving || !_current) return;
     if (oldIndex == 0 || newIndex == 0) {
       SmartDialog.showToast('默认收藏夹不支持排序');
       return;

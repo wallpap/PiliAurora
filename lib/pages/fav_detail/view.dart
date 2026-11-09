@@ -5,7 +5,6 @@ import 'package:pili_aurora/common/widgets/flutter/refresh_indicator.dart';
 import 'package:pili_aurora/common/widgets/image/network_img_layer.dart';
 import 'package:pili_aurora/common/widgets/loading_widget/http_error.dart';
 import 'package:pili_aurora/common/widgets/scaffold/simple_scaffold.dart';
-import 'package:pili_aurora/http/fav.dart';
 import 'package:pili_aurora/http/loading_state.dart';
 import 'package:pili_aurora/models/common/fav_order_type.dart';
 import 'package:pili_aurora/models/remote/fav/fav_detail/media.dart';
@@ -18,7 +17,6 @@ import 'package:pili_aurora/utils/grid.dart';
 import 'package:pili_aurora/utils/request_utils.dart';
 import 'package:pili_aurora/utils/share_utils.dart';
 import 'package:pili_aurora/utils/utils.dart';
-import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:get/get.dart';
 import 'package:material_design_icons_flutter/material_design_icons_flutter.dart';
 import 'package:material_ui/material_ui.dart';
@@ -37,7 +35,7 @@ class _FavDetailPageState extends State<FavDetailPage> with GridMixin {
   @override
   void initState() {
     super.initState();
-    mediaId = Get.parameters['mediaId']!;
+    mediaId = Get.parameters['mediaId'] ?? '';
     _favDetailController = Get.put(
       FavDetailController(),
       tag: Utils.makeHeroTag(mediaId),
@@ -260,7 +258,10 @@ class _FavDetailPageState extends State<FavDetailPage> with GridMixin {
                         '/createFav',
                         parameters: {'mediaId': mediaId},
                       )?.then((res) {
-                        if (res is FavFolderInfo) {
+                        if (mounted &&
+                            _favDetailController.isFavCurrent &&
+                            res is FavFolderInfo &&
+                            res.id == _favDetailController.mediaId) {
                           _favDetailController.folderInfo.value = res;
                         }
                       }),
@@ -299,15 +300,12 @@ class _FavDetailPageState extends State<FavDetailPage> with GridMixin {
                     onTap: () => showConfirmDialog(
                       context: context,
                       title: const Text('确定删除该收藏夹?'),
-                      onConfirm: () =>
-                          FavHttp.deleteFolder(mediaIds: mediaId).then((res) {
-                            if (res.isSuccess) {
-                              SmartDialog.showToast('删除成功');
-                              Get.back(result: true);
-                            } else {
-                              res.toast();
-                            }
-                          }),
+                      onConfirm: () => _favDetailController.deleteFolder(() {
+                        if (mounted &&
+                            ModalRoute.of(this.context)?.isCurrent == true) {
+                          Navigator.of(this.context).pop(true);
+                        }
+                      }),
                     ),
                     child: Text(
                       '删除',

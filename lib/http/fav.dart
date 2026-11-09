@@ -41,33 +41,48 @@ abstract final class FavHttp {
     }
   }
 
-  static Future<LoadingState<void>> favFavFolder(Object mediaId) async {
+  static Future<LoadingState<void>> favFavFolder(
+    Object mediaId, {
+    Account? account,
+  }) async {
+    account ??= Accounts.main;
     return await Request().requestApi<void>(
       Api.favFavFolder,
       kind: ApiCallKind.mutation,
       decode: (_) {},
       data: {
         'media_id': mediaId,
-        'csrf': Accounts.main.csrf,
+        'csrf': account.csrf,
       },
-      options: Options(contentType: Headers.formUrlEncodedContentType),
+      options: Options(
+        extra: {'account': account},
+        contentType: Headers.formUrlEncodedContentType,
+      ),
     );
   }
 
-  static Future<LoadingState<void>> unfavFavFolder(Object mediaId) async {
+  static Future<LoadingState<void>> unfavFavFolder(
+    Object mediaId, {
+    Account? account,
+  }) async {
+    account ??= Accounts.main;
     return await Request().requestApi<void>(
       Api.unfavFavFolder,
       kind: ApiCallKind.mutation,
       decode: (_) {},
       data: {
         'media_id': mediaId,
-        'csrf': Accounts.main.csrf,
+        'csrf': account.csrf,
       },
-      options: Options(contentType: Headers.formUrlEncodedContentType),
+      options: Options(
+        extra: {'account': account},
+        contentType: Headers.formUrlEncodedContentType,
+      ),
     );
   }
 
   static Future<LoadingState<FavDetailData>> userFavFolderDetail({
+    Account? account,
     required int mediaId,
     required int pn,
     required int ps,
@@ -79,6 +94,7 @@ abstract final class FavHttp {
       Api.favResourceList,
       kind: ApiCallKind.query,
       decode: (body) => FavDetailData.fromJson(body['data']),
+      options: Options(extra: {'account': account ?? Accounts.main}),
       queryParameters: {
         'media_id': mediaId,
         'pn': pn,
@@ -356,6 +372,7 @@ abstract final class FavHttp {
 
   // 收藏夹
   static Future<LoadingState<FavFolderData>> userfavFolder({
+    Account? account,
     required int pn,
     required int ps,
     required dynamic mid,
@@ -364,6 +381,7 @@ abstract final class FavHttp {
       Api.userFavFolder,
       kind: ApiCallKind.query,
       decode: (body) => FavFolderData.fromJson(body['data']),
+      options: Options(extra: {'account': account ?? Accounts.main}),
       queryParameters: {
         'pn': pn,
         'ps': ps,
@@ -373,11 +391,13 @@ abstract final class FavHttp {
   }
 
   static Future<LoadingState<void>> sortFavFolder({
+    Account? account,
     required String sort,
   }) async {
+    account ??= Accounts.main;
     Map<String, dynamic> data = {
       'sort': sort,
-      'csrf': Accounts.main.csrf,
+      'csrf': account.csrf,
     };
     AppSign.appSign(data);
     return await Request().requestApi<void>(
@@ -386,19 +406,22 @@ abstract final class FavHttp {
       decode: (_) {},
       data: data,
       options: Options(
+        extra: {'account': account},
         contentType: Headers.formUrlEncodedContentType,
       ),
     );
   }
 
   static Future<LoadingState<void>> sortFav({
+    Account? account,
     required Object mediaId,
     required String sort,
   }) async {
+    account ??= Accounts.main;
     Map<String, dynamic> data = {
       'media_id': mediaId,
       'sort': sort,
-      'csrf': Accounts.main.csrf,
+      'csrf': account.csrf,
     };
     AppSign.appSign(data);
     return await Request().requestApi<void>(
@@ -407,14 +430,17 @@ abstract final class FavHttp {
       decode: (_) {},
       data: data,
       options: Options(
+        extra: {'account': account},
         contentType: Headers.formUrlEncodedContentType,
       ),
     );
   }
 
   static Future<LoadingState<void>> cleanFav({
+    Account? account,
     required Object mediaId,
   }) async {
+    account ??= Accounts.main;
     return await Request().requestApi<void>(
       Api.cleanFav,
       kind: ApiCallKind.mutation,
@@ -422,17 +448,20 @@ abstract final class FavHttp {
       data: {
         'media_id': mediaId,
         'platform': 'web',
-        'csrf': Accounts.main.csrf,
+        'csrf': account.csrf,
       },
       options: Options(
+        extra: {'account': account},
         contentType: Headers.formUrlEncodedContentType,
       ),
     );
   }
 
   static Future<LoadingState<void>> deleteFolder({
+    Account? account,
     required String mediaIds,
   }) async {
+    account ??= Accounts.main;
     return await Request().requestApi<void>(
       Api.deleteFolder,
       kind: ApiCallKind.mutation,
@@ -440,9 +469,10 @@ abstract final class FavHttp {
       data: {
         'media_ids': mediaIds,
         'platform': 'web',
-        'csrf': Accounts.main.csrf,
+        'csrf': account.csrf,
       },
       options: Options(
+        extra: {'account': account},
         contentType: Headers.formUrlEncodedContentType,
       ),
     );
@@ -611,6 +641,7 @@ abstract final class FavHttp {
   }
 
   static Future<LoadingState<void>> copyOrMoveFav({
+    Account? account,
     required bool isCopy,
     required bool isFav,
     required dynamic srcMediaId,
@@ -618,6 +649,7 @@ abstract final class FavHttp {
     dynamic mid,
     required String resources,
   }) async {
+    account ??= Accounts.main;
     return await Request().requestApi<void>(
       isFav
           ? isCopy
@@ -634,17 +666,24 @@ abstract final class FavHttp {
         'mid': ?mid,
         'resources': resources,
         'platform': 'web',
-        'csrf': Accounts.main.csrf,
+        'csrf': account.csrf,
       },
-      options: Options(contentType: Headers.formUrlEncodedContentType),
+      options: Options(
+        extra: {'account': account},
+        contentType: Headers.formUrlEncodedContentType,
+      ),
     );
   }
 
-  static Future<LoadingState<FavFolderData>> allFavFolders(Object mid) async {
+  static Future<LoadingState<FavFolderData>> allFavFolders(
+    Object mid, {
+    Account? account,
+  }) async {
     return await Request().requestApi(
       Api.favFolder,
       kind: ApiCallKind.query,
       decode: (body) => FavFolderData.fromJson(body['data']),
+      options: Options(extra: {'account': account ?? Accounts.main}),
       queryParameters: {'up_mid': mid},
     );
   }

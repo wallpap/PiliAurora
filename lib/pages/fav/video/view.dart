@@ -71,10 +71,11 @@ class _FavVideoPageState extends State<FavVideoPage>
                           'mediaId': item.id.toString(),
                         },
                       );
-                      if (res == true) {
-                        _favController.loadingState.value.data!.removeWhere(
-                          (folder) => folder.id == item.id,
-                        );
+                      if (mounted && _favController.isCurrent && res == true) {
+                        _favController.loadingState.value.dataOrNull
+                            ?.removeWhere(
+                              (folder) => folder.id == item.id,
+                            );
                         _favController.loadingState.refresh();
                       }
                     },

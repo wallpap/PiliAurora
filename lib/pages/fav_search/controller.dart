@@ -38,15 +38,17 @@ class FavSearchController
   final Rx<FavOrderType> order = FavOrderType.mtime.obs;
 
   @override
-  Future<LoadingState<FavDetailData>> customGetData() =>
-      FavHttp.userFavFolderDetail(
-        pn: page,
-        ps: 20,
-        mediaId: mediaId,
-        keyword: editController.text,
-        type: type,
-        order: order.value,
-      );
+  Future<LoadingState<FavDetailData>> customGetData() async => isFavCurrent
+      ? FavHttp.userFavFolderDetail(
+          account: account,
+          pn: page,
+          ps: 20,
+          mediaId: mediaId,
+          keyword: editController.text,
+          type: type,
+          order: order.value,
+        )
+      : const Error('账号已切换，请重新打开页面');
 
   @override
   List<FavDetailItemModel>? getDataList(FavDetailData response) {
