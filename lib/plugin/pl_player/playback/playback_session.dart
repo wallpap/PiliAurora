@@ -71,6 +71,9 @@ class PlaybackSession implements PlaybackMediaClock {
   PlaybackPlan? _lastLoadPlan;
   PlaybackOwner? _lastLoadOwner;
   bool _runtimePositionAvailable = false;
+  String? _observedDurationContentKey;
+  Duration? _observedDuration;
+  int? _observedDurationLoadId;
   PlaybackConfiguration _desiredConfiguration = PlaybackConfiguration();
   PlaybackConfiguration _appliedConfiguration = PlaybackConfiguration();
   PlaybackActual _actual = const PlaybackActual();
@@ -641,6 +644,8 @@ class PlaybackSession implements PlaybackMediaClock {
         _lastLoadPlan?.contentKey == plan.contentKey) {
       plan = _planForReload(plan);
     }
+    if (!request.restartAfterEnd) plan = _normalizeResumePlan(plan);
+    var retriedInvalidResume = false;
     while (true) {
       if (!_isRequestCurrent(request) || !operation.isCurrent()) {
         throw const _PlaybackSuperseded();
@@ -675,6 +680,21 @@ class PlaybackSession implements PlaybackMediaClock {
       if (!context.isCurrent()) throw const _PlaybackSuperseded();
       _stage = PlaybackStage.outputPreparing;
       _publish();
+      final position = plan.reloadPosition ?? plan.startPosition;
+      final actualDuration = _observedDurationLoadId == thisLoadId
+          ? _observedDuration
+          : null;
+      if (!request.restartAfterEnd &&
+          !retriedInvalidResume &&
+          plan.timeline.kind != PlaybackTimelineKind.live &&
+          position != null &&
+          actualDuration != null &&
+          position >= actualDuration) {
+        // 仅本次打开确认起点越界时回退一次，继续使用原请求的时限。
+        retriedInvalidResume = true;
+        plan = _normalizeResumePlan(plan);
+        continue;
+      }
       if (!result.loaded ||
           result.output.strategy == PlaybackOutputStrategy.unknown ||
           result.output.strategy == PlaybackOutputStrategy.failed) {
@@ -1470,13 +1490,43 @@ class PlaybackSession implements PlaybackMediaClock {
                   : null) ??
               plan.reloadPosition ??
               plan.startPosition;
+    return _normalizeResumePlan(
+      PlaybackPlan(
+        contentKey: plan.contentKey,
+        source: plan.source,
+        timeline: plan.timeline,
+        configuration: _desiredConfiguration,
+        startPosition: position,
+        reloadPosition: position,
+        metadata: plan.metadata,
+      ),
+    );
+  }
+
+  PlaybackPlan _normalizeResumePlan(PlaybackPlan plan) {
+    final observed = _observedDurationContentKey == plan.contentKey
+        ? _observedDuration
+        : null;
+    final duration = observed ?? plan.timeline.duration;
+    Duration? normalize(Duration? position) {
+      if (plan.timeline.kind == PlaybackTimelineKind.live) return null;
+      if (position == null) return null;
+      if (position < Duration.zero ||
+          (duration != null &&
+              duration > Duration.zero &&
+              position >= duration)) {
+        return Duration.zero;
+      }
+      return position;
+    }
+
     return PlaybackPlan(
       contentKey: plan.contentKey,
       source: plan.source,
       timeline: plan.timeline,
-      configuration: _desiredConfiguration,
-      startPosition: position,
-      reloadPosition: position,
+      configuration: plan.configuration,
+      startPosition: normalize(plan.startPosition),
+      reloadPosition: normalize(plan.reloadPosition),
       metadata: plan.metadata,
     );
   }
@@ -1726,6 +1776,15 @@ class PlaybackSession implements PlaybackMediaClock {
         _mediaAnchor = anchor;
         _mediaAnchors.add(anchor);
       case PlaybackRuntimeStateChanged(:final actual):
+        final duration = actual.duration;
+        if (event.loadId != null &&
+            duration != null &&
+            duration > Duration.zero &&
+            _lastLoadPlan != null) {
+          _observedDurationContentKey = _lastLoadPlan!.contentKey;
+          _observedDuration = duration;
+          _observedDurationLoadId = event.loadId;
+        }
         final clockStateChanged =
             _actual.playing != actual.playing ||
             _actual.buffering != actual.buffering ||

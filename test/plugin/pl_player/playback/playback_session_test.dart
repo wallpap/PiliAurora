@@ -802,6 +802,33 @@ void main() {
     }
   });
 
+  test('显式 seek 到片尾保留用户目标，包括播放结束后重载', () async {
+    final runtime = _FakeRuntime()..position = const Duration(seconds: 10);
+    final session = PlaybackSession(runtime: runtime);
+    final owner = session.attach();
+    addTearDown(session.shutdown);
+    await owner.load(_plan('tail'));
+    expect(
+      (await owner.seek(const Duration(seconds: 10))).outcome,
+      CommandOutcome.applied,
+    );
+    expect(runtime.seekCalls.last, const Duration(seconds: 10));
+    runtime._events.add(
+      PlaybackRuntimeEnded(
+        runtimeId: runtime.runtimeId,
+        loadId: session.loadId,
+      ),
+    );
+    expect(
+      (await owner.seek(const Duration(seconds: 10))).outcome,
+      CommandOutcome.applied,
+    );
+    expect(
+      runtime.loadedPlans.last.reloadPosition,
+      const Duration(seconds: 10),
+    );
+  });
+
   for (final playing in [false, true]) {
     test('片尾复播从零重载，在途最新播放意图生效：$playing', () async {
       final runtime = _FakeRuntime()..position = const Duration(seconds: 10);
@@ -1823,7 +1850,7 @@ void main() {
     final runtime = _FakeRuntime();
     final session = PlaybackSession(runtime: runtime);
     final owner = session.attach();
-    final plan = _plan('movie');
+    final plan = _plan('movie', duration: const Duration(seconds: 1200));
     await owner.load(plan, start: PlaybackStartPolicy.play);
     runtime.position = const Duration(milliseconds: 123456);
     await owner.load(plan.withSource(_plan('cdn').source));
@@ -1839,11 +1866,254 @@ void main() {
     await runtime.released;
   });
 
+  for (final queryFirst in [false, true]) {
+    test('历史起点超出时长时${queryFirst ? '来源查询' : '直接加载'}从片头播放，重试不重复越界', () async {
+      final runtime = _FakeRuntime();
+      final session = PlaybackSession(runtime: runtime);
+      final owner = session.attach();
+      addTearDown(session.shutdown);
+      final base = _plan('expired-history');
+      final plan = PlaybackPlan(
+        contentKey: base.contentKey,
+        source: base.source,
+        timeline: base.timeline,
+        configuration: base.configuration,
+        startPosition: const Duration(seconds: 20),
+        reloadPosition: const Duration(seconds: 20),
+      );
+      runtime.onLoad = (plan, context, _) async {
+        final start = plan.reloadPosition ?? plan.startPosition;
+        // 回放原生从结束位置打开后立即 EOF、无法确认加载成功的行为。
+        return start != null && start >= plan.timeline.duration!
+            ? _failedLoad(context)
+            : _loaded(context, plan);
+      };
+
+      final result = queryFirst
+          ? await owner.query((_) async => plan)
+          : await owner.load(plan);
+      expect(result.outcome, LoadOutcome.ready);
+      expect(runtime.loadedPlans.single.startPosition, Duration.zero);
+      expect(runtime.loadedPlans.single.reloadPosition, Duration.zero);
+
+      // 原生末帧的轻微越界也不能被下次重载永久带回。
+      runtime.position = const Duration(milliseconds: 10020);
+      for (var i = 0; i < 2; i++) {
+        expect((await owner.retry()).outcome, LoadOutcome.ready);
+        expect(runtime.loadedPlans.last.reloadPosition, Duration.zero);
+      }
+    });
+  }
+
+  for (final example in [
+    (
+      name: '等于时长',
+      start: const Duration(seconds: 10),
+      duration: const Duration(seconds: 10),
+      expected: Duration.zero,
+      live: false,
+    ),
+    (
+      name: '负数',
+      start: const Duration(seconds: -1),
+      duration: const Duration(seconds: 10),
+      expected: Duration.zero,
+      live: false,
+    ),
+    (
+      name: '未知时长',
+      start: const Duration(seconds: 20),
+      duration: null,
+      expected: const Duration(seconds: 20),
+      live: false,
+    ),
+    (
+      name: '零时长',
+      start: const Duration(seconds: 20),
+      duration: Duration.zero,
+      expected: const Duration(seconds: 20),
+      live: false,
+    ),
+    (
+      name: '有效位置',
+      start: const Duration(seconds: 9),
+      duration: const Duration(seconds: 10),
+      expected: const Duration(seconds: 9),
+      live: false,
+    ),
+    (
+      name: '直播',
+      start: const Duration(seconds: 9),
+      duration: null,
+      expected: null,
+      live: true,
+    ),
+  ]) {
+    test('历史起点边界：${example.name}', () async {
+      final runtime = _FakeRuntime();
+      final session = PlaybackSession(runtime: runtime);
+      final owner = session.attach();
+      addTearDown(session.shutdown);
+      final base = _plan(
+        'boundary',
+        kind: example.live
+            ? PlaybackTimelineKind.live
+            : PlaybackTimelineKind.onDemand,
+      );
+      final plan = PlaybackPlan(
+        contentKey: base.contentKey,
+        source: base.source,
+        timeline: PlaybackTimeline(
+          kind: base.timeline.kind,
+          seekPolicy: base.timeline.seekPolicy,
+          duration: example.duration,
+        ),
+        configuration: base.configuration,
+        startPosition: example.start,
+        reloadPosition: example.start,
+      );
+      expect((await owner.load(plan)).outcome, LoadOutcome.ready);
+      expect(runtime.loadedPlans.single.startPosition, example.expected);
+      expect(runtime.loadedPlans.single.reloadPosition, example.expected);
+    });
+  }
+
+  for (final hint in [null, const Duration(seconds: 30)]) {
+    test('首次加载确认实际时长越界后同一请求从零重试：$hint', () async {
+      final runtime = _FakeRuntime();
+      final session = PlaybackSession(runtime: runtime);
+      final owner = session.attach();
+      addTearDown(session.shutdown);
+      final base = _plan('short-runtime', duration: hint);
+      final plan = PlaybackPlan(
+        contentKey: base.contentKey,
+        source: base.source,
+        timeline: base.timeline,
+        configuration: base.configuration,
+        startPosition: const Duration(seconds: 20),
+      );
+      runtime.onLoad = (plan, context, index) async {
+        if (index == 0) {
+          runtime.emitActual(
+            context.loadId,
+            const PlaybackActual(
+              duration: Duration(seconds: 10),
+              position: Duration(seconds: 20),
+            ),
+          );
+          return _failedLoad(context);
+        }
+        return _loaded(context, plan);
+      };
+      expect(
+        (await owner.load(plan, start: PlaybackStartPolicy.pause)).outcome,
+        LoadOutcome.ready,
+      );
+      expect(runtime.loadedPlans, hasLength(2));
+      expect(runtime.loadedPlans.last.startPosition, Duration.zero);
+      expect(session.currentSnapshot.intent.playing, isFalse);
+    });
+  }
+
+  test('成功打开但确认起点越界时仍从零重新打开一次', () async {
+    final runtime = _FakeRuntime();
+    final session = PlaybackSession(runtime: runtime);
+    final owner = session.attach();
+    addTearDown(session.shutdown);
+    final base = _plan('loaded-overrun', duration: null);
+    final plan = PlaybackPlan(
+      contentKey: base.contentKey,
+      source: base.source,
+      timeline: base.timeline,
+      configuration: base.configuration,
+      startPosition: const Duration(seconds: 20),
+    );
+    runtime.onLoad = (plan, context, index) async {
+      if (index == 0) {
+        runtime.emitActual(
+          context.loadId,
+          const PlaybackActual(duration: Duration(seconds: 10)),
+        );
+      }
+      return _loaded(context, plan);
+    };
+    expect((await owner.load(plan)).outcome, LoadOutcome.ready);
+    expect(runtime.loadedPlans, hasLength(2));
+    expect(runtime.loadedPlans.last.startPosition, Duration.zero);
+  });
+
+  test('越界回退失败后不盲目重试，未证实越界也不重试', () async {
+    for (final hasDuration in [false, true]) {
+      final runtime = _FakeRuntime();
+      final session = PlaybackSession(runtime: runtime);
+      final owner = session.attach();
+      final base = _plan('bounded', duration: null);
+      final plan = PlaybackPlan(
+        contentKey: base.contentKey,
+        source: base.source,
+        timeline: base.timeline,
+        configuration: base.configuration,
+        startPosition: const Duration(seconds: 20),
+      );
+      runtime.onLoad = (plan, context, index) async {
+        if (hasDuration) {
+          runtime.emitActual(
+            context.loadId,
+            const PlaybackActual(duration: Duration(seconds: 10)),
+          );
+        }
+        return _failedLoad(context);
+      };
+      expect((await owner.load(plan)).outcome, LoadOutcome.failed);
+      expect(runtime.loadedPlans, hasLength(hasDuration ? 2 : 1));
+      await session.shutdown();
+    }
+  });
+
+  test('旧内容时长不修正新内容的起点', () async {
+    final runtime = _FakeRuntime();
+    final session = PlaybackSession(runtime: runtime);
+    final owner = session.attach();
+    addTearDown(session.shutdown);
+    await owner.load(_plan('old'));
+    runtime.emitActual(
+      session.loadId,
+      const PlaybackActual(duration: Duration(seconds: 10)),
+    );
+    final next = _plan('new', duration: null);
+    final plan = PlaybackPlan(
+      contentKey: next.contentKey,
+      source: next.source,
+      timeline: next.timeline,
+      configuration: next.configuration,
+      startPosition: const Duration(seconds: 20),
+    );
+    expect((await owner.load(plan)).outcome, LoadOutcome.ready);
+    expect(runtime.loadedPlans.last.startPosition, const Duration(seconds: 20));
+  });
+
+  test('实际时长短于来源提示时，重载按实际时长修正', () async {
+    final runtime = _FakeRuntime();
+    final session = PlaybackSession(runtime: runtime);
+    final owner = session.attach();
+    addTearDown(session.shutdown);
+    final plan = _plan('short-actual', duration: const Duration(seconds: 30));
+    expect((await owner.load(plan)).outcome, LoadOutcome.ready);
+    runtime
+      ..emitActual(
+        session.loadId,
+        const PlaybackActual(duration: Duration(seconds: 10)),
+      )
+      ..position = const Duration(seconds: 20);
+    expect((await owner.retry()).outcome, LoadOutcome.ready);
+    expect(runtime.loadedPlans.last.reloadPosition, Duration.zero);
+  });
+
   test('重载失败清零后连续重试保留续播位置，seek 后使用新的当前位置', () async {
     final runtime = _FakeRuntime();
     final session = PlaybackSession(runtime: runtime);
     final owner = session.attach();
-    final plan = _plan('movie');
+    final plan = _plan('movie', duration: const Duration(seconds: 1200));
     await owner.load(plan, start: PlaybackStartPolicy.play);
     runtime.position = const Duration(milliseconds: 123456);
     runtime.onLoad = (plan, context, index) async {
@@ -1888,7 +2158,7 @@ void main() {
     final runtime = _FakeRuntime();
     final session = PlaybackSession(runtime: runtime);
     final owner = session.attach();
-    final plan = _plan('movie');
+    final plan = _plan('movie', duration: const Duration(seconds: 1200));
     await owner.load(plan, start: PlaybackStartPolicy.play);
     await owner.setVolume(37);
     runtime
@@ -2229,6 +2499,7 @@ PlaybackPlan _plan(
   PlaybackTimelineKind kind = PlaybackTimelineKind.onDemand,
   List<String>? candidates,
   bool audioOnly = false,
+  Duration? duration = const Duration(seconds: 10),
 }) => PlaybackPlan(
   contentKey: key,
   source: PlaybackSourceSnapshot.fromDataSource(
@@ -2241,9 +2512,7 @@ PlaybackPlan _plan(
   timeline: PlaybackTimeline(
     kind: kind,
     seekPolicy: seekPolicy,
-    duration: kind == PlaybackTimelineKind.live
-        ? null
-        : const Duration(seconds: 10),
+    duration: kind == PlaybackTimelineKind.live ? null : duration,
   ),
   configuration: PlaybackConfiguration(audioOnly: audioOnly),
 );

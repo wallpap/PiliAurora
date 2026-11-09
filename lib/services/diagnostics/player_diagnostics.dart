@@ -147,6 +147,7 @@ class PlayerDiagnostics {
     'buffering': player.state.buffering,
     'completed': player.state.completed,
     'positionMs': player.state.position.inMilliseconds,
+    'durationMs': player.state.duration.inMilliseconds,
     'bufferMs': player.state.buffer.inMilliseconds,
     'width': player.state.width,
     'height': player.state.height,

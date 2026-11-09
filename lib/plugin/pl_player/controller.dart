@@ -143,6 +143,7 @@ class PlPlayerController
   final RxInt position = RxInt(0);
   final RxInt seekPosition = RxInt(0);
   final _progressProjection = PlaybackProgressProjection();
+  int? _progressProjectionLoadId;
   int get progress => isSeeking.value ? seekPosition.value : position.value;
 
   int get positionInMilliseconds =>
@@ -966,6 +967,21 @@ class PlPlayerController
       PlaybackPhase.failed => DataStatus.error,
       PlaybackPhase.closing || PlaybackPhase.disposed => DataStatus.none,
     };
+    if (snapshot.phase == PlaybackPhase.ready &&
+        snapshot.loadId != null &&
+        snapshot.loadId == _session.loadId &&
+        _session.currentSnapshot.phase == PlaybackPhase.ready &&
+        snapshot.loadId != _progressProjectionLoadId) {
+      _progressProjectionLoadId = snapshot.loadId;
+      final plan = _session.currentPlan;
+      final acceptedPosition = plan?.reloadPosition ?? plan?.startPosition;
+      if (!_audioSeekInProgress &&
+          _progressProjection.awaitingPosition &&
+          acceptedPosition != null) {
+        // 只在新加载首次就绪时交接修正后的起点，后续进度不再重置。
+        _progressProjection.begin(acceptedPosition);
+      }
+    }
     if (snapshot.phase == PlaybackPhase.ready && player != null) {
       _publishPlaybackPosition(player.state.position);
     }

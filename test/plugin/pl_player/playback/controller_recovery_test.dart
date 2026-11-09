@@ -38,6 +38,98 @@ void main() {
     '最大化恢复': (controller) => controller.onWindowMaximize(),
     '退出最大化': (controller) => controller.onWindowUnmaximize(),
   };
+  _recoveryTest('越界续播归零后，进度条立即交接到修正位置', (f) async {
+    final plan = PlaybackPlan(
+      contentKey: 'invalid-history-projection',
+      source: PlaybackSourceSnapshot.fromDataSource(
+        NetworkSource(
+          videoSource: 'https://example.test/history.mp4',
+          audioSource: null,
+        ),
+      ),
+      timeline: const PlaybackTimeline(
+        kind: PlaybackTimelineKind.onDemand,
+        seekPolicy: PlaybackSeekPolicy.allowed,
+        duration: Duration(seconds: 10),
+      ),
+      configuration: PlaybackConfiguration(),
+      startPosition: const Duration(seconds: 20),
+      reloadPosition: const Duration(seconds: 20),
+    );
+    final result = await f.controller.loadPlaybackPlan(
+      owner: f.owner,
+      plan: plan,
+      start: PlaybackStartPolicy.pause,
+      live: false,
+    );
+    await f.tester.pump();
+    expect(result.outcome, LoadOutcome.ready);
+    expect(f.runtime.loads.single.reloadPosition, Duration.zero);
+    expect(f.controller.position.value, 0);
+    expect(f.controller.positionInMilliseconds, 0);
+  });
+
+  for (final actualFallback in [false, true]) {
+    _recoveryTest('来源查询越界归零并在后续进度持续推进：$actualFallback', (f) async {
+      final plan = PlaybackPlan(
+        contentKey: 'query-projection',
+        source: PlaybackSourceSnapshot.fromDataSource(
+          NetworkSource(
+            videoSource: 'https://example.test/video.mp4',
+            audioSource: null,
+          ),
+        ),
+        timeline: PlaybackTimeline(
+          kind: PlaybackTimelineKind.onDemand,
+          seekPolicy: PlaybackSeekPolicy.allowed,
+          duration: Duration(seconds: actualFallback ? 30 : 10),
+        ),
+        configuration: PlaybackConfiguration(),
+        startPosition: const Duration(seconds: 20),
+        reloadPosition: const Duration(seconds: 20),
+      );
+      if (actualFallback) {
+        f.runtime.onLoadOverride = (plan, context) async {
+          if (f.runtime.loads.length != 1) return null;
+          f.runtime._events.add(
+            PlaybackRuntimeStateChanged(
+              runtimeId: f.runtime.runtimeId,
+              loadId: context.loadId,
+              actual: const PlaybackActual(duration: Duration(seconds: 10)),
+            ),
+          );
+          return PlaybackRuntimeLoadResult(
+            loaded: false,
+            output: PlaybackOutputPreparation(
+              strategy: PlaybackOutputStrategy.failed,
+              evidence: 'eof',
+              outputEpoch: context.loadId,
+            ),
+          );
+        };
+      }
+      final result = await f.owner.query((_) async {
+        f.controller.preparePlaybackPlan(
+          owner: f.owner,
+          plan: plan,
+          live: false,
+        );
+        return plan;
+      });
+      await f.tester.pump();
+      expect(result.outcome, LoadOutcome.ready);
+      expect(f.runtime.loads, hasLength(actualFallback ? 2 : 1));
+      expect(f.controller.position.value, 0);
+      f.runtime.player.state.position = const Duration(seconds: 5);
+      f.runtime.emitActual();
+      await f.tester.pump();
+      expect(f.controller.position.value, 5);
+      f.runtime.emitActual();
+      await f.tester.pump();
+      expect(f.controller.position.value, 5);
+    });
+  }
+
   for (final entry in restoreWindow.entries) {
     _recoveryTest('最小化暂停后${entry.key}释放抑制并保留播放意图', (f) async {
       await f.load();
@@ -809,6 +901,11 @@ class _Runtime extends NativePlaybackRuntime {
   Duration get position => player.state.position;
   final loads = <PlaybackPlan>[];
   Future<void> Function(PlaybackPlan)? beforeLoad;
+  Future<PlaybackRuntimeLoadResult?> Function(
+    PlaybackPlan,
+    PlaybackExecutionContext,
+  )?
+  onLoadOverride;
   bool hasVideo = true;
   bool hasAudio = true;
   bool videoHealthy = true;
@@ -861,6 +958,8 @@ class _Runtime extends NativePlaybackRuntime {
     PlaybackExecutionContext context,
   ) async {
     loads.add(plan);
+    final override = await onLoadOverride?.call(plan, context);
+    if (override != null) return override;
     await beforeLoad?.call(plan);
     loadId = context.loadId;
     player.state

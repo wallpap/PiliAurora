@@ -19,6 +19,7 @@ void main() {
     final diagnostics = Diagnostics.instance;
     await diagnostics.initialize(directory: directory);
     final player = _SnapshotPlayer();
+    player.state.duration = const Duration(seconds: 87);
     final playerDiagnostics = PlayerDiagnostics(player);
     final detachDanmaku = diagnostics.register(
       'danmaku.fixture',
@@ -52,6 +53,11 @@ void main() {
         containsPair('hwdec-current', 'mediacodec'),
       );
       expect(playerDiagnostics.snapshot(), contains('track-list'));
+      expect(playerDiagnostics.snapshot(), containsPair('durationMs', 87000));
+      expect(
+        playerDiagnostics.snapshot(detailed: false),
+        containsPair('durationMs', 87000),
+      );
     } finally {
       detachDanmaku();
       playerDiagnostics.dispose();
