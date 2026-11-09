@@ -10,6 +10,8 @@
 #include "include/media_kit_video/texture_gl.h"
 #include "include/media_kit_video/texture_sw.h"
 
+#include <cstddef>
+
 #include <epoxy/egl.h>
 #include <epoxy/glx.h>
 #include <gdk/gdkwayland.h>
@@ -282,7 +284,8 @@ VideoOutput* video_output_new(FlTextureRegistrar* texture_registrar,
                     gint64 height = video_output_get_height(self);
                     if (width > 0 && height > 0) {
                       gint32 size[]{(gint32)width, (gint32)height};
-                      gint32 pitch = 4 * (gint32)width;
+                      // mpv 按 size_t* 读取步长，不能传入 32 位整数的地址。
+                      size_t pitch = 4 * static_cast<size_t>(width);
                       mpv_render_param params[]{
                           {MPV_RENDER_PARAM_SW_SIZE, size},
                           {MPV_RENDER_PARAM_SW_FORMAT, (void*)"rgb0"},

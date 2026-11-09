@@ -13,6 +13,14 @@
 
 Python 探针使用 uv 环境，首次运行前请按[工具入口中的 Python 环境说明](../README.md#python-工具环境)初始化；以下命令均从仓库根目录运行。
 
+## mpv 软件渲染参数 ABI
+
+`windows/software_render_abi_test.py` 提取 Windows、Linux 生产源码中的步长声明，使用 C++17 编译器检查 `MPV_RENDER_PARAM_SW_STRIDE` 的 `size_t*` 契约，并读回多个宽度的步长。不创建 GL 或播放器；缺少 `c++` / `g++` 时跳过，真实输出仍需设备验证。该文件由 Linux CI 的 Windows 探针单元测试发现入口执行。
+
+```powershell
+python -m unittest discover -s tool/probes/windows -p software_render_abi_test.py -v
+```
+
 ## 事件循环生命周期探针
 
 `event_loop/native_event_loop_probe.dart` 使用纯 Dart 桩检查生命周期、关闭顺序和 ABI 选择：

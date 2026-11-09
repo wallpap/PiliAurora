@@ -1,6 +1,6 @@
 # media_kit_video 本地版本
 
-- 本地版本：`1.2.5+piliaurora.14`；来源包版本：`1.2.5`。
+- 本地版本：`1.2.5+piliaurora.15`；来源包版本：`1.2.5`。
 - 来源仓库：https://github.com/My-Responsitories/media-kit.git
 - 来源提交：`73771ec38176be2d984a3049c28177bce23b54a0`。
 - 来源子目录：`media_kit_video`。
@@ -17,6 +17,8 @@ ANGLE 上下文/Surface、D3D 纹理及软件缓冲区），并暴露 `VideoOutp
 更新流程见 `../README.md`，来源登记见 `../dependencies.json`。
 
 本地维护修正：补齐字幕文档模板的闭合标签，不改变生产行为。
+
+2026-11-09：Windows、Linux 软件渲染的 `MPV_RENDER_PARAM_SW_STRIDE` 使用 `size_t` 存储并在该宽度下计算，避免 64 位进程向 mpv 传入 32 位整数地址。主机回归编译生产声明并检查步长读回；Linux 显示路径仍需目标平台验证。
 
 2026-10-15：Windows 创建/扩容 EGL Surface 时移除额外的 GL 纹理生成、绑定和
 `eglBindTexImage`，同步移除对应释放。输出继续由 mpv 绘制到默认 framebuffer，
