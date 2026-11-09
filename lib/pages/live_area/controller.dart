@@ -72,11 +72,11 @@ class LiveAreaPreferencesNotifier extends AsyncNotifier<LiveAreaPreferences> {
       }
       state = AsyncData(result.isSuccess ? LiveAreaPreferences(items) : before);
       return result;
-    } catch (_) {
+    } catch (error, stackTrace) {
       if (owner.mounted && identical(account, Accounts.main)) {
         state = AsyncData(before);
       }
-      return const Error('保存结果待确认，请重试或重新查询');
+      return UnknownResult(cause: error, stackTrace: stackTrace);
     }
   }
 }

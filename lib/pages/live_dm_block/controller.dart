@@ -99,9 +99,9 @@ class LiveBlockNotifier extends AsyncNotifier<LiveBlockState> {
         );
       }
       if (!current()) return const Error('账号已切换或页面已关闭');
-      if (!result.isSuccess) {
+      if (result is Error) {
         state = AsyncData(before);
-        return Error(result.toString());
+        return result;
       }
       state = AsyncData(
         LiveBlockState(
@@ -118,9 +118,9 @@ class LiveBlockNotifier extends AsyncNotifier<LiveBlockState> {
         ),
       );
       return const Success(null);
-    } catch (_) {
+    } catch (error, stackTrace) {
       if (current()) state = AsyncData(before);
-      return const Error('操作结果待确认，请刷新规则后核对');
+      return UnknownResult(cause: error, stackTrace: stackTrace);
     }
   }
 }

@@ -210,6 +210,32 @@ void main() {
     expect(current().users.map((e) => e.uid), [2]);
   });
 
+  test('规则保存保留业务拒绝和待确认类型，失败时不修改确认快照', () async {
+    await loadRules();
+    final before = current();
+    final notifier = container.read(provider.notifier);
+    for (final code in <Object>[-403, '0']) {
+      final save = notifier.change(
+        source: before.source,
+        keyword: true,
+        value: 'new',
+      );
+      await dispatched(code == -403 ? 2 : 3);
+      requests.last.reply.complete({'code': code, 'message': '请求被拒绝'});
+      final result = await save as Error;
+      if (code == -403) {
+        expect(result.code, -403);
+        expect(result.toString(), '请求被拒绝');
+      } else {
+        expect(result, isA<UnknownResult>());
+        expect(result.cause, isNotNull);
+        expect(result.stackTrace, isNotNull);
+      }
+      expect(current(), same(before));
+      expect(current().keywords, ['old']);
+    }
+  });
+
   test('切号与刷新丢弃迟到写入，查询失败不能使用保留值写入', () async {
     await loadRules();
     final notifier = container.read(provider.notifier);

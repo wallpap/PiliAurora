@@ -1,5 +1,6 @@
 import 'package:pili_aurora/common/constants.dart';
 import 'package:pili_aurora/http/api.dart';
+import 'package:pili_aurora/http/api_response.dart';
 import 'package:pili_aurora/http/browser_ua.dart';
 import 'package:pili_aurora/http/init.dart';
 import 'package:pili_aurora/http/loading_state.dart';
@@ -42,40 +43,44 @@ abstract final class LiveHttp {
     Object? emoticonOptions,
     int replyMid = 0,
     String replayDmid = '',
+    Account? account,
   }) async {
-    String csrf = Accounts.main.csrf;
-    final res = await Request().post(
-      Api.sendLiveMsg,
-      queryParameters: await WbiSign.makSign({'web_location': 444.8}),
-      data: FormData.fromMap({
-        'bubble': 0,
-        'msg': msg,
-        'color': 16777215,
-        'mode': 1,
-        'dm_type': ?dmType,
-        if (emoticonOptions != null)
-          'emoticonOptions': emoticonOptions
-        else ...{
-          'room_type': 0,
-          'jumpfrom': 0,
-          'reply_mid': replyMid,
-          'reply_attr': 0,
-          'replay_dmid': replayDmid,
-          'statistics': '{"appId":100,"platform":5}',
-          'reply_type': 0,
-          'reply_uname': '',
-        },
-        'fontsize': 25,
-        'rnd': DateTime.now().millisecondsSinceEpoch ~/ 1000,
-        'roomid': roomId,
-        'csrf': csrf,
-        'csrf_token': csrf,
-      }),
-    );
-    if (res.data['code'] == 0) {
-      return const Success(null);
-    } else {
-      return Error(res.data['message']);
+    account ??= Accounts.main;
+    final csrf = account.csrf;
+    try {
+      return await Request().requestApi(
+        Api.sendLiveMsg,
+        kind: ApiCallKind.mutation,
+        decode: (_) {},
+        options: Options(extra: {'account': account}),
+        queryParameters: await WbiSign.makSign({'web_location': 444.8}),
+        data: FormData.fromMap({
+          'bubble': 0,
+          'msg': msg,
+          'color': 16777215,
+          'mode': 1,
+          'dm_type': ?dmType,
+          if (emoticonOptions != null)
+            'emoticonOptions': emoticonOptions
+          else ...{
+            'room_type': 0,
+            'jumpfrom': 0,
+            'reply_mid': replyMid,
+            'reply_attr': 0,
+            'replay_dmid': replayDmid,
+            'statistics': '{"appId":100,"platform":5}',
+            'reply_type': 0,
+            'reply_uname': '',
+          },
+          'fontsize': 25,
+          'rnd': DateTime.now().millisecondsSinceEpoch ~/ 1000,
+          'roomid': roomId,
+          'csrf': csrf,
+          'csrf_token': csrf,
+        }),
+      );
+    } catch (error, stackTrace) {
+      return Error.fromException(error, stackTrace);
     }
   }
 
@@ -85,53 +90,53 @@ abstract final class LiveHttp {
     bool onlyAudio = false,
     CancelToken? cancelToken,
   }) async {
-    final res = await Request().get(
-      Api.liveRoomInfo,
-      cancelToken: cancelToken,
-      queryParameters: await WbiSign.makSign({
-        'room_id': roomId,
-        'protocol': '0,1',
-        'format': '0,1,2',
-        'codec': '0,1,2',
-        'qn': ?qn,
-        'platform': 'web',
-        'ptype': 8,
-        'dolby': 5,
-        'panorama': 1,
-        if (onlyAudio) 'only_audio': 1,
-        'web_location': 444.8,
-      }),
-    );
-    if (res.data['code'] == 0) {
-      try {
-        return Success(RoomPlayInfoData.fromJson(res.data['data']));
-      } catch (e, s) {
-        return Error.fromException(e, s);
-      }
-    } else {
-      return Error(res.data['message']);
+    final account = Accounts.heartbeat;
+    try {
+      return await Request().requestApi(
+        Api.liveRoomInfo,
+        kind: ApiCallKind.query,
+        decode: (body) => RoomPlayInfoData.fromJson(body['data']),
+        cancelToken: cancelToken,
+        options: Options(extra: {'account': account}),
+        queryParameters: await WbiSign.makSign({
+          'room_id': roomId,
+          'protocol': '0,1',
+          'format': '0,1,2',
+          'codec': '0,1,2',
+          'qn': ?qn,
+          'platform': 'web',
+          'ptype': 8,
+          'dolby': 5,
+          'panorama': 1,
+          if (onlyAudio) 'only_audio': 1,
+          'web_location': 444.8,
+        }),
+      );
+    } catch (error, stackTrace) {
+      return Error.fromException(error, stackTrace);
     }
   }
 
   static Future<LoadingState<RoomInfoH5Data>> liveRoomInfoH5({
     required Object roomId,
   }) async {
-    final res = await Request().get(
+    return await Request().requestApi(
       Api.liveRoomInfoH5,
+      kind: ApiCallKind.query,
+      decode: (body) => RoomInfoH5Data.fromJson(body['data']),
       queryParameters: {'room_id': roomId},
     );
-    if (res.data['code'] == 0) {
-      return Success(RoomInfoH5Data.fromJson(res.data['data']));
-    } else {
-      return Error(res.data['message']);
-    }
   }
 
   static Future<LoadingState<List<DanmakuMsg>?>> liveRoomDmPrefetch({
     required Object roomId,
   }) async {
-    final res = await Request().get(
+    return await Request().requestApi(
       Api.liveRoomDmPrefetch,
+      kind: ApiCallKind.query,
+      decode: (body) => (body['data']?['room'] as List?)
+          ?.map((e) => DanmakuMsg.fromPrefetch(e))
+          .toList(),
       queryParameters: {'roomid': roomId},
       options: Options(
         headers: {
@@ -140,65 +145,49 @@ abstract final class LiveHttp {
         },
       ),
     );
-    if (res.data['code'] == 0) {
-      try {
-        return Success(
-          (res.data['data']?['room'] as List?)
-              ?.map((e) => DanmakuMsg.fromPrefetch(e))
-              .toList(),
-        );
-      } catch (e, s) {
-        return Error.fromException(e, s);
-      }
-    } else {
-      return Error(res.data['message']);
-    }
   }
 
   static Future<LoadingState<LiveDmInfoData>> liveRoomGetDanmakuToken({
     required Object roomId,
   }) async {
-    final res = await Request().get(
-      Api.liveRoomDmToken,
-      queryParameters: await WbiSign.makSign({
-        'id': roomId,
-        'web_location': 444.8,
-      }),
-    );
-    if (res.data['code'] == 0) {
-      try {
-        return Success(LiveDmInfoData.fromJson(res.data['data']));
-      } catch (e, s) {
-        return Error.fromException(e, s);
-      }
-    } else {
-      return Error(res.data['message']);
+    final account = Accounts.heartbeat;
+    try {
+      return await Request().requestApi(
+        Api.liveRoomDmToken,
+        kind: ApiCallKind.query,
+        decode: (body) => LiveDmInfoData.fromJson(body['data']),
+        options: Options(extra: {'account': account}),
+        queryParameters: await WbiSign.makSign({
+          'id': roomId,
+          'web_location': 444.8,
+        }),
+      );
+    } catch (error, stackTrace) {
+      return Error.fromException(error, stackTrace);
     }
   }
 
   static Future<LoadingState<List<LiveEmoteDatum>?>> getLiveEmoticons({
     required int roomId,
   }) async {
-    final res = await Request().get(
+    return await Request().requestApi(
       Api.getLiveEmoticons,
+      kind: ApiCallKind.query,
+      decode: (body) => LiveEmoteData.fromJson(body['data']).data,
       queryParameters: {
         'platform': 'pc',
         'room_id': roomId,
       },
     );
-    if (res.data['code'] == 0) {
-      return Success(LiveEmoteData.fromJson(res.data['data']).data);
-    } else {
-      return Error(res.data['message']);
-    }
   }
 
   static Future<LoadingState<LiveIndexData>> liveFeedIndex({
     required int pn,
     bool moduleSelect = false,
   }) async {
+    final account = recommend;
     final params = {
-      'access_key': ?recommend.accessKey,
+      'access_key': ?account.accessKey,
       'channel': 'master',
       'actionKey': 'appkey',
       'build': 8430300,
@@ -215,16 +204,19 @@ abstract final class LiveHttp {
       'network': 'wifi',
       'page': pn,
       'platform': 'android',
-      if (recommend.isLogin) 'relation_page': 1,
+      if (account.isLogin) 'relation_page': 1,
       's_locale': 'zh_CN',
       'scale': 2,
       'statistics': Constants.statisticsApp,
     };
     AppSign.appSign(params);
-    final res = await Request().get(
+    return await Request().requestApi(
       Api.liveFeedIndex,
+      kind: ApiCallKind.query,
+      decode: (body) => LiveIndexData.fromJson(body['data']),
       queryParameters: params,
       options: Options(
+        extra: {'account': account},
         headers: {
           'buvid': LoginHttp.buvid,
           'fp_local': '1111111111111111111111111111111111111111111111111111111111111111',
@@ -240,19 +232,16 @@ abstract final class LiveHttp {
         },
       ),
     );
-    if (res.data['code'] == 0) {
-      return Success(LiveIndexData.fromJson(res.data['data']));
-    } else {
-      return Error(res.data['message']);
-    }
   }
 
   static Future<LoadingState<LiveFollowData>> liveFollow(
     int page, {
     required Account account,
   }) async {
-    final res = await Request().get(
+    return await Request().requestApi(
       Api.liveFollow,
+      kind: ApiCallKind.query,
+      decode: (body) => LiveFollowData.fromJson(body['data']),
       queryParameters: {
         'page': page,
         'page_size': 9,
@@ -261,11 +250,6 @@ abstract final class LiveHttp {
       },
       options: Options(extra: {'account': account}),
     );
-    if (res.data['code'] == 0) {
-      return Success(LiveFollowData.fromJson(res.data['data']));
-    } else {
-      return Error(res.data['message']);
-    }
   }
 
   static Future<LoadingState<LiveSecondData>> liveSecondList({
@@ -274,8 +258,9 @@ abstract final class LiveHttp {
     required Object? parentAreaId,
     String? sortType,
   }) async {
+    final account = recommend;
     final params = {
-      'access_key': ?recommend.accessKey,
+      'access_key': ?account.accessKey,
       'actionKey': 'appkey',
       'channel': 'master',
       'area_id': ?areaId,
@@ -303,10 +288,13 @@ abstract final class LiveHttp {
       'statistics': Constants.statisticsApp,
     };
     AppSign.appSign(params);
-    final res = await Request().get(
+    return await Request().requestApi(
       Api.liveSecondList,
+      kind: ApiCallKind.query,
+      decode: (body) => LiveSecondData.fromJson(body['data']),
       queryParameters: params,
       options: Options(
+        extra: {'account': account},
         headers: {
           'buvid': LoginHttp.buvid,
           'fp_local': '1111111111111111111111111111111111111111111111111111111111111111',
@@ -322,11 +310,6 @@ abstract final class LiveHttp {
         },
       ),
     );
-    if (res.data['code'] == 0) {
-      return Success(LiveSecondData.fromJson(res.data['data']));
-    } else {
-      return Error(res.data['message']);
-    }
   }
 
   static Future<LoadingState<List<AreaList>?>> liveAreaList({
@@ -348,20 +331,15 @@ abstract final class LiveHttp {
       'statistics': Constants.statisticsApp,
     };
     AppSign.appSign(params);
-    final res = await Request().get(
+    return await Request().requestApi(
       Api.liveAreaList,
+      kind: ApiCallKind.query,
+      decode: (body) => (body['data']?['list'] as List?)
+          ?.map((e) => AreaList.fromJson(e))
+          .toList(),
       options: Options(extra: {'account': account}),
       queryParameters: params,
     );
-    if (res.data['code'] == 0) {
-      return Success(
-        (res.data['data']?['list'] as List?)
-            ?.map((e) => AreaList.fromJson(e))
-            .toList(),
-      );
-    } else {
-      return Error(res.data['message']);
-    }
   }
 
   static Future<LoadingState<List<AreaItem>>> getLiveFavTag({
@@ -382,22 +360,17 @@ abstract final class LiveHttp {
       'statistics': Constants.statisticsApp,
     };
     AppSign.appSign(params);
-    final res = await Request().get(
+    return await Request().requestApi(
       Api.getLiveFavTag,
+      kind: ApiCallKind.query,
+      decode: (body) =>
+          (body['data']?['tags'] as List?)
+              ?.map((e) => AreaItem.fromJson(e))
+              .toList() ??
+          <AreaItem>[],
       options: Options(extra: {'account': account}),
       queryParameters: params,
     );
-
-    if (res.data['code'] == 0) {
-      return Success(
-        (res.data['data']?['tags'] as List?)
-                ?.map((e) => AreaItem.fromJson(e))
-                .toList() ??
-            <AreaItem>[],
-      );
-    } else {
-      return Error(res.data['message']);
-    }
   }
 
   static Future<LoadingState<void>> setLiveFavTag({
@@ -420,27 +393,24 @@ abstract final class LiveHttp {
       'statistics': Constants.statisticsApp,
     };
     AppSign.appSign(data);
-    final res = await Request().post(
+    return await Request().requestApi(
       Api.setLiveFavTag,
+      kind: ApiCallKind.mutation,
+      decode: (_) {},
       data: data,
       options: Options(
         contentType: Headers.formUrlEncodedContentType,
-        extra: {'account': account, 'noRetry': true},
+        extra: {'account': account},
       ),
     );
-
-    if (res.data['code'] == 0) {
-      return const Success(null);
-    } else {
-      return Error(res.data['message']);
-    }
   }
 
   static Future<LoadingState<List<AreaItem>?>> liveRoomAreaList({
     required Object parentid,
   }) async {
+    final account = recommend;
     final params = {
-      'access_key': ?recommend.accessKey,
+      'access_key': ?account.accessKey,
       'actionKey': 'appkey',
       'build': 8430300,
       'channel': 'master',
@@ -457,17 +427,14 @@ abstract final class LiveHttp {
       'statistics': Constants.statisticsApp,
     };
     AppSign.appSign(params);
-    final res = await Request().get(
+    return await Request().requestApi(
       Api.liveRoomAreaList,
+      kind: ApiCallKind.query,
+      decode: (body) =>
+          (body['data'] as List?)?.map((e) => AreaItem.fromJson(e)).toList(),
+      options: Options(extra: {'account': account}),
       queryParameters: params,
     );
-    if (res.data['code'] == 0) {
-      return Success(
-        (res.data['data'] as List?)?.map((e) => AreaItem.fromJson(e)).toList(),
-      );
-    } else {
-      return Error(res.data['message']);
-    }
   }
 
   static Future<LoadingState<LiveSearchData>> liveSearch({
@@ -495,16 +462,13 @@ abstract final class LiveHttp {
       'type': type.name,
     };
     AppSign.appSign(params);
-    final res = await Request().get(
+    return await Request().requestApi(
       Api.liveSearch,
+      kind: ApiCallKind.query,
+      decode: (body) => LiveSearchData.fromJson(body['data']),
       options: Options(extra: {'account': account}),
       queryParameters: params,
     );
-    if (res.data['code'] == 0) {
-      return Success(LiveSearchData.fromJson(res.data['data']));
-    } else {
-      return Error(res.data['message']);
-    }
   }
 
   static Future<LoadingState<ShieldInfo?>> getLiveInfoByUser(
@@ -512,20 +476,21 @@ abstract final class LiveHttp {
     Account? account,
   }) async {
     account ??= Accounts.main;
-    final res = await Request().get(
-      Api.getLiveInfoByUser,
-      options: Options(extra: {'account': account}),
-      queryParameters: await WbiSign.makSign({
-        'room_id': roomId,
-        'from': 0,
-        'not_mock_enter_effect': 1,
-        'web_location': 444.8,
-      }),
-    );
-    if (res.data['code'] == 0) {
-      return Success(LiveDmBlockData.fromJson(res.data['data']).shieldInfo);
-    } else {
-      return Error(res.data['message']);
+    try {
+      return await Request().requestApi(
+        Api.getLiveInfoByUser,
+        kind: ApiCallKind.query,
+        decode: (body) => LiveDmBlockData.fromJson(body['data']).shieldInfo,
+        options: Options(extra: {'account': account}),
+        queryParameters: await WbiSign.makSign({
+          'room_id': roomId,
+          'from': 0,
+          'not_mock_enter_effect': 1,
+          'web_location': 444.8,
+        }),
+      );
+    } catch (error, stackTrace) {
+      return Error.fromException(error, stackTrace);
     }
   }
 
@@ -533,22 +498,23 @@ abstract final class LiveHttp {
     required String type,
     required int level,
   }) async {
-    final csrf = Accounts.main.csrf;
-    final res = await Request().post(
+    final account = Accounts.main;
+    final csrf = account.csrf;
+    return await Request().requestApi(
       Api.liveSetSilent,
+      kind: ApiCallKind.mutation,
+      decode: (_) {},
       data: {
         'type': type,
         'level': level,
         'csrf': csrf,
         'csrf_token': csrf,
       },
-      options: Options(contentType: Headers.formUrlEncodedContentType),
+      options: Options(
+        contentType: Headers.formUrlEncodedContentType,
+        extra: {'account': account},
+      ),
     );
-    if (res.data['code'] == 0) {
-      return const Success(null);
-    } else {
-      return Error(res.data['message']);
-    }
   }
 
   static Future<LoadingState<void>> addShieldKeyword({
@@ -556,8 +522,10 @@ abstract final class LiveHttp {
     required Account account,
   }) async {
     final csrf = account.csrf;
-    final res = await Request().post(
+    return await Request().requestApi(
       Api.addShieldKeyword,
+      kind: ApiCallKind.mutation,
+      decode: (_) {},
       data: {
         'keyword': keyword,
         'csrf': csrf,
@@ -565,14 +533,9 @@ abstract final class LiveHttp {
       },
       options: Options(
         contentType: Headers.formUrlEncodedContentType,
-        extra: {'account': account, 'noRetry': true},
+        extra: {'account': account},
       ),
     );
-    if (res.data['code'] == 0) {
-      return const Success(null);
-    } else {
-      return Error(res.data['message']);
-    }
   }
 
   static Future<LoadingState<void>> delShieldKeyword({
@@ -580,8 +543,10 @@ abstract final class LiveHttp {
     required Account account,
   }) async {
     final csrf = account.csrf;
-    final res = await Request().post(
+    return await Request().requestApi(
       Api.delShieldKeyword,
+      kind: ApiCallKind.mutation,
+      decode: (_) {},
       data: {
         'keyword': keyword,
         'csrf': csrf,
@@ -589,14 +554,9 @@ abstract final class LiveHttp {
       },
       options: Options(
         contentType: Headers.formUrlEncodedContentType,
-        extra: {'account': account, 'noRetry': true},
+        extra: {'account': account},
       ),
     );
-    if (res.data['code'] == 0) {
-      return const Success(null);
-    } else {
-      return Error(res.data['message']);
-    }
   }
 
   static Future<LoadingState<ShieldUserList?>> liveShieldUser({
@@ -607,8 +567,17 @@ abstract final class LiveHttp {
   }) async {
     account ??= Accounts.main;
     final csrf = account.csrf;
-    final res = await Request().post(
+    return await Request().requestApi(
       Api.liveShieldUser,
+      kind: ApiCallKind.mutation,
+      decode: (body) {
+        if (type == 0) return null;
+        final user = ShieldUserList.fromJson(body['data']);
+        if (user.uid <= 0 || user.uid.toString() != uid.toString()) {
+          throw const FormatException('屏蔽用户响应与目标不符');
+        }
+        return user;
+      },
       data: {
         'uid': uid,
         'roomid': roomid,
@@ -618,16 +587,9 @@ abstract final class LiveHttp {
       },
       options: Options(
         contentType: Headers.formUrlEncodedContentType,
-        extra: {'account': account, 'noRetry': true},
+        extra: {'account': account},
       ),
     );
-    if (res.data['code'] == 0) {
-      return Success(
-        type == 0 ? null : ShieldUserList.fromJson(res.data['data']),
-      );
-    } else {
-      return Error(res.data['message']);
-    }
   }
 
   static Future<LoadingState<void>> liveLikeReport({
@@ -636,22 +598,27 @@ abstract final class LiveHttp {
     required Object uid,
     Object? anchorId,
   }) async {
-    final res = await Request().post(
-      Api.liveLikeReport,
-      data: await WbiSign.makSign({
-        'click_time': clickTime,
-        'room_id': roomId,
-        'uid': uid,
-        'anchor_id': ?anchorId,
-        'web_location': 444.8,
-        'csrf': Accounts.heartbeat.csrf,
-      }),
-      options: Options(contentType: Headers.formUrlEncodedContentType),
-    );
-    if (res.data['code'] == 0) {
-      return const Success(null);
-    } else {
-      return Error(res.data['message']);
+    final account = Accounts.heartbeat;
+    try {
+      return await Request().requestApi(
+        Api.liveLikeReport,
+        kind: ApiCallKind.mutation,
+        decode: (_) {},
+        data: await WbiSign.makSign({
+          'click_time': clickTime,
+          'room_id': roomId,
+          'uid': uid,
+          'anchor_id': ?anchorId,
+          'web_location': 444.8,
+          'csrf': account.csrf,
+        }),
+        options: Options(
+          contentType: Headers.formUrlEncodedContentType,
+          extra: {'account': account},
+        ),
+      );
+    } catch (error, stackTrace) {
+      return Error.fromException(error, stackTrace);
     }
   }
 
@@ -659,21 +626,14 @@ abstract final class LiveHttp {
   static Future<LoadingState<SuperChatData>> superChatMsg(
     int roomId,
   ) async {
-    final res = await Request().get(
+    return await Request().requestApi(
       Api.superChatMsg,
+      kind: ApiCallKind.query,
+      decode: (body) => SuperChatData.fromJson(body['data'], roomId),
       queryParameters: {
         'room_id': roomId,
       },
     );
-    if (res.data['code'] == 0) {
-      try {
-        return Success(SuperChatData.fromJson(res.data['data'], roomId));
-      } catch (e, s) {
-        return Error.fromException(e, s);
-      }
-    } else {
-      return Error(res.data['message']);
-    }
   }
 
   static Future<LoadingState<void>> liveDmReport({
@@ -687,7 +647,8 @@ abstract final class LiveHttp {
     required Object ts,
     required Object sign,
   }) async {
-    final csrf = Accounts.main.csrf;
+    final account = Accounts.main;
+    final csrf = account.csrf;
     final data = {
       'id': 0,
       'roomid': roomId,
@@ -704,16 +665,16 @@ abstract final class LiveHttp {
       'csrf': csrf,
       'visit_id': '',
     };
-    final res = await Request().post(
+    return await Request().requestApi(
       Api.liveDmReport,
+      kind: ApiCallKind.mutation,
+      decode: (_) {},
       data: data,
-      options: Options(contentType: Headers.formUrlEncodedContentType),
+      options: Options(
+        contentType: Headers.formUrlEncodedContentType,
+        extra: {'account': account},
+      ),
     );
-    if (res.data['code'] == 0) {
-      return const Success(null);
-    } else {
-      return Error(res.data['message']);
-    }
   }
 
   static Future<LoadingState<LiveContributionRankData>> liveContributionRank({
@@ -722,27 +683,26 @@ abstract final class LiveHttp {
     required int page,
     required LiveContributionRankType type,
   }) async {
-    final res = await Request().get(
-      Api.liveContributionRank,
-      queryParameters: await WbiSign.makSign({
-        'ruid': ruid,
-        'room_id': roomId,
-        'page': page,
-        'page_size': 100,
-        'type': type.name,
-        'switch': type.sw1tch,
-        'platform': 'web',
-        'web_location': 444.8,
-      }),
-    );
-    if (res.data['code'] == 0) {
-      try {
-        return Success(LiveContributionRankData.fromJson(res.data['data']));
-      } catch (e, s) {
-        return Error.fromException(e, s);
-      }
-    } else {
-      return Error(res.data['message']);
+    final account = Accounts.main;
+    try {
+      return await Request().requestApi(
+        Api.liveContributionRank,
+        kind: ApiCallKind.query,
+        decode: (body) => LiveContributionRankData.fromJson(body['data']),
+        options: Options(extra: {'account': account}),
+        queryParameters: await WbiSign.makSign({
+          'ruid': ruid,
+          'room_id': roomId,
+          'page': page,
+          'page_size': 100,
+          'type': type.name,
+          'switch': type.sw1tch,
+          'platform': 'web',
+          'web_location': 444.8,
+        }),
+      );
+    } catch (error, stackTrace) {
+      return Error.fromException(error, stackTrace);
     }
   }
 
@@ -750,8 +710,10 @@ abstract final class LiveHttp {
     required Object roomId,
     required Object ruid,
   }) async {
-    final res = await Request().get(
+    return await Request().requestApi(
       Api.liveGuardTopList,
+      kind: ApiCallKind.query,
+      decode: (body) => LiveGuardTopListData.fromJson(body['data']),
       queryParameters: {
         'roomid': roomId,
         'ruid': ruid,
@@ -759,15 +721,6 @@ abstract final class LiveHttp {
         'page_size': 10,
       },
     );
-    if (res.data['code'] == 0) {
-      try {
-        return Success(LiveGuardTopListData.fromJson(res.data['data']));
-      } catch (e, s) {
-        return Error.fromException(e, s);
-      }
-    } else {
-      return Error(res.data['message']);
-    }
   }
 
   static Future<LoadingState<void>> superChatReport({
@@ -779,9 +732,12 @@ abstract final class LiveHttp {
     required int ts,
     required String token,
   }) async {
-    final csrf = Accounts.main.csrf;
-    final res = await Request().post(
+    final account = Accounts.main;
+    final csrf = account.csrf;
+    return await Request().requestApi(
       Api.superChatReport,
+      kind: ApiCallKind.mutation,
+      decode: (_) {},
       data: {
         'id': id,
         'roomid': roomId,
@@ -797,27 +753,22 @@ abstract final class LiveHttp {
         'csrf': csrf,
         'visit_id': '',
       },
-      options: Options(contentType: Headers.formUrlEncodedContentType),
+      options: Options(
+        contentType: Headers.formUrlEncodedContentType,
+        extra: {'account': account},
+      ),
     );
-    if (res.data['code'] == 0) {
-      return const Success(null);
-    } else {
-      return Error(res.data['message']);
-    }
   }
 
   static Future<LoadingState<MedalWallData>> liveMedalWall({
     required Object mid,
   }) async {
-    final res = await Request().get(
+    return await Request().requestApi(
       Api.liveMedalWall,
+      kind: ApiCallKind.query,
+      decode: (body) => MedalWallData.fromJson(body['data']),
       queryParameters: {'target_id': mid},
     );
-    if (res.data['code'] == 0) {
-      return Success(MedalWallData.fromJson(res.data['data']));
-    } else {
-      return Error(res.data['message']);
-    }
   }
 
   static Future<LoadingState<void>> liveFeedback(
@@ -826,8 +777,9 @@ abstract final class LiveHttp {
     String type, {
     int page = 1,
   }) async {
+    final account = recommend;
     final params = {
-      'access_key': ?recommend.accessKey,
+      'access_key': ?account.accessKey,
       'actionKey': 'appkey',
       'build': 8430300,
       'channel': 'master',
@@ -846,14 +798,12 @@ abstract final class LiveHttp {
       'page': page,
     };
     AppSign.appSign(params);
-    final res = await Request().get(
+    return await Request().requestApi(
       Api.liveFeedback,
+      kind: ApiCallKind.mutation,
+      decode: (_) {},
+      options: Options(method: 'GET', extra: {'account': account}),
       queryParameters: params,
     );
-    if (res.data['code'] == 0) {
-      return const Success(null);
-    } else {
-      return Error(res.data['message']);
-    }
   }
 }

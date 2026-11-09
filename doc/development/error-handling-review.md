@@ -47,6 +47,7 @@
 | 弹幕、评论与表情包：`http/danmaku.dart`、`reply.dart`、发送面板、赞踩／置顶、评论可见性检查和表情包页面 | 接入查询／写入结果契约，保留业务码和写入待确认。修正弹幕管理端点和赞踩防重入；发送按提交草稿回显，失败或关闭时保留新草稿，切号／换对象后拒绝旧结果。表情包分页固定账号并检查进度、总数与详情归属。举报在所属弹窗显示提交状态，取消后的结果不关闭新页面，举报成功与屏蔽同步失败分别反馈。可见性检查按 12022 业务码判断，查询故障和重复分页不误报不可见。 | `test/http/community_response_test.dart`、`test/pages/community/operation_results_test.dart`、表情包模型与评论生命周期回归 |
 | 搜索：`http/search.dart`、搜索首页与热搜控制器 | 查询接入统一契约，保留业务码、原始原因与堆栈，签名前固定推荐账号，无效风控凭据返回解析失败。搜索首页与热搜订阅账号变化并拒绝旧响应；已有结果分页保护保留。分 P 查询保留可空包装，空列表仍返回 null，损坏响应显示可读提示。 | `test/http/search_response_test.dart`、`test/pages/search/controller_test.dart`、搜索结果分页回归 |
 | 动态 HTTP：`http/dynamics.dart` | 32 个接口接入查询／写入结果契约，保留业务码、原始原因和待确认结果。跨页与签名前固定账号，过滤补页检查游标进展并有请求上限；话题等可选内容仍允许为空。投票和预约创建必须取得有效 ID，编辑允许沿用已知 ID；发布只返回调用方使用的可空动态 ID，定时发布可缺少 ID。 | `test/http/dynamics_response_test.dart`、文章内容重试回归 |
+| 直播业务：`http/live.dart`、屏蔽规则、发送面板与表情查询 | 27 个接口接入统一结果契约，保留查询角色、签名账号、可选数据和明确业务码，GET 反馈也按写入禁重试。屏蔽规则保留原 Error／UnknownResult；文本和表情发送共用在途状态，保留新草稿，切号／换房／关闭后拒绝旧结果。表情查询跟随主账号凭据变化，刷新前释放旧页签。 | `test/http/live_response_test.dart`、直播设置、发送与表情回归 |
 
 ## 检查后保留的实现
 
@@ -103,3 +104,5 @@
 - 补查账号路由时修正 HTTP 评论列表与楼中楼默认账号：继续沿用播放记录角色，显式绑定主账号的可见性检查保持原语义。新增的角色分离回归 1 项通过（`build/reply-account-tests.log`）。
 
 - 动态 HTTP 11 项与文章内容重试 2 项共 13 项不同用例通过。首批 11 项通过后只补跑完整投票与分页上限 2 项（`build/dynamics-response-tests.log`、`build/dynamics-extra-tests.log`）。修改文件的定向分析提示已修正（`build/dynamics-response-final-analyze.log`）。未重跑完整 CI，动态发布和管理调用方继续检查，真实账号写入尚未验收。
+
+- 直播业务响应、屏蔽设置与发送面板 22 项通过，表情查询修正可重复创建 Ticker 后单项通过，共 23 项不同用例通过（`build/live-contract-tests.log`、`build/live-emote-contract-retry.log`）。修改的 9 个文件定向分析无问题（`build/live-contract-analyze.log`）。未重跑连接／worker 或完整 CI；直播推荐与分区的账号生命周期、榜单／菜单等其余消费，以及真实服务写入仍待检查。
