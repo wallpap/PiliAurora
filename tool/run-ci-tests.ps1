@@ -51,6 +51,7 @@ $ciTests = @(
     "test/pages/video/playback_lifecycle_test.dart",
     "test/pages/video/pgc_sharing_test.dart",
     "test/pages/video/reply/controller_test.dart",
+    "test/pages/video/reply/timestamp_test.dart",
     "test/pages/video/reply_reply/level_filter_test.dart",
     "test/utils/reply_filter_test.dart",
     "test/pages/setting/settings_navigation_test.dart",

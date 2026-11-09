@@ -1,7 +1,6 @@
 import 'dart:math';
 
 import 'package:pili_aurora/common/assets.dart';
-import 'package:pili_aurora/services/logger.dart';
 import 'package:pili_aurora/common/constants.dart';
 import 'package:pili_aurora/common/style.dart';
 import 'package:pili_aurora/common/widgets/badge.dart';
@@ -34,7 +33,6 @@ import 'package:pili_aurora/utils/bili_utils.dart';
 import 'package:pili_aurora/utils/color_utils.dart';
 import 'package:pili_aurora/utils/danmaku_utils.dart';
 import 'package:pili_aurora/utils/date_utils.dart';
-import 'package:pili_aurora/utils/duration_utils.dart';
 import 'package:pili_aurora/utils/extension/context_ext.dart';
 import 'package:pili_aurora/utils/extension/iterable_ext.dart';
 import 'package:pili_aurora/utils/extension/num_ext.dart';
@@ -883,21 +881,41 @@ class ReplyItemGrpc extends StatelessWidget {
           );
         } else if (_timeRegExp.hasMatch(matchStr)) {
           matchStr = matchStr.replaceAll('：', ':');
-          bool isValid = false;
-          try {
-            final ctr = Get.find<VideoDetailController>(
-              tag: getTag?.call() ?? Get.arguments['heroTag'],
-            );
-            isValid =
-                DurationUtils.parseDuration(matchStr) * 1000 <=
-                ctr.data.timeLength!;
-          } catch (e, stackTrace) {
-            logger.w(
-              'failed to validate: $e',
-              error: e,
-              stackTrace: stackTrace,
-            );
+          final args = Get.arguments;
+          final tagValue =
+              getTag?.call() ?? (args is Map ? args['heroTag'] : null);
+          final tag = tagValue is String ? tagValue : null;
+          VideoDetailController? controller;
+          int? timeLength;
+          if (tag != null &&
+              Get.isRegistered<VideoDetailController>(tag: tag)) {
+            controller = Get.find<VideoDetailController>(tag: tag);
+            if (!controller.isClosed) {
+              try {
+                // 地址尚未解析时 data 仍未初始化。
+                timeLength = controller.data.timeLength;
+              } catch (_) {
+                timeLength = null;
+              }
+            }
           }
+          var secondsValue = BigInt.zero;
+          for (final part in matchStr.split(':')) {
+            final value = BigInt.tryParse(part);
+            if (value == null) {
+              secondsValue = BigInt.from(-1);
+              break;
+            }
+            secondsValue = secondsValue * BigInt.from(60) + value;
+          }
+          final isValid =
+              controller != null &&
+              !controller.isClosed &&
+              timeLength != null &&
+              timeLength > 0 &&
+              secondsValue >= BigInt.zero &&
+              secondsValue <= BigInt.from(timeLength ~/ 1000);
+          final target = controller;
           spanChildren.add(
             TextSpan(
               text: isValid ? ' $matchStr ' : matchStr,
@@ -905,20 +923,22 @@ class ReplyItemGrpc extends StatelessWidget {
               recognizer: isValid
                   ? (NoDeadlineTapGestureRecognizer()
                       ..onTap = () {
-                        // 跳转到指定位置
-                        try {
-                          SmartDialog.showToast('跳转至：$matchStr');
-                          Get.find<VideoDetailController>(
-                            tag: Get.arguments['heroTag'],
-                          ).plPlayerController.seekTo(
-                            Duration(
-                              seconds: DurationUtils.parseDuration(matchStr),
-                            ),
-                            isSeek: false,
-                          );
-                        } catch (e) {
-                          SmartDialog.showToast('跳转失败: $e');
+                        if (target == null ||
+                            target.isClosed ||
+                            !Get.isRegistered<VideoDetailController>(
+                              tag: tag,
+                            ) ||
+                            !identical(
+                              Get.find<VideoDetailController>(tag: tag),
+                              target,
+                            )) {
+                          return;
                         }
+                        SmartDialog.showToast('跳转至：$matchStr');
+                        target.plPlayerController.seekTo(
+                          Duration(seconds: secondsValue.toInt()),
+                          isSeek: false,
+                        );
                       })
                   : null,
             ),
