@@ -3,6 +3,9 @@ import 'package:pili_aurora/services/diagnostics/redact.dart';
 import 'package:pili_aurora/services/logger.dart';
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 
+/// 本地保留的操作结果码，不是远端业务码；服务端可能已完成本次写入。
+const unknownOperationResultCode = -10001;
+
 sealed class LoadingState<T> {
   const LoadingState();
 
@@ -95,4 +98,13 @@ class Error extends LoadingState<Never> implements Exception {
           : '请求失败，请稍后重试',
     );
   }
+}
+
+/// 响应未能确认写入结果，调用方应先核对远端状态，不能直接重发。
+class UnknownResult extends Error {
+  const UnknownResult({super.cause, super.stackTrace})
+    : super(
+        '操作结果待确认，请先核对后再操作',
+        code: unknownOperationResultCode,
+      );
 }

@@ -22,6 +22,7 @@ abstract final class DmGrpc {
         type: type,
       ),
       DmSegMobileReply.fromBuffer,
+      kind: .query,
       isolate: true,
       danmakuWork: true,
       inspectDecoded: inspectDanmakuProtobuf,
@@ -35,6 +36,7 @@ abstract final class DmGrpc {
       GrpcUrl.dmView,
       DmViewReq(pid: Int64(aid), oid: Int64(cid), type: 1),
       DmViewReply.fromBuffer,
+      kind: .query,
     );
   }
 }

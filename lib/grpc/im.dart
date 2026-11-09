@@ -33,8 +33,8 @@ abstract final class ImGrpc {
         devId: newUuidV4(),
       ),
       RspSendMsg.fromBuffer,
+      kind: .mutation,
       account: account,
-      retry: false,
     );
   }
 
@@ -46,6 +46,7 @@ abstract final class ImGrpc {
       GrpcUrl.shareList,
       ReqShareList(size: size),
       RspShareList.fromBuffer,
+      kind: .query,
       account: account,
     );
   }
@@ -67,6 +68,7 @@ abstract final class ImGrpc {
         devId: '1',
       ),
       RspSessionMsg.fromBuffer,
+      kind: .query,
       account: account,
     );
   }
@@ -81,6 +83,7 @@ abstract final class ImGrpc {
         paginationParams: PaginationParams(offsets: offset?.entries),
       ),
       SessionMainReply.fromBuffer,
+      kind: .query,
       account: account,
     );
   }
@@ -97,6 +100,7 @@ abstract final class ImGrpc {
         pageType: pageType,
       ),
       SessionSecondaryReply.fromBuffer,
+      kind: .query,
       account: account,
     );
   }
@@ -113,8 +117,8 @@ abstract final class ImGrpc {
         sessionId: sessionId,
       ),
       ClearUnreadReply.fromBuffer,
+      kind: .mutation,
       account: account,
-      retry: false,
     );
   }
 
@@ -130,6 +134,7 @@ abstract final class ImGrpc {
         sessionId: sessionId,
       ),
       SessionUpdateReply.fromBuffer,
+      kind: .mutation,
       account: account,
     );
   }
@@ -146,8 +151,8 @@ abstract final class ImGrpc {
         topTimeMicros: topTimeMicros,
       ),
       PinSessionReply.fromBuffer,
+      kind: .mutation,
       account: account,
-      retry: false,
     );
   }
 
@@ -161,8 +166,8 @@ abstract final class ImGrpc {
         sessionId: sessionId,
       ),
       UnPinSessionReply.fromBuffer,
+      kind: .mutation,
       account: account,
-      retry: false,
     );
   }
 
@@ -176,8 +181,8 @@ abstract final class ImGrpc {
         pageType: pageType,
       ),
       DeleteSessionListReply.fromBuffer,
+      kind: .mutation,
       account: account,
-      retry: false,
     );
   }
 
@@ -191,6 +196,7 @@ abstract final class ImGrpc {
         type: type,
       ),
       GetImSettingsReply.fromBuffer,
+      kind: .query,
       account: account,
     );
   }
@@ -203,8 +209,8 @@ abstract final class ImGrpc {
       GrpcUrl.setImSettings,
       SetImSettingsReq(settings: settings?.entries),
       SetImSettingsReply.fromBuffer,
+      kind: .mutation,
       account: account,
-      retry: false,
     );
   }
 
@@ -215,6 +221,7 @@ abstract final class ImGrpc {
       GrpcUrl.keywordBlockingList,
       KeywordBlockingListReq(),
       KeywordBlockingListReply.fromBuffer,
+      kind: .query,
       account: account,
     );
   }
@@ -227,8 +234,8 @@ abstract final class ImGrpc {
       GrpcUrl.keywordBlockingAdd,
       KeywordBlockingAddReq(keyword: keyword),
       KeywordBlockingAddReply.fromBuffer,
+      kind: .mutation,
       account: account,
-      retry: false,
     );
   }
 
@@ -240,8 +247,8 @@ abstract final class ImGrpc {
       GrpcUrl.keywordBlockingDelete,
       KeywordBlockingDeleteReq(keyword: keyword),
       KeywordBlockingDeleteReply.fromBuffer,
+      kind: .mutation,
       account: account,
-      retry: false,
     );
   }
 
@@ -253,6 +260,7 @@ abstract final class ImGrpc {
       GrpcUrl.getTotalUnread,
       ReqTotalUnread(unreadType: unreadType, showUnfollowList: 1),
       RspTotalUnread.fromBuffer,
+      kind: .query,
       account: account,
     );
   }
@@ -267,6 +275,7 @@ abstract final class ImGrpc {
       GrpcUrl.sessionDetail,
       ReqSessionDetail(talkerId: talkerId, sessionType: sessionType, uid: uid),
       SessionInfo.fromBuffer,
+      kind: .query,
       account: account,
     );
   }

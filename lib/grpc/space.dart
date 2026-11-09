@@ -22,6 +22,7 @@ abstract final class SpaceGrpc {
         filterType: filterType,
       ),
       OpusSpaceFlowResp.fromBuffer,
+      kind: .query,
     );
   }
 
@@ -41,6 +42,7 @@ abstract final class SpaceGrpc {
         ps: ps,
       ),
       SearchArchiveReply.fromBuffer,
+      kind: .query,
       account: account,
     );
   }

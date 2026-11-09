@@ -21,6 +21,7 @@ abstract final class DynGrpc {
       GrpcUrl.dynRed,
       DynRedReq(tabOffset: [TabOffset(tab: 1)]),
       DynRedReply.fromBuffer,
+      kind: .query,
     );
     return res.dataOrNull?.dynRedItem.count.toInt();
   }
@@ -36,6 +37,7 @@ abstract final class DynGrpc {
         oid: Int64(oid),
       ),
       OpusDetailResp.fromBuffer,
+      kind: .query,
     );
   }
 
@@ -56,6 +58,7 @@ abstract final class DynGrpc {
         page: page,
       ),
       LikeListReply.fromBuffer,
+      kind: .query,
     );
   }
 
@@ -77,6 +80,7 @@ abstract final class DynGrpc {
         repostType: repostType,
       ),
       RepostListRsp.fromBuffer,
+      kind: .query,
     );
   }
 }

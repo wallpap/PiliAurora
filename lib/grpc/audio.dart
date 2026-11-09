@@ -30,6 +30,7 @@ abstract final class AudioGrpc {
         ),
       ),
       PlayURLResp.fromBuffer,
+      kind: .query,
     );
   }
 
@@ -68,6 +69,7 @@ abstract final class AudioGrpc {
         pagination: Pagination(pageSize: 20, next: next),
       ),
       PlaylistResp.fromBuffer,
+      kind: .query,
     );
   }
 
@@ -88,6 +90,7 @@ abstract final class AudioGrpc {
         action: type,
       ),
       ThumbUpResp.fromBuffer,
+      kind: .mutation,
     );
   }
 
@@ -106,6 +109,7 @@ abstract final class AudioGrpc {
         ),
       ),
       TripleLikeResp.fromBuffer,
+      kind: .mutation,
     );
   }
 
@@ -128,6 +132,7 @@ abstract final class AudioGrpc {
         thumbUp: thumbUp,
       ),
       CoinAddResp.fromBuffer,
+      kind: .mutation,
     );
   }
 }

@@ -22,10 +22,11 @@
 | 账号请求：`utils/accounts/account_manager/account_mgr.dart` | Cookie 持久化失败通过请求返回专用异常，保留已收到的响应以阻止重放；错误响应保存失败不覆盖原始 HTTP 失败 | `test/utils/accounts/cookie_failure_test.dart`、账号生命周期回归 |
 | HTTP 重试：`http/retry_interceptor.dart` | 默认只重试 GET／HEAD／OPTIONS，gRPC POST 读取保留显式选择；解析和程序错误不重试 | `test/http/retry_interceptor_test.dart` |
 | 设置恢复：`services/settings/settings_backup.dart` | JSON 解析与后续持久化失败统一沿返回的 Future 交付，格式损坏时不修改存储 | `test/services/settings/settings_backup_test.dart` |
+| gRPC：`grpc/grpc_req.dart` 及 audio／dm／dyn／im／reply／space 调用 | 强制声明查询或写入；查询传输失败统一返回 Error；写入禁用重试，传输或响应无法确认时返回 UnknownResult；保留业务拒绝码及可读状态消息；解码错误保留原因，取消消费返回失效并归还额度 | `test/grpc/request_test.dart`、`test/grpc/decode_policy_test.dart`、消息、弹幕、空间搜索和空间列表回归 |
 
 ## 已检查且保留的契约
 
-- 消息 Session、聊天及分享：成功、失败、结果待确认已有独立语义；Session 将传输异常映射为 unknown，切号后拒绝旧结果，分享保留部分成功信息。不能为了统一 HTTP 返回值而吞掉这些传输异常。见[消息模块](../../lib/services/messaging/README.md)。
+- 消息 Session、聊天及分享：成功、失败、结果待确认已有独立语义；Session 保留传输不确定性，切号后拒绝旧结果，分享保留部分成功信息。HTTP 与 gRPC 返回值统一时必须保留 unknown 语义。见[消息模块](../../lib/services/messaging/README.md)。
 - 设置备份与 WebDAV 的领域异常类型：备份格式校验使用 FormatException，配置误用使用 ArgumentError，传输失败使用 WebDavRequestException；保留这些类型、本地替换规则和客户端关闭逻辑。JSON 入口统一异步错误交付，见上表及 `lib/services/settings/` 回归。
 - 诊断导出：已有 DiagnosticExportResult 和带阶段的 DiagnosticExportException，结果拥有临时目录并携带不完整信息，保留原实现。
 - 播放会话对外结果：LoadResult、CommandResult 和 PlaybackShutdownResult 已区分就绪、失效、关闭、失败及清理不完整，保留现有类型。原生输出与设备行为仍按[构建与测试](build-and-test.md)验收。
@@ -36,7 +37,7 @@
 以下范围尚不能视为完成全量检查：
 
 - HTTP 传输、重试和其余业务适配器：逐接口核对响应形状、写入重试及调用方对可空返回值的判断；现有通用捕获的修正不等同于所有 HTTP 接口已验收。
-- gRPC 读取／写入及解码失败：同时核对消息 unknown 语义和弹幕处理额度，不直接将所有传输异常转换成普通失败。
+- gRPC 各领域响应模型及业务调用方：请求、写入不确定性与解码契约已检查；模型字段和业务行为继续随各领域核对。
 - 直播连接的 init／关闭结果、桌面播放进程和启动／退出装配。
 - 其余页面查询、收藏／历史／动态等写入，以及公共工具与模型的返回值和异常消费。
 

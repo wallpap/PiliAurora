@@ -8,13 +8,17 @@ import 'package:pili_aurora/http/constants.dart';
 import 'package:pili_aurora/http/init.dart';
 import 'package:pili_aurora/http/loading_state.dart';
 import 'package:pili_aurora/utils/accounts/account.dart';
+import 'package:pili_aurora/utils/accounts/account_manager/account_mgr.dart';
 import 'package:pili_aurora/services/diagnostics/diagnostics.dart';
 import 'package:pili_aurora/services/danmaku/work_quota.dart';
 import 'package:pili_aurora/pages/danmaku/element_size.dart';
 import 'package:archive/archive.dart';
 import 'package:dio/dio.dart';
-import 'package:flutter/foundation.dart' show kDebugMode, compute;
+import 'package:flutter/foundation.dart' show compute;
 import 'package:protobuf/protobuf.dart' show GeneratedMessage;
+
+/// 传输都使用 POST，必须由调用方声明是否写入，不能按账号或 HTTP 方法推断。
+enum GrpcCallKind { query, mutation }
 
 /// 输出在首次展开前按获配上限分配；gzip 尾部长度仅用于预约，
 /// 实际解压仍逐块核对，损坏或伪造的长度无法扩大工作集。
@@ -64,7 +68,7 @@ abstract final class GrpcReq {
       throw const FormatException('gRPC 帧头无效');
     }
     final length = ByteData.sublistView(data, 1, 5).getInt32(0, Endian.big);
-    if (length < 0 || length > data.length - 5) {
+    if (length < 0 || length != data.length - 5) {
       throw const FormatException('gRPC 帧长度越界');
     }
 
@@ -105,8 +109,15 @@ abstract final class GrpcReq {
       }
       final grpcResponse = args.$2(data);
       return (Success(grpcResponse), storage);
-    } catch (e) {
-      return (Error(e.toString()), 0);
+    } catch (e, s) {
+      return (
+        Error(
+          e is DanmakuWorkTooLarge ? '弹幕响应超过处理预算' : '响应数据解析失败，请重试',
+          cause: e,
+          stackTrace: s,
+        ),
+        0,
+      );
     }
   }
 
@@ -114,35 +125,40 @@ abstract final class GrpcReq {
     String url,
     GeneratedMessage request,
     T Function(Uint8List) grpcParser, {
+    required GrpcCallKind kind,
     bool isolate = false,
     bool danmakuWork = false,
     int Function(Uint8List)? inspectDecoded,
     DanmakuWorkToken? workToken,
     Future<void> Function(T, DanmakuWorkLease)? consume,
     Account? account,
-    bool retry = true,
   }) async {
     final requestOptions = options.copyWith(
       extra: {
         ...?options.extra,
         'account': ?account,
-        'noRetry': !retry,
+        'noRetry': kind == GrpcCallKind.mutation,
       },
     );
-    final response = await (account == null
-        ? Request().post<Uint8List>(
-            HttpString.appBaseUrl + url,
-            data: compressProtobuf(request.writeToBuffer()),
-            options: requestOptions,
-          )
-        : Request.dio.post<Uint8List>(
-            HttpString.appBaseUrl + url,
-            data: compressProtobuf(request.writeToBuffer()),
-            options: requestOptions,
-          ));
-
-    if (response.data case final Map map) {
-      return Error(map['message']);
+    Request();
+    final payload = compressProtobuf(request.writeToBuffer());
+    final Response response;
+    try {
+      response = await Request.dio.post<dynamic>(
+        HttpString.appBaseUrl + url,
+        data: payload,
+        options: requestOptions,
+      );
+    } on DioException catch (error, stack) {
+      if (kind == GrpcCallKind.mutation) {
+        return UnknownResult(cause: error, stackTrace: stack);
+      }
+      return Error(
+        await AccountManager.dioError(error),
+        code: error.response?.statusCode,
+        cause: error,
+        stackTrace: stack,
+      );
     }
 
     if (response.headers.value('Grpc-Status') == '0') {
@@ -199,23 +215,27 @@ abstract final class GrpcReq {
                           admission.elapsedMicroseconds / 1000;
                     }
                     final (decoded, storage) = await decode();
-                    if (!(workToken?.isCancelled ?? false)) {
-                      if (decoded case Success(:final response)) {
-                        final watch = operation == null
-                            ? null
-                            : (Stopwatch()..start());
-                        await consume?.call(
-                          response,
-                          lease.retaining(
-                            // compute 已结束；下一阶段保留主 isolate 的输入与解析结果。
-                            data.length + decodedLimit! + storage,
-                          ),
-                        );
-                        if (watch != null) {
-                          // 包含消费阶段的后台任务等待，不能当作主 isolate CPU 时间。
-                          decodeDetails['consumeMs'] =
-                              watch.elapsedMicroseconds / 1000;
-                        }
+                    if (workToken?.isCancelled ?? false) {
+                      throw const DanmakuWorkCancelled();
+                    }
+                    if (decoded case Success(:final response)) {
+                      final watch = operation == null
+                          ? null
+                          : (Stopwatch()..start());
+                      await consume?.call(
+                        response,
+                        lease.retaining(
+                          // compute 已结束；下一阶段保留主 isolate 的输入与解析结果。
+                          data.length + decodedLimit! + storage,
+                        ),
+                      );
+                      if (workToken?.isCancelled ?? false) {
+                        throw const DanmakuWorkCancelled();
+                      }
+                      if (watch != null) {
+                        // 包含消费阶段的后台任务等待，不能当作主 isolate CPU 时间。
+                        decodeDetails['consumeMs'] =
+                            watch.elapsedMicroseconds / 1000;
                       }
                     }
                     return decoded;
@@ -225,53 +245,103 @@ abstract final class GrpcReq {
                 )
               : (await decode()).$1;
           operation?.finish(error: result is Error ? result.errMsg : null);
+          if (result case Error(:final cause?, :final stackTrace?)) {
+            final failure = cause is DanmakuWorkTooLarge
+                ? result
+                : Error.fromException(cause, stackTrace);
+            return kind == GrpcCallKind.mutation
+                ? UnknownResult(cause: cause, stackTrace: stackTrace)
+                : failure;
+          }
           return result;
-        } on DanmakuWorkBusy {
-          return const Error('弹幕处理等待额度已满');
-        } on DanmakuWorkCancelled {
-          return const Error('弹幕任务已失效');
-        } on DanmakuWorkTooLarge {
-          return const Error('弹幕响应超过处理预算');
+        } on DanmakuWorkBusy catch (error, stack) {
+          operation?.finish(error: '弹幕处理等待额度已满');
+          return Error('弹幕处理等待额度已满', cause: error, stackTrace: stack);
+        } on DanmakuWorkCancelled catch (error, stack) {
+          operation?.finish(error: '弹幕任务已失效');
+          return Error('弹幕任务已失效', cause: error, stackTrace: stack);
+        } on DanmakuWorkTooLarge catch (error, stack) {
+          operation?.finish(error: '弹幕响应超过处理预算');
+          return Error('弹幕响应超过处理预算', cause: error, stackTrace: stack);
         } catch (error) {
-          operation?.finish(error: error);
+          operation?.finish(error: error.runtimeType);
           rethrow;
         } finally {
           operation?.finish();
         }
       } else {
-        return Error('grpc: ${data.runtimeType} is not Uint8List');
+        const cause = FormatException('gRPC 响应不是字节数据');
+        return kind == GrpcCallKind.mutation
+            ? const UnknownResult(cause: cause)
+            : const Error('响应数据解析失败，请重试', cause: cause);
       }
     } else {
+      return _statusFailure(response, kind);
+    }
+  }
+
+  static Error _statusFailure(Response response, GrpcCallKind kind) {
+    final status = int.tryParse(response.headers.value('Grpc-Status') ?? '');
+    int? businessCode;
+    String? message;
+    Object? cause;
+    StackTrace? stack;
+    try {
+      final details = response.headers.value('Grpc-Status-Details-Bin');
+      if (details != null && details.isNotEmpty) {
+        final outer = Status.fromBuffer(
+          base64Decode(base64.normalize(details)),
+        );
+        message = outer.message;
+        final nested = outer.details
+            .where(
+              (detail) =>
+                  detail.typeUrl.isEmpty ||
+                  detail.typeUrl.endsWith('/bilibili.rpc.Status') ||
+                  detail.typeUrl.endsWith('/google.rpc.Status'),
+            )
+            .map((detail) => Status.fromBuffer(detail.value))
+            .toList();
+        businessCode = nested
+            .where((detail) => detail.code != 0)
+            .firstOrNull
+            ?.code;
+        final messages = nested
+            .map((detail) => detail.message)
+            .where((text) => text.trim().isNotEmpty)
+            .toList();
+        message = messages.isNotEmpty ? messages.join('\n') : outer.message;
+      }
+    } catch (error, trace) {
+      cause = error;
+      stack = trace;
+    }
+    if (message == null || message.trim().isEmpty) {
       try {
-        int? code;
-        String msg = response.headers.value('Grpc-Status-Details-Bin') ?? '';
-        if (msg.isNotEmpty) {
-          final padding = -msg.length & 3;
-          if (padding != 0) {
-            msg += '=' * padding;
-          }
-          final msgBytes = base64Decode(msg);
-          try {
-            final grpcMsg = Status.fromBuffer(msgBytes);
-            final details = grpcMsg.details
-                .map((e) => Status.fromBuffer(e.value))
-                .toList();
-            code = details.firstOrNull?.code;
-            // UNKNOWN : -400 : msg
-            final errMsg = details.map((e) => e.message).join('\n');
-            msg = kDebugMode
-                ? 'CODE: ${grpcMsg.code}(${grpcMsg.message})\n'
-                      'MSG: $errMsg'
-                : errMsg;
-          } catch (e) {
-            msg = utf8.decode(msgBytes, allowMalformed: true);
-          }
-        }
-        return Error(msg, code: code);
-      } catch (e) {
-        return Error(e.toString());
+        message = Uri.decodeComponent(
+          response.headers.value('Grpc-Message') ?? '',
+        );
+      } catch (error, trace) {
+        cause ??= error;
+        stack ??= trace;
       }
     }
+    final failure = Error(
+      message?.trim().isNotEmpty == true
+          ? message
+          : status != null && status > 0 && status <= 16
+          ? 'gRPC 请求失败（状态码：$status）'
+          : 'gRPC 响应缺少有效状态，请重试',
+      code: businessCode ?? status,
+      cause: cause,
+      stackTrace: stack,
+    );
+    // 没有明确业务拒绝时，取消、超时、内部及传输故障可能发生在写入完成之后。
+    return kind == GrpcCallKind.mutation &&
+            businessCode == null &&
+            !const {3, 5, 6, 7, 8, 9, 10, 11, 12, 16}.contains(status)
+        ? UnknownResult(cause: failure, stackTrace: stack)
+        : failure;
   }
 
   // static Future playerOnline({

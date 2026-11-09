@@ -62,6 +62,7 @@ abstract final class ReplyGrpc {
         // pagination: offset == null ? null : FeedPagination(offset: offset),
       ),
       MainListReply.fromBuffer,
+      kind: .query,
     );
     if (res case Success(:final response)) {
       // keyword filter
@@ -102,6 +103,7 @@ abstract final class ReplyGrpc {
         pagination: offset == null ? null : FeedPagination(offset: offset),
       ),
       DetailListReply.fromBuffer,
+      kind: .query,
     );
     return res..dataOrNull?.root.replies.removeWhere(needRemoveGrpc);
   }
@@ -123,6 +125,7 @@ abstract final class ReplyGrpc {
         pagination: offset == null ? null : FeedPagination(offset: offset),
       ),
       DialogListReply.fromBuffer,
+      kind: .query,
     );
     return res..dataOrNull?.replies.removeWhere(needRemoveGrpc);
   }
@@ -146,6 +149,7 @@ abstract final class ReplyGrpc {
         keyword: keyword,
       ),
       SearchItemReply.fromBuffer,
+      kind: .query,
     );
   }
 
@@ -162,6 +166,7 @@ abstract final class ReplyGrpc {
         rpids: [rpid],
       ),
       TranslateReplyResp.fromBuffer,
+      kind: .query,
     );
   }
 }

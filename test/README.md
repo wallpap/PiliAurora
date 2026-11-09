@@ -92,6 +92,8 @@ Windows 保活页面内存回归：先执行 `pwsh -File lib/scripts/patch.ps1 w
 
 ## 服务与诊断
 
+`grpc/request_test.dart` 覆盖查询／写入声明、账号绑定前后一致的网络失败结果、音频写入不重试、前台／后台解码错误、业务拒绝码与状态消息、消息 unknown、弹幕消费取消及额度归还。
+
 诊断记录存储及突发写入位于 `services/diagnostics/record_store_test.dart`。
 
 消息业务状态、分享和协议分别由 `messaging_test.dart`、`sharing_test.dart`、`protocol_test.dart` 覆盖，设置和本地偏好另有测试。运行入口与实际服务验证范围见[消息模块](../lib/services/messaging/README.md#验证)。

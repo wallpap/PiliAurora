@@ -24,7 +24,7 @@ class MessagingChange {
   final MsgUnReadType? readType;
 }
 
-const messagingUnknownResultCode = -10001;
+const messagingUnknownResultCode = unknownOperationResultCode;
 const messagingInactiveCode = -10002;
 
 /// 每次主账号切换创建独立所有者；远端操作完成后仍须检查此所有者是否有效。
