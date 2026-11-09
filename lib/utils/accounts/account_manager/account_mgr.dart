@@ -1,6 +1,8 @@
 // edit from package:dio_cookie_manager
 import 'dart:io';
+
 import 'package:pili_aurora/services/diagnostics/redact.dart';
+import 'package:pili_aurora/services/logger.dart';
 
 import 'package:pili_aurora/http/api.dart';
 import 'package:pili_aurora/http/request_failure_policy.dart';
@@ -18,6 +20,15 @@ import 'package:dio/dio.dart';
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 
 final _setCookieReg = RegExp('(?<=)(,)(?=[^;]+?=)');
+
+/// 服务端已经响应，但本地 Cookie 或账号持久化失败；不能因此重放远端写操作。
+class AccountCookiePersistenceException implements Exception {
+  const AccountCookiePersistenceException(this.cause);
+  final Object cause;
+
+  @override
+  String toString() => '账号状态保存失败，请检查存储后重试';
+}
 
 class AccountManager extends Interceptor {
   AccountManager();
@@ -112,22 +123,21 @@ class AccountManager extends Interceptor {
   @override
   void onResponse(Response response, ResponseInterceptorHandler handler) {
     if (_boundRequestAccount(response.requestOptions) case final account?) {
-      final future = _saveCookies(
+      _saveCookies(
         account,
         response,
-      ).whenComplete(() => handler.next(response));
-      assert(() {
-        future.catchError(
-          (Object e, StackTrace s) {
-            throw DioException(
-              requestOptions: response.requestOptions,
-              error: e,
-              stackTrace: s,
-            );
-          },
-        );
-        return true;
-      }());
+      ).then(
+        (_) => handler.next(response),
+        onError: (Object e, StackTrace s) => handler.reject(
+          DioException(
+            requestOptions: response.requestOptions,
+            response: response,
+            error: AccountCookiePersistenceException(e),
+            stackTrace: s,
+          ),
+          true,
+        ),
+      );
     } else {
       return handler.next(response);
     }
@@ -142,17 +152,19 @@ class AccountManager extends Interceptor {
 
     if (options.method != 'POST') toast(err);
 
+    if (err.error is AccountCookiePersistenceException) {
+      return handler.next(err);
+    }
+
     if (err.response case final res?) {
       if (_boundRequestAccount(options) case final account?) {
         _saveCookies(account, res).then(
           (_) => handler.next(err),
-          onError: (Object e, StackTrace s) => handler.next(
-            DioException(
-              requestOptions: options,
-              error: e,
-              stackTrace: s,
-            ),
-          ),
+          onError: (Object e, StackTrace s) {
+            // Cookie 保存是次要失败，保留原始 HTTP 状态与请求错误供调用方判断。
+            logger.w('保存错误响应中的账号状态失败', error: e.runtimeType, stackTrace: s);
+            handler.next(err);
+          },
         );
         return;
       }
@@ -236,6 +248,9 @@ class AccountManager extends Interceptor {
   }
 
   static Future<String> dioError(DioException error) async {
+    if (error.error case AccountCookiePersistenceException failure) {
+      return failure.toString();
+    }
     switch (error.type) {
       case .badCertificate:
         return '证书有误！';
