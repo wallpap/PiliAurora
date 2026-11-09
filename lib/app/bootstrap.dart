@@ -1,3 +1,4 @@
+import 'dart:async' show unawaited;
 import 'dart:io';
 
 import 'package:pili_aurora/plugin/pl_player/playback/presentation_profile.dart';
@@ -172,7 +173,20 @@ Future<void> _bootstrapApplication(
   progress.phase = StartupPhase.requests;
   Request();
   Request.setCookie(syncWebView: !playerWindow);
-  if (!playerWindow) RequestUtils.syncHistoryStatus();
+  if (!playerWindow) {
+    unawaited(
+      RequestUtils.syncHistoryStatus().catchError((
+        Object error,
+        StackTrace stackTrace,
+      ) {
+        logger.w(
+          '启动历史状态同步失败',
+          error: error.runtimeType,
+          stackTrace: stackTrace,
+        );
+      }),
+    );
+  }
   windows.setLocalMuted = (muted) async {
     await PlPlayerController.instance?.setMuted(muted);
   };

@@ -9,6 +9,7 @@ import 'package:pili_aurora/http/browser_ua.dart';
 import 'package:pili_aurora/services/webview_environment.dart';
 import 'package:pili_aurora/models/common/webview_menu_type.dart';
 import 'package:pili_aurora/utils/app_scheme.dart';
+import 'package:pili_aurora/utils/accounts.dart';
 import 'package:pili_aurora/utils/cache_manager.dart';
 import 'package:pili_aurora/utils/extension/string_ext.dart';
 import 'package:pili_aurora/utils/login_utils.dart';
@@ -146,8 +147,24 @@ class _WebviewPageState extends State<WebviewPage> with RouteAware {
         }
         break;
       case WebviewMenuItem.resetCookie:
-        await LoginUtils.setWebCookie();
-        SmartDialog.showToast('设置成功，刷新或重新打开网页');
+        final account = Accounts.main;
+        final route = ModalRoute.of(context);
+        bool isCurrent() =>
+            mounted &&
+            identical(account, Accounts.main) &&
+            route?.isCurrent == true;
+        try {
+          if (await LoginUtils.setWebCookie(account) && isCurrent()) {
+            SmartDialog.showToast('设置成功，刷新或重新打开网页');
+          }
+        } catch (error, stackTrace) {
+          logger.w(
+            '网页 Cookie 同步失败',
+            error: error.runtimeType,
+            stackTrace: stackTrace,
+          );
+          if (isCurrent()) SmartDialog.showToast('网页 Cookie 同步失败，请重试');
+        }
         break;
     }
   }

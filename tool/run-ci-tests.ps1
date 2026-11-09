@@ -48,6 +48,7 @@ $ciTests = @(
     "test/pages/metadata/controller_test.dart",
     "test/pages/metadata/view_test.dart",
     "test/utils/gaia_validation_test.dart",
+    "test/utils/background_sync_results_test.dart",
     "test/pages/fav/operation_results_test.dart",
     "test/pages/fav/management_results_test.dart",
     "test/http/retry_interceptor_test.dart",

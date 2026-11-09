@@ -1,8 +1,10 @@
+import 'dart:async' show unawaited;
 import 'dart:convert';
 import 'dart:io';
 
 import 'package:pili_aurora/services/diagnostics/http_diagnostics.dart';
 import 'package:pili_aurora/services/download/response_adapter.dart';
+import 'package:pili_aurora/services/logger.dart';
 
 import 'package:pili_aurora/http/api.dart';
 import 'package:pili_aurora/http/api_response.dart';
@@ -40,13 +42,39 @@ class Request {
   static void setCookie({bool syncWebView = true}) {
     accountManager = AccountManager();
     dio.interceptors.add(accountManager);
-    Accounts.refresh();
-    if (syncWebView) LoginUtils.setWebCookie();
+    unawaited(
+      Accounts.refresh().catchError((Object error, StackTrace stackTrace) {
+        logger.w('后台账号初始化失败', error: error.runtimeType, stackTrace: stackTrace);
+      }),
+    );
+    if (syncWebView) {
+      unawaited(
+        LoginUtils.setWebCookie().catchError((
+          Object error,
+          StackTrace stackTrace,
+        ) {
+          logger.w(
+            '启动网页 Cookie 同步失败',
+            error: error.runtimeType,
+            stackTrace: stackTrace,
+          );
+          return false;
+        }),
+      );
+    }
 
     if (Accounts.main.isLogin) {
       final coin = Pref.userInfoCache?.money;
       if (coin == null) {
-        setCoin();
+        unawaited(
+          setCoin().catchError((Object error, StackTrace stackTrace) {
+            logger.w(
+              '启动余额同步失败',
+              error: error.runtimeType,
+              stackTrace: stackTrace,
+            );
+          }),
+        );
       } else {
         GlobalData().coins = coin;
       }

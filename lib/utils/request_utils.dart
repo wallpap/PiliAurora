@@ -72,7 +72,7 @@ abstract final class RequestUtils {
       return;
     }
     if (res case Success(:final response)) {
-      GStorage.localCache.put(LocalCacheKey.historyPause, response);
+      await GStorage.localCache.put(LocalCacheKey.historyPause, response);
     }
   }
 
