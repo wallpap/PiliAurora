@@ -31,11 +31,15 @@ class _MatchInfoPageState extends CommonDynPageState<MatchInfoPage> {
   @override
   final MatchInfoController controller = Get.putOrFind(
     MatchInfoController.new,
-    tag: Get.parameters['cid']!,
+    tag: Get.parameters['cid'] ?? '',
   );
 
   @override
   dynamic get arguments => null;
+
+  @override
+  Widget get replyButton =>
+      controller.oid > 0 ? super.replyButton : const SizedBox.shrink();
 
   @override
   Widget build(BuildContext context) {
@@ -64,6 +68,25 @@ class _MatchInfoPageState extends CommonDynPageState<MatchInfoPage> {
   }
 
   Widget _buildInfo(LoadingState<MatchContest?> infoState) {
+    if (infoState is Error) {
+      return SliverToBoxAdapter(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            children: [
+              Text(infoState.toString()),
+              TextButton(
+                onPressed: controller.getMatchInfo,
+                child: const Text('重试赛事详情'),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+    if (infoState is Loading) {
+      return const SliverToBoxAdapter(child: LinearProgressIndicator());
+    }
     if (infoState case Success(:final response?)) {
       try {
         Widget teamInfo(MatchTeam team) {

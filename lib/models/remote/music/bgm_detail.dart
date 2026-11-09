@@ -22,7 +22,7 @@ class MusicDetail {
     required this.musicPublish,
   });
 
-  final String? musicTitle;
+  final String musicTitle;
   final String? originArtist;
   final String? originArtistList;
   final int? mvAid;
@@ -42,8 +42,12 @@ class MusicDetail {
   final String? musicPublish;
 
   factory MusicDetail.fromJson(Map<String, dynamic> json) {
+    final title = json['music_title'];
+    if (title is! String || title.trim().isEmpty) {
+      throw const FormatException('音乐详情缺少有效名称');
+    }
     return MusicDetail(
-      musicTitle: json["music_title"],
+      musicTitle: title,
       originArtist: json["origin_artist"],
       originArtistList: json["origin_artist_list"],
       mvAid: json["mv_aid"],

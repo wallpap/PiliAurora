@@ -30,6 +30,7 @@
 | 关注／粉丝／黑名单／弹幕屏蔽：`http/follow.dart`、`fan.dart`、`black.dart`、`danmaku_block.dart` | 接入上述契约，保留账号和 CSRF 绑定；无效规则列表不伪装为空列表，新增规则验证 ID 和类型；编辑保留已确认删除和添加待确认的区别，领域结果不丢失原因与业务码 | HTTP 响应回归及关注、粉丝、黑名单、弹幕屏蔽页面回归 |
 | 收藏适配器、快速收藏与收藏夹创建／选择：`http/fav.dart`、`common_intro_controller.dart`、`fav_create`、`fav_panel` | 35 个接口接入业务契约，保留笔记和空间列表的可空语义；缺少收藏夹 ID、名称或属性不再假报成功；只将明确 -404 视频判为不可用；请求进入拦截器前固定账号；快速收藏等待真实写入，失败显示本次写入结果，切号拒绝旧查询和后续写入；创建防重复提交、保留失败草稿，空标题不等同加载中，迟到查询不再写入已释放文本框；封面上传 Future 被消费，裁剪取消不提交上传 | `test/http/fav_response_test.dart`、`test/pages/fav/operation_results_test.dart`、收藏详情、空间收藏和订阅回归 |
 | 风控校验：`http/validate.dart`、`models/login/gaia_result.dart`、`RequestUtils.validate` | 挑战参数不再返回可空 Map；验证通过携带非空 ID，明确拒绝与协议／传输不确定性分离；空参数不分发请求，缺字段不进入 WebView 或提交校验；用户取消、失效结果和不完整证明不会触发成功回调，异步消费者完成／失败沿同一 Future 交付 | `test/http/validate_response_test.dart`、`test/utils/gaia_validation_test.dart`、登录回归 |
+| 音乐与赛事：`http/music.dart`、`match.dart`、`pages/music`、`match_info` | 接入业务结果契约，音乐名称必需，封面／创作者／评论和赛事对象保留可选语义；详情重复加载、乱序、关闭和切号不会发布旧结果，旧评论绑定详情快照；音乐缺少评论来源时呈现空状态，评论失败保留已加载详情；赛事详情和评论独立加载，非法路由交付可读错误；点赞显示在途状态、防止重复写入，仅在确认成功后更新当前账号快照，未知计数保持未知 | `test/http/metadata_response_test.dart`、`test/pages/metadata/` |
 
 ## 已检查且保留的契约
 
@@ -53,6 +54,7 @@
 - 其余页面查询、收藏／历史／动态等写入，以及公共工具与模型的返回值和异常消费。
 - 收藏详情、排序／批量迁移、视频自动收藏等其余消费端继续核对；收藏 HTTP 适配器及上述三个页面路径完成，不等于收藏相关全部页面已经验收。
 - 极验 WebView 自身的脚本失败、超时与取消结果仍需独立审查；风控协调回归通过导航替身提供弹窗结果，不启动原生 WebView。
+- 赛事卡片中各可选字段的局部降级继续随模型消费审查；当前批次覆盖接口、详情／评论生命周期和失败重试。
 
 ## 验证范围
 
@@ -72,3 +74,4 @@
 - 收藏接口分支、快速收藏、创建／编辑、收藏夹选择、收藏详情、空间收藏、订阅、关系响应和账号 Cookie 组合回归 94 项通过，定向分析无问题（`build/fav-contract-tests.log`、`build/fav-contract-analyze.log`）。封面选择／裁剪与真实服务端写入仍需设备及登录验收。
 - 上述收藏与账号捕获改动后的完整 CI：1150 项通过。`fvm flutter analyze --no-pub lib test tool` 仍只有上游控件副本的 24 条既有 info，没有 error 或 warning。
 - 风控响应、验证协调和登录组合回归 29 项通过，定向分析无问题（`build/validate-contract-tests.log`、`build/validate-contract-analyze.log`）。原生极验页面及真实平台校验仍需登录设备验收。
+- 音乐／赛事接口、控制器、真实音乐页面、番剧分享与成员信息流组合回归 33 项通过，定向分析无问题（`build/metadata-contract-tests.log`、`build/metadata-contract-analyze.log`）。账号写入和原生评论交互仍需登录设备验收。

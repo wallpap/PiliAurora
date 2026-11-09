@@ -91,7 +91,7 @@ class _MusicRecommendPageState extends State<MusicRecommendPage>
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                info.musicTitle!,
+                info.musicTitle,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: theme.textTheme.titleMedium,

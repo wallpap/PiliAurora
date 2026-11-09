@@ -12,19 +12,17 @@ import 'package:pili_aurora/common/widgets/scaffold/simple_scaffold.dart';
 import 'package:pili_aurora/common/widgets/selection_text.dart';
 import 'package:pili_aurora/common/widgets/sliver/sliver_to_box_adapter.dart';
 import 'package:pili_aurora/http/loading_state.dart';
-import 'package:pili_aurora/http/music.dart';
+import 'package:pili_aurora/common/widgets/loading_widget/loading_widget.dart';
 import 'package:pili_aurora/models/common/image_preview_type.dart';
 import 'package:pili_aurora/models/common/image_type.dart';
 import 'package:pili_aurora/models/remote/music/bgm_detail.dart';
 import 'package:pili_aurora/pages/common/dyn/common_dyn_page.dart';
 import 'package:pili_aurora/pages/music/controller.dart';
 import 'package:pili_aurora/pages/music/video/view.dart';
-import 'package:pili_aurora/utils/accounts.dart';
 import 'package:pili_aurora/utils/android/android_helper.dart';
 import 'package:pili_aurora/utils/date_utils.dart';
 import 'package:pili_aurora/utils/extension/get_ext.dart';
 import 'package:pili_aurora/utils/extension/iterable_ext.dart';
-import 'package:pili_aurora/utils/extension/num_ext.dart';
 import 'package:pili_aurora/utils/extension/string_ext.dart';
 import 'package:pili_aurora/utils/grid.dart';
 import 'package:pili_aurora/utils/num_utils.dart';
@@ -32,7 +30,6 @@ import 'package:pili_aurora/utils/page_utils.dart';
 import 'package:pili_aurora/utils/share_utils.dart';
 import 'package:pili_aurora/utils/utils.dart';
 import 'package:fl_chart/fl_chart.dart';
-import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:get/get.dart';
 import 'package:material_ui/material_ui.dart';
@@ -48,11 +45,15 @@ class _MusicDetailPageState extends CommonDynPageState<MusicDetailPage> {
   @override
   final MusicDetailController controller = Get.putOrFind(
     MusicDetailController.new,
-    tag: Get.parameters['musicId']!,
+    tag: Get.parameters['musicId'] ?? '',
   );
 
   @override
   dynamic get arguments => null;
+
+  @override
+  Widget get replyButton =>
+      controller.canComment ? super.replyButton : const SizedBox.shrink();
 
   @override
   Widget build(BuildContext context) {
@@ -93,7 +94,7 @@ class _MusicDetailPageState extends CommonDynPageState<MusicDetailPage> {
                       height: 36,
                       type: ImageType.avatar,
                     ),
-                    Text(response.musicTitle!),
+                    Text(response.musicTitle),
                   ],
                 ),
               ),
@@ -196,8 +197,13 @@ class _MusicDetailPageState extends CommonDynPageState<MusicDetailPage> {
           body: child,
           fab: _buildBottom(response),
         );
-      default:
-        return const SizedBox.shrink();
+      case Error error:
+        return scrollErrorWidget(
+          errMsg: error.toString(),
+          onReload: controller.getMusicDetail,
+        );
+      case Loading():
+        return m3eLoading;
     }
   });
 
@@ -225,7 +231,7 @@ class _MusicDetailPageState extends CommonDynPageState<MusicDetailPage> {
       required String text,
       int? count,
       bool status = false,
-      required VoidCallback onPressed,
+      required VoidCallback? onPressed,
       IconData? activatedIcon,
     }) {
       final color = status ? primary : outline;
@@ -280,37 +286,20 @@ class _MusicDetailPageState extends CommonDynPageState<MusicDetailPage> {
                   ),
                 ),
                 Expanded(
-                  child: Builder(
-                    builder: (context) => textIconButton(
-                      icon: FontAwesomeIcons.thumbsUp.data,
+                  child: Obx(
+                    () => textIconButton(
+                      icon: controller.updatingWish
+                          ? Icons.hourglass_top
+                          : FontAwesomeIcons.thumbsUp.data,
                       activatedIcon: FontAwesomeIcons.solidThumbsUp.data,
-                      text: '点赞',
-                      count: item.wishCount,
-                      status: item.wishListen ?? false,
-                      onPressed: () async {
-                        if (!Accounts.main.isLogin) {
-                          SmartDialog.showToast('请先登录');
-                          return;
-                        }
-                        final hasLike = item.wishListen ?? false;
-                        final res = await MusicHttp.wishUpdate(
-                          controller.musicId,
-                          hasLike,
-                        );
-                        if (res.isSuccess) {
-                          if (hasLike) {
-                            item.wishCount--;
-                          } else {
-                            item.wishCount++;
-                          }
-                          item.wishListen = !hasLike;
-                          if (context.mounted) {
-                            (context as Element).markNeedsBuild();
-                          }
-                        } else {
-                          res.toast();
-                        }
-                      },
+                      text: controller.updatingWish ? '处理中' : '点赞',
+                      count: controller.updatingWish ? null : item.wishCount,
+                      status:
+                          !controller.updatingWish &&
+                          (item.wishListen ?? false),
+                      onPressed: controller.updatingWish
+                          ? null
+                          : () => controller.toggleWish(item),
                     ),
                   ),
                 ),
@@ -323,7 +312,15 @@ class _MusicDetailPageState extends CommonDynPageState<MusicDetailPage> {
   }
 
   Widget _buildArtist(Artist artist, TextStyle? style) {
-    Widget child = Text('${artist.identity}: ${artist.name}', style: style);
+    final name = artist.name;
+    final mid = artist.mid;
+    final displayName = name ?? '未知创作者';
+    Widget child = Text(
+      artist.identity.isNullOrEmpty
+          ? displayName
+          : '${artist.identity}：$displayName',
+      style: style,
+    );
     if (!artist.face.isNullOrEmpty) {
       child = Row(
         spacing: 2,
@@ -340,12 +337,14 @@ class _MusicDetailPageState extends CommonDynPageState<MusicDetailPage> {
       );
     }
     child = GestureDetector(
-      onTap: artist.mid == null || artist.mid == 0
-          ? () => Utils.copyText(artist.name!)
-          : () => Get.toNamed(
+      onTap: mid != null && mid > 0
+          ? () => Get.toNamed(
               '/member',
-              parameters: {'mid': artist.mid!.toString()},
-            ),
+              parameters: {'mid': mid.toString()},
+            )
+          : name != null && name.isNotEmpty
+          ? () => Utils.copyText(name)
+          : null,
       child: child,
     );
     return child;
@@ -391,6 +390,8 @@ class _MusicDetailPageState extends CommonDynPageState<MusicDetailPage> {
 
   Widget _buildCard(MusicDetail item, double maxWidth) {
     final textTheme = theme.textTheme;
+    final cover = item.mvCover;
+    final coverImage = NetworkImgLayer(src: cover, width: 80, height: 80);
     return SizedBox(
       width: maxWidth,
       child: Card(
@@ -405,17 +406,14 @@ class _MusicDetailPageState extends CommonDynPageState<MusicDetailPage> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   GestureDetector(
-                    onTap: () => PageUtils.imageView(
-                      imgList: [SourceModel(url: item.mvCover!)],
-                    ),
-                    child: fromHero(
-                      tag: item.mvCover!,
-                      child: NetworkImgLayer(
-                        src: item.mvCover,
-                        width: 80,
-                        height: 80,
-                      ),
-                    ),
+                    onTap: cover == null || cover.isEmpty
+                        ? null
+                        : () => PageUtils.imageView(
+                            imgList: [SourceModel(url: cover)],
+                          ),
+                    child: cover == null || cover.isEmpty
+                        ? coverImage
+                        : fromHero(tag: cover, child: coverImage),
                   ),
                   Expanded(
                     child: Column(
@@ -425,10 +423,10 @@ class _MusicDetailPageState extends CommonDynPageState<MusicDetailPage> {
                       children: [
                         GestureDetector(
                           onTap: () => _searchMusic(item),
-                          onLongPress: () => Utils.copyText(item.musicTitle!),
+                          onLongPress: () => Utils.copyText(item.musicTitle),
                           behavior: HitTestBehavior.opaque,
                           child: MarqueeText(
-                            item.musicTitle!,
+                            item.musicTitle,
                             spacing: 30,
                             style: textTheme.titleMedium,
                           ),
@@ -658,11 +656,11 @@ class _MusicDetailPageState extends CommonDynPageState<MusicDetailPage> {
   void _searchMusic(MusicDetail item) {
     if (!Platform.isAndroid ||
         !PiliAndroidHelper.openMusic(
-          item.musicTitle!,
+          item.musicTitle,
           item.originArtist ?? item.originArtistList,
           item.album,
         )) {
-      Utils.copyText(item.musicTitle!);
+      Utils.copyText(item.musicTitle);
     }
   }
 }
