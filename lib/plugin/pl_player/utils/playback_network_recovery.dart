@@ -3,6 +3,7 @@ bool isPlaybackPermissionFailure(String event) =>
 
 /// 只把连接中断和 CDN 临时失效交给重试，HTTP 403 仍按权限错误处理。
 bool isPlaybackNetworkFailure(String event) {
+  if (isPlaybackPermissionFailure(event)) return false;
   final status = RegExp(r'HTTP error (\d{3})\b').firstMatch(event)?.group(1);
   if (status != null) {
     final code = int.parse(status);
@@ -10,6 +11,13 @@ bool isPlaybackNetworkFailure(String event) {
         code == 408 ||
         code == 429 ||
         (code >= 500 && code < 600);
+  }
+
+  if (RegExp(
+    r'^tcp: Failed to resolve hostname [^\r\n]+: (?:No address associated with hostname|Temporary failure in name resolution|Name or service not known|No such host is known)',
+    multiLine: true,
+  ).hasMatch(event)) {
+    return true;
   }
 
   final failedSeek = RegExp(

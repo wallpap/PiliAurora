@@ -2,6 +2,34 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:pili_aurora/plugin/pl_player/utils/playback_network_recovery.dart';
 
 void main() {
+  test('诊断回放：CDN 主机名解析失败属于可限次恢复的网络错误', () {
+    expect(
+      isPlaybackNetworkFailure(
+        'tcp: Failed to resolve hostname cdn.example.test: '
+        'No address associated with hostname',
+      ),
+      isTrue,
+    );
+  });
+
+  test('DNS 组合日志分类保留权限优先并排除解码错误', () {
+    for (final message in [
+      'tcp: Failed to resolve hostname cdn.example.test: Temporary failure in name resolution',
+      'Packet corrupt\ntcp: Failed to resolve hostname cdn.example.test: No address associated with hostname',
+      'tcp: Failed to resolve hostname cdn.example.test: Name or service not known',
+    ]) {
+      expect(isPlaybackNetworkFailure(message), isTrue, reason: message);
+    }
+    for (final message in [
+      'tcp: Failed to resolve hostname cdn.example.test: No address associated with hostname\nhttp: HTTP error 403 Forbidden',
+      'http: HTTP error 503 Service Unavailable\nhttp: HTTP error 403 Forbidden',
+      'av1: Failed to resolve hostname metadata',
+      'tcp: Failed to resolve hostname cdn.example.test: Invalid argument',
+    ]) {
+      expect(isPlaybackNetworkFailure(message), isFalse, reason: message);
+    }
+  });
+
   test('网络故障可恢复，权限、解码与无效 seek 保留各自处理路径', () {
     for (final (expected, events) in [
       (
