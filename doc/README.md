@@ -23,6 +23,7 @@
 | 查找项目术语 | [领域词汇表](development/glossary.md) |
 | 修改消息、私信与分享 | [消息模块](../lib/services/messaging/README.md) |
 | 修改账号请求绑定和 Cookie | [账号拦截器](../lib/utils/accounts/account_manager/README.md) |
+| 核对异常处理、返回类型及逐模块检查范围 | [异常与返回类型检查](development/error-handling-review.md) |
 | 更新依赖或核对来源与许可证 | [第三方依赖](../third_party/README.md) |
 
 [工具入口](../tool/README.md)介绍构建、代码生成和依赖检查；[测试目录](../test/README.md)按模块列出回归入口。

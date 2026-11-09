@@ -13,6 +13,14 @@ $ciTests = @(
     # 架构与账号、数据安全
     "test/architecture/dependency_policy_test.dart",
     "test/architecture/dependency_rules_test.dart",
+    "test/http/loading_state_test.dart",
+    "test/http/retry_interceptor_test.dart",
+    "test/http/login_test.dart",
+    "test/http/search_response_test.dart",
+    "test/http/download_response_test.dart",
+    "test/utils/accounts/cookie_failure_test.dart",
+    "test/utils/image_save_results_test.dart",
+    "test/pages/login/request_lifecycle_test.dart",
     "test/services/messaging/messaging_test.dart",
     "test/services/messaging/sharing_test.dart",
     "test/services/messaging/protocol_test.dart",
@@ -28,6 +36,7 @@ $ciTests = @(
     "test/services/settings/settings_backup_test.dart",
     "test/services/settings/webdav_sync_test.dart",
     "test/services/download/download_service_test.dart",
+    "test/services/download/download_manager_test.dart",
     # 页面退出、音频归属与播放会话
     "test/common/widgets/image/image_lifecycle_test.dart",
     "test/common/widgets/image/cached_image_transition_test.dart",

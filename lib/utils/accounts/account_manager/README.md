@@ -15,6 +15,10 @@
 - Web 响应中的 `Set-Cookie` 写入绑定账号的 CookieJar。3xx 响应含 `Location` 时，也处理解析后的目标 URI，随后调用 `account.onChange()`。
 - 错误响应含 Cookie 时同样尝试保存；流式请求错误直接向后传递。提示逻辑位于 `toast()` 和 `dioError()`。
 
+成功响应的 Cookie 保存失败时，请求 Future 返回包装 `AccountCookiePersistenceException` 的 DioException，保留响应、原始原因和堆栈，不会因此重放远端请求。原始 HTTP 请求已经失败时，Cookie 保存失败只记录类型和位置，调用方仍收到原 HTTP 状态与错误。
+
+自动重试默认只用于 GET、HEAD 和 OPTIONS。gRPC 的 POST 读取通过 `extra['noRetry'] = false` 显式选择重试；普通写请求、明确禁用重试的请求和流式请求不自动重放。解析错误和程序错误也不作为瞬时网络错误重试。回归见 `test/utils/accounts/cookie_failure_test.dart` 和 `test/http/retry_interceptor_test.dart`。
+
 请求层的创建和重试入口见 [`lib/http/init.dart`](../../../http/init.dart)；账号选择规则见 [`api_type.dart`](../api_type.dart)。消息业务在此基础上显式绑定 Session 账号，并检查旧 Session 的查询结果是否仍有效，详见[消息模块](../../../services/messaging/README.md)。
 
 修改认证或响应处理时，应分别检查 Web、App/gRPC、匿名请求和账号切换。问题记录保留接口类型、操作顺序与脱敏错误，移除 Cookie、access key 和完整账号数据。
