@@ -1,9 +1,11 @@
 import 'package:material_ui/material_ui.dart';
 import 'package:get/get.dart';
+import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:pili_aurora/common/widgets/app_popup_menu_item.dart';
 import 'package:pili_aurora/plugin/pl_player/controller.dart';
 import 'package:pili_aurora/services/desktop_playback_layout.dart';
 import 'package:pili_aurora/services/desktop_playback_windows.dart';
+import 'package:pili_aurora/services/logger.dart';
 
 class DesktopPlaybackMenu extends StatelessWidget {
   const DesktopPlaybackMenu({super.key, required this.controller});
@@ -16,21 +18,32 @@ class DesktopPlaybackMenu extends StatelessWidget {
       tooltip: '播放窗口',
       onOpened: () => controller.setControlsMenuOpen(true),
       onCanceled: () => controller.setControlsMenuOpen(false),
-      onSelected: (action) {
+      onSelected: (action) async {
         controller.setControlsMenuOpen(false);
-        switch (action) {
-          case 'open':
-            controller.openDesktopWindow();
-          case 'solo':
-            DesktopPlaybackWindows.instance.solo();
-          case 'grid':
-            DesktopPlaybackWindows.instance.arrange(DesktopPlaybackLayout.grid);
-          case 'cascade':
-            DesktopPlaybackWindows.instance.arrange(
-              DesktopPlaybackLayout.cascade,
-            );
-          case 'close':
-            controller.exitDesktopPip();
+        try {
+          switch (action) {
+            case 'open':
+              await controller.openDesktopWindow();
+            case 'solo':
+              await DesktopPlaybackWindows.instance.solo();
+            case 'grid':
+              await DesktopPlaybackWindows.instance.arrange(
+                DesktopPlaybackLayout.grid,
+              );
+            case 'cascade':
+              await DesktopPlaybackWindows.instance.arrange(
+                DesktopPlaybackLayout.cascade,
+              );
+            case 'close':
+              await controller.exitDesktopPip();
+          }
+        } catch (error, stackTrace) {
+          logger.w(
+            '播放窗口菜单操作失败：$action',
+            error: error.runtimeType,
+            stackTrace: stackTrace,
+          );
+          SmartDialog.showToast('播放窗口操作失败，请重试');
         }
       },
       itemBuilder: (_) => [

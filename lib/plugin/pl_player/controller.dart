@@ -389,7 +389,8 @@ class PlPlayerController
       if (owner != null && owner.isActive && identical(_activeOwner, owner)) {
         await owner.setPlaying(false);
       }
-    } catch (_) {
+    } catch (error, stackTrace) {
+      logger.w('播放窗口启动失败', error: error.runtimeType, stackTrace: stackTrace);
       SmartDialog.showToast('播放窗口启动失败，请重试');
     } finally {
       _openingDesktopWindow.value = false;

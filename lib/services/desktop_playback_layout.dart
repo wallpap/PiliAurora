@@ -6,6 +6,23 @@ enum DesktopPlaybackLayout { grid, cascade }
 
 /// 窗口排列使用显示器工作区的逻辑坐标，包含副屏的负坐标。
 abstract final class DesktopPlaybackGeometry {
+  /// 旧配置与 IPC 都可能携带无效尺寸；调用方决定回退或拒绝初始化。
+  static Rect? fromValues(Object? values) {
+    if (values is! List ||
+        values.length != 4 ||
+        values.any((value) => value is! num || !value.isFinite)) {
+      return null;
+    }
+    final numbers = values.cast<num>();
+    if (numbers[2] <= 0 || numbers[3] <= 0) return null;
+    return Rect.fromLTWH(
+      numbers[0].toDouble(),
+      numbers[1].toDouble(),
+      numbers[2].toDouble(),
+      numbers[3].toDouble(),
+    );
+  }
+
   static Rect fit(Rect bounds, Rect workArea) {
     final width = bounds.width
         .clamp(

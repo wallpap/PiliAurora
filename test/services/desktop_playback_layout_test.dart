@@ -4,6 +4,24 @@ import 'package:pili_aurora/services/desktop_playback_layout.dart';
 
 void main() {
   const workArea = Rect.fromLTWH(-1920, 40, 1920, 1040);
+  test('尺寸解析拒绝缺失、非有限数值和非正面积，保留副屏负坐标', () {
+    for (final values in [
+      null,
+      'invalid',
+      [1, 2],
+      [1, 2, '640', 400],
+      [1, 2, 0, 400],
+      [1, 2, 640, -1],
+      [double.nan, 2, 640, 400],
+      [1, 2, double.infinity, 400],
+    ]) {
+      expect(DesktopPlaybackGeometry.fromValues(values), isNull);
+    }
+    expect(
+      DesktopPlaybackGeometry.fromValues([-1920, 40, 640, 400]),
+      const Rect.fromLTWH(-1920, 40, 640, 400),
+    );
+  });
   test('网格排列覆盖全部窗口，且保持在副屏工作区内', () {
     for (var count = 1; count <= 12; count++) {
       final bounds = DesktopPlaybackGeometry.arrange(

@@ -64,6 +64,8 @@ fvm flutter test test/services/diagnostics/ test/pages/about/diagnostics_page_te
 
 `pages/live_room/loading_test.dart` 在直播请求持续未返回时检查加载动画、控件、刷新与失败提示；`app/desktop_playback_launch_test.dart` 检查小窗显示不等待播放流就绪。前者使用内存设置和挂起的 HTTP 响应，后者模拟窗口平台调用；实际纹理、声音交接和窗口显示仍需设备验证。
 
+`services/desktop_playback_windows_test.dart` 使用真实回环连接、临时 Hive 和进程替身检查提前退出、握手损坏、超时、连接重试、并发 ID、凭证只使用一次、断连和清理错误交付；`desktop_playback_layout_test.dart` 检查尺寸校验及旧配置回退。原生窗口显示与进程声音交接需设备验收。
+
 `pages/rcmd/` 覆盖首页实际视口容量与字体缩放、页脚留白、连续下载、Web 有界并发与有序去重、合作卡片骨架与渐进揭示、历史位置保留、分页重试，以及刷新、账号切换和退出时的旧查询隔离。时序用例使用模拟延迟，覆盖数据交付；封面下载与解码沿用图片模块的独立验证。
 
 `common/widgets/feed_pagination_test.dart` 检查控制器或快照所有者替换后旧请求不会阻塞新列表、快照修订无需 stream 即可补足视口，也检查 GetX stream 包装重建时同一列表仍保持请求串行。
