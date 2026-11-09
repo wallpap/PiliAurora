@@ -5,9 +5,9 @@ import 'dart:typed_data' show Uint8List;
 
 import 'package:pili_aurora/common/constants.dart';
 import 'package:pili_aurora/http/init.dart';
+import 'package:pili_aurora/http/loading_state.dart';
 import 'package:pili_aurora/utils/cache_manager.dart';
 import 'package:pili_aurora/utils/device_utils.dart';
-import 'package:pili_aurora/utils/extension/file_ext.dart';
 import 'package:pili_aurora/utils/extension/string_ext.dart';
 import 'package:pili_aurora/utils/global_data.dart';
 import 'package:pili_aurora/utils/path_utils.dart';
@@ -93,16 +93,24 @@ abstract final class ImageUtils {
       String videoPath = '$tmpDirPath/$videoName';
 
       final res = await Request().downloadFile(liveUrl.http2https, videoPath);
-      if (res.statusCode != 200) throw '${res.statusCode}';
+      if (res.statusCode != 200) {
+        final data = res.data;
+        throw Error(
+          data is Map && data['message'] is String
+              ? data['message']
+              : '视频下载失败，请重试',
+          code: res.statusCode,
+        );
+      }
 
       if (!silentDownImg) SmartDialog.showLoading(msg: '正在保存');
-      await saveFileImg(
+      final saved = await saveFileImg(
         filePath: videoPath,
         fileName: videoName,
         type: FileType.video,
         needToast: true,
       );
-      return true;
+      return saved?.isSuccess == true;
     } catch (err) {
       SmartDialog.showToast(err.toString());
       return false;
@@ -112,6 +120,10 @@ abstract final class ImageUtils {
   }
 
   static Future<bool> downloadImg(List<String> imgList) async {
+    if (imgList.isEmpty) {
+      SmartDialog.showToast('没有可保存的图片');
+      return false;
+    }
     if (PlatformUtils.isMobile && !await checkPermissionDependOnSdkInt()) {
       return false;
     }
@@ -127,7 +139,7 @@ abstract final class ImageUtils {
       // 下载结果属于共享缓存，部分失败时不删除已成功的文件。
       final result = await Future.wait(futures, eagerError: true);
       if (PlatformUtils.isMobile) {
-        await SaverGallery.saveFiles([
+        final saved = await SaverGallery.saveFiles([
           for (final (file, name) in result)
             SaveFileData(
               filePath: file.path,
@@ -135,6 +147,10 @@ abstract final class ImageUtils {
               albumPath: _albumPath,
             ),
         ], skipIfExists: false);
+        if (!saved.isSuccess) {
+          SmartDialog.showToast('保存失败，${saved.errorMessage ?? '请重试'}');
+          return false;
+        }
       } else {
         final dst = await FilePicker.getDirectoryPath();
         if (dst == null) {
@@ -142,8 +158,7 @@ abstract final class ImageUtils {
           return false;
         }
         await Future.wait([
-          for (final (src, name) in result)
-            src.moveOrCopy(path.join(dst, name)),
+          for (final (src, name) in result) src.copy(path.join(dst, name)),
         ]);
       }
       SmartDialog.showToast(' 已保存 ');
@@ -255,37 +270,39 @@ abstract final class ImageUtils {
     fileName += '.$ext';
     if (PlatformUtils.isMobile) {
       if (showLoading) SmartDialog.showLoading(msg: '正在保存');
-      res = await SaverGallery.saveImage(
-        bytes,
-        fileName: fileName,
-        albumPath: _albumPath,
-        skipIfExists: false,
-      );
-      SmartDialog.dismiss();
+      try {
+        res = await SaverGallery.saveImage(
+          bytes,
+          fileName: fileName,
+          albumPath: _albumPath,
+          skipIfExists: false,
+        );
+      } finally {
+        if (showLoading) SmartDialog.dismiss(status: .loading);
+      }
       if (res.isSuccess) {
         SmartDialog.showToast(' 已保存 ');
       } else {
         SmartDialog.showToast('保存失败，${res.errorMessage}');
       }
     } else {
-      SmartDialog.dismiss();
       final savePath = await FilePicker.saveFile(
         type: FileType.image,
         fileName: fileName,
-        bytes: Uint8List(0),
+        bytes: bytes,
       );
       if (savePath == null) {
         SmartDialog.showToast("取消保存");
         return null;
       }
-      await File(savePath.toFilePath()).writeAsBytes(bytes);
       SmartDialog.showToast(' 已保存 ');
       res = SaveResult(true, null);
     }
     return res;
   }
 
-  static Future<void> saveFileImg({
+  /// 返回保存结果；用户取消选择时返回 null，文件缺失返回明确的失败结果。
+  static Future<SaveResult?> saveFileImg({
     required String filePath,
     required String fileName,
     FileType type = FileType.image,
@@ -294,7 +311,7 @@ abstract final class ImageUtils {
     final file = File(filePath);
     if (!file.existsSync()) {
       SmartDialog.showToast("文件不存在");
-      return;
+      return SaveResult(false, '文件不存在');
     }
     SaveResult? res;
     if (PlatformUtils.isMobile) {
@@ -308,13 +325,12 @@ abstract final class ImageUtils {
       final savePath = await FilePicker.saveFile(
         type: type,
         fileName: fileName,
-        bytes: Uint8List(0),
+        bytes: await file.readAsBytes(),
       );
       if (savePath == null) {
         SmartDialog.showToast("取消保存");
-        return;
+        return null;
       }
-      await file.moveOrCopy(savePath.toFilePath());
       res = SaveResult(true, null);
     }
     if (needToast) {
@@ -324,5 +340,6 @@ abstract final class ImageUtils {
         SmartDialog.showToast('保存失败，${res.errorMessage}');
       }
     }
+    return res;
   }
 }
