@@ -5,6 +5,7 @@ import 'package:pili_aurora/services/diagnostics/http_diagnostics.dart';
 import 'package:pili_aurora/services/download/response_adapter.dart';
 
 import 'package:pili_aurora/http/api.dart';
+import 'package:pili_aurora/http/api_response.dart';
 import 'package:pili_aurora/http/constants.dart';
 import 'package:pili_aurora/http/loading_state.dart';
 import 'package:pili_aurora/http/retry_interceptor.dart';
@@ -205,6 +206,54 @@ class Request {
       ..options.validateStatus = (int? status) {
         return status != null && status >= 200 && status < 300;
       };
+  }
+
+  /// 领域接口显式声明查询或写入，解析和传输失败均沿返回结果交付。
+  /// 特殊 HTTP 方法可通过 options.method 指定；写入始终关闭自动重试。
+  Future<LoadingState<T>> requestApi<T>(
+    String url, {
+    required ApiCallKind kind,
+    required ApiResponseDecoder<T> decode,
+    Object? data,
+    Map<String, dynamic>? queryParameters,
+    Options? options,
+    CancelToken? cancelToken,
+    Map<int, String> errorMessages = const {},
+  }) async {
+    if (cancelToken?.isCancelled ?? false) {
+      final error = cancelToken!.cancelError;
+      return Error('请求已取消', cause: error, stackTrace: error?.stackTrace);
+    }
+    final requestOptions = (options ?? Options()).copyWith(
+      method: options?.method ?? (kind == ApiCallKind.query ? 'GET' : 'POST'),
+      extra: {
+        ...?options?.extra,
+        'noRetry':
+            kind == ApiCallKind.mutation || options?.extra?['noRetry'] == true,
+      },
+    );
+    try {
+      final response = await dio.request<dynamic>(
+        url,
+        data: data,
+        queryParameters: queryParameters,
+        options: requestOptions,
+        cancelToken: cancelToken,
+      );
+      return decodeApiResponse(
+        response,
+        kind: kind,
+        decode: decode,
+        errorMessages: errorMessages,
+      );
+    } on DioException catch (error, stackTrace) {
+      return decodeApiException(
+        error,
+        stackTrace,
+        kind: kind,
+        errorMessages: errorMessages,
+      );
+    }
   }
 
   /*

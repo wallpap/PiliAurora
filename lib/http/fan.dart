@@ -1,4 +1,5 @@
 import 'package:pili_aurora/http/api.dart';
+import 'package:pili_aurora/http/api_response.dart';
 import 'package:pili_aurora/http/error_msg.dart';
 import 'package:pili_aurora/http/init.dart';
 import 'package:pili_aurora/http/loading_state.dart';
@@ -14,8 +15,11 @@ abstract final class FanHttp {
     String? orderType,
     required Account account,
   }) async {
-    final res = await Request().get(
+    return await Request().requestApi(
       Api.fans,
+      kind: ApiCallKind.query,
+      decode: (body) => FollowData.fromJson(body['data']),
+      errorMessages: errorMsg,
       options: Options(extra: {'account': account}),
       queryParameters: {
         'vmid': vmid,
@@ -25,10 +29,5 @@ abstract final class FanHttp {
         'order_type': orderType,
       },
     );
-    if (res.data['code'] == 0) {
-      return Success(FollowData.fromJson(res.data['data']));
-    } else {
-      return Error(errorMsg[res.data['code']] ?? res.data['message']);
-    }
   }
 }

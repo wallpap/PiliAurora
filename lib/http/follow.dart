@@ -1,4 +1,5 @@
 import 'package:pili_aurora/http/api.dart';
+import 'package:pili_aurora/http/api_response.dart';
 import 'package:pili_aurora/http/error_msg.dart';
 import 'package:pili_aurora/http/init.dart';
 import 'package:pili_aurora/http/loading_state.dart';
@@ -14,8 +15,11 @@ abstract final class FollowHttp {
     int ps = 20,
     String orderType = '', // ''=>最近关注，'attention'=>最常访问
   }) async {
-    final res = await Request().get(
+    return await Request().requestApi(
       Api.followings,
+      kind: ApiCallKind.query,
+      decode: (body) => FollowData.fromJson(body['data']),
+      errorMessages: errorMsg,
       options: Options(extra: {'account': account}),
       queryParameters: {
         'vmid': vmid,
@@ -25,19 +29,16 @@ abstract final class FollowHttp {
         'order_type': orderType,
       },
     );
-    if (res.data['code'] == 0) {
-      return Success(FollowData.fromJson(res.data['data']));
-    } else {
-      return Error(errorMsg[res.data['code']] ?? res.data['message']);
-    }
   }
 
   static Future<LoadingState<void>> sortFollowTag({
     required Account account,
     required String tagids,
   }) async {
-    final res = await Request().post(
+    return await Request().requestApi<void>(
       Api.sortFollowTag,
+      kind: ApiCallKind.mutation,
+      decode: (_) {},
       queryParameters: {
         'x-bili-device-req-json':
             '{"platform":"web","device":"pc","spmid":"333.1387"}',
@@ -51,10 +52,5 @@ abstract final class FollowHttp {
         contentType: Headers.formUrlEncodedContentType,
       ),
     );
-    if (res.data['code'] == 0) {
-      return const Success(null);
-    } else {
-      return Error(res.data['message']);
-    }
   }
 }

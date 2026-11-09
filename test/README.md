@@ -58,6 +58,8 @@ fvm flutter test test/services/diagnostics/ test/pages/about/diagnostics_page_te
 
 `app/startup_test.dart` 和 `app/startup_failure_test.dart` 检查启动阶段、原始原因和堆栈保留，以及存储未就绪时的错误页、按需复制和关闭事件；`app/platform_setup_test.dart` 在 Windows 通过模拟通道检查初始化等待窗口显示与聚焦，并沿同一个 Future 交付窗口失败。真实进程退出码和设备窗口行为需另行验收。
 
+`http/api_response_test.dart` 和 `http/relationship_response_test.dart` 检查业务码、损坏响应、领域空数据、原始异常和写入待确认；同时检查操作语义对应的重试策略、未分发取消、账号／CSRF 和屏蔽规则 ID。弹幕屏蔽页面另检查删除已确认但添加待确认时保留部分成功与待确认类型。
+
 `utils/image_save_results_test.dart` 检查取消保存不误报成功、选择器收到真实字节、保存结果和共享缓存文件保留。Windows 文件选择使用模拟 adapter；Android 图库写入与权限需目标设备验收。
 
 `pages/video/danmaku_pool_test.dart` 检查弹幕列表刷新、个人点赞状态恢复与取消点赞。挂起接口响应时检查首帧及慢响应期间的加载占位，另覆盖响应缺失、网络异常、查询重试不提交点赞，以及切换弹幕后迟到结果的隔离。

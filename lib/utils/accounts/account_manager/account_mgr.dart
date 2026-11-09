@@ -13,9 +13,7 @@ import 'package:pili_aurora/utils/accounts/account.dart';
 import 'package:pili_aurora/utils/accounts/api_type.dart';
 import 'package:pili_aurora/utils/app_sign.dart';
 import 'package:pili_aurora/utils/extension/string_ext.dart';
-import 'package:pili_aurora/utils/platform_utils.dart';
 import 'package:pili_aurora/utils/storage_pref.dart';
-import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 
@@ -269,19 +267,9 @@ class AccountManager extends Interceptor {
       case .transformTimeout:
         return '转换响应数据超时！';
       case .unknown:
-        String desc;
-        try {
-          desc = PlatformUtils.isMobile
-              ? (await Connectivity().checkConnectivity()).first.desc
-              : '';
-        } catch (_) {
-          desc = '';
-        }
-        return '$desc网络异常 ${DiagnosticRedactor.text(error.error)}';
+        return error.error is FormatException
+            ? '响应数据解析失败，请重试'
+            : '网络异常，请检查网络后重试';
     }
   }
-}
-
-extension _ConnectivityResultExt on ConnectivityResult {
-  String get desc => const ['蓝牙', 'Wi-Fi', '局域', '流量', '无', '代理', '其他'][index];
 }

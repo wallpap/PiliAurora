@@ -1,4 +1,5 @@
 import 'package:pili_aurora/http/api.dart';
+import 'package:pili_aurora/http/api_response.dart';
 import 'package:pili_aurora/http/init.dart';
 import 'package:pili_aurora/http/loading_state.dart';
 import 'package:pili_aurora/models/remote/blacklist/data.dart';
@@ -11,8 +12,10 @@ abstract final class BlackHttp {
     int ps = 50,
     required Account account,
   }) async {
-    final res = await Request().get(
+    return await Request().requestApi(
       Api.blackLst,
+      kind: ApiCallKind.query,
+      decode: (body) => BlackListData.fromJson(body['data']),
       queryParameters: {
         'pn': pn,
         'ps': ps,
@@ -22,10 +25,5 @@ abstract final class BlackHttp {
       },
       options: Options(extra: {'account': account}),
     );
-    if (res.data['code'] == 0) {
-      return Success(BlackListData.fromJson(res.data['data']));
-    } else {
-      return Error(res.data['message']);
-    }
   }
 }

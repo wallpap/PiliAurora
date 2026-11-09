@@ -67,8 +67,8 @@ class DanmakuBlockNotifier extends Notifier<DanmakuBlockState> {
     LoadingState<DanmakuBlockDataModel> result;
     try {
       result = await DanmakuFilterHttp.danmakuFilter(account: account);
-    } catch (_) {
-      result = const Error('加载失败，请重试');
+    } catch (error, stackTrace) {
+      result = Error.fromException(error, stackTrace);
     }
     if (!_isCurrent(owner) || version != _queryVersion) return;
     state = switch (result) {
@@ -148,15 +148,33 @@ class DanmakuBlockNotifier extends Notifier<DanmakuBlockState> {
             ),
             response,
           ]);
-        } else {
+        } else if (result is Error) {
+          if (removeId == null) return result;
+          if (result is UnknownResult) {
+            return UnknownResult(
+              message: '原规则已删除，添加结果待确认，请刷新规则后核对',
+              cause: result.cause,
+              stackTrace: result.stackTrace,
+            );
+          }
           return Error(
-            removeId == null ? result.toString() : '原规则已删除，添加失败：$result',
+            '原规则已删除，添加失败：$result',
+            code: result.code,
+            cause: result.cause,
+            stackTrace: result.stackTrace,
           );
+        } else {
+          return const Error('操作未完成，请刷新规则后核对');
         }
       }
       return const Success(null);
-    } catch (_) {
-      return const Error('操作未完成，请刷新规则后核对');
+    } catch (error, stackTrace) {
+      final failure = Error.fromException(error, stackTrace);
+      return UnknownResult(
+        message: '操作结果待确认，请刷新规则后核对',
+        cause: failure.cause,
+        stackTrace: failure.stackTrace,
+      );
     } finally {
       if (_isCurrent(owner)) state = DanmakuBlockState(rules: state.rules);
     }

@@ -159,6 +159,45 @@ void main() {
     expect(container.read(danmakuBlockProvider).rules.data.first, isEmpty);
   });
 
+  test('删除结果待确认时保留原规则，不继续提交添加', () async {
+    await loaded();
+    final editing = container
+        .read(danmakuBlockProvider.notifier)
+        .save(
+          DmBlockType.keyword,
+          'new',
+          replaceId: 1,
+        );
+    await dispatched(2);
+    requests[1].reply.complete({'message': 'missing status'});
+    final result = await editing as UnknownResult;
+    expect(result.cause, isA<FormatException>());
+    expect(requests, hasLength(2));
+    expect(container.read(danmakuBlockProvider).rules.data.first.single.id, 1);
+    expect(container.read(danmakuBlockProvider).isSaving, isFalse);
+  });
+
+  test('删除已确认但添加响应损坏时保留待确认类型和部分成功说明', () async {
+    await loaded();
+    final editing = container
+        .read(danmakuBlockProvider.notifier)
+        .save(
+          DmBlockType.keyword,
+          'new',
+          replaceId: 1,
+        );
+    await dispatched(2);
+    requests[1].reply.complete({'code': 0});
+    await dispatched(3);
+    requests[2].reply.complete({'code': 0, 'data': {}});
+    final result = await editing as UnknownResult;
+    expect(result.cause, isNotNull);
+    expect(result.stackTrace, isNotNull);
+    expect(result.toString(), contains('原规则已删除，添加结果待确认'));
+    expect(container.read(danmakuBlockProvider).rules.data.first, isEmpty);
+    expect(container.read(danmakuBlockProvider).isSaving, isFalse);
+  });
+
   test('写入期间拒绝重复写和刷新；UID 只哈希一次且账号/CSRF 固定', () async {
     await loaded();
     final notifier = container.read(danmakuBlockProvider.notifier);

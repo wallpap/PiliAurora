@@ -26,6 +26,8 @@
 | 直播消息连接：`services/live_stream/live.dart`、`pages/live_room/controller.dart` | init 明确区分成功认证、失败及主动关闭；拒绝认证不启动心跳，等待认证有超时；保留节点真实错误；失败后释放连接与缓存令牌，迟到结果不影响当前房间，已断开的连接可重试 | `test/services/live_stream/`、`test/pages/live_room/controller_test.dart`、直播加载回归 |
 | 启动装配：`app/bootstrap.dart`、`platform_setup.dart` | StartupResult 区分成功与失败，失败保留阶段、原始原因和堆栈；存储不可用时显示独立错误页，用户点击后才复制脱敏摘要；主窗口关闭和播放子进程失败使用非零退出码；日志刷新有界且不覆盖原始失败；窗口显示与聚焦沿初始化 Future 返回，可选刷新率失败保留系统模式 | `test/app/startup_test.dart`、`startup_failure_test.dart`、`platform_setup_test.dart` |
 | 桌面播放进程：`services/desktop_playback_windows.dart`、窗口菜单 | 握手解析与连接异常沿启动 Future 交付，保留进程退出码；失败释放连接后可重试，状态在完整解析后提交；后台消息、管道与清理失败被消费和记录，清理不覆盖主错误；凭证仅使用一次，并发窗口 ID 隔离；关闭等待进程缓存清理并释放服务器，菜单操作显示可读失败 | `test/services/desktop_playback_windows_test.dart`、尺寸、快照、请求和诊断协调回归 |
+| HTTP 业务边界：`init.dart` 的 `requestApi`、`api_response.dart` | 显式区分查询和写入，领域解码器保留实际空数据语义；查询失败保留原因和堆栈，写入的传输或响应不确定性返回 UnknownResult；明确业务拒绝保留业务码；写入强制关闭重试，已取消且未分发的请求返回取消；用户提示不拼接底层异常正文 | `test/http/api_response_test.dart`、`relationship_response_test.dart` |
+| 关注／粉丝／黑名单／弹幕屏蔽：`http/follow.dart`、`fan.dart`、`black.dart`、`danmaku_block.dart` | 接入上述契约，保留账号和 CSRF 绑定；无效规则列表不伪装为空列表，新增规则验证 ID 和类型；编辑保留已确认删除和添加待确认的区别，领域结果不丢失原因与业务码 | HTTP 响应回归及关注、粉丝、黑名单、弹幕屏蔽页面回归 |
 
 ## 已检查且保留的契约
 
@@ -35,6 +37,8 @@
 - 播放会话对外结果：LoadResult、CommandResult 和 PlaybackShutdownResult 已区分就绪、失效、关闭、失败及清理不完整，保留现有类型。原生输出与设备行为仍按[构建与测试](build-and-test.md)验收。
 - 黑名单／合作作者补查：可选查询失败时保留完整缓存或已知作者；null 及短暂失败缓存属于明确的降级语义，保留原实现。
 - 直播协议解析：无效包头返回 null，单包损坏不阻断同帧内后续合法消息；worker 关闭或失败时结束在途 Future，连接持有者处理解析失败并释放连接。保留 `live_packet.dart` 和 `live_packet_decoder.dart` 的既有契约。
+
+`Request.requestApi` 面向 code/message/data 风格的业务接口，调用方声明 `ApiCallKind` 并提供领域解码器；默认查询使用 GET、写入使用 POST，特殊方法通过 `Options.method` 指定。重试策略依操作语义决定，页面负责消费结果与提示。原有 raw `get`／`post` 和二进制协议仍保留，尚未迁移的适配器不能视为已经完成响应契约检查。
 
 ## 后续检查范围
 
@@ -60,3 +64,4 @@
 - 启动结果、独立错误页、平台窗口等待、小窗加载与架构约束组合回归 17 项通过。错误页测试不初始化 Hive，窗口和剪贴板使用模拟通道；真实 Windows 关闭退出码和 Android 系统返回仍需设备验收。
 - 桌面播放进程、尺寸、内存快照、请求与诊断协调组合回归 25 项通过，定向分析无问题；连接使用真实回环 HTTP／WebSocket，进程退出与原生窗口使用替身。真实播放器和窗口交接仍需目标设备验收。
 - 启动和桌面进程修正后的完整 CI：1074 项通过（`build/error-contract-ci-tests.log`）；启动、桌面进程、菜单和关联测试的定向分析无问题。
+- HTTP 业务边界、关注／粉丝／黑名单／弹幕屏蔽、账号 Cookie、登录、gRPC 与消息协议组合回归 108 项通过；新增业务边界与相关源码／测试的定向分析无问题（`build/http-contract-tests.log`、`build/http-contract-analyze.log`）。

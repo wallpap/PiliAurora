@@ -102,9 +102,12 @@ class Error extends LoadingState<Never> implements Exception {
 
 /// 响应未能确认写入结果，调用方应先核对远端状态，不能直接重发。
 class UnknownResult extends Error {
-  const UnknownResult({super.cause, super.stackTrace})
-    : super(
-        '操作结果待确认，请先核对后再操作',
-        code: unknownOperationResultCode,
-      );
+  const UnknownResult({
+    super.cause,
+    super.stackTrace,
+    String message = '操作结果待确认，请先核对后再操作',
+  }) : super(
+         message,
+         code: unknownOperationResultCode,
+       );
 }

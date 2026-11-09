@@ -250,11 +250,16 @@ class FollowTagsNotifier extends AsyncNotifier<FollowTagsState> {
         state = AsyncData(before);
       }
       return result;
-    } catch (_) {
+    } catch (error, stackTrace) {
       if (owner.mounted && identical(account, Accounts.main)) {
         state = AsyncData(before);
       }
-      return const Error('操作未完成，请刷新分组后核对');
+      final failure = Error.fromException(error, stackTrace);
+      return UnknownResult(
+        message: '操作结果待确认，请刷新分组后核对',
+        cause: failure.cause,
+        stackTrace: failure.stackTrace,
+      );
     }
   }
 
