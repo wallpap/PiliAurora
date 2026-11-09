@@ -5,6 +5,7 @@ import 'package:pili_aurora/http/api.dart';
 import 'package:pili_aurora/http/init.dart';
 import 'package:pili_aurora/http/loading_state.dart';
 import 'package:pili_aurora/models/remote/login_devices/data.dart';
+import 'package:pili_aurora/models/login/result.dart';
 import 'package:pili_aurora/utils/accounts/account.dart';
 import 'package:pili_aurora/utils/app_sign.dart';
 import 'package:pili_aurora/utils/login_utils.dart';
@@ -40,45 +41,53 @@ abstract final class LoginHttp {
     AppSign.appSign(params);
     final res = await Request().post(Api.getTVCode, queryParameters: params);
 
-    if (res.data['code'] == 0) {
-      try {
-        final Map<String, dynamic> data = res.data['data'];
-        return Success((authCode: data['auth_code'], url: data['url']));
-      } catch (e, s) {
-        return Error('$e\n\n$s');
-      }
-    } else {
-      return Error(res.data['message']);
-    }
+    final result = LoginResult.fromResponse(
+      res.data,
+      validate: (data) =>
+          data['auth_code'] is String &&
+          (data['auth_code'] as String).isNotEmpty &&
+          data['url'] is String &&
+          (data['url'] as String).isNotEmpty,
+    );
+    return result.isSuccess
+        ? Success((
+            authCode: result.data['auth_code'] as String,
+            url: result.data['url'] as String,
+          ))
+        : Error(result.message, code: result.code);
   }
 
-  static Future codePoll(String authCode) async {
+  static Future<LoginResult> codePoll(String authCode) async {
     final params = {
       'auth_code': authCode,
       'local_id': '0',
     };
     AppSign.appSign(params);
-    final res = await Request().post(Api.qrcodePoll, queryParameters: params);
-    return {
-      'status': res.data['code'] == 0,
-      'code': res.data['code'],
-      'data': res.data['data'],
-      'msg': res.data['message'],
-    };
+    final res = await Request().post(
+      Api.qrcodePoll,
+      queryParameters: params,
+      options: Options(extra: {'noRetry': true}),
+    );
+    return LoginResult.fromResponse(
+      res.data,
+      validate: (data) =>
+          data['cookie_info'] is Map && data['cookie_info']['cookies'] is List,
+    );
   }
 
-  // 获取salt与PubKey
-  static Future getWebKey() async {
+  static Future<LoginResult> getWebKey() async {
     final res = await Request().get(Api.getWebKey);
     //data: {'disable_rcmd': 0, 'local_id': LoginUtils.generateBuvid()});
-    if (res.data['code'] == 0) {
-      return {'status': true, 'data': res.data['data']};
-    } else {
-      return {'status': false, 'data': {}, 'msg': res.data['message']};
-    }
+    return LoginResult.fromResponse(
+      res.data,
+      validate: (data) =>
+          data['key'] is String &&
+          (data['key'] as String).isNotEmpty &&
+          (data['hash'] == null || data['hash'] is String),
+    );
   }
 
-  static Future sendSmsCode({
+  static Future<LoginResult> sendSmsCode({
     required Object cid,
     required String tel,
     String? geeChallenge,
@@ -117,24 +126,22 @@ abstract final class LoginHttp {
       data: data,
       options: Options(
         contentType: Headers.formUrlEncodedContentType,
+        extra: {'noRetry': true},
         headers: headers,
       ),
     );
 
-    if (res.data['code'] == 0 && res.data['data']['recaptcha_url'] == "") {
-      return {'status': true, 'data': res.data['data']};
-    } else {
-      return {
-        'status': false,
-        'code': res.data['code'],
-        'msg': res.data['message'],
-        'data': res.data['data'],
-      };
-    }
+    return LoginResult.fromResponse(
+      res.data,
+      validate: (data) =>
+          data['recaptcha_url'] == '' &&
+          data['captcha_key'] is String &&
+          (data['captcha_key'] as String).isNotEmpty,
+      smsChallenge: true,
+    );
   }
 
-  // app端密码登录
-  static Future loginByPwd({
+  static Future<LoginResult> loginByPwd({
     required String username,
     required String password,
     required String key,
@@ -144,10 +151,16 @@ abstract final class LoginHttp {
     String? geeValidate,
     String? recaptchaToken,
   }) async {
-    dynamic publicKey = RSAKeyParser().parse(key);
-    String passwordEncrypted = Encrypter(
-      RSA(publicKey: publicKey),
-    ).encrypt(salt + password).base64;
+    late final String passwordEncrypted;
+    late final String deviceToken;
+    try {
+      final dynamic publicKey = RSAKeyParser().parse(key);
+      final encrypter = Encrypter(RSA(publicKey: publicKey));
+      passwordEncrypted = encrypter.encrypt(salt + password).base64;
+      deviceToken = encrypter.encrypt(Utils.generateRandomString(16)).base64;
+    } catch (_) {
+      return LoginResult.failure('登录加密失败，请刷新后重试');
+    }
 
     Map<String, String> data = {
       'bili_local_id': deviceId,
@@ -161,11 +174,7 @@ abstract final class LoginHttp {
       'device_name': 'vivo',
       'device_platform': 'Android14vivo',
       'disable_rcmd': '0',
-      'dt': Uri.encodeComponent(
-        Encrypter(
-          RSA(publicKey: publicKey),
-        ).encrypt(Utils.generateRandomString(16)).base64,
-      ),
+      'dt': Uri.encodeComponent(deviceToken),
       'from_pv': 'main.homepage.avatar-nologin.all.click',
       'from_url': Uri.encodeComponent('bilibili://pegasus/promo'),
       'gee_challenge': ?geeChallenge,
@@ -187,36 +196,36 @@ abstract final class LoginHttp {
       data: data,
       options: Options(
         contentType: Headers.formUrlEncodedContentType,
+        extra: {'noRetry': true},
         headers: headers,
         //responseType: ResponseType.plain
       ),
     );
 
-    if (res.data['code'] == 0) {
-      return {
-        'status': true,
-        'data': res.data['data'],
-        'msg': res.data['message'],
-      };
-    } else {
-      return {
-        'status': false,
-        'code': res.data['code'],
-        'msg': res.data['message'],
-        'data': res.data['data'],
-      };
-    }
+    return LoginResult.fromResponse(
+      res.data,
+      validate: (data) => data['status'] == 2
+          ? _hasRiskVerificationUrl(data['url'])
+          : _hasCredentials(data),
+    );
   }
 
-  // app端短信验证码登录
-  static Future loginBySms({
+  static Future<LoginResult> loginBySms({
     required String captchaKey,
     required String tel,
     required String code,
     required Object cid,
     required String key,
   }) async {
-    dynamic publicKey = RSAKeyParser().parse(key);
+    late final String deviceToken;
+    try {
+      final dynamic publicKey = RSAKeyParser().parse(key);
+      deviceToken = Encrypter(RSA(publicKey: publicKey))
+          .encrypt(Utils.generateRandomString(16))
+          .base64;
+    } catch (_) {
+      return LoginResult.failure('登录加密失败，请刷新后重试');
+    }
     Map<String, Object> data = {
       'bili_local_id': deviceId,
       'build': '2001100',
@@ -233,11 +242,7 @@ abstract final class LoginHttp {
       'device_platform': 'Android14vivo',
       // 'device_tourist_id': '',
       'disable_rcmd': '0',
-      'dt': Uri.encodeComponent(
-        Encrypter(
-          RSA(publicKey: publicKey),
-        ).encrypt(Utils.generateRandomString(16)).base64,
-      ),
+      'dt': Uri.encodeComponent(deviceToken),
       'from_pv': 'main.my-information.my-login.0.click',
       'from_url': Uri.encodeComponent('bilibili://user_center/mine'),
       'local_id': buvid,
@@ -253,25 +258,19 @@ abstract final class LoginHttp {
       data: data,
       options: Options(
         contentType: Headers.formUrlEncodedContentType,
+        extra: {'noRetry': true},
         headers: headers,
         //responseType: ResponseType.plain
       ),
     );
 
-    if (res.data['code'] == 0) {
-      return {'status': true, 'data': res.data['data']};
-    } else {
-      return {
-        'status': false,
-        'code': res.data['code'],
-        'msg': res.data['message'],
-        'data': res.data['data'],
-      };
-    }
+    return LoginResult.fromResponse(
+      res.data,
+      validate: _hasCredentials,
+    );
   }
 
-  // 密码登录时风控验证手机
-  static Future safeCenterGetInfo({
+  static Future<LoginResult> safeCenterGetInfo({
     required String tmpCode,
   }) async {
     final res = await Request().get(
@@ -280,36 +279,28 @@ abstract final class LoginHttp {
         'tmp_code': tmpCode,
       },
     );
-    if (res.data['code'] == 0) {
-      return {'status': true, 'data': res.data['data']};
-    } else {
-      return {
-        'status': false,
-        'code': res.data['code'],
-        'msg': res.data['message'],
-        'data': res.data['data'],
-      };
-    }
+    return LoginResult.fromResponse(
+      res.data,
+      validate: (data) => data['account_info'] is Map,
+    );
   }
 
-  // 风控验证手机前的极验验证码
-  static Future preCapture() async {
-    final res = await Request().post(Api.preCapture);
+  static Future<LoginResult> preCapture() async {
+    final res = await Request().post(
+      Api.preCapture,
+      options: Options(extra: {'noRetry': true}),
+    );
 
-    if (res.data['code'] == 0) {
-      return {'status': true, 'data': res.data['data']};
-    } else {
-      return {
-        'status': false,
-        'code': res.data['code'],
-        'msg': res.data['message'],
-        'data': res.data['data'],
-      };
-    }
+    return LoginResult.fromResponse(
+      res.data,
+      validate: (data) =>
+          data['gee_gt'] is String &&
+          data['gee_challenge'] is String &&
+          data['recaptcha_token'] is String,
+    );
   }
 
-  // 风控验证手机：发送短信验证码
-  static Future safeCenterSmsCode({
+  static Future<LoginResult> safeCenterSmsCode({
     String? smsType,
     required String tmpCode,
     String? geeChallenge,
@@ -333,26 +324,22 @@ abstract final class LoginHttp {
       data: data,
       options: Options(
         contentType: Headers.formUrlEncodedContentType,
+        extra: {'noRetry': true},
         headers: {
           "Referer": refererUrl,
         },
       ),
     );
 
-    if (res.data['code'] == 0) {
-      return {'status': true, 'data': res.data['data']};
-    } else {
-      return {
-        'status': false,
-        'code': res.data['code'],
-        'msg': res.data['message'],
-        'data': res.data['data'],
-      };
-    }
+    return LoginResult.fromResponse(
+      res.data,
+      validate: (data) =>
+          data['captcha_key'] is String &&
+          (data['captcha_key'] as String).isNotEmpty,
+    );
   }
 
-  // 风控验证手机：提交短信验证码
-  static Future safeCenterSmsVerify({
+  static Future<LoginResult> safeCenterSmsVerify({
     String? type,
     required String code,
     required String tmpCode,
@@ -375,26 +362,21 @@ abstract final class LoginHttp {
       data: data,
       options: Options(
         contentType: Headers.formUrlEncodedContentType,
+        extra: {'noRetry': true},
         headers: {
           "Referer": refererUrl,
         },
       ),
     );
 
-    if (res.data['code'] == 0) {
-      return {'status': true, 'data': res.data['data']};
-    } else {
-      return {
-        'status': false,
-        'code': res.data['code'],
-        'msg': res.data['message'],
-        'data': res.data['data'],
-      };
-    }
+    return LoginResult.fromResponse(
+      res.data,
+      validate: (data) =>
+          data['code'] is String && (data['code'] as String).isNotEmpty,
+    );
   }
 
-  // 风控验证手机：用oauthCode换回accessToken
-  static Future oauth2AccessToken({
+  static Future<LoginResult> oauth2AccessToken({
     required String code,
   }) async {
     final Map<String, String> data = {
@@ -421,20 +403,28 @@ abstract final class LoginHttp {
       data: data,
       options: Options(
         contentType: Headers.formUrlEncodedContentType,
+        extra: {'noRetry': true},
         headers: headers,
       ),
     );
 
-    if (res.data['code'] == 0) {
-      return {'status': true, 'data': res.data['data']};
-    } else {
-      return {
-        'status': false,
-        'code': res.data['code'],
-        'msg': res.data['message'],
-        'data': res.data['data'],
-      };
-    }
+    return LoginResult.fromResponse(
+      res.data,
+      validate: _hasCredentials,
+    );
+  }
+
+  static bool _hasCredentials(Map<String, dynamic> data) =>
+      data['token_info'] is Map &&
+      data['cookie_info'] is Map &&
+      data['cookie_info']['cookies'] is List;
+
+  static bool _hasRiskVerificationUrl(Object? value) {
+    final uri = value is String ? Uri.tryParse(value) : null;
+    return uri != null &&
+        const ['tmp_token', 'request_id', 'source'].every(
+          (key) => uri.queryParameters[key]?.isNotEmpty == true,
+        );
   }
 
   static Future<LoadingState<void>> logout(LoginAccount account) async {

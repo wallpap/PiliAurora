@@ -202,6 +202,39 @@ SQIDAQAB
     await tester.pump(const Duration(seconds: 4));
   });
 
+  testWidgets('短信响应缺少凭据时不启动冷却并允许重试', (tester) async {
+    await _mount(tester);
+    controller.telTextController.text = '10000000000';
+    final failed = controller.sendSmsCode();
+    await _flush(tester);
+    adapter.json(0, {
+      'code': 0,
+      'data': {'recaptcha_url': ''},
+    });
+    await _flush(tester);
+    await failed;
+    expect(controller.smsSending.value, isFalse);
+    expect(controller.smsSendCooldown.value, 0);
+    expect(controller.captchaKey, isEmpty);
+    expect(controller.smsSendCooldownTimer, isNull);
+
+    final retry = controller.sendSmsCode();
+    await _flush(tester);
+    expect(adapter.pending, hasLength(2));
+    adapter.json(1, {
+      'code': 0,
+      'data': {'recaptcha_url': '', 'captcha_key': 'retry'},
+    });
+    await _flush(tester);
+    await retry;
+    expect(controller.captchaKey, 'retry');
+    expect(controller.smsSendCooldown.value, 60);
+    controller.onDelete();
+    final dismissal = SmartDialog.dismiss(status: SmartStatus.allToast);
+    await tester.pumpAndSettle();
+    await dismissal;
+  });
+
   testWidgets('关闭控制器后短信迟到响应不启动倒计时', (tester) async {
     controller.telTextController.text = '10000000000';
     final request = controller.sendSmsCode();
