@@ -69,7 +69,8 @@ void main() {
           'authorization': 'secret',
         },
       );
-      final archiveFile = await service.exportArchive();
+      final exportResult = await service.exportArchive();
+      final archiveFile = exportResult.file;
       try {
         final archive = ZipDecoder().decodeBytes(
           await archiveFile.readAsBytes(),
@@ -92,7 +93,7 @@ void main() {
         expect(manifest['playerLevel'], 'trace');
         expect(manifest['storage'], contains('player'));
       } finally {
-        await archiveFile.parent.delete(recursive: true);
+        await exportResult.dispose();
       }
       await service.clear();
       expect(await service.files(), isEmpty);

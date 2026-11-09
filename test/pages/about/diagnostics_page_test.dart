@@ -59,6 +59,65 @@ void main() {
     await tester.pump(const Duration(milliseconds: 300));
   });
 
+  testWidgets('clipboard failure is shown without an unhandled exception', (
+    tester,
+  ) async {
+    final diagnostics = Diagnostics();
+    addTearDown(diagnostics.dispose);
+    diagnostics.log(DiagnosticLogLevel.error, 'test', 'copy this');
+    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+      SystemChannels.platform,
+      (call) async {
+        if (call.method == 'Clipboard.setData') {
+          throw PlatformException(code: 'clipboard-unavailable');
+        }
+        return null;
+      },
+    );
+    addTearDown(
+      () => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        SystemChannels.platform,
+        null,
+      ),
+    );
+    await tester.pumpWidget(
+      MaterialApp(home: DiagnosticsPage(diagnostics: diagnostics)),
+    );
+    await tester.tap(find.byTooltip('复制日志'));
+    await tester.pump();
+    expect(find.text('复制日志失败，请重试'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump(const Duration(milliseconds: 300));
+  });
+
+  for (final entry in {
+    DiagnosticExportStage.prepare: '无法创建临时诊断目录，请检查存储空间和权限',
+    DiagnosticExportStage.snapshot: '收集诊断记录失败，请检查子窗口连接和存储空间',
+    DiagnosticExportStage.archive: '诊断包脱敏或压缩失败，请重试',
+  }.entries) {
+    testWidgets(
+      'export ${entry.key.name} failure shows its stage and allows retry',
+      (tester) async {
+        final diagnostics = _FailingExportDiagnostics(entry.key);
+        addTearDown(diagnostics.dispose);
+        await tester.pumpWidget(
+          MaterialApp(home: DiagnosticsPage(diagnostics: diagnostics)),
+        );
+        await tester.tap(find.byTooltip('导出诊断包'));
+        await tester.pump();
+        expect(find.text(entry.value), findsOneWidget);
+        expect(find.textContaining('private-cause'), findsNothing);
+        await tester.tap(find.byTooltip('导出诊断包'));
+        await tester.pump();
+        expect(diagnostics.attempts, 2);
+        expect(tester.takeException(), isNull);
+        await tester.pumpWidget(const SizedBox.shrink());
+        await tester.pump(const Duration(milliseconds: 300));
+      },
+    );
+  }
+
   testWidgets('unified logs filter channels and expand report details', (
     tester,
   ) async {
@@ -122,4 +181,18 @@ void main() {
       await tester.pumpWidget(const SizedBox.shrink());
     },
   );
+}
+
+class _FailingExportDiagnostics extends Diagnostics {
+  _FailingExportDiagnostics(this.stage);
+  final DiagnosticExportStage stage;
+  int attempts = 0;
+
+  @override
+  Future<DiagnosticExportResult> exportArchive() {
+    attempts++;
+    return Future<DiagnosticExportResult>.error(
+      DiagnosticExportException(stage, StateError('private-cause')),
+    );
+  }
 }

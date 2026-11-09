@@ -57,6 +57,39 @@ class DiagnosticLogResult {
   final bool queued;
 }
 
+enum DiagnosticExportStage { prepare, snapshot, archive }
+
+/// 保留失败阶段和原始原因；面向用户的提示不拼接可能包含路径或凭据的异常正文。
+class DiagnosticExportException implements Exception {
+  const DiagnosticExportException(this.stage, this.cause);
+  final DiagnosticExportStage stage;
+  final Object cause;
+
+  @override
+  String toString() =>
+      'DiagnosticExportException(${stage.name}, ${cause.runtimeType})';
+}
+
+/// 本次导出的文件、完整性信息与临时目录所有权属于同一个结果。
+class DiagnosticExportResult {
+  DiagnosticExportResult._(
+    this._directory, {
+    required this.file,
+    required Set<int> skippedChildWindows,
+    required this.skippedRecords,
+  }) : skippedChildWindows = Set.unmodifiable(skippedChildWindows);
+
+  final File file;
+  final Set<int> skippedChildWindows;
+  final int skippedRecords;
+  final Directory _directory;
+
+  /// 保存或分享完成后释放本次导出拥有的临时目录，可重复调用。
+  Future<void> dispose() async {
+    if (_directory.existsSync()) await _directory.delete(recursive: true);
+  }
+}
+
 class _DeferredRecord {
   _DeferredRecord(
     this.store,
@@ -492,13 +525,20 @@ class Diagnostics extends ChangeNotifier with WidgetsBindingObserver {
 
   Future<T> _maintain<T>(Future<T> Function() action) {
     final result = _maintenanceTail.then((_) async {
+      var failed = false;
       try {
         await pauseWrites();
         await pauseChildren?.call();
         return await action();
+      } catch (_) {
+        failed = true;
+        rethrow;
       } finally {
         try {
           await resumeChildren?.call();
+        } catch (_) {
+          // 恢复仍要执行，但不能用它的次生错误替换快照或清除的原始故障。
+          if (!failed) rethrow;
         } finally {
           resumeWrites();
         }
@@ -983,20 +1023,22 @@ class Diagnostics extends ChangeNotifier with WidgetsBindingObserver {
   }
 
   /// 文件快照使用本地副本，脱敏和压缩移到后台 isolate。
-  Future<File> exportArchive() async {
-    final directory = await Directory.systemTemp.createTemp(
-      'pili-diagnostics-',
-    );
+  Future<DiagnosticExportResult> exportArchive() async {
+    Directory? directory;
+    var stage = DiagnosticExportStage.prepare;
     try {
-      final paths = await _maintain(() async {
+      directory = await Directory.systemTemp.createTemp('pili-diagnostics-');
+      final destination = directory;
+      stage = DiagnosticExportStage.snapshot;
+      final snapshot = await _maintain(() async {
         final paths = [
-          ...?await _logs?.snapshot(directory),
-          ...?await _playerLogs?.snapshot(directory),
-          ...?await _trace?.snapshot(directory),
-          ...?await _legacyReports?.snapshot(directory),
-          ...await _childSnapshots(directory),
+          ...?await _logs?.snapshot(destination),
+          ...?await _playerLogs?.snapshot(destination),
+          ...?await _trace?.snapshot(destination),
+          ...?await _legacyReports?.snapshot(destination),
+          ...await _childSnapshots(destination),
         ];
-        final manifest = File('${directory.path}/manifest.json');
+        final manifest = File('${destination.path}/manifest.json');
         await manifest.writeAsString(
           jsonEncode({
             'schema': 2,
@@ -1014,59 +1056,98 @@ class Diagnostics extends ChangeNotifier with WidgetsBindingObserver {
           }),
         );
         paths.add(manifest.path);
-        return paths;
+        // 后台压缩期间可能开始下一次维护，不能让调用方读取可变的全局状态。
+        return (
+          paths: paths,
+          skippedChildWindows: Set<int>.of(skippedChildWindows),
+        );
       });
-      final output = '${directory.path}/diagnostics.zip';
-      await compute(_zip, (paths, output));
-      return File(output);
-    } catch (_) {
+      stage = DiagnosticExportStage.archive;
+      final output = '${destination.path}/diagnostics.zip';
+      final skippedRecords = await compute(_zip, (snapshot.paths, output));
+      return DiagnosticExportResult._(
+        destination,
+        file: File(output),
+        skippedChildWindows: snapshot.skippedChildWindows,
+        skippedRecords: skippedRecords,
+      );
+    } catch (error, stack) {
       try {
-        await directory.delete(recursive: true);
+        await directory?.delete(recursive: true);
       } catch (_) {
         // 清理失败不覆盖真正的导出错误。
       }
-      rethrow;
+      Error.throwWithStackTrace(DiagnosticExportException(stage, error), stack);
     }
   }
 
-  static Future<void> _zip((List<String>, String) args) async {
+  static Future<int> _zip((List<String>, String) args) async {
     final encoder = ZipFileEncoder()..create(args.$2);
+    var skippedRecords = 0;
     try {
       for (final path in args.$1) {
         final file = File(path);
         final sanitized = File('$path.sanitized');
         final sink = sanitized.openWrite();
+        // 提前监听异步写盘错误；pipe/close 仍会把实际失败交给导出调用方。
+        unawaited(
+          sink.done.then<void>((_) {}, onError: (Object _, StackTrace _) {}),
+        );
         try {
-          await for (final line
-              in file
-                  .openRead()
-                  .transform(const Utf8Decoder(allowMalformed: true))
-                  .transform(const LineSplitter())) {
-            try {
-              final value = jsonDecode(line);
-              final cleaned =
-                  value is Map &&
-                      (value.containsKey('channel') ||
-                          value['type'] == 'sample')
-                  ? DiagnosticRedactor.exportRecord(
-                      Map<String, Object?>.from(value),
-                    )
-                  : DiagnosticRedactor.clean(value);
-              sink.writeln(jsonEncode(cleaned));
-            } on FormatException {
-              // 不完整记录不进入导出包，原始本地文件保持原样。
-            }
+          await file
+              .openRead()
+              .transform(const Utf8Decoder(allowMalformed: true))
+              .transform(const LineSplitter())
+              .expand<String>((line) {
+                Object? value;
+                try {
+                  value = jsonDecode(line);
+                } on FormatException {
+                  // 仅跳过解码失败的记录；脱敏及写盘错误必须使导出失败。
+                  skippedRecords++;
+                  return const [];
+                }
+                if (file.uri.pathSegments.last == 'manifest.json' &&
+                    value is Map) {
+                  value = {
+                    ...value,
+                    'export': {'skippedRecords': skippedRecords},
+                  };
+                }
+                final cleaned =
+                    value is Map &&
+                        (value.containsKey('channel') ||
+                            value['type'] == 'sample')
+                    ? DiagnosticRedactor.exportRecord(
+                        Map<String, Object?>.from(value),
+                      )
+                    : DiagnosticRedactor.clean(value);
+                return ['${jsonEncode(cleaned)}\n'];
+              })
+              .transform(utf8.encoder)
+              .pipe(sink);
+        } catch (_) {
+          try {
+            await sink.close();
+          } catch (_) {
+            // 关闭失败不能覆盖读取、脱敏或写盘的原始错误。
           }
-        } finally {
-          await sink.close();
+          rethrow;
         }
         // 仅替换导出临时副本，返回目录中也不遗留原始快照。
         await sanitized.rename(path);
         await encoder.addFile(file);
       }
-    } finally {
-      await encoder.close();
+    } catch (_) {
+      try {
+        await encoder.close();
+      } catch (_) {
+        // 保留归档失败的原始原因。
+      }
+      rethrow;
     }
+    await encoder.close();
+    return skippedRecords;
   }
 
   String snapshotText() =>

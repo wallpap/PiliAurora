@@ -1,5 +1,4 @@
 import 'dart:convert';
-import 'dart:io';
 
 import 'package:flutter/services.dart';
 
@@ -79,10 +78,16 @@ class _DiagnosticsPageState extends State<DiagnosticsPage> {
   Future<void> _export() async {
     if (_exporting) return;
     setState(() => _exporting = true);
-    File? file;
+    DiagnosticExportResult? exported;
+    var failed = false;
     try {
-      file = await service.exportArchive();
-      final skippedWindows = service.skippedChildWindows.length;
+      exported = await service.exportArchive();
+      final warnings = [
+        if (exported.skippedChildWindows.isNotEmpty)
+          '未包含 ${exported.skippedChildWindows.length} 个未连接窗口',
+        if (exported.skippedRecords > 0)
+          '略过 ${exported.skippedRecords} 条损坏或未写完的记录',
+      ].join('，');
       if (!mounted) return;
       if (PlatformUtils.isDesktop) {
         final destination = await FilePicker.saveFile(
@@ -93,30 +98,47 @@ class _DiagnosticsPageState extends State<DiagnosticsPage> {
           allowedExtensions: const ['zip'],
         );
         if (destination != null) {
-          await file.copy(destination.toFilePath());
+          await exported.file.copy(destination.toFilePath());
           if (mounted) {
             _message(
               context,
-              skippedWindows == 0
-                  ? '诊断包已导出'
-                  : '诊断包已导出，未包含 $skippedWindows 个未连接窗口',
+              warnings.isEmpty ? '诊断包已导出' : '诊断包已导出，$warnings',
             );
           }
         }
       } else {
-        await SharePlus.instance.share(ShareParams(files: [XFile(file.path)]));
-        if (mounted && skippedWindows > 0) {
-          _message(context, '诊断包未包含 $skippedWindows 个未连接窗口');
+        final shared = await SharePlus.instance.share(
+          ShareParams(files: [XFile(exported.file.path)]),
+        );
+        if (mounted &&
+            shared.status != ShareResultStatus.dismissed &&
+            warnings.isNotEmpty) {
+          _message(context, '诊断包$warnings');
         }
       }
+    } on DiagnosticExportException catch (error) {
+      failed = true;
+      if (mounted) {
+        _message(context, switch (error.stage) {
+          DiagnosticExportStage.prepare => '无法创建临时诊断目录，请检查存储空间和权限',
+          DiagnosticExportStage.snapshot => '收集诊断记录失败，请检查子窗口连接和存储空间',
+          DiagnosticExportStage.archive => '诊断包脱敏或压缩失败，请重试',
+        });
+      }
     } catch (_) {
-      if (mounted) _message(context, '导出失败，请检查存储空间和目标目录');
+      failed = true;
+      if (mounted) {
+        _message(
+          context,
+          PlatformUtils.isDesktop ? '保存诊断包失败，请检查目标目录和存储空间' : '分享诊断包失败，请重试',
+        );
+      }
     } finally {
       // 只清理本次导出创建的临时目录。
       try {
-        if (file != null) await file.parent.delete(recursive: true);
+        await exported?.dispose();
       } catch (_) {
-        if (mounted) _message(context, '临时诊断包清理失败');
+        if (mounted && !failed) _message(context, '临时诊断包清理失败');
       }
       if (mounted) setState(() => _exporting = false);
     }
@@ -517,14 +539,18 @@ class _LogCardState extends State<_LogCard> {
                   tooltip: '复制日志',
                   icon: const Icon(Icons.copy_outlined, size: 20),
                   onPressed: () async {
-                    await Clipboard.setData(
-                      ClipboardData(
-                        text: const JsonEncoder.withIndent('  ').convert(
-                          DiagnosticRedactor.exportRecord(record),
+                    try {
+                      await Clipboard.setData(
+                        ClipboardData(
+                          text: const JsonEncoder.withIndent('  ').convert(
+                            DiagnosticRedactor.exportRecord(record),
+                          ),
                         ),
-                      ),
-                    );
-                    if (context.mounted) _message(context, '日志已复制');
+                      );
+                      if (context.mounted) _message(context, '日志已复制');
+                    } catch (_) {
+                      if (context.mounted) _message(context, '复制日志失败，请重试');
+                    }
                   },
                 ),
                 IconButton(

@@ -122,7 +122,8 @@ void main() {
         expect(output, contains('fixture-key'));
         expect(output, contains('fixture-stack'));
       }
-      final archiveFile = await diagnostics.exportArchive();
+      final exportResult = await diagnostics.exportArchive();
+      final archiveFile = exportResult.file;
       try {
         final archive = ZipDecoder().decodeBytes(
           await archiveFile.readAsBytes(),
@@ -137,7 +138,7 @@ void main() {
         expect(output, contains('ready'));
         expect(output, contains('500'));
       } finally {
-        await archiveFile.parent.delete(recursive: true);
+        await exportResult.dispose();
       }
     },
   );

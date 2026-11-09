@@ -49,7 +49,8 @@ void main() {
       final content = await File('${directory.path}/runtime.jsonl')
           .readAsString();
       expect(content, contains('fixture-app-token'));
-      final output = await diagnostics.exportArchive();
+      final exportResult = await diagnostics.exportArchive();
+      final output = exportResult.file;
       late String exported;
       try {
         final archive = ZipDecoder().decodeBytes(await output.readAsBytes());
@@ -57,7 +58,7 @@ void main() {
           archive.files.firstWhere((f) => f.name == 'runtime.jsonl').content,
         );
       } finally {
-        await output.parent.delete(recursive: true);
+        await exportResult.dispose();
       }
       expect(exported, contains('<redacted>'));
       expect(exported, isNot(contains('fixture-secret')));
@@ -137,7 +138,8 @@ void main() {
     await diagnostics.initialize(directory: directory, legacyReports: legacy);
     expect(diagnostics.recentLogs.single['message'], 'old error');
     expect(diagnostics.recentLogs.single['stack'], 'old stack');
-    final archiveFile = await diagnostics.exportArchive();
+    final exportResult = await diagnostics.exportArchive();
+    final archiveFile = exportResult.file;
     try {
       final archive = ZipDecoder().decodeBytes(await archiveFile.readAsBytes());
       expect(
@@ -154,7 +156,7 @@ void main() {
       expect(exported, isNot(contains('legacy-secret-fixture')));
       expect(await legacy.readAsString(), contains('legacy-secret-fixture'));
     } finally {
-      await archiveFile.parent.delete(recursive: true);
+      await exportResult.dispose();
     }
     await diagnostics.clear();
     expect(diagnostics.recentLogs, isEmpty);

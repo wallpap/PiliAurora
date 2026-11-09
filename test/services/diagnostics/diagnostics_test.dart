@@ -104,7 +104,8 @@ void main() {
       await Future<void>.delayed(const Duration(milliseconds: 1100));
       await diagnostics.configure(tracing: false);
       await diagnostics.flush();
-      final output = await diagnostics.exportArchive();
+      final exportResult = await diagnostics.exportArchive();
+      final output = exportResult.file;
       late List<dynamic> records;
       try {
         final zip = ZipDecoder().decodeBytes(await output.readAsBytes());
@@ -117,7 +118,7 @@ void main() {
             .map((line) => jsonDecode(line) as Map)
             .toList();
       } finally {
-        await output.parent.delete(recursive: true);
+        await exportResult.dispose();
       }
       final snapshots = records
           .where((r) => r['category'] == 'memory.snapshot')
@@ -271,7 +272,8 @@ void main() {
       final text = await File('${directory.path}/player.jsonl').readAsString();
       expect(text, contains('fixture-device'));
       expect(text, contains('fixture-token'));
-      final output = await diagnostics.exportArchive();
+      final exportResult = await diagnostics.exportArchive();
+      final output = exportResult.file;
       try {
         final zip = ZipDecoder().decodeBytes(await output.readAsBytes());
         final exported = utf8.decode(
@@ -284,7 +286,7 @@ void main() {
           text,
         );
       } finally {
-        await output.parent.delete(recursive: true);
+        await exportResult.dispose();
       }
     },
   );
@@ -340,7 +342,8 @@ void main() {
             .readAsString(),
         contains('rssBytes'),
       );
-      final archive = await diagnostics.exportArchive();
+      final exportResult = await diagnostics.exportArchive();
+      final archive = exportResult.file;
       try {
         final zip = ZipDecoder().decodeBytes(await archive.readAsBytes());
         expect(
@@ -348,7 +351,7 @@ void main() {
           containsAll(['window-2-runtime.jsonl', 'window-2-performance.jsonl']),
         );
       } finally {
-        await archive.parent.delete(recursive: true);
+        await exportResult.dispose();
         child.dispose();
       }
       await diagnostics.clear();
@@ -397,7 +400,8 @@ void main() {
           child.log(DiagnosticLogLevel.error, 'app', 'during snapshot');
         }
         ..resumeChildren = (() => Future<void>.sync(child.resumeWrites));
-      final archive = await diagnostics.exportArchive();
+      final exportResult = await diagnostics.exportArchive();
+      final archive = exportResult.file;
       try {
         final zip = ZipDecoder().decodeBytes(await archive.readAsBytes());
         final text = utf8.decode(
@@ -424,7 +428,7 @@ void main() {
       } finally {
         child.dispose();
         await child.flushLocal();
-        await archive.parent.delete(recursive: true);
+        await exportResult.dispose();
       }
     },
   );
@@ -464,7 +468,13 @@ void main() {
       ..resumeChildren = () async {
         resumes++;
       };
-    await expectLater(diagnostics.exportArchive(), throwsStateError);
+    await expectLater(
+      diagnostics.exportArchive(),
+      _exportFailure(
+        DiagnosticExportStage.snapshot,
+        isA<StateError>(),
+      ),
+    );
     expect(resumes, 1);
     diagnostics.log(DiagnosticLogLevel.error, 'app', 'after failure');
     await diagnostics.flushLocal();
@@ -473,8 +483,52 @@ void main() {
       contains('after failure'),
     );
     diagnostics.pauseChildren = null;
-    final archive = await diagnostics.exportArchive();
-    await archive.parent.delete(recursive: true);
+    final exportResult = await diagnostics.exportArchive();
+    await exportResult.dispose();
+  });
+
+  test('resume failure preserves the original snapshot failure', () async {
+    final primary = StateError('snapshot failed');
+    diagnostics
+      ..pauseChildren = (() => Future<void>.error(primary))
+      ..resumeChildren = (() =>
+          Future<void>.error(StateError('resume failed')));
+    await expectLater(
+      diagnostics.exportArchive(),
+      _exportFailure(
+        DiagnosticExportStage.snapshot,
+        same(primary),
+      ),
+    );
+    diagnostics.log(DiagnosticLogLevel.error, 'app', 'writes resumed');
+    await diagnostics.flush().timeout(const Duration(seconds: 1));
+    expect(
+      await File('${directory.path}/runtime.jsonl').readAsString(),
+      contains('writes resumed'),
+    );
+  });
+
+  test('export manifest reports skipped malformed records', () async {
+    final raw = File('${directory.path}/runtime.jsonl');
+    await raw.writeAsString(
+      '${jsonEncode({'channel': 'runtime', 'message': 'keep this'})}\n'
+      'incomplete record\n',
+    );
+    final exportResult = await diagnostics.exportArchive();
+    final archive = exportResult.file;
+    try {
+      final zip = ZipDecoder().decodeBytes(await archive.readAsBytes());
+      final manifest = jsonDecode(
+        utf8.decode(
+          zip.files.firstWhere((f) => f.name == 'manifest.json').content,
+        ),
+      ) as Map;
+      expect(manifest['export'], containsPair('skippedRecords', 1));
+      expect(exportResult.skippedRecords, 1);
+      expect(await raw.readAsString(), contains('incomplete record'));
+    } finally {
+      await exportResult.dispose();
+    }
   });
 
   test(
@@ -560,7 +614,8 @@ void main() {
       diagnostics.pauseChildren = () async {
         diagnostics.skippedChildWindows.add(9);
       };
-      final archive = await diagnostics.exportArchive();
+      final exportResult = await diagnostics.exportArchive();
+      final archive = exportResult.file;
       try {
         final zip = ZipDecoder().decodeBytes(await archive.readAsBytes());
         expect(
@@ -577,8 +632,104 @@ void main() {
         await diagnostics.clear();
         expect(await file.readAsString(), 'offline record');
       } finally {
-        await archive.parent.delete(recursive: true);
+        await exportResult.dispose();
       }
+    },
+  );
+
+  test(
+    'export result owns stable completeness metadata and temporary files',
+    () async {
+      diagnostics
+        ..pauseChildren = () async {
+          diagnostics.skippedChildWindows.add(9);
+        }
+        ..resumeChildren = () async {
+          diagnostics.skippedChildWindows.clear();
+        }
+        ..log(DiagnosticLogLevel.error, 'app', 'original stays local');
+      final result = await diagnostics.exportArchive();
+      try {
+        expect(diagnostics.skippedChildWindows, isEmpty);
+        expect(result.skippedChildWindows, {9});
+        expect(result.skippedRecords, 0);
+        expect(
+          () => result.skippedChildWindows.add(10),
+          throwsUnsupportedError,
+        );
+        expect(result.file.existsSync(), isTrue);
+      } finally {
+        await result.dispose();
+      }
+      await result.dispose();
+      expect(result.file.parent.existsSync(), isFalse);
+      expect(File('${directory.path}/runtime.jsonl').existsSync(), isTrue);
+    },
+  );
+
+  test('unavailable temporary storage reports the prepare stage', () async {
+    final blocked = File('${directory.path}/blocked-temp');
+    await blocked.writeAsString('keep');
+    await IOOverrides.runZoned(() async {
+      await expectLater(
+        diagnostics.exportArchive(),
+        _exportFailure(
+          DiagnosticExportStage.prepare,
+          isA<FileSystemException>(),
+        ),
+      );
+    }, getSystemTempDirectory: () => Directory(blocked.path));
+    expect(await blocked.readAsString(), 'keep');
+  });
+
+  test('snapshot failure removes raw temporary copies', () async {
+    final temporary = await Directory('${directory.path}/export-temp').create();
+    diagnostics
+      ..log(DiagnosticLogLevel.error, 'app', 'keep original')
+      ..register('app', () => throw StateError('source failed'));
+    await IOOverrides.runZoned(() async {
+      await expectLater(
+        diagnostics.exportArchive(),
+        _exportFailure(
+          DiagnosticExportStage.snapshot,
+          isA<StateError>(),
+        ),
+      );
+    }, getSystemTempDirectory: () => temporary);
+    expect(await temporary.list().toList(), isEmpty);
+    expect(File('${directory.path}/runtime.jsonl').existsSync(), isTrue);
+  });
+
+  test(
+    'archive failure preserves its cause and removes temporary copies',
+    () async {
+      final temporary = await Directory('${directory.path}/export-temp')
+          .create();
+      diagnostics
+        ..log(DiagnosticLogLevel.error, 'app', 'keep original')
+        ..resumeChildren = () async {
+          final snapshot =
+              (await temporary.list().toList()).single as Directory;
+          await File('${snapshot.path}/manifest.json').delete();
+        };
+      await IOOverrides.runZoned(() async {
+        await expectLater(
+          diagnostics.exportArchive(),
+          _exportFailure(
+            DiagnosticExportStage.archive,
+            isA<FileSystemException>(),
+          ),
+        );
+      }, getSystemTempDirectory: () => temporary);
+      expect(await temporary.list().toList(), isEmpty);
+      diagnostics
+        ..resumeChildren = null
+        ..log(DiagnosticLogLevel.error, 'app', 'after archive failure');
+      await diagnostics.flush().timeout(const Duration(seconds: 1));
+      expect(
+        await File('${directory.path}/runtime.jsonl').readAsString(),
+        contains('after archive failure'),
+      );
     },
   );
 
@@ -605,7 +756,13 @@ void main() {
     await failing.initialize(directory: target);
     failing.failNextFlush = true;
     try {
-      await expectLater(failing.exportArchive(), throwsStateError);
+      await expectLater(
+        failing.exportArchive(),
+        _exportFailure(
+          DiagnosticExportStage.snapshot,
+          isA<StateError>(),
+        ),
+      );
       failing.log(DiagnosticLogLevel.error, 'app', 'after failed pause');
       await failing.flush().timeout(const Duration(seconds: 1));
       expect(
@@ -817,7 +974,8 @@ void main() {
       );
       await File('${childDir.path}/status.json')
           .writeAsString(jsonEncode({'token': 'child-status-secret'}));
-      final file = await diagnostics.exportArchive();
+      final exportResult = await diagnostics.exportArchive();
+      final file = exportResult.file;
       try {
         final archive = ZipDecoder().decodeBytes(await file.readAsBytes());
         expect(
@@ -847,7 +1005,7 @@ void main() {
           }
         }
       } finally {
-        await file.parent.delete(recursive: true);
+        await exportResult.dispose();
       }
     },
   );
@@ -864,3 +1022,9 @@ class _FailingPauseDiagnostics extends Diagnostics {
     return super.flushLocal();
   }
 }
+
+Matcher _exportFailure(DiagnosticExportStage stage, Matcher cause) => throwsA(
+  isA<DiagnosticExportException>()
+      .having((error) => error.stage, 'stage', stage)
+      .having((error) => error.cause, 'cause', cause),
+);

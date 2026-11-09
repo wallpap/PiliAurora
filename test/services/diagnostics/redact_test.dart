@@ -183,4 +183,19 @@ void main() {
     final large = List.generate(64, (_) => List.filled(64, 'x' * 10000));
     expect(jsonEncode(DiagnosticRedactor.clean(large)).length, lessThan(65536));
   });
+  test('malformed sample sources remain readable and sanitized', () {
+    for (final sources in [
+      'token=source-secret',
+      ['token=source-secret'],
+      false,
+    ]) {
+      final output = DiagnosticRedactor.exportRecord({
+        'type': 'sample',
+        'state': 'ready',
+        'sources': sources,
+      });
+      expect(output['state'], 'ready');
+      expect(jsonEncode(output), isNot(contains('source-secret')));
+    }
+  });
 }

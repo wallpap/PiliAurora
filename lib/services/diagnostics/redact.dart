@@ -148,16 +148,18 @@ abstract final class DiagnosticRedactor {
   /// sample 的各字段与来源独立限界，不能让内存明细耗尽后续来源预算。
   static Map<String, Object?> exportRecord(Map<String, Object?> record) {
     if (record['type'] == 'sample') {
-      final sources = record['sources'] as Map? ?? const {};
+      final sources = record['sources'] ?? const {};
       return {
         for (final entry in record.entries)
           if (entry.key != 'sources') entry.key: clean(entry.value),
-        'sources': {
-          for (final entry in sources.entries.take(64))
-            ...Map<String, Object?>.from(
-              clean({entry.key: entry.value}) as Map,
-            ),
-        },
+        'sources': sources is Map
+            ? {
+                for (final entry in sources.entries.take(64))
+                  ...Map<String, Object?>.from(
+                    clean({entry.key: entry.value}) as Map,
+                  ),
+              }
+            : clean(sources),
       };
     }
     // 日志顶层、正文和详情分别处理，保留播放器的长日志和内存分块。
