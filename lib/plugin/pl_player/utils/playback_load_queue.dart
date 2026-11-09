@@ -300,7 +300,10 @@ class PlaybackOperationScheduler {
 
   Future<void> _execute<T>(_ScheduledPlaybackOperation<T> task) async {
     try {
-      if (!task.isCurrent(this)) return;
+      if (!task.isCurrent(this)) {
+        if (!task.settled && task.deadline <= now()) _expire(task);
+        return;
+      }
       final value = await task.operation(
         PlaybackOperationContext(
           deadline: task.deadline,
@@ -308,11 +311,19 @@ class PlaybackOperationScheduler {
         ),
       );
       if (!task.settled) {
-        _settle(task, PlaybackOperationResult<T>.completed(value));
+        if (task.deadline <= now()) {
+          _expire(task);
+        } else {
+          _settle(task, PlaybackOperationResult<T>.completed(value));
+        }
       }
     } catch (error) {
       if (!task.settled) {
-        _settle(task, PlaybackOperationResult<T>.failed(error));
+        if (task.deadline <= now()) {
+          _expire(task);
+        } else {
+          _settle(task, PlaybackOperationResult<T>.failed(error));
+        }
       }
     } finally {
       if (identical(_active, task)) _active = null;
