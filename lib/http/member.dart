@@ -446,7 +446,7 @@ abstract final class MemberHttp {
         }
         return Success(data);
       } catch (e, s) {
-        return Error('$e\n\n$s');
+        return Error.fromException(e, s);
       }
     } else {
       return Error(errorMsg[res.data['code']] ?? res.data['message']);

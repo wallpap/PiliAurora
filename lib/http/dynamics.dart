@@ -65,7 +65,7 @@ abstract final class DynamicsHttp {
         }
         return Success(data);
       } catch (e, s) {
-        return Error('$e\n\n$s');
+        return Error.fromException(e, s);
       }
     } else {
       return Error(code == 4101132 ? '没有数据' : res.data['message']);
@@ -268,7 +268,7 @@ abstract final class DynamicsHttp {
       try {
         return Success(DynamicItemModel.fromJson(res.data['data']['item']));
       } catch (e, s) {
-        return Error('$e\n\n$s');
+        return Error.fromException(e, s);
       }
     } else {
       return Error(res.data['message']);

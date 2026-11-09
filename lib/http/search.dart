@@ -13,7 +13,6 @@ import 'package:pili_aurora/models/remote/search/search_trending/data.dart';
 import 'package:pili_aurora/utils/extension/iterable_ext.dart';
 import 'package:pili_aurora/utils/wbi_sign.dart';
 import 'package:dio/dio.dart';
-import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 
 class SearchVerificationRequired extends Error {
@@ -40,11 +39,16 @@ abstract final class SearchHttp {
     if (resData is Map && resData['code'] == 0) {
       try {
         return Success(SearchSuggestModel.fromJson(resData['data']['result']));
-      } catch (_) {
-        if (kDebugMode) rethrow;
+      } catch (e, s) {
+        return Error.fromException(e, s);
       }
     }
-    return const Error(null);
+    return resData is Map
+        ? Error(
+            resData['message'] is String ? resData['message'] : null,
+            code: resData['code'] is int ? resData['code'] : null,
+          )
+        : const Error('搜索服务返回的数据无效，请重试');
   }
 
   // 分类搜索
@@ -97,12 +101,12 @@ abstract final class SearchHttp {
     final resData = res.data;
     if (resData is Map) {
       if (resData['code'] == 0) {
-        final Map<String, dynamic> dataData = resData['data'];
-        final vVoucher = dataData['v_voucher'];
-        if (vVoucher != null) {
-          return SearchVerificationRequired(vVoucher.toString());
-        }
         try {
+          final Map<String, dynamic> dataData = resData['data'];
+          final vVoucher = dataData['v_voucher'];
+          if (vVoucher != null) {
+            return SearchVerificationRequired(vVoucher.toString());
+          }
           return Success(
             switch (searchType) {
               .all => SearchVideoData.fromSearchAll(dataData),
@@ -114,7 +118,7 @@ abstract final class SearchHttp {
             } as R,
           );
         } catch (e, s) {
-          return Error('$e\n\n$s');
+          return Error.fromException(e, s);
         }
       } else {
         return Error(resData['message'], code: resData['code']);

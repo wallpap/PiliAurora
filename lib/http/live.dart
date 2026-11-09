@@ -105,8 +105,8 @@ abstract final class LiveHttp {
     if (res.data['code'] == 0) {
       try {
         return Success(RoomPlayInfoData.fromJson(res.data['data']));
-      } catch (e) {
-        return Error(e.toString());
+      } catch (e, s) {
+        return Error.fromException(e, s);
       }
     } else {
       return Error(res.data['message']);
@@ -147,8 +147,8 @@ abstract final class LiveHttp {
               ?.map((e) => DanmakuMsg.fromPrefetch(e))
               .toList(),
         );
-      } catch (e) {
-        return Error(e.toString());
+      } catch (e, s) {
+        return Error.fromException(e, s);
       }
     } else {
       return Error(res.data['message']);
@@ -168,8 +168,8 @@ abstract final class LiveHttp {
     if (res.data['code'] == 0) {
       try {
         return Success(LiveDmInfoData.fromJson(res.data['data']));
-      } catch (e) {
-        return Error(e.toString());
+      } catch (e, s) {
+        return Error.fromException(e, s);
       }
     } else {
       return Error(res.data['message']);
@@ -669,7 +669,7 @@ abstract final class LiveHttp {
       try {
         return Success(SuperChatData.fromJson(res.data['data'], roomId));
       } catch (e, s) {
-        return Error('$e\n\n$s');
+        return Error.fromException(e, s);
       }
     } else {
       return Error(res.data['message']);
@@ -739,7 +739,7 @@ abstract final class LiveHttp {
       try {
         return Success(LiveContributionRankData.fromJson(res.data['data']));
       } catch (e, s) {
-        return Error('$e\n\n$s');
+        return Error.fromException(e, s);
       }
     } else {
       return Error(res.data['message']);
@@ -763,7 +763,7 @@ abstract final class LiveHttp {
       try {
         return Success(LiveGuardTopListData.fromJson(res.data['data']));
       } catch (e, s) {
-        return Error('$e\n\n$s');
+        return Error.fromException(e, s);
       }
     } else {
       return Error(res.data['message']);

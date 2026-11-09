@@ -280,7 +280,7 @@ abstract final class VideoHttp {
       }
       return Error(_parseVideoErr(res.data['code'], res.data['message']));
     } catch (e, s) {
-      return Error('$e\n\n$s');
+      return Error.fromException(e, s);
     }
   }
 

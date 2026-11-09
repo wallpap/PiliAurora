@@ -144,7 +144,7 @@ final class GrpcConversationAdapter implements ConversationAdapter {
     );
     return switch (result) {
       Success() => const Success(null),
-      Error(:final errMsg, :final code) => Error(errMsg, code: code),
+      Error() => result,
       Loading() => const Error('发送状态未知'),
     };
   }
@@ -177,7 +177,7 @@ final class GrpcConversationAdapter implements ConversationAdapter {
         ),
         _ => const Error('图片服务返回的数据不完整'),
       },
-      Error(:final errMsg, :final code) => Error(errMsg, code: code),
+      Error() => result,
       Loading() => const Error('图片上传状态未知'),
     };
   }
@@ -198,7 +198,7 @@ final class GrpcConversationAdapter implements ConversationAdapter {
     );
     return switch (result) {
       Success() => const Success(null),
-      Error(:final errMsg, :final code) => Error(errMsg, code: code),
+      Error() => result,
       Loading() => const Error('撤回状态未知'),
     };
   }
@@ -251,7 +251,7 @@ final class GrpcConversationAdapter implements ConversationAdapter {
         emotions: response.eInfos.map(_emotionFromProto),
       ),
     ),
-    Error(:final errMsg, :final code) => Error(errMsg, code: code),
+    Error() => response,
     Loading() => const Error('消息读取状态未知'),
   };
 

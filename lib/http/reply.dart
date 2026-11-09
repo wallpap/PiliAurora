@@ -323,8 +323,8 @@ abstract final class ReplyHttp {
     if (res.data['code'] == 0) {
       try {
         return Success(ReplyInteractData.fromJson(res.data['data']));
-      } catch (e) {
-        return Error(e.toString());
+      } catch (e, s) {
+        return Error.fromException(e, s);
       }
     } else {
       return Error(res.data['message']);

@@ -270,7 +270,7 @@ abstract final class MessagingFeedAdapters {
     FeedPage<T> Function(R response) convert,
   ) => switch (state) {
     Success<R>(:final response) => Success(convert(response)),
-    Error(:final errMsg, :final code) => Error(errMsg, code: code),
+    Error() => state,
     Loading() => LoadingState<FeedPage<T>>.loading(),
   };
 
@@ -279,7 +279,7 @@ abstract final class MessagingFeedAdapters {
     LikeFeedPage Function(MsgLikeData response) convert,
   ) => switch (state) {
     Success<MsgLikeData>(:final response) => Success(convert(response)),
-    Error(:final errMsg, :final code) => Error(errMsg, code: code),
+    Error() => state,
     Loading() => LoadingState<LikeFeedPage>.loading(),
   };
 }
