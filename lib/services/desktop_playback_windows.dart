@@ -90,6 +90,9 @@ class DesktopPlaybackWindows with WindowListener {
   bool _closing = false;
   Future<void>? _shutdown;
   Future<void>? _showPlayerWindow;
+  Future<void> _soundChange = Future<void>.value();
+  int _soundVersion = 0;
+  _PlaybackWindow? _soundWindow;
   Future<DesktopPlaybackInitialization>? _playerInitialization;
   Map<String, dynamic>? _diagnosticSettings;
   int _flushSequence = 0;
@@ -251,7 +254,7 @@ class DesktopPlaybackWindows with WindowListener {
       case 'arrange':
         await arrange(DesktopPlaybackLayout.values.byName(message['layout']));
       case 'solo':
-        await _solo(window.id);
+        await _solo(window);
       case 'progress':
         final cid = message['cid'] as int;
         final position = message['position'] as int;
@@ -349,7 +352,7 @@ class DesktopPlaybackWindows with WindowListener {
       unawaited(_release('stdout', () => process.stdout.drain<void>()));
       unawaited(_release('stderr', () => process.stderr.drain<void>()));
       await window.ready.future.timeout(startupTimeout);
-      await _solo(id);
+      await _solo(window);
     } catch (_) {
       if (identical(_windows[id], window)) {
         _windows.remove(id);
@@ -373,8 +376,10 @@ class DesktopPlaybackWindows with WindowListener {
     _PlaybackWindow window,
     Process process,
   ) async {
+    var exited = false;
     try {
       final code = await process.exitCode;
+      exited = true;
       if (!window.ready.isCompleted) {
         window.ready.completeError(
           ProcessException('PiliAurora Player', const [], '播放窗口就绪前退出', code),
@@ -388,6 +393,9 @@ class DesktopPlaybackWindows with WindowListener {
       _reportFailure('exit', error, stackTrace);
     } finally {
       if (identical(_windows[window.id], window)) _windows.remove(window.id);
+      if (exited && _shutdown == null && identical(_soundWindow, window)) {
+        await _release('restoreSound', () => _solo(null));
+      }
       await _release('socket', () async {
         await window.socket?.close().timeout(const Duration(seconds: 3));
       });
@@ -761,13 +769,38 @@ class DesktopPlaybackWindows with WindowListener {
     }
   }
 
-  Future<void> _solo(int? id) async {
-    await setLocalMuted?.call(id != null);
-    for (final window in _windows.values) {
-      window.socket?.add(
-        jsonEncode({'type': 'mute', 'muted': window.id != id}),
-      );
+  Future<void> _solo(_PlaybackWindow? target) async {
+    void ensureTarget() {
+      if (target != null &&
+          (!identical(_windows[target.id], target) ||
+              target.socket?.readyState != WebSocket.open)) {
+        throw StateError('播放窗口连接已关闭');
+      }
     }
+
+    ensureTarget();
+    final version = ++_soundVersion;
+    _soundWindow = target;
+    final change = _soundChange.then((_) async {
+      if (version != _soundVersion || _shutdown != null) return;
+      ensureTarget();
+      await setLocalMuted?.call(target != null);
+      if (version != _soundVersion || _shutdown != null) return;
+      ensureTarget();
+      for (final window in _windows.values) {
+        if (window.socket?.readyState == WebSocket.open) {
+          window.socket!.add(
+            jsonEncode({'type': 'mute', 'muted': !identical(window, target)}),
+          );
+        }
+      }
+    });
+    // 当前请求仍向调用方交付异常，后续声音切换继续使用未失败的队尾。
+    _soundChange = change.then<void>(
+      (_) {},
+      onError: (Object _, StackTrace _) {},
+    );
+    await change;
   }
 
   static List<double> _rectValues(Rect rect) => [

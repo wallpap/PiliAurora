@@ -146,6 +146,8 @@ Windows 保活页面内存回归：先执行 `pwsh -File lib/scripts/patch.ps1 w
 
 `services/app_exit_test.dart` 检查退出合并、必要清理等待、独立步骤失败继续、实际退出失败后的重试，以及诊断超时与迟到异常。`services/audio_session_initialization_test.dart` 检查音频配置的单次共享初始化、激活等待、原始失败与重试；真实插件配置和进程退出需设备验证。
 
+`plugin/pl_player/playback/controller_recovery_test.dart` 的音频焦点用例检查等待、拒绝／异常、意图覆盖、串行交接与旧 owner 失效；`services/desktop_playback_windows_test.dart` 的声音归属用例检查异常退出恢复、IPC 断连、退出状态失败、目标失效和切换失败后的继续操作。进程和音频使用替身，真实输出仍需设备验证。
+
 `plugin/pl_player/playback/video_frame_timings_test.dart` 覆盖请求／消费阶段、输出身份、失效代次、序号高水位与独立消费证据；`pages/danmaku/frame_plan_identity_test.dart` 另检查共用调度的合帧、订阅释放、同一 view 换屏／变频和迟到 timing 隔离；`plugin/pl_player/android/preloaded_surface_test.dart` 使用实际 Android 输出控制器与模拟平台通道，检查临时 Surface 的解码前挂载、FILE_LOADED 几何确认及同尺寸输出复用。
 
 `plugin/pl_player/playback/native_media_clock_sampling_test.dart` 覆盖异步媒体时钟采样的通知合并、在途结果失效、冻结锚点时刻、读取失败恢复，以及释放前等待原生读取完成；属性一致性由 `native_media_clock_test.dart` 覆盖。

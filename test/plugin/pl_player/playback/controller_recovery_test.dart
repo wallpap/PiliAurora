@@ -16,6 +16,8 @@ import 'package:pili_aurora/plugin/pl_player/playback/playback_contracts.dart';
 import 'package:pili_aurora/plugin/pl_player/playback/playback_session.dart';
 import 'package:pili_aurora/services/diagnostics/diagnostics.dart';
 import 'package:pili_aurora/services/diagnostics/player_diagnostics.dart';
+import 'package:pili_aurora/services/audio_session.dart';
+import 'package:pili_aurora/services/service_locator.dart';
 import 'package:pili_aurora/utils/storage.dart';
 
 void main() {
@@ -32,6 +34,111 @@ void main() {
         );
   });
   tearDownAll(Hive.close);
+
+  for (final failure in [false, true]) {
+    _recoveryTest('音频焦点：播放等待激活，${failure ? '异常' : '拒绝'}保留播放结果', (f) async {
+      final previous = audioSessionHandler;
+      final activated = Completer<void>();
+      final handler = _AudioSession()
+        ..change = (active) async {
+          if (!active) return true;
+          await activated.future;
+          if (failure) throw StateError('synthetic focus failure');
+          return false;
+        };
+      audioSessionHandler = handler;
+      addTearDown(() => audioSessionHandler = previous);
+      try {
+        await f.load(start: PlaybackStartPolicy.pause);
+        var completed = false;
+        final playing = f.controller.play()..then((_) => completed = true);
+        await f.tester.pump();
+        expect(handler.activations, [true]);
+        expect(completed, isFalse);
+        expect(f.runtime.player.state.playing, isTrue);
+        activated.complete();
+        await playing;
+        expect(completed, isTrue);
+        expect(f.controller.wantsToPlay, isTrue);
+        expect(
+          Diagnostics.instance.recentLogs.any(
+            (record) =>
+                record['message'] == (failure ? '音频会话激活失败' : '音频会话未接受激活请求'),
+          ),
+          isTrue,
+        );
+        await f.controller.pause();
+        expect(handler.activations, [true, false]);
+      } finally {
+        if (!activated.isCompleted) activated.complete();
+        await f.tester.pump(const Duration(milliseconds: 300));
+      }
+    });
+  }
+
+  _recoveryTest('音频焦点：旧暂停已被后续播放取代时不释放新焦点', (f) async {
+    final previous = audioSessionHandler;
+    final handler = _AudioSession();
+    audioSessionHandler = handler;
+    addTearDown(() => audioSessionHandler = previous);
+    await f.load();
+    final paused = Completer<void>();
+    f.runtime.beforePlaying = (playing) async {
+      if (!playing) await paused.future;
+    };
+    try {
+      final pausing = f.controller.pause();
+      await f.tester.pump();
+      final playing = f.controller.play();
+      await f.tester.pump();
+      paused.complete();
+      await f.tester.pump();
+      await Future.wait([pausing, playing]);
+      expect(handler.activations, [true]);
+      expect(f.controller.wantsToPlay, isTrue);
+    } finally {
+      if (!paused.isCompleted) paused.complete();
+      await f.tester.pump();
+    }
+  });
+
+  _recoveryTest('音频焦点：激活与释放串行，旧 owner 排队副作用失效', (f) async {
+    final previous = audioSessionHandler;
+    var activated = Completer<void>();
+    final handler = _AudioSession()
+      ..change = (active) async {
+        if (active) await activated.future;
+        return true;
+      };
+    audioSessionHandler = handler;
+    addTearDown(() => audioSessionHandler = previous);
+    try {
+      await f.load(start: PlaybackStartPolicy.pause);
+      final playing = f.controller.play();
+      await f.tester.pump();
+      final pausing = f.controller.pause();
+      await f.tester.pump();
+      expect(handler.activations, [true]);
+      activated.complete();
+      await f.tester.pump();
+      await Future.wait([playing, pausing]);
+      expect(handler.activations, [true, false]);
+
+      activated = Completer<void>();
+      final oldPlaying = f.controller.play();
+      await f.tester.pump();
+      final oldPausing = f.controller.pause();
+      await f.tester.pump();
+      f.controller.attachPlaybackOwner();
+      activated.complete();
+      await f.tester.pump();
+      await Future.wait([oldPlaying, oldPausing]);
+      expect(handler.activations, [true, false, true]);
+    } finally {
+      if (!activated.isCompleted) activated.complete();
+      await f.tester.pump();
+    }
+  });
 
   final restoreWindow = <String, void Function(PlPlayerController)>{
     '普通恢复': (controller) => controller.onWindowRestore(),
@@ -756,6 +863,17 @@ void _recoveryTest(
 
 enum _Mode { separate, combined, audioOnly, videoOnly }
 
+class _AudioSession extends AudioSessionHandler {
+  final activations = <bool>[];
+  Future<bool> Function(bool)? change;
+
+  @override
+  Future<bool> setActive(bool active) async {
+    activations.add(active);
+    return change?.call(active) ?? true;
+  }
+}
+
 // 使用真实控制器、Session 与两个恢复器；替换原生 I/O 和轨道健康输入。
 class _Fixture {
   _Fixture(this.tester, {this.mode = _Mode.separate}) {
@@ -915,6 +1033,7 @@ class _Runtime extends NativePlaybackRuntime {
   int loadId = 0;
   int repairs = 0;
   Future<PlaybackRuntimeCommandResult> Function()? onRepair;
+  Future<void> Function(bool)? beforePlaying;
 
   void emitActual() {
     final progressing =
@@ -1008,6 +1127,7 @@ class _Runtime extends NativePlaybackRuntime {
     bool value,
     PlaybackExecutionContext context,
   ) async {
+    if (beforePlaying case final before?) await before(value);
     if (!context.isCurrent()) {
       return const PlaybackRuntimeCommandResult(applied: false);
     }

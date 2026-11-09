@@ -38,14 +38,16 @@ class _Process implements Process {
 }
 
 class _PlayerPeer {
-  _PlayerPeer(this.socket, this.initialization);
+  _PlayerPeer(this.socket, this.initialization, this.messages);
   final WebSocket socket;
   final Map<String, dynamic> initialization;
+  final List<Map<String, dynamic>> messages;
 
   static Future<_PlayerPeer> connect(
     Map<String, String> environment,
-    _Process process,
-  ) async {
+    _Process process, {
+    bool finishOnDisconnect = true,
+  }) async {
     final socket = await WebSocket.connect(
       'ws://127.0.0.1:${environment['PILIAURORA_WINDOW_PORT']}',
       headers: {
@@ -53,16 +55,25 @@ class _PlayerPeer {
       },
     );
     final initialization = Completer<Map<String, dynamic>>();
-    socket.listen((data) {
-      final message = jsonDecode(data as String) as Map<String, dynamic>;
-      if (!initialization.isCompleted) {
-        initialization.complete(message);
-      } else if (message['type'] == 'close') {
-        process.finish(0);
-        unawaited(socket.close());
-      }
-    }, onDone: () => process.finish(0));
-    return _PlayerPeer(socket, await initialization.future);
+    final messages = <Map<String, dynamic>>[];
+    socket.listen(
+      (data) {
+        final message = jsonDecode(data as String) as Map<String, dynamic>;
+        if (!initialization.isCompleted) {
+          initialization.complete(message);
+        } else {
+          messages.add(message);
+          if (message['type'] == 'close') {
+            process.finish(0);
+            unawaited(socket.close());
+          }
+        }
+      },
+      onDone: () {
+        if (finishOnDisconnect) process.finish(0);
+      },
+    );
+    return _PlayerPeer(socket, await initialization.future, messages);
   }
 }
 
@@ -272,6 +283,221 @@ void main() {
     await windows.closeAll();
   });
 
+  test('声音归属：旧小窗退出不覆盖新目标，当前声音窗口退出才恢复主声', () async {
+    final processes = <_Process>[];
+    final peers = <_PlayerPeer>[];
+    final muted = <bool>[];
+    final windows = DesktopPlaybackWindows(
+      startProcess: (environment) async {
+        final process = _Process();
+        processes.add(process);
+        final peer = await _PlayerPeer.connect(environment, process);
+        peers.add(peer);
+        peer.socket.add(jsonEncode({'type': 'ready'}));
+        return process;
+      },
+    )..setLocalMuted = (value) async => muted.add(value);
+    addTearDown(windows.closeAll);
+    await windows.open(const DesktopPlaybackRequest.live(1));
+    await windows.open(const DesktopPlaybackRequest.live(2));
+    processes.first.finish(7);
+    await _until(
+      () =>
+          !Directory(peers.first.initialization['cacheDirectory'] as String)
+              .existsSync(),
+    );
+    expect(muted, [true, true]);
+    processes.last.finish(9);
+    await _until(() => muted.length == 3);
+    expect(muted, [true, true, false]);
+  });
+
+  test('声音归属：IPC 断连保留活进程声音归属，进程实际退出才恢复主声', () async {
+    final process = _Process();
+    late _PlayerPeer peer;
+    final muted = <bool>[];
+    final windows = DesktopPlaybackWindows(
+      startProcess: (environment) async {
+        peer = await _PlayerPeer.connect(
+          environment,
+          process,
+          finishOnDisconnect: false,
+        );
+        peer.socket.add(jsonEncode({'type': 'ready'}));
+        return process;
+      },
+    )..setLocalMuted = (value) async => muted.add(value);
+    addTearDown(windows.closeAll);
+    await windows.open(const DesktopPlaybackRequest.live(1));
+    await peer.socket.close();
+    await Future<void>.delayed(Duration.zero);
+    expect(process.exited.isCompleted, isFalse);
+    expect(muted, [true]);
+    process.finish(7);
+    await _until(() => muted.length == 2);
+    expect(muted, [true, false]);
+  });
+
+  test('声音归属：退出状态查询失败不将活进程视为已退出', () async {
+    final process = _Process();
+    late _PlayerPeer peer;
+    final muted = <bool>[];
+    final windows = DesktopPlaybackWindows(
+      startProcess: (environment) async {
+        peer = await _PlayerPeer.connect(
+          environment,
+          process,
+          finishOnDisconnect: false,
+        );
+        peer.socket.add(jsonEncode({'type': 'ready'}));
+        return process;
+      },
+    )..setLocalMuted = (value) async => muted.add(value);
+    addTearDown(windows.closeAll);
+    await windows.open(const DesktopPlaybackRequest.live(1));
+    process.exited.completeError(StateError('synthetic exit tracking failure'));
+    await _until(
+      () =>
+          !Directory(peer.initialization['cacheDirectory'] as String)
+              .existsSync(),
+    );
+    expect(muted, [true]);
+    expect(process.kills, 0);
+    expect(
+      Diagnostics.instance.recentLogs.any(
+        (record) => record['message'] == '播放窗口操作失败: exit',
+      ),
+      isTrue,
+    );
+  });
+
+  test('声音归属：排队目标断连后不再静音主窗口', () async {
+    final process = _Process();
+    _PlayerPeer? peer;
+    final restoreStarted = Completer<void>();
+    final restored = Completer<void>();
+    final muted = <bool>[];
+    final windows =
+        DesktopPlaybackWindows(
+            startProcess: (environment) async {
+              peer = await _PlayerPeer.connect(
+                environment,
+                process,
+                finishOnDisconnect: false,
+              );
+              peer!.socket.add(jsonEncode({'type': 'ready'}));
+              return process;
+            },
+          )
+          ..setLocalMuted = (value) async {
+            if (!restoreStarted.isCompleted) {
+              restoreStarted.complete();
+              await restored.future;
+            }
+            muted.add(value);
+          };
+    addTearDown(() {
+      if (!restored.isCompleted) restored.complete();
+      return windows.closeAll();
+    });
+    final restoring = windows.solo();
+    await restoreStarted.future.timeout(const Duration(seconds: 3));
+    final opening = expectLater(
+      windows.open(const DesktopPlaybackRequest.live(1)),
+      throwsA(isA<StateError>()),
+    );
+    await _until(
+      () =>
+          peer?.messages.any(
+            (message) => message['type'] == 'diagnosticSettings',
+          ) ==
+          true,
+    );
+    await peer!.socket.close();
+    await Future<void>.delayed(Duration.zero);
+    restored.complete();
+    await Future.wait([restoring, opening]);
+    expect(muted, isNotEmpty);
+    expect(muted, everyElement(isFalse));
+    expect(process.kills, 1);
+  });
+
+  test('声音归属：主声恢复在途时新小窗接管，迟到恢复先排空再落实新目标', () async {
+    final restoring = Completer<void>();
+    final restored = Completer<void>();
+    final processes = <_Process>[];
+    final peers = <_PlayerPeer>[];
+    final requested = <bool>[];
+    final applied = <bool>[];
+    final windows =
+        DesktopPlaybackWindows(
+            startProcess: (environment) async {
+              final process = _Process();
+              processes.add(process);
+              final peer = await _PlayerPeer.connect(environment, process);
+              peers.add(peer);
+              peer.socket.add(jsonEncode({'type': 'ready'}));
+              return process;
+            },
+          )
+          ..setLocalMuted = (value) async {
+            requested.add(value);
+            if (!value && !restoring.isCompleted) {
+              restoring.complete();
+              await restored.future;
+            }
+            applied.add(value);
+          };
+    addTearDown(() {
+      if (!restored.isCompleted) restored.complete();
+      return windows.closeAll();
+    });
+    await windows.open(const DesktopPlaybackRequest.live(1));
+    processes.first.finish(7);
+    await restoring.future.timeout(const Duration(seconds: 3));
+    final opening = windows.open(const DesktopPlaybackRequest.live(2));
+    await _until(() => peers.length == 2);
+    expect(applied, [true]);
+    restored.complete();
+    await opening;
+    await _until(
+      () => peers.last.messages.any((message) => message['type'] == 'mute'),
+    );
+    expect(requested, [true, false, true]);
+    expect(applied, [true, false, true]);
+    expect(
+      peers.last.messages.lastWhere((message) => message['type'] == 'mute'),
+      {'type': 'mute', 'muted': false},
+    );
+  });
+
+  test('声音归属：静音回调失败不毒化切换队列，下一次打开仍能接管', () async {
+    final muted = <bool>[];
+    var attempts = 0;
+    final windows =
+        DesktopPlaybackWindows(
+            startProcess: (environment) async {
+              final process = _Process();
+              final peer = await _PlayerPeer.connect(environment, process);
+              peer.socket.add(jsonEncode({'type': 'ready'}));
+              return process;
+            },
+          )
+          ..setLocalMuted = (value) async {
+            if (attempts++ == 0) throw StateError('synthetic mute failure');
+            muted.add(value);
+          };
+    addTearDown(windows.closeAll);
+    await expectLater(
+      windows.open(const DesktopPlaybackRequest.live(1)),
+      throwsA(isA<StateError>()),
+    );
+    await _until(() => muted.isNotEmpty);
+    expect(muted.last, isFalse);
+    await windows.open(const DesktopPlaybackRequest.live(2));
+    expect(muted.last, isTrue);
+  });
+
   test('窗口没有就绪时启动超时并终止进程', () async {
     final process = _Process();
     final windows = DesktopPlaybackWindows(
@@ -396,4 +622,12 @@ void main() {
     await windows.showPlayerWindow();
     expect(attempts, 2);
   });
+}
+
+Future<void> _until(bool Function() ready) async {
+  final deadline = DateTime.now().add(const Duration(seconds: 3));
+  while (!ready()) {
+    if (DateTime.now().isAfter(deadline)) throw TimeoutException('等待窗口事件超时');
+    await Future<void>.delayed(const Duration(milliseconds: 5));
+  }
 }

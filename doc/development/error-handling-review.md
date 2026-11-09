@@ -2,9 +2,9 @@
 
 ## 当前进度（2026-11-09）
 
-按用户要求完成当前批次后暂停，全仓检查尚未完成。当前收尾范围为后台账号同步、播放器音频激活与小窗异常退出后的声音归属。
+检查已按用户要求暂停，全仓检查尚未完成。最后收尾范围为后台账号同步、播放器音频激活与小窗异常退出后的声音归属。
 
-账号、历史与稍后再看批次的 37 项定向回归通过；收藏详情、排序和迁移批次的 66 项通过；弹幕、评论与表情包批次的 29 项通过；搜索批次的 38 项通过。后续按改动运行必要回归，不逐批重跑完整 CI。
+最后两批共 21 个不同用例通过：后台同步 11 项，播放器焦点与小窗声音归属 10 项。按改动运行必要回归，没有重跑完整 CI；历史验证范围与未验证的设备行为见下文。
 
 此前风控、音乐／赛事与空降助手批次后的完整 CI：1218 项通过（`build/error-contract-ci-tests.log`）。`fvm flutter analyze --no-pub lib test tool` 只有上游控件副本中的 24 条既有 info，没有 error 或 warning。修改文件的格式检查无改动，`git diff --check` 通过。
 
@@ -55,6 +55,7 @@
 | 评论发布／删除与列表、楼中楼和内容搜索：`http/video.dart`、`grpc/reply.dart`、`common/reply_controller.dart` 与评论页面 | 写请求固定账号／CSRF 并禁重试，保留拒绝与待确认；明确发送成功时允许无回显，缓存失败不覆盖远端结果。上传前固定草稿，阻止重复发送，成功回调更新列表且保留后来编辑的草稿；楼中楼沿用根 ID，草稿按完整目标隔离。列表按 ID 插入／删除，未知计数保持未知；换凭据重查并释放订阅。删除弹窗拥有自身在途状态，取消或切号后拒绝迟到结果；举报和翻译检查评论归属。内容搜索按已提交词分页，父子控制器按页面释放。 | `test/http/reply_write_results_test.dart`、`test/pages/community/reply_*_results_test.dart`、评论与文章关联回归 |
 | 应用退出与音频初始化：`services/app_exit.dart`、`audio_session.dart`、`service_locator.dart`、主窗口／定时退出与 `DeviceUtils.exitApp` | 退出合并并发请求，等待清理；独立阶段失败记录后继续，实际退出失败保留原因并允许重试。诊断刷新最多等待 3 秒，迟到失败有消费者；Windows 检查进程结束回执。定时退出持有心跳和退出 Future。音频配置改为显式等待，初始化与激活共享同一 Future，配置失败可重试。 | `test/services/app_exit_test.dart`、`audio_session_initialization_test.dart` |
 | 后台账号与历史同步：`http/init.dart`、`utils/login_utils.dart`、`request_utils.dart`、启动与 WebView Cookie 菜单 | Cookie 原生写入和登出清理串行，过期账号不分发，原生拒绝与异常沿 Future 返回；失败不阻断后续批次。启动／登录持有可选同步的失败并记录诊断，保留登录核心结果。历史同步等待缓存写入；手动重置只向所属页面／账号提示实际结果。 | `test/utils/background_sync_results_test.dart`、历史与账号资料生命周期回归 |
+| 播放器音频激活与小窗声音归属：`plugin/pl_player/controller.dart`、`services/desktop_playback_windows.dart` | 播放／暂停等待所属音频焦点操作；激活拒绝或异常保留播放结果并记录诊断。焦点与窗口声音切换串行，旧 owner／意图和排队目标失效后不再提交副作用；仅确认持有声音的小窗进程退出时恢复主声。IPC 断连或退出状态查询失败不当作进程退出，新窗口接管使旧恢复失效。 | `test/plugin/pl_player/playback/controller_recovery_test.dart`、`test/services/desktop_playback_windows_test.dart` |
 
 ## 检查后保留的实现
 
@@ -69,8 +70,7 @@
 
 - HTTP 传输、重试和其余业务适配器：逐接口核对响应结构、写入重试和调用方对可空返回值的处理。通用错误捕获的修正只覆盖部分问题，其余接口仍需逐一验收。
 - gRPC 各领域响应模型和调用方：请求、写入不确定性与解码契约已检查，模型字段和业务行为继续按领域核对。
-- 播放器调用方的音频激活失败消费。后台账号／历史同步、应用退出、音频初始化、桌面播放 IPC、直播消息连接和协议 worker 已检查。
-- 播放小窗异常退出后的声音归属和主窗口恢复行为。
+- 播放器 `setMuted` 对 `owner.setVolume` 的命令回执消费仍需检查。本批验证了焦点与声音切换的异步归属，未保证原生音量命令实际成功；后台同步、退出、音频初始化、桌面 IPC、直播连接和协议 worker 已检查。
 - 其余页面查询、收藏／历史／动态等写入，以及公共工具、模型的返回值和异常处理。
 - 评论投票等其余 gRPC 领域模型的可选字段，以及原生表情输入、选图与裁剪失败／取消。评论发布／删除、内容搜索、弹幕发送、HTTP 赞踩／置顶／举报、评论可见性检查和表情包管理已完成本轮检查。
 - 搜索适配器之外的视频导航调用方，以及番剧／课程资料的领域消费。搜索首页、热搜、联想与结果分页已完成本轮检查。
@@ -127,3 +127,5 @@
 - 退出协调与音频初始化新增 6 项核心回归全部通过（`build/app-exit-tests.log`）。8 文件定向分析仅有主窗口两条多余 async 提示，修正后只复查该文件，无问题（分析结果记录于终端，本批未另存分析日志）；格式和限定 diff 检查通过。既有音频 duck／焦点测试未涉及本批初始化路径，未重跑；真实音频插件、原生窗口和进程终止尚未设备验收。
 
 - 后台 Cookie／历史同步新增 6 项，加历史与账号资料生命周期既有 5 项，共 11 个不同用例通过。新增夹具的编译和静态存储初始化问题修正后，5 项核心用例通过；登录用例改用模拟时钟推进后单项通过（`build/background-sync-tests.log`、`build/background-sync-retry-tests.log`、`build/background-sync-final-tests.log`、`build/background-sync-login-final-tests.log`）。其中 `background-sync-final-tests.log` 的登录用例等待已手动中止，其前 5 项通过记录保留，登录结果以最后的单项日志为准。5 个生产文件定向分析无问题；测试的两条提示修正后单文件复查无问题（`build/background-sync-analyze.log`、`build/background-sync-test-final-analyze.log`）。未重跑完整 CI，也未验证真实 WebView Cookie 存储与登录设备。
+
+- 播放器音频焦点新增 4 项、小窗声音归属新增 6 项，共 10 个不同用例通过。焦点用例修正模拟时钟推进及静态队尾跨测试存续后，复跑该 4 项通过；声音归属先通过 4 项，再补跑退出状态失败与排队目标断连 2 项（`build/player-audio-focus-tests.log`、`build/desktop-playback-sound-tests.log`、`build/desktop-playback-sound-boundary-tests.log`）。4 个修改文件定向分析的两条提示修正后复查无问题（`build/player-audio-lifecycle-final-analyze.log`）。未重跑完整 CI；真实音频焦点、音量命令结果、窗口声音输出和进程退出仍需设备验收。

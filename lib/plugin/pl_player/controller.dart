@@ -783,6 +783,9 @@ class PlPlayerController
   bool _audioSeekInProgress = false;
   int _seekRevision = 0;
   PlaybackOwner? _activeOwner;
+  // 系统音频会话由进程共享，旧门面的在途请求也先排空再交接。
+  static Future<void>? _audioSessionChange;
+  static int _audioSessionVersion = 0;
   StreamSubscription<PlaybackSnapshot>? _snapshotSubscription;
   PlaybackPlan? _currentPlan;
   int? _shaderConfiguredLoadId;
@@ -2032,27 +2035,71 @@ class PlPlayerController
   Future<void> play({bool repeat = false, bool hideControls = true}) async {
     final owner = _activeOwner;
     if (owner == null || !owner.isActive) return;
+    final version = ++_audioSessionVersion;
     // 播放时自动隐藏控制条
     controls = !hideControls;
     // repeat为true，将从头播放
     if (repeat) {
       await owner.seek(Duration.zero);
     }
-    await owner.setPlaying(true);
-
-    audioSessionHandler?.setActive(true);
+    final result = await owner.setPlaying(true);
+    if (result.outcome == CommandOutcome.applied ||
+        result.outcome == CommandOutcome.accepted) {
+      await _changeAudioSession(owner, true, version);
+    }
   }
 
   /// 暂停播放
   Future<void> pause({bool notify = true, bool isInterrupt = false}) async {
     final owner = _activeOwner;
     if (owner == null || !owner.isActive || !notify) return;
-    await owner.setPlaying(false);
+    final version = ++_audioSessionVersion;
+    final result = await owner.setPlaying(false);
 
     // 主动暂停时让出音频焦点
-    if (!isInterrupt) {
-      audioSessionHandler?.setActive(false);
+    if (!isInterrupt &&
+        (result.outcome == CommandOutcome.applied ||
+            result.outcome == CommandOutcome.accepted)) {
+      await _changeAudioSession(owner, false, version);
     }
+  }
+
+  Future<void> _changeAudioSession(
+    PlaybackOwner owner,
+    bool active,
+    int version,
+  ) {
+    final handler = audioSessionHandler;
+    if (handler == null) return Future<void>.value();
+    late final Future<void> change;
+    change = (_audioSessionChange ?? Future<void>.value())
+        .then((_) async {
+          if (version != _audioSessionVersion ||
+              !owner.isActive ||
+              !identical(owner, _activeOwner) ||
+              !identical(handler, audioSessionHandler) ||
+              _session.currentSnapshot.intent.playing != active) {
+            return;
+          }
+          try {
+            if (!await handler.setActive(active)) {
+              logger.w('音频会话未接受${active ? '激活' : '释放'}请求');
+            }
+          } catch (error, stackTrace) {
+            // 播放命令已完成，焦点失败只作诊断，不改写播放结果。
+            logger.w(
+              '音频会话${active ? '激活' : '释放'}失败',
+              error: error.runtimeType,
+              stackTrace: stackTrace,
+            );
+          }
+        })
+        .whenComplete(() {
+          if (identical(_audioSessionChange, change)) {
+            _audioSessionChange = null;
+          }
+        });
+    return _audioSessionChange = change;
   }
 
   bool tripling = false;
