@@ -17,6 +17,9 @@ class SubDetailController
   SubItemModel? subInfo;
 
   @override
+  Object get queryContext => Accounts.main;
+
+  @override
   void onInit() {
     super.onInit();
     final args = Get.arguments;
@@ -24,22 +27,28 @@ class SubDetailController
     subInfo = args['subInfo'];
     heroTag = args['heroTag'];
 
+    Accounts.mainChanges.addListener(_onAccountChanged);
     queryData();
   }
 
-  @override
-  Future<void> queryData([bool isRefresh = true]) async {
-    await super.queryData(isRefresh);
-    // 一整页被本地隐藏后继续读取，让后续页的有效视频仍可展示。
-    while (Pref.hideInvalidSubscriptionVideos &&
-        !isClosed &&
-        !isEnd &&
-        loadingState.value.dataOrNull?.isEmpty == true) {
-      final previousPage = page;
-      await super.queryData(false);
-      if (page == previousPage) break;
-    }
+  void _onAccountChanged() {
+    subInfo = null;
+    onReload();
   }
+
+  @override
+  void onClose() {
+    Accounts.mainChanges.removeListener(_onAccountChanged);
+    super.onClose();
+  }
+
+  @override
+  int remainingItemsToLoad(int remaining) =>
+      Pref.hideInvalidSubscriptionVideos &&
+          !isEnd &&
+          loadingState.value.dataOrNull?.isEmpty == true
+      ? 1
+      : 0;
 
   @override
   List<SubDetailItemModel>? getDataList(SubDetailData response) {
@@ -72,6 +81,7 @@ class SubDetailController
 
   @override
   Future<LoadingState<SubDetailData>> customGetData() => FavHttp.favSeasonList(
+    account: Accounts.main,
     id: id,
     ps: 20,
     pn: page,
