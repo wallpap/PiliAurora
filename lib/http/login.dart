@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:pili_aurora/common/constants.dart';
 import 'package:pili_aurora/http/api.dart';
+import 'package:pili_aurora/http/api_response.dart';
 import 'package:pili_aurora/http/init.dart';
 import 'package:pili_aurora/http/loading_state.dart';
 import 'package:pili_aurora/models/remote/login_devices/data.dart';
@@ -427,25 +428,22 @@ abstract final class LoginHttp {
         );
   }
 
-  static Future<LoadingState<void>> logout(LoginAccount account) async {
-    final res = await Request().post(
+  static Future<LoadingState<void>> logout(LoginAccount account) {
+    return Request().requestApi<void>(
       Api.logout,
+      kind: ApiCallKind.mutation,
+      decode: (_) {},
       data: {'biliCSRF': account.csrf},
       options: Options(
         contentType: Headers.formUrlEncodedContentType,
         extra: {'account': account},
       ),
     );
-    if (res.data['code'] == 0) {
-      return const Success(null);
-    } else {
-      return Error(res.data['message']);
-    }
   }
 
   static Future<LoadingState<LoginDevicesData>> loginDevices({
     required Account account,
-  }) async {
+  }) {
     final buvid = LoginUtils.buvid;
     final params = {
       'local_id': buvid,
@@ -459,15 +457,12 @@ abstract final class LoginHttp {
       'statistics': Constants.statistics,
     };
     AppSign.appSign(params);
-    final res = await Request().get(
+    return Request().requestApi<LoginDevicesData>(
       Api.loginDevices,
+      kind: ApiCallKind.query,
+      decode: (body) => LoginDevicesData.fromJson(body['data']),
       queryParameters: params,
       options: Options(extra: {'account': account}),
     );
-    if (res.data['code'] == 0) {
-      return Success(LoginDevicesData.fromJson(res.data['data']));
-    } else {
-      return Error(res.data['message']);
-    }
   }
 }

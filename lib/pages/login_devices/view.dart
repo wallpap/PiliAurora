@@ -75,7 +75,10 @@ class LoginDevicesPage extends ConsumerWidget {
         style: const TextStyle(fontSize: 14),
       ),
       subtitle: Text(
-        '${item.latestLoginAt} ${item.source}',
+        [
+          if (item.latestLoginAt case final value? when value.isNotEmpty) value,
+          if (item.source case final value? when value.isNotEmpty) value,
+        ].join(' '),
         style: style,
       ),
       trailing: item.isCurrentDevice == true
