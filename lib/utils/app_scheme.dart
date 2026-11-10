@@ -21,6 +21,7 @@ import 'package:pili_aurora/pages/rank/view.dart';
 import 'package:pili_aurora/pages/subscription_detail/view.dart';
 import 'package:pili_aurora/pages/video/reply_reply/view.dart';
 import 'package:pili_aurora/utils/id_utils.dart';
+import 'package:pili_aurora/utils/accounts.dart';
 import 'package:pili_aurora/utils/navigation_request.dart';
 import 'package:pili_aurora/utils/page_utils.dart';
 import 'package:pili_aurora/utils/parse_string.dart';
@@ -525,6 +526,13 @@ abstract final class PiliScheme {
     bool off = false,
     Map? parameters,
   }) async {
+    final account = Accounts.heartbeat;
+    final mainAccount = Accounts.main;
+    bool current() =>
+        request.isCurrent &&
+        identical(account, Accounts.heartbeat) &&
+        identical(mainAccount, Accounts.main);
+
     // https://m.bilibili.com/bangumi/play/ss39708
     // https | m.bilibili.com | /bangumi/play/ss39708
 
@@ -545,7 +553,7 @@ abstract final class PiliScheme {
     if (host.contains(b23_tv)) {
       String? redirectUrl = await UrlUtils.parseRedirectUrl(uri.toString());
       // 已消费的旧链接不可再触发浏览器回退或覆盖用户的新导航。
-      if (!request.isCurrent) return true;
+      if (!current()) return true;
       if (redirectUrl != null) {
         uri = Uri.parse(redirectUrl);
         host = uri.host;
@@ -707,15 +715,20 @@ abstract final class PiliScheme {
             IdUtils.bvRegex.firstMatch(path)?.group(0);
         if (bvid != null) {
           if (mediaId != null) {
-            final result = await SearchHttp.pageWithDimension(bvid: bvid);
-            if (!request.isCurrent) return true;
+            final result = await SearchHttp.pageWithDimension(
+              bvid: bvid,
+              account: account,
+            );
+            if (!current()) return true;
             if (result is Error) {
               result.toast();
               return true;
             }
             final res = result.dataOrNull;
             final cid = res?.cid;
-            if (cid != null) {
+            if (cid == null || cid <= 0) {
+              SmartDialog.showToast('视频暂无可播放内容');
+            } else {
               PageUtils.toVideoPage(
                 bvid: bvid,
                 cid: cid,
@@ -971,6 +984,12 @@ abstract final class PiliScheme {
     String? part,
   }) async {
     final request = NavigationRequest();
+    final account = Accounts.heartbeat;
+    final mainAccount = Accounts.main;
+    bool current() =>
+        request.isCurrent &&
+        identical(account, Accounts.heartbeat) &&
+        identical(mainAccount, Accounts.main);
     try {
       aid ??= IdUtils.bv2av(bvid!);
       bvid ??= IdUtils.av2bv(aid);
@@ -980,9 +999,10 @@ abstract final class PiliScheme {
       final result = await SearchHttp.pageWithDimension(
         bvid: bvid,
         aid: aid,
+        account: account,
         part: parseIntOrNull(part),
       );
-      if (!request.isCurrent) return;
+      if (!current()) return;
       if (result is Error) {
         result.toast();
         return;
@@ -1004,7 +1024,7 @@ abstract final class PiliScheme {
       );
     } catch (error, stackTrace) {
       logger.w('获取链接视频失败', error: error.runtimeType, stackTrace: stackTrace);
-      if (request.isCurrent) SmartDialog.showToast('视频获取失败，请重试');
+      if (current()) SmartDialog.showToast('视频获取失败，请重试');
     } finally {
       await request.close();
     }

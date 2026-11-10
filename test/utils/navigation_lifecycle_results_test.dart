@@ -208,6 +208,49 @@ void main() {
     await finish(tester);
   });
 
+  for (final playlist in [false, true]) {
+    for (final role in [AccountType.main, AccountType.heartbeat]) {
+      testWidgets('${playlist ? '播放列表' : '链接视频'}切换$role后拒绝旧回包', (tester) async {
+        await mount(tester);
+        final account = Accounts.heartbeat;
+        final Future<void> operation;
+        if (playlist) {
+          operation = PiliScheme.routePushFromUrl(
+            'https://m.bilibili.com/playlist/pl123?bvid=BV17x411w7KC',
+          ).then((_) {});
+        } else {
+          operation = PiliScheme.videoPush(123, null);
+        }
+        await until(tester, () => requests.length == 1);
+        expect(requests.single.options.extra['account'], same(account));
+        Accounts.accountMode[role.index] = LoginAccount(
+          BiliCookieJar.fromJson({
+            'DedeUserID': '2',
+            'bili_jct': 'replacement',
+          }),
+          null,
+          null,
+        );
+        await complete(tester, operation, 0, video(42));
+        expect(openedVideos, isEmpty);
+        expect(find.text('视频暂无可播放内容'), findsNothing);
+        await finish(tester);
+      });
+    }
+  }
+
+  testWidgets('播放列表空结果明确提示，保持原页面', (tester) async {
+    await mount(tester);
+    final operation = PiliScheme.routePushFromUrl(
+      'https://m.bilibili.com/playlist/pl123?bvid=BV17x411w7KC',
+    ).then((_) {});
+    await until(tester, () => requests.length == 1);
+    await complete(tester, operation, 0, {'code': 0, 'data': []});
+    expect(find.text('视频暂无可播放内容'), findsOneWidget);
+    expect(openedVideos, isEmpty);
+    await finish(tester);
+  });
+
   testWidgets('当前视频空结果明确提示，并关闭自己的加载', (tester) async {
     await mount(tester);
     final operation = PiliScheme.videoPush(123, null);
