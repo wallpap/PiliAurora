@@ -354,6 +354,7 @@ abstract final class ImageUtils {
     required String fileName,
     String ext = 'png',
     bool showLoading = true,
+    bool needToast = true,
   }) async {
     SaveResult? res;
     fileName += '.$ext';
@@ -369,9 +370,9 @@ abstract final class ImageUtils {
       } finally {
         loading.close();
       }
-      if (res.isSuccess) {
+      if (needToast && res.isSuccess) {
         SmartDialog.showToast(' 已保存 ');
-      } else {
+      } else if (needToast) {
         SmartDialog.showToast('保存失败，请检查相册权限后重试');
       }
     } else {
@@ -381,10 +382,10 @@ abstract final class ImageUtils {
         bytes: bytes,
       );
       if (savePath == null) {
-        SmartDialog.showToast("取消保存");
+        if (needToast) SmartDialog.showToast("取消保存");
         return null;
       }
-      SmartDialog.showToast(' 已保存 ');
+      if (needToast) SmartDialog.showToast(' 已保存 ');
       res = SaveResult(true, null);
     }
     return res;

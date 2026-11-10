@@ -3,6 +3,7 @@ import 'package:pili_aurora/common/dial_prefix.dart';
 import 'package:pili_aurora/common/widgets/custom_toast.dart';
 import 'package:pili_aurora/common/widgets/loading_widget/http_error.dart';
 import 'package:pili_aurora/common/widgets/loading_widget/loading_widget.dart';
+import 'package:pili_aurora/common/widgets/route_aware_mixin.dart';
 import 'package:pili_aurora/common/widgets/scaffold/simple_scaffold.dart';
 import 'package:pili_aurora/common/widgets/scroll_physics.dart' show tabBarView;
 import 'package:pili_aurora/common/widgets/view_insets_safe_area.dart';
@@ -12,7 +13,6 @@ import 'package:pili_aurora/services/logger.dart';
 import 'package:pili_aurora/utils/extension/size_ext.dart';
 import 'package:pili_aurora/utils/extension/widget_ext.dart';
 import 'package:pili_aurora/utils/image_utils.dart';
-import 'package:pili_aurora/utils/page_utils.dart';
 import 'package:pili_aurora/utils/platform_utils.dart';
 import 'package:pili_aurora/utils/utils.dart';
 import 'package:flutter/foundation.dart';
@@ -37,38 +37,124 @@ class _LoginPageState extends State<LoginPage> {
   bool showPassword = false;
   GlobalKey globalKey = GlobalKey();
   bool _savingQRCode = false;
+  bool _openingQRCode = false;
+  // 离开页面或扫码标签后，即使返回也不交付原操作的回执。
+  int _qrTabRevision = 0;
+  int _lastTabIndex = 0;
+  Route<dynamic>? _pageRoute;
+
+  @override
+  void initState() {
+    super.initState();
+    _lastTabIndex = _loginPageCtr.tabController.index;
+    _loginPageCtr.tabController.addListener(_onQrTabChanged);
+    routeObserver.addNavigationListener(_onNavigation);
+  }
+
+  void _onNavigation() {
+    if (!identical(routeObserver.currentRoute, _pageRoute)) _qrTabRevision++;
+  }
+
+  void _onQrTabChanged() {
+    final index = _loginPageCtr.tabController.index;
+    if (index == _lastTabIndex) return;
+    _lastTabIndex = index;
+    _qrTabRevision++;
+  }
+
+  @override
+  void dispose() {
+    routeObserver.removeNavigationListener(_onNavigation);
+    if (!_loginPageCtr.isClosed) {
+      _loginPageCtr.tabController.removeListener(_onQrTabChanged);
+    }
+    super.dispose();
+  }
+
+  bool get _qrReady =>
+      !_loginPageCtr.isClosed &&
+      _loginPageCtr.tabController.index == 2 &&
+      _loginPageCtr.codeInfo.value is Success &&
+      _loginPageCtr.qrCodeLeftTime.value > 0;
+
+  Future<void> _openQRCode() async {
+    if (_openingQRCode) return;
+    final state = _loginPageCtr.codeInfo.value;
+    final code = state.dataOrNull;
+    if (!_qrReady || code == null) {
+      SmartDialog.showToast('请先刷新二维码');
+      return;
+    }
+    final revision = _qrTabRevision;
+    final route = ModalRoute.of(context);
+    bool current() =>
+        mounted &&
+        _qrReady &&
+        revision == _qrTabRevision &&
+        identical(state, _loginPageCtr.codeInfo.value) &&
+        route?.isCurrent == true;
+    _openingQRCode = true;
+    try {
+      final opened = await launchUrl(
+        Uri.parse('bilibili://browser?url=${Uri.encodeComponent(code.url)}'),
+        mode: LaunchMode.externalNonBrowserApplication,
+      );
+      if (!opened && current()) SmartDialog.showToast('无法打开二维码，请重试');
+    } catch (error, stackTrace) {
+      logger.w('打开登录二维码失败', error: error.runtimeType, stackTrace: stackTrace);
+      if (current()) SmartDialog.showToast('无法打开二维码，请重试');
+    } finally {
+      _openingQRCode = false;
+    }
+  }
 
   Future<void> _saveQRCode() async {
     if (_savingQRCode) return;
     final state = _loginPageCtr.codeInfo.value;
     final code = state.dataOrNull;
-    if (code == null || _loginPageCtr.qrCodeLeftTime.value <= 0) {
+    if (!_qrReady || code == null) {
       SmartDialog.showToast('请先刷新二维码');
       return;
     }
     final route = ModalRoute.of(context);
+    final revision = _qrTabRevision;
     bool cancelled = false;
     bool current() =>
         mounted &&
         !cancelled &&
-        !_loginPageCtr.isClosed &&
+        _qrReady &&
+        revision == _qrTabRevision &&
         identical(state, _loginPageCtr.codeInfo.value) &&
-        _loginPageCtr.qrCodeLeftTime.value > 0 &&
         route?.isCurrent == true;
     _savingQRCode = true;
     final loadingTag = 'qr-screenshot-${UniqueKey()}';
-    bool loadingShown = true;
-    SmartDialog.show<void>(
-      tag: loadingTag,
-      builder: (_) => const LoadingWidget('正在生成截图'),
-      debounce: false,
-      clickMaskDismiss: false,
-      backType: SmartBackType.normal,
-      onDismiss: () {
-        if (loadingShown) cancelled = true;
-      },
-    );
+    bool loadingShown = false;
+    Future<void> closeLoading() async {
+      if (!loadingShown) return;
+      loadingShown = false;
+      try {
+        await SmartDialog.dismiss(tag: loadingTag);
+      } catch (error, stackTrace) {
+        logger.w(
+          '关闭二维码截图提示失败',
+          error: error.runtimeType,
+          stackTrace: stackTrace,
+        );
+      }
+    }
+
     try {
+      loadingShown = true;
+      SmartDialog.show<void>(
+        tag: loadingTag,
+        builder: (_) => const LoadingWidget('正在生成截图'),
+        debounce: false,
+        clickMaskDismiss: false,
+        backType: SmartBackType.normal,
+        onDismiss: () {
+          if (loadingShown) cancelled = true;
+        },
+      );
       final boundary = globalKey.currentContext?.findRenderObject();
       if (boundary is! RenderRepaintBoundary) {
         throw StateError('二维码截图尚未就绪');
@@ -83,24 +169,37 @@ class _LoginPageState extends State<LoginPage> {
         image.dispose();
       }
       if (!current()) return;
-      loadingShown = false;
-      await SmartDialog.dismiss(tag: loadingTag);
+      await closeLoading();
       if (!current()) return;
       final picName =
           '${Constants.appName}_loginQRCode_${code.authCode.hashCode.toUnsigned(32).toRadixString(16)}';
-      await ImageUtils.saveByteImg(bytes: pngBytes, fileName: picName);
+      final result = await ImageUtils.saveByteImg(
+        bytes: pngBytes,
+        fileName: picName,
+        showLoading: false,
+        needToast: false,
+      );
+      if (!current()) return;
+      SmartDialog.showToast(
+        result == null
+            ? '取消保存'
+            : result.isSuccess
+            ? ' 已保存 '
+            : '保存失败，请检查相册权限后重试',
+      );
     } catch (error, stackTrace) {
       logger.w('二维码截图保存失败', error: error.runtimeType, stackTrace: stackTrace);
       if (current()) SmartDialog.showToast('二维码截图保存失败，请重试');
     } finally {
       _savingQRCode = false;
-      if (loadingShown) await SmartDialog.dismiss(tag: loadingTag);
+      await closeLoading();
     }
   }
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
+    _pageRoute = ModalRoute.of(context);
     _loginPageCtr.didChangeDependencies(context);
   }
 
@@ -135,10 +234,7 @@ class _LoginPageState extends State<LoginPage> {
             ),
             if (kDebugMode || PlatformUtils.isMobile)
               TextButton.icon(
-                onPressed: () => PageUtils.launchURL(
-                  'bilibili://browser?url=${Uri.encodeComponent(_loginPageCtr.codeInfo.value.data.url)}',
-                  mode: LaunchMode.externalNonBrowserApplication,
-                ),
+                onPressed: _openQRCode,
                 icon: const Icon(Icons.open_in_browser_outlined),
                 label: const Text('其他应用打开'),
               ),
