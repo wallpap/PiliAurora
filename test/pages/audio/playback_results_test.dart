@@ -17,6 +17,7 @@ import 'package:pili_aurora/models/common/account_type.dart';
 import 'package:pili_aurora/models/remote/video/video_detail/page.dart';
 import 'package:pili_aurora/services/audio_handler.dart';
 import 'package:pili_aurora/services/audio_session.dart';
+import 'package:pili_aurora/services/diagnostics/diagnostics.dart';
 import 'package:pili_aurora/services/service_locator.dart';
 import 'package:pili_aurora/utils/storage_key.dart';
 
@@ -134,6 +135,22 @@ Future<void> _complete(WidgetTester tester, Future<void> operation) async {
   await operation;
 }
 
+List<Map<String, Object?>> _lifecycle(AudioController controller) =>
+    Diagnostics.instance.recentLogs
+        .where(
+          (record) =>
+              record['channel'] == 'player' &&
+              record['category'] == 'audio' &&
+              record['details'] is Map &&
+              (record['details'] as Map)['audioOwnerId'] ==
+                  'audio.${controller.hashCode}',
+        )
+        .toList()
+      ..sort((a, b) => (a['sequence'] as int).compareTo(b['sequence'] as int));
+
+List<Object?> _actions(AudioController controller) =>
+    _lifecycle(controller).map((record) => record['message']).toList();
+
 void _check(String description, Future<void> Function(WidgetTester) body) {
   testWidgets(description, (tester) async {
     try {
@@ -155,6 +172,7 @@ void main() {
   late AudioController controller;
   var creations = 0;
   var failCreation = false;
+  Object? creationFailure;
   Completer<Player>? pendingCreation;
   var closed = false;
   setUpAll(() {
@@ -172,12 +190,14 @@ void main() {
     player = _Player();
     creations = 0;
     failCreation = false;
+    creationFailure = null;
     pendingCreation = null;
     closed = false;
     controller =
         AudioController(
             createPlayer: (_) async {
               creations++;
+              if (creationFailure case final error?) throw error;
               if (failCreation) {
                 throw StateError('https://private?token=secret');
               }
@@ -268,6 +288,7 @@ void main() {
       await tester.pump();
       await _complete(tester, first);
       expect(controller.audioItem.value, isNull);
+      expect(_actions(controller), contains('audio.initialize.failed'));
       failCreation = false;
       player.opening = Completer<void>();
       final second = controller.playIndex(0);
@@ -336,6 +357,9 @@ void main() {
     adapter.reply(0, _source());
     await _complete(tester, operation);
     expect(controller.audioItem.value, isNull);
+    expect(_actions(controller), contains('audio.open.failed'));
+    expect(_lifecycle(controller).toString(), isNot(contains('token=')));
+    expect(_lifecycle(controller).toString(), isNot(contains('secret')));
     expect(find.textContaining('secret'), findsNothing);
     await tester.pump();
     expect(find.text('音频播放失败，请重试'), findsOneWidget);
@@ -430,6 +454,12 @@ void main() {
       duration: const Duration(milliseconds: 200),
     );
     try {
+      expect(_actions(controller), [
+        'audio.initialize.begin',
+        'audio.initialize.ready',
+        'audio.open.begin',
+        'audio.shutdown.requested',
+      ]);
       final playing = second.playIndex(0);
       await _until(tester, () => adapter.requests.length == 2);
       adapter.reply(1, _source('https://media.example/second'));
@@ -438,6 +468,8 @@ void main() {
       expect(secondPlayer.playing, isEmpty);
       player.opening!.complete();
       await _until(tester, () => player.disposals == 1);
+      expect(_actions(controller), contains('audio.shutdown.disposing'));
+      expect(_actions(controller), isNot(contains('audio.shutdown.released')));
       expect(secondPlayer.opened, isEmpty);
       expect(secondPlayer.playing, isEmpty);
       player.disposing!.complete();
@@ -445,6 +477,19 @@ void main() {
       await _complete(tester, playing);
       expect(secondPlayer.opened, ['https://media.example/second']);
       expect(secondPlayer.playing, [true]);
+      expect(_actions(controller), [
+        'audio.initialize.begin',
+        'audio.initialize.ready',
+        'audio.open.begin',
+        'audio.shutdown.requested',
+        'audio.open.completed',
+        'audio.shutdown.disposing',
+        'audio.shutdown.released',
+      ]);
+      expect(
+        _lifecycle(controller).last['details'],
+        containsPair('playerId', 'player.${player.hashCode}'),
+      );
     } finally {
       if (!player.opening!.isCompleted) player.opening!.complete();
       if (!player.disposing!.isCompleted) player.disposing!.complete();
@@ -481,6 +526,8 @@ void main() {
     await expectLater(next.prepare(), throwsA(same(cause)));
     await next.close(() async {});
     expect(player.opened, isEmpty);
+    expect(_actions(controller), contains('audio.shutdown.failed'));
+    expect(_actions(controller), isNot(contains('audio.shutdown.released')));
   });
 
   _check('old playback metadata cannot replace a newer system owner', (
@@ -502,6 +549,96 @@ void main() {
     } finally {
       videoPlayerServiceHandler = null;
       handler.clear();
+    }
+  });
+
+  _check('unconfirmed native creation cleanup blocks retry until release', (
+    tester,
+  ) async {
+    await host(tester);
+    final cleanup = Completer<void>();
+    creationFailure = NativePlayerCreationFailure(
+      cause: StateError('synthetic creation failure'),
+      cleanupError: StateError('synthetic unconfirmed cleanup'),
+      released: cleanup.future,
+    );
+    try {
+      final first = controller.playIndex(0);
+      await _until(tester, () => adapter.requests.length == 1);
+      adapter.reply(0, _source());
+      await _complete(tester, first);
+      creationFailure = null;
+      final retry = controller.playIndex(0);
+      await _until(tester, () => adapter.requests.length == 2);
+      adapter.reply(1, _source());
+      await _complete(tester, retry);
+      expect(creations, 1);
+      expect(player.opened, isEmpty);
+      expect(controller.audioItem.value, isNull);
+      cleanup.complete();
+      await tester.pump();
+      final recovered = controller.playIndex(0);
+      await _until(tester, () => adapter.requests.length == 3);
+      adapter.reply(2, _source());
+      await _complete(tester, recovered);
+      expect(creations, 2);
+      expect(controller.audioItem.value, isNotNull);
+    } finally {
+      if (!cleanup.isCompleted) cleanup.complete();
+    }
+  });
+
+  _check('close after failed native creation retains handover until cleanup', (
+    tester,
+  ) async {
+    await host(tester);
+    final previous = audioSessionHandler;
+    audioSessionHandler = _Focus();
+    addTearDown(() => audioSessionHandler = previous);
+    final cleanup = Completer<void>();
+    creationFailure = NativePlayerCreationFailure(
+      cause: StateError('synthetic creation failure'),
+      cleanupError: StateError('synthetic unconfirmed cleanup'),
+      released: cleanup.future,
+    );
+    final secondPlayer = _Player();
+    var secondCreations = 0;
+    final second =
+        AudioController(
+            createPlayer: (_) async {
+              secondCreations++;
+              return secondPlayer;
+            },
+          )
+          ..cacheAudioQa = 30280
+          ..playlist = controller.playlist;
+    second.animController = AnimationController(
+      vsync: second,
+      duration: const Duration(milliseconds: 200),
+    );
+    try {
+      final first = controller.playIndex(0);
+      await _until(tester, () => adapter.requests.length == 1);
+      adapter.reply(0, _source());
+      await _complete(tester, first);
+      controller.onClose();
+      closed = true;
+      await tester.pump();
+      expect(_actions(controller), isNot(contains('audio.shutdown.released')));
+      final playing = second.playIndex(0);
+      await _until(tester, () => adapter.requests.length == 2);
+      adapter.reply(1, _source());
+      await tester.pump(const Duration(milliseconds: 100));
+      expect(secondCreations, 0);
+      expect(secondPlayer.opened, isEmpty);
+      cleanup.complete();
+      await _complete(tester, playing);
+      expect(secondCreations, 1);
+      expect(secondPlayer.opened, hasLength(1));
+      expect(_actions(controller), contains('audio.shutdown.released'));
+    } finally {
+      if (!cleanup.isCompleted) cleanup.complete();
+      second.onClose();
     }
   });
 }

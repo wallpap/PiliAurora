@@ -38,6 +38,7 @@ import 'package:pili_aurora/plugin/pl_player/playback/playback_contracts.dart'
     show CommandOutcome;
 import 'package:pili_aurora/services/service_locator.dart';
 import 'package:pili_aurora/services/audio_session.dart';
+import 'package:pili_aurora/services/diagnostics/diagnostics.dart';
 import 'package:pili_aurora/services/logger.dart';
 import 'package:pili_aurora/services/shutdown_timer_service.dart';
 import 'package:pili_aurora/utils/accounts.dart';
@@ -104,6 +105,7 @@ class AudioController extends GetxController
   bool _playbackReady = false;
   int? _pendingPlayGeneration;
   Future<void>? _playerInitialization;
+  NativePlayerCreationFailure? _unreleasedCreation;
   Future<bool>? _mediaOpening;
   bool _audioClosed = false;
   int _speedRevision = 0;
@@ -113,6 +115,32 @@ class AudioController extends GetxController
   Player? player;
   Player? _closingPlayer;
   IndependentAudioLease? _audioLease;
+
+  void _audioEvent(
+    String action, {
+    Player? target,
+    int? generation,
+    Object? error,
+  }) {
+    try {
+      Diagnostics.instance.playerLog(
+        error == null ? DiagnosticLogLevel.info : DiagnosticLogLevel.warning,
+        'audio',
+        action,
+        details: {
+          'audioOwnerId': 'audio.$hashCode',
+          if (target != null) 'playerId': 'player.${target.hashCode}',
+          'generation': generation ?? _playGeneration,
+          'closed': _audioClosed,
+          'creationCleanupPending': _unreleasedCreation != null,
+          // 原始异常可能包含媒体地址和凭据，只记录类型。
+          if (error != null) 'errorType': error.runtimeType.toString(),
+        },
+      );
+    } catch (_) {
+      // 诊断失败不改变音频控制和真实释放屏障。
+    }
+  }
 
   void _ensureAudioLease() {
     _audioLease ??= audioSessionHandler?.acquireIndependentPlayer(
@@ -756,9 +784,10 @@ class AudioController extends GetxController
         await previous;
         if (!_ownsPlayback(generation)) return false;
         if (url.trim().isEmpty) throw const FormatException('音频来源为空');
-        await _initPlayerIfNeeded();
-        if (!_ownsPlayback(generation)) return false;
+        // 交接可能仍在等待旧原生句柄销毁，确认后再分配新 Player。
         await _audioLease?.prepare();
+        if (!_ownsPlayback(generation)) return false;
+        await _initPlayerIfNeeded();
         if (!_ownsPlayback(generation)) return false;
         final currentPlayer = player!
           ..setMediaHeader(
@@ -766,9 +795,30 @@ class AudioController extends GetxController
             // mpv cannot clear referer option
             headers: {'Referer': ?referer},
           );
-        await currentPlayer.open(
-          Media(url, start: _start, extras: audioFilterExtras(volume)),
-          play: _audioLease == null,
+        _audioEvent(
+          'audio.open.begin',
+          target: currentPlayer,
+          generation: generation,
+        );
+        try {
+          await currentPlayer.open(
+            Media(url, start: _start, extras: audioFilterExtras(volume)),
+            play: _audioLease == null,
+          );
+        } catch (error) {
+          _audioEvent(
+            'audio.open.failed',
+            target: currentPlayer,
+            generation: generation,
+            error: error,
+          );
+          rethrow;
+        }
+        // open 的真实回执仍须记录；关闭或切曲后的迟到成功不提交业务状态。
+        _audioEvent(
+          'audio.open.completed',
+          target: currentPlayer,
+          generation: generation,
         );
         if (!_ownsPlayback(generation)) return false;
         // 打开期间的显式暂停和拔耳机意图优先于本次自动起播。
@@ -832,17 +882,59 @@ class AudioController extends GetxController
   }
 
   Future<void> _initializePlayer() async {
+    // 原生创建可能在分配句柄后失败；清理未确认时拒绝再次分配。
+    if (_unreleasedCreation case final failure?) throw failure;
     _ensureAudioLease();
-    final initializedPlayer = await _createPlayer(
-      PlayerConfiguration(
-        options: {
-          if (Platform.isAndroid) 'ao': Pref.audioOutput,
-          'volume': PlatformUtils.isDesktop
-              ? volumePercent(desktopVolume.value).toStringAsFixed(0)
-              : Pref.playerVolume.toString(),
-          ...Pref.initBuffer(),
-        },
-      ),
+    final generation = _playGeneration;
+    _audioEvent('audio.initialize.begin', generation: generation);
+    late final Player initializedPlayer;
+    try {
+      initializedPlayer = await _createPlayer(
+        PlayerConfiguration(
+          options: {
+            if (Platform.isAndroid) 'ao': Pref.audioOutput,
+            'volume': PlatformUtils.isDesktop
+                ? volumePercent(desktopVolume.value).toStringAsFixed(0)
+                : Pref.playerVolume.toString(),
+            ...Pref.initBuffer(),
+          },
+        ),
+      );
+    } catch (error) {
+      if (error is NativePlayerCreationFailure) {
+        _unreleasedCreation = error;
+        unawaited(
+          error.released.then<void>(
+            (_) {
+              if (identical(_unreleasedCreation, error)) {
+                _unreleasedCreation = null;
+              }
+              _audioEvent(
+                'audio.initialize.cleanupReleased',
+                generation: generation,
+              );
+            },
+            onError: (Object cleanupError, StackTrace _) {
+              _audioEvent(
+                'audio.initialize.cleanupFailed',
+                generation: generation,
+                error: cleanupError,
+              );
+            },
+          ),
+        );
+      }
+      _audioEvent(
+        'audio.initialize.failed',
+        generation: generation,
+        error: error,
+      );
+      rethrow;
+    }
+    _audioEvent(
+      'audio.initialize.ready',
+      target: initializedPlayer,
+      generation: generation,
     );
     if (_audioClosed || isClosed) {
       // 交由关闭流程统一销毁，失败必须继续持有音频租约和视频抑制。
@@ -1440,6 +1532,7 @@ class AudioController extends GetxController
   @override
   void onClose() {
     _audioClosed = true;
+    _audioEvent('audio.shutdown.requested', target: player ?? _closingPlayer);
     _playlistGeneration++;
     if (_listeningToPlaylistAccount) {
       Accounts.mainChanges.removeListener(_onPlaylistAccountChanged);
@@ -1483,11 +1576,33 @@ class AudioController extends GetxController
         try {
           await _playerInitialization;
         } catch (_) {
-          // 创建失败已由播放入口交付，没有可继续销毁的资源。
+          // 创建失败已交付；可能已分配的原生句柄仍须单独等待清理。
         }
         await _mediaOpening;
+        if (_unreleasedCreation case final failure?) {
+          _audioEvent('audio.shutdown.waitingForCreation');
+          try {
+            await failure.released;
+          } catch (error) {
+            _audioEvent('audio.shutdown.failed', error: error);
+            rethrow;
+          }
+        }
         final releasing = target ?? _closingPlayer;
-        if (releasing != null) await releasing.dispose();
+        if (releasing != null) {
+          _audioEvent('audio.shutdown.disposing', target: releasing);
+          try {
+            await releasing.dispose();
+          } catch (error) {
+            _audioEvent(
+              'audio.shutdown.failed',
+              target: releasing,
+              error: error,
+            );
+            rethrow;
+          }
+        }
+        _audioEvent('audio.shutdown.released', target: releasing);
         _closingPlayer = null;
       }
 
