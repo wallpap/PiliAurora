@@ -9,7 +9,7 @@ import 'package:pili_aurora/utils/em.dart';
 import 'package:pili_aurora/utils/extension/iterable_ext.dart';
 import 'package:pili_aurora/utils/extension/string_ext.dart';
 import 'package:pili_aurora/utils/parse_int.dart';
-import 'package:flutter/foundation.dart' show kDebugMode;
+import 'package:pili_aurora/services/logger.dart';
 
 abstract class SearchNumData<T> {
   SearchNumData({
@@ -74,8 +74,12 @@ class SearchVideoData extends SearchNumData<SearchVideoItemModel> {
             if (item['data'] case List esports when esports.isNotEmpty) {
               try {
                 searchEsports = SearchEsports.fromJson(esports.first);
-              } catch (_) {
-                if (kDebugMode) rethrow;
+              } catch (error, stackTrace) {
+                logger.w(
+                  '赛事卡片解析失败，保留其余搜索结果',
+                  error: error.runtimeType,
+                  stackTrace: stackTrace,
+                );
               }
             }
         }

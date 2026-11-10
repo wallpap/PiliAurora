@@ -18,6 +18,7 @@ class SearchEsportsItem extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colorScheme = ColorScheme.of(context);
+    if (item.contest.isEmpty) return const SizedBox.shrink();
     final contest = item.contest.first;
 
     Widget buildTeamWidget(EsportsTeam team) {
@@ -51,7 +52,9 @@ class SearchEsportsItem extends StatelessWidget {
             RoundedRectangleBorder(borderRadius: .all(.circular(6))),
           ),
         ),
-        onPressed: () => PageUtils.toLiveRoom(contest.liveRoom),
+        onPressed: contest.liveRoom > 0
+            ? () => PageUtils.toLiveRoom(contest.liveRoom)
+            : null,
         child: const Text('观看直播'),
       );
     } else {
@@ -70,7 +73,9 @@ class SearchEsportsItem extends StatelessWidget {
 
       btn = OutlinedButton(
         style: style,
-        onPressed: () => PageUtils.toLiveRoom(contest.liveRoom),
+        onPressed: contest.liveRoom > 0
+            ? () => PageUtils.toLiveRoom(contest.liveRoom)
+            : null,
         child: const Text('直播间'),
       );
 
@@ -96,10 +101,12 @@ class SearchEsportsItem extends StatelessWidget {
       child: Center(
         child: GestureDetector(
           behavior: .opaque,
-          onTap: () => Get.toNamed(
-            '/matchInfo',
-            parameters: {'cid': contest.id.toString()},
-          ),
+          onTap: contest.id <= 0
+              ? null
+              : () => Get.toNamed(
+                  '/matchInfo',
+                  parameters: {'cid': contest.id.toString()},
+                ),
           child: Column(
             mainAxisSize: .min,
             children: [
