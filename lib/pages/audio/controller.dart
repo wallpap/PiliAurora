@@ -42,7 +42,6 @@ import 'package:pili_aurora/utils/accounts/account.dart';
 import 'package:pili_aurora/utils/android/android_helper.dart';
 import 'package:pili_aurora/utils/connectivity_utils.dart';
 import 'package:pili_aurora/utils/extension/iterable_ext.dart';
-import 'package:pili_aurora/utils/extension/num_ext.dart';
 import 'package:pili_aurora/utils/global_data.dart';
 import 'package:pili_aurora/utils/id_utils.dart';
 import 'package:pili_aurora/utils/page_utils.dart';
@@ -86,6 +85,16 @@ class AudioController extends GetxController
   final audioItem = Rxn<DetailItem>();
 
   int _playlistGeneration = 0;
+  Account? _playlistAccount;
+  bool _listeningToPlaylistAccount = false;
+  Object? _pageOperation;
+  bool _failedPageIsPrev = false;
+  int _prevEmptyPages = 0;
+  int _nextEmptyPages = 0;
+  final playlistState = Rx<LoadingState<void>>(LoadingState.loading());
+  final playlistPageState = Rx<LoadingState<void>>(const Success(null));
+  final playlistRevision = RxInt(0);
+  final _removedPlaylistItems = <(int, Int64)>{};
   int _playGeneration = 0;
   Account? _playAccount;
   bool _playbackReady = false;
@@ -128,6 +137,7 @@ class AudioController extends GetxController
   String? _prev;
   String? _next;
   bool get reachStart => _prev == null;
+  bool get hasNextPage => _next != null;
 
   ListOrder order = ListOrder.ORDER_NORMAL;
 
@@ -200,7 +210,7 @@ class AudioController extends GetxController
       vsync: this,
       duration: const Duration(milliseconds: 200),
     );
-    _queryPlayList(isInit: true);
+    reloadPlaylist();
 
     final String? audioUrl = args['audioUrl'];
     final hasAudioUrl = audioUrl != null;
@@ -263,54 +273,181 @@ class AudioController extends GetxController
     );
   }
 
-  Future<void> _queryPlayList({
-    bool isInit = false,
-    bool isLoadPrev = false,
-    bool isLoadNext = false,
-  }) async {
-    if (isClosed) return;
-    final generation = isInit ? ++_playlistGeneration : _playlistGeneration;
-    final res = await AudioGrpc.audioPlayList(
-      id: id,
-      oid: isInit ? oid : null,
-      subId: isInit ? subId : null,
-      itemType: isInit ? itemType : null,
-      from: isInit ? from : null,
-      next: isLoadPrev
-          ? _prev
-          : isLoadNext
-          ? _next
-          : null,
-      extraId: extraId,
-      order: order,
-    );
-    if (isClosed || generation != _playlistGeneration) return;
-    if (res case Success(:final response)) {
-      if (isInit) {
-        late final paginationReply = response.paginationReply;
-        _prev = response.reachStart ? null : paginationReply.prev;
-        _next = response.reachEnd ? null : paginationReply.next;
-        final index = response.list.indexWhere((e) => e.item.oid == oid);
-        if (index != -1) {
-          this.index = index;
-          _updateCurrItem(response.list[index]);
-          playlist = response.list;
-        }
-      } else if (isLoadPrev) {
-        _prev = response.reachStart ? null : response.paginationReply.prev;
-        if (response.list.isNotEmpty) {
-          index += response.list.length;
-          playlist?.insertAll(0, response.list);
-        }
-      } else if (isLoadNext) {
-        _next = response.reachEnd ? null : response.paginationReply.next;
-        if (response.list.isNotEmpty) {
-          playlist?.addAll(response.list);
-        }
-      }
-    } else {
-      res.toast();
+  bool _ownsPlaylist(int generation, Account account) =>
+      !isClosed &&
+      generation == _playlistGeneration &&
+      identical(account, Accounts.main);
+
+  void _onPlaylistAccountChanged() {
+    if (!identical(_playlistAccount, Accounts.main)) reloadPlaylist();
+  }
+
+  Future<bool> reloadPlaylist() async {
+    if (isClosed) return false;
+    if (!_listeningToPlaylistAccount) {
+      Accounts.mainChanges.addListener(_onPlaylistAccountChanged);
+      _listeningToPlaylistAccount = true;
     }
+    final account = Accounts.main;
+    if (!identical(account, _playlistAccount)) {
+      playlist = null;
+      index = null;
+      _prev = _next = null;
+    }
+    _playlistAccount = account;
+    final generation = ++_playlistGeneration;
+    _pageOperation = null;
+    _prevEmptyPages = _nextEmptyPages = 0;
+    _removedPlaylistItems.clear();
+    playlistState.value = LoadingState.loading();
+    playlistPageState.value = const Success(null);
+    playlistRevision.value++;
+    final anchorOid = oid;
+    final anchorSubIds = List<Int64>.of(subId);
+    try {
+      final res = await AudioGrpc.audioPlayList(
+        id: id,
+        oid: anchorOid,
+        subId: anchorSubIds,
+        itemType: itemType,
+        from: from,
+        extraId: extraId,
+        order: order,
+      );
+      if (!_ownsPlaylist(generation, account)) return false;
+      if (res case Success(:final response)) {
+        final keys = <(int, Int64)>{..._removedPlaylistItems};
+        final items = response.list
+            .where((entry) => keys.add((entry.item.itemType, entry.item.oid)))
+            .toList();
+        final selected = items.indexWhere(
+          (entry) => entry.item.oid == oid && entry.item.itemType == itemType,
+        );
+        playlist = items;
+        index = selected >= 0 ? selected : null;
+        _prev = _playlistCursor(
+          response.reachStart,
+          response.paginationReply.prev,
+        );
+        _next = _playlistCursor(
+          response.reachEnd,
+          response.paginationReply.next,
+        );
+        // 列表可以不含正在播放的资源，不擅自把首项当作当前音频。
+        if (selected >= 0 &&
+            oid == anchorOid &&
+            listEquals(subId, anchorSubIds)) {
+          _updateCurrItem(items[selected]);
+        }
+        playlistState.value = const Success(null);
+        playlistRevision.value++;
+        return true;
+      }
+      playlistState.value = res is Error ? res : const Error('播放列表尚未加载完成，请重试');
+    } catch (error, stack) {
+      if (!_ownsPlaylist(generation, account)) return false;
+      logger
+          .scoped('audio')
+          .w('音频列表加载失败', error: error.runtimeType, stackTrace: stack);
+      playlistState.value = Error(
+        '播放列表加载失败，请重试',
+        cause: error,
+        stackTrace: stack,
+      );
+    }
+    return false;
+  }
+
+  static String? _playlistCursor(bool reachedEnd, String cursor) =>
+      reachedEnd || cursor.isEmpty ? null : cursor;
+
+  Future<bool> _loadPlaylistPage({
+    required bool previous,
+    bool retry = false,
+  }) async {
+    if (isClosed ||
+        _pageOperation != null ||
+        !playlistState.value.isSuccess ||
+        !identical(_playlistAccount, Accounts.main) ||
+        playlist == null ||
+        (!retry && playlistPageState.value is Error)) {
+      return false;
+    }
+    final cursor = previous ? _prev : _next;
+    if (cursor == null) return false;
+    final generation = _playlistGeneration;
+    final account = _playlistAccount!;
+    final operation = Object();
+    _pageOperation = operation;
+    _failedPageIsPrev = previous;
+    playlistPageState.value = LoadingState.loading();
+    try {
+      final res = await AudioGrpc.audioPlayList(
+        id: id,
+        next: cursor,
+        extraId: extraId,
+        order: order,
+      );
+      if (!_ownsPlaylist(generation, account)) return false;
+      if (res case Success(:final response)) {
+        final keys = <(int, Int64)>{
+          ..._removedPlaylistItems,
+          for (final entry in playlist!) (entry.item.itemType, entry.item.oid),
+        };
+        final added = response.list
+            .where((entry) => keys.add((entry.item.itemType, entry.item.oid)))
+            .toList();
+        var nextCursor = _playlistCursor(
+          previous ? response.reachStart : response.reachEnd,
+          previous
+              ? response.paginationReply.prev
+              : response.paginationReply.next,
+        );
+        if (nextCursor == cursor) nextCursor = null;
+        if (previous) {
+          _prevEmptyPages = added.isEmpty ? _prevEmptyPages + 1 : 0;
+          _prev = _prevEmptyPages >= 5 ? null : nextCursor;
+          playlist!.insertAll(0, added);
+          if (index case final selected?) index = selected + added.length;
+        } else {
+          _nextEmptyPages = added.isEmpty ? _nextEmptyPages + 1 : 0;
+          _next = _nextEmptyPages >= 5 ? null : nextCursor;
+          playlist!.addAll(added);
+        }
+        playlistPageState.value = const Success(null);
+        playlistRevision.value++;
+        return true;
+      }
+      playlistPageState.value = res is Error
+          ? res
+          : const Error('播放列表尚未加载完成，请重试');
+    } catch (error, stack) {
+      if (!_ownsPlaylist(generation, account)) return false;
+      logger
+          .scoped('audio')
+          .w('音频列表分页失败', error: error.runtimeType, stackTrace: stack);
+      playlistPageState.value = Error(
+        '播放列表加载失败，请重试',
+        cause: error,
+        stackTrace: stack,
+      );
+    } finally {
+      if (identical(_pageOperation, operation)) _pageOperation = null;
+    }
+    return false;
+  }
+
+  void removePlaylistItem(DetailItem item) {
+    final items = playlist;
+    final removedIndex =
+        items?.indexWhere((entry) => identical(entry, item)) ?? -1;
+    if (removedIndex < 0 || removedIndex == index) return;
+    _removedPlaylistItems.add((item.item.itemType, item.item.oid));
+    items!.removeAt(removedIndex);
+    if (index case final selected? when removedIndex < selected) {
+      index = selected - 1;
+    }
+    playlistRevision.value++;
   }
 
   @pragma('vm:notify-debugger-on-exception')
@@ -824,13 +961,21 @@ class AudioController extends GetxController
       final next = index! + 1;
       if (next < playlist!.length) {
         if (next == playlist!.length - 1 && _next != null) {
-          _queryPlayList(isLoadNext: true);
+          loadNext();
         }
         playIndex(next);
         return true;
       }
     }
     return false;
+  }
+
+  Future<void> selectPlaylistItem(DetailItem item, {List<Int64>? subId}) {
+    // 行点击归属实际快照，前插分页和重排后不能沿用旧位置。
+    final selected =
+        playlist?.indexWhere((entry) => identical(entry, item)) ?? -1;
+    if (selected < 0) return Future.value();
+    return playIndex(selected, subId: subId);
   }
 
   Future<void> playIndex(int index, {List<Int64>? subId}) async {
@@ -873,29 +1018,21 @@ class AudioController extends GetxController
     } catch (_) {}
   }
 
-  Future<void> loadPrev(BuildContext context) async {
-    if (_prev == null) return;
-    final length = playlist!.length;
-    await _queryPlayList(isLoadPrev: true);
-    if (length != playlist!.length && context.mounted) {
-      (context as Element).markNeedsBuild();
-    }
-  }
+  Future<bool> loadPrev() => _loadPlaylistPage(previous: true, retry: true);
 
-  Future<void> loadNext(BuildContext context) async {
-    if (_next == null) return;
-    final length = playlist!.length;
-    await _queryPlayList(isLoadNext: true);
-    if (length != playlist!.length && context.mounted) {
-      (context as Element).markNeedsBuild();
-    }
-  }
+  Future<bool> loadNext() => _loadPlaylistPage(previous: false);
 
-  void onChangeOrder(ListOrder value) {
-    if (order != value) {
-      order = value;
-      _queryPlayList(isInit: true);
+  Future<bool> retryPlaylistPage() =>
+      _loadPlaylistPage(previous: _failedPageIsPrev, retry: true);
+
+  Future<bool> onChangeOrder(ListOrder value) {
+    if (order == value &&
+        playlistState.value is! Error &&
+        identical(_playlistAccount, Accounts.main)) {
+      return Future.value(false);
     }
+    order = value;
+    return reloadPlaylist();
   }
 
   @override
@@ -925,6 +1062,10 @@ class AudioController extends GetxController
   @override
   void onClose() {
     _playlistGeneration++;
+    if (_listeningToPlaylistAccount) {
+      Accounts.mainChanges.removeListener(_onPlaylistAccountChanged);
+      _listeningToPlaylistAccount = false;
+    }
     _playGeneration++;
     _stopStatusTimer();
     shutdownTimerService
