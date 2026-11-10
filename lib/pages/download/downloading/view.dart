@@ -4,6 +4,7 @@ import 'package:pili_aurora/common/widgets/flutter/pop_scope.dart';
 import 'package:pili_aurora/common/widgets/loading_widget/http_error.dart';
 import 'package:pili_aurora/common/widgets/scaffold/simple_scaffold.dart';
 import 'package:pili_aurora/common/widgets/view_sliver_safe_area.dart';
+import 'package:pili_aurora/http/loading_state.dart';
 import 'package:pili_aurora/models/remote/download/bili_download_entry_info.dart';
 import 'package:pili_aurora/pages/common/multi_select/base.dart'
     show BaseMultiSelectMixin;
@@ -68,6 +69,19 @@ class _DownloadingPageState extends State<DownloadingPage>
             slivers: [
               ViewSliverSafeArea(
                 sliver: Obx(() {
+                  final initialization =
+                      _downloadService.initializationState.value;
+                  if (initialization is Error) {
+                    return HttpError(
+                      errMsg: initialization.toString(),
+                      onReload: _downloadService.initDownloadList,
+                    );
+                  }
+                  if (!initialization.isSuccess) {
+                    return const SliverToBoxAdapter(
+                      child: Center(child: CircularProgressIndicator()),
+                    );
+                  }
                   if (_waitDownloadQueue.isNotEmpty) {
                     return SliverGrid.builder(
                       gridDelegate: gridDelegate,

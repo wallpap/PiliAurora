@@ -6,16 +6,17 @@ import 'package:pili_aurora/common/widgets/flutter/pop_scope.dart';
 import 'package:pili_aurora/common/widgets/loading_widget/http_error.dart';
 import 'package:pili_aurora/common/widgets/scaffold/simple_scaffold.dart';
 import 'package:pili_aurora/common/widgets/view_sliver_safe_area.dart';
+import 'package:pili_aurora/http/loading_state.dart';
 import 'package:pili_aurora/models/remote/download/bili_download_entry_info.dart';
 import 'package:pili_aurora/pages/common/multi_select/base.dart'
     show BaseMultiSelectMixin;
 import 'package:pili_aurora/pages/download/controller.dart';
+import 'package:pili_aurora/pages/download/danmaku_update.dart';
 import 'package:pili_aurora/pages/download/detail/widgets/item.dart';
 import 'package:pili_aurora/services/download/download_service.dart';
 import 'package:pili_aurora/utils/grid.dart';
 import 'package:pili_aurora/pages/download/deletion.dart';
 import 'package:collection/collection.dart';
-import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:get/get.dart';
 import 'package:material_ui/material_ui.dart'
     hide SliverGridDelegateWithMaxCrossAxisExtent;
@@ -43,6 +44,23 @@ class _DownloadDetailPageState extends State<DownloadDetailPage>
   final _controller = Get.find<DownloadPageController>();
   final _downloadService = Get.find<DownloadService>();
   final _deletion = DownloadDeletion();
+  final _danmakuUpdate = DownloadDanmakuUpdate();
+
+  Future<void> _updateDanmaku() async {
+    final updated = await _danmakuUpdate.run(
+      service: _downloadService,
+      entries: allChecked,
+      isCurrent: () => mounted,
+    );
+    if (!mounted) return;
+    for (final entry in updated) {
+      entry.checked = false;
+    }
+    _downloadItems.refresh();
+    rxCount.value = allChecked.length;
+    if (checkedCount == 0) enableMultiSelect.value = false;
+  }
+
   @override
   RxList<BiliDownloadEntryInfo> get list => _downloadItems;
   @override
@@ -103,23 +121,7 @@ class _DownloadDetailPageState extends State<DownloadDetailPage>
                 style: TextButton.styleFrom(
                   visualDensity: VisualDensity.compact,
                 ),
-                onPressed: () async {
-                  final futures = allChecked
-                      .map(
-                        (e) => _downloadService.downloadDanmaku(
-                          entry: e,
-                          isUpdate: true,
-                        ),
-                      )
-                      .toList();
-                  handleSelect();
-                  final res = await Future.wait(futures);
-                  if (res.every((e) => e)) {
-                    SmartDialog.showToast('更新成功');
-                  } else {
-                    SmartDialog.showToast('更新失败');
-                  }
-                },
+                onPressed: _updateDanmaku,
                 child: Text(
                   '更新',
                   style: TextStyle(color: colorScheme.onSurface),
@@ -148,6 +150,18 @@ class _DownloadDetailPageState extends State<DownloadDetailPage>
             slivers: [
               ViewSliverSafeArea(
                 sliver: Obx(() {
+                  final initialization = _controller.initializationState.value;
+                  if (initialization is Error) {
+                    return HttpError(
+                      errMsg: initialization.toString(),
+                      onReload: _controller.retryInitialization,
+                    );
+                  }
+                  if (!initialization.isSuccess) {
+                    return const SliverToBoxAdapter(
+                      child: Center(child: CircularProgressIndicator()),
+                    );
+                  }
                   if (_downloadItems.isNotEmpty) {
                     return SliverGrid.builder(
                       gridDelegate: gridDelegate,

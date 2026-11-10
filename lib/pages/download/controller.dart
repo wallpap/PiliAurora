@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:pili_aurora/common/widgets/dialog/dialog.dart';
+import 'package:pili_aurora/http/loading_state.dart';
 import 'package:pili_aurora/models/remote/download/download_info.dart';
 import 'package:pili_aurora/pages/common/multi_select/base.dart'
     show BaseMultiSelectMixin;
@@ -17,6 +18,8 @@ class DownloadPageController extends GetxController
   final pages = RxList<DownloadPageInfo>();
   final flag = RxInt(0);
   final deletion = DownloadDeletion();
+  Rx<LoadingState<void>> get initializationState =>
+      _downloadService.initializationState;
 
   @override
   List<DownloadPageInfo> get list => pages;
@@ -37,8 +40,19 @@ class DownloadPageController extends GetxController
   }
 
   Future<void> _loadList() async {
-    await _downloadService.waitForInitialization;
-    if (isClosed) return;
+    final initialization = _downloadService.waitForInitialization;
+    final result = await initialization;
+    if (isClosed ||
+        !identical(initialization, _downloadService.waitForInitialization)) {
+      return;
+    }
+    if (!result.isSuccess) {
+      pages.clear();
+      rxCount.value = 0;
+      enableMultiSelect.value = false;
+      flag.value++;
+      return;
+    }
     if (_downloadService.downloadList.isEmpty) {
       pages.clear();
       rxCount.value = 0;
@@ -84,6 +98,10 @@ class DownloadPageController extends GetxController
     rxCount.value = list.where((item) => item.checked).length;
     if (rxCount.value == 0) enableMultiSelect.value = false;
     flag.value++;
+  }
+
+  Future<void> retryInitialization() async {
+    await _downloadService.initDownloadList();
   }
 
   Future<void> removeEntry(BiliDownloadEntryInfo entry) async {

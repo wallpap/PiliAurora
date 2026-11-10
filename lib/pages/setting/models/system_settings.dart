@@ -11,6 +11,7 @@ import 'package:pili_aurora/pages/setting/models/model.dart';
 import 'package:pili_aurora/pages/setting/widgets/clear_cache_item.dart';
 import 'package:pili_aurora/pages/setting/widgets/slider_dialog.dart';
 import 'package:pili_aurora/services/download/download_service.dart';
+import 'package:pili_aurora/services/logger.dart';
 import 'package:pili_aurora/utils/android/bindings.g.dart';
 import 'package:pili_aurora/utils/cache_manager.dart';
 import 'package:pili_aurora/utils/filtering_text.dart';
@@ -128,10 +129,47 @@ List<SettingsModel> get diagnosticSettings => [
   ),
 ];
 
+bool _changingDownloadPath = false;
+
+Future<void> _setDownloadPath(
+  BuildContext context,
+  VoidCallback setState,
+  String nextPath,
+) async {
+  if (_changingDownloadPath || nextPath == downloadPath) return;
+  _changingDownloadPath = true;
+  try {
+    final service = Get.find<DownloadService>();
+    final pause = await service.cancelDownload(
+      isDelete: false,
+      downloadNext: false,
+    );
+    if (!pause.isSuccess) {
+      if (context.mounted) pause.toast();
+      return;
+    }
+    if (!context.mounted) return;
+    if (nextPath == defDownloadPath) {
+      await GStorage.setting.delete(SettingBoxKey.downloadPath);
+    } else {
+      await GStorage.setting.put(SettingBoxKey.downloadPath, nextPath);
+    }
+    downloadPath = nextPath;
+    if (context.mounted) setState();
+    final result = await service.initDownloadList();
+    if (!result.isSuccess && context.mounted) result.toast();
+  } catch (error, stack) {
+    logger.e('下载目录设置失败', error: error.runtimeType, stackTrace: stack);
+    if (context.mounted) SmartDialog.showToast('下载目录设置失败，请重试');
+  } finally {
+    _changingDownloadPath = false;
+  }
+}
+
 void _showDownPathDialog(BuildContext context, VoidCallback setState) {
   showDialog(
     context: context,
-    builder: (context) => SimpleDialog(
+    builder: (_) => SimpleDialog(
       clipBehavior: Clip.hardEdge,
       contentPadding: const EdgeInsets.symmetric(vertical: 12),
       children: [
@@ -150,30 +188,28 @@ void _showDownPathDialog(BuildContext context, VoidCallback setState) {
           child: const Text('复制', style: TextStyle(fontSize: 14)),
         ),
         DialogOption(
-          onPressed: () {
+          onPressed: () async {
             Get.back();
             final defPath = defDownloadPath;
-            if (downloadPath == defPath) return;
-            downloadPath = defPath;
-            setState();
-            Get.find<DownloadService>().initDownloadList();
-            GStorage.setting.delete(SettingBoxKey.downloadPath);
+            await _setDownloadPath(context, setState, defPath);
           },
           child: const Text('重置', style: TextStyle(fontSize: 14)),
         ),
         DialogOption(
           onPressed: () async {
             Get.back();
-            final path = await FilePicker.getDirectoryPath(
-              initialDirectory: Directory(downloadPath).existsSync()
-                  ? downloadPath
-                  : null,
-            );
-            if (path == null || path == downloadPath) return;
-            downloadPath = path;
-            setState();
-            Get.find<DownloadService>().initDownloadList();
-            GStorage.setting.put(SettingBoxKey.downloadPath, path);
+            try {
+              final path = await FilePicker.getDirectoryPath(
+                initialDirectory: Directory(downloadPath).existsSync()
+                    ? downloadPath
+                    : null,
+              );
+              if (path == null || !context.mounted) return;
+              await _setDownloadPath(context, setState, path);
+            } catch (error, stack) {
+              logger.e('下载目录选择失败', error: error.runtimeType, stackTrace: stack);
+              if (context.mounted) SmartDialog.showToast('下载目录选择失败，请重试');
+            }
           },
           child: const Text('设置新路径', style: TextStyle(fontSize: 14)),
         ),

@@ -1,5 +1,5 @@
 import 'dart:async';
-import 'dart:io' show File;
+import 'dart:io' show Directory, File;
 
 import 'package:pili_aurora/grpc/dm.dart';
 import 'package:pili_aurora/http/download.dart';
@@ -32,6 +32,11 @@ import 'package:synchronized/synchronized.dart';
 
 // ref https://github.com/10miaomiao/bilimiao2/blob/master/bilimiao-download/src/main/java/cn/a10miaomiao/bilimiao/download/DownloadService.kt
 
+/// 已被暂停、切源或较新操作取代；调用方无需提示用户重试。
+class DownloadCancelled extends Error {
+  const DownloadCancelled() : super('下载操作已取消');
+}
+
 /// 管理下载记录、待下载队列和当前任务；DASH 的音视频流可并行传输。
 ///
 /// 目录与 JSON 由 [DownloadRepository] 管理，单路媒体传输由
@@ -57,7 +62,10 @@ class DownloadService extends GetxService {
 
   final _lock = Lock();
   final _creatingCids = <int>{};
+  final _danmakuOperations = <String, Object>{};
   Object? _operation;
+  int _initializationGeneration = 0;
+  final initializationState = Rx<LoadingState<void>>(LoadingState.loading());
 
   final flagNotifier = SetNotifier();
   final waitDownloadQueue = RxList<BiliDownloadEntryInfo>();
@@ -81,13 +89,14 @@ class DownloadService extends GetxService {
   void _saveProgress(BiliDownloadEntryInfo entry) {
     unawaited(
       _repository.save(entry).catchError((Object error, StackTrace stack) {
-        logger.e('下载进度保存失败', error: error, stackTrace: stack);
+        logger.e('下载进度保存失败', error: error.runtimeType, stackTrace: stack);
         SmartDialog.showToast('下载进度保存失败，请检查磁盘空间和目录权限');
       }),
     );
   }
 
-  late Future<void> waitForInitialization;
+  /// 初始化与重读均返回结果；失败保留旧服务快照，由页面显示重试入口。
+  late Future<LoadingState<void>> waitForInitialization;
 
   @override
   void onInit() {
@@ -95,213 +104,290 @@ class DownloadService extends GetxService {
     initDownloadList();
   }
 
-  void initDownloadList() {
-    waitForInitialization = _readDownloadList();
+  Future<LoadingState<void>> initDownloadList() {
+    final generation = ++_initializationGeneration;
+    initializationState.value = LoadingState.loading();
+    return waitForInitialization = _readDownloadList(generation);
   }
 
-  Future<void> _readDownloadList() async {
-    final entries = await _repository.load();
-    for (final entry in entries.where((entry) => !entry.isCompleted)) {
-      final name = entry.mediaType == 1
-          ? PathUtils.videoNameType1
-          : PathUtils.videoNameType2;
-      final file = File(path.join(entry.entryDirPath, entry.typeTag, name));
-      // 续传以真实文件长度为准，进程异常退出不依赖最后一次 UI 进度。
-      entry.downloadedBytes = file.existsSync() ? file.lengthSync() : 0;
+  Future<LoadingState<void>> _readDownloadList(int generation) async {
+    try {
+      return await _lock.synchronized(() async {
+        final entries = await _repository.load();
+        for (final entry in entries.where((entry) => !entry.isCompleted)) {
+          final name = entry.mediaType == 1
+              ? PathUtils.videoNameType1
+              : PathUtils.videoNameType2;
+          final file = File(path.join(entry.entryDirPath, entry.typeTag, name));
+          // 续传以真实文件长度为准，进程异常退出不依赖最后一次 UI 进度。
+          entry.downloadedBytes = file.existsSync() ? file.lengthSync() : 0;
+        }
+        if (generation != _initializationGeneration) {
+          return const DownloadCancelled();
+        }
+        final pending = entries.where((entry) => !entry.isCompleted).toList();
+        var current = curDownload.value;
+        if (current != null &&
+            !pending.any(
+              (entry) => entry.entryDirPath == current!.entryDirPath,
+            )) {
+          await _cancelCurrent(isDelete: false, downloadNext: false);
+          if (generation != _initializationGeneration) {
+            return const DownloadCancelled();
+          }
+          _curCid = null;
+          curDownload.value = null;
+          current = null;
+        }
+        downloadList
+          ..clear()
+          ..addAll(entries.where((entry) => entry.isCompleted))
+          ..sort((a, b) => b.timeUpdateStamp.compareTo(a.timeUpdateStamp));
+        // 同一目录重读复用当前对象；新目录不能继承同 CID 的旧任务状态。
+        waitDownloadQueue.assignAll(
+          pending.map(
+            (entry) =>
+                current?.entryDirPath == entry.entryDirPath ? current! : entry,
+          ),
+        );
+        initializationState.value = const Success(null);
+        _publishDeletion(true);
+        return const Success<void>(null);
+      });
+    } catch (error, stack) {
+      final result = _failure('下载记录读取失败，请检查目录权限后重试', error, stack);
+      if (generation == _initializationGeneration) {
+        initializationState.value = result;
+        _publishDeletion(true);
+      }
+      return result;
     }
-    downloadList
-      ..clear()
-      ..addAll(entries.where((entry) => entry.isCompleted))
-      ..sort((a, b) => b.timeUpdateStamp.compareTo(a.timeUpdateStamp));
-    final pending = entries.where((entry) => !entry.isCompleted).toList();
-    final current = curDownload.value;
-    // 用磁盘快照替换队列，同时复用当前对象，避免刷新时丢失进行中的状态。
-    waitDownloadQueue.assignAll(
-      pending.map((entry) => current?.cid == entry.cid ? current! : entry),
-    );
   }
 
-  void downloadVideo(
+  Error _failure(String message, Object error, StackTrace stack) {
+    logger.e(message, error: error.runtimeType, stackTrace: stack);
+    return Error(message, cause: error, stackTrace: stack);
+  }
+
+  Future<LoadingState<void>> downloadVideo(
     Part page,
     VideoDetailData? videoDetail,
     ugc.EpisodeItem? videoArc,
     VideoQuality videoQuality,
     AudioQuality audioQuality,
-  ) {
-    final cid = page.cid!;
-    if (downloadList.indexWhere((e) => e.cid == cid) != -1) {
-      return;
+  ) async {
+    try {
+      final cid = page.cid!;
+      final pageData = PageInfo(
+        cid: cid,
+        page: page.page!,
+        from: page.from,
+        part: page.part,
+        vid: page.vid,
+        hasAlias: false,
+        tid: 0,
+        width: 0,
+        height: 0,
+        rotate: 0,
+        downloadTitle: '视频已缓存完成',
+        downloadSubtitle: videoDetail?.title ?? videoArc!.title,
+      );
+      final currentTime = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+      final entry = BiliDownloadEntryInfo(
+        mediaType: 2,
+        hasDashAudio: false,
+        isCompleted: false,
+        totalBytes: 0,
+        downloadedBytes: 0,
+        title: videoDetail?.title ?? videoArc!.title!,
+        typeTag: videoQuality.code.toString(),
+        cover: (videoDetail?.pic ?? videoArc!.cover!).http2https,
+        preferedVideoQuality: videoQuality.code,
+        preferredAudioQuality: audioQuality.code,
+        qualityPithyDescription: videoQuality.desc,
+        guessedTotalBytes: 0,
+        totalTimeMilli: (page.duration ?? 0) * 1000,
+        danmakuCount:
+            videoDetail?.stat?.danmaku ?? videoArc?.arc?.stat?.danmaku ?? 0,
+        timeUpdateStamp: currentTime,
+        timeCreateStamp: currentTime,
+        canPlayInAdvance: true,
+        interruptTransformTempFile: false,
+        avid: videoDetail?.aid ?? videoArc!.aid!,
+        spid: 0,
+        seasonId: null,
+        ep: null,
+        source: null,
+        bvid: videoDetail?.bvid ?? videoArc!.bvid!,
+        ownerId: videoDetail?.owner?.mid ?? videoArc?.arc?.author?.mid,
+        ownerName: videoDetail?.owner?.name ?? videoArc?.arc?.author?.name,
+        pageData: pageData,
+      );
+      return await _createDownload(entry);
+    } catch (error, stack) {
+      return _failure('创建下载失败，请检查视频信息后重试', error, stack);
     }
-    if (waitDownloadQueue.indexWhere((e) => e.cid == cid) != -1) {
-      return;
-    }
-    final pageData = PageInfo(
-      cid: cid,
-      page: page.page!,
-      from: page.from,
-      part: page.part,
-      vid: page.vid,
-      hasAlias: false,
-      tid: 0,
-      width: 0,
-      height: 0,
-      rotate: 0,
-      downloadTitle: '视频已缓存完成',
-      downloadSubtitle: videoDetail?.title ?? videoArc!.title,
-    );
-    final currentTime = DateTime.now().millisecondsSinceEpoch ~/ 1000;
-    final entry = BiliDownloadEntryInfo(
-      mediaType: 2,
-      hasDashAudio: false,
-      isCompleted: false,
-      totalBytes: 0,
-      downloadedBytes: 0,
-      title: videoDetail?.title ?? videoArc!.title!,
-      typeTag: videoQuality.code.toString(),
-      cover: (videoDetail?.pic ?? videoArc!.cover!).http2https,
-      preferedVideoQuality: videoQuality.code,
-      preferredAudioQuality: audioQuality.code,
-      qualityPithyDescription: videoQuality.desc,
-      guessedTotalBytes: 0,
-      totalTimeMilli: (page.duration ?? 0) * 1000,
-      danmakuCount:
-          videoDetail?.stat?.danmaku ?? videoArc?.arc?.stat?.danmaku ?? 0,
-      timeUpdateStamp: currentTime,
-      timeCreateStamp: currentTime,
-      canPlayInAdvance: true,
-      interruptTransformTempFile: false,
-      avid: videoDetail?.aid ?? videoArc!.aid!,
-      spid: 0,
-      seasonId: null,
-      ep: null,
-      source: null,
-      bvid: videoDetail?.bvid ?? videoArc!.bvid!,
-      ownerId: videoDetail?.owner?.mid ?? videoArc?.arc?.author?.mid,
-      ownerName: videoDetail?.owner?.name ?? videoArc?.arc?.author?.name,
-      pageData: pageData,
-    );
-    _createDownload(entry);
   }
 
-  void downloadBangumi(
+  Future<LoadingState<void>> downloadBangumi(
     int index,
     PgcInfoModel pgcItem,
     pgc.EpisodeItem episode,
     VideoQuality quality,
     AudioQuality audioQuality,
-  ) {
-    final cid = episode.cid!;
-    if (downloadList.indexWhere((e) => e.cid == cid) != -1) {
-      return;
+  ) async {
+    try {
+      final cid = episode.cid!;
+      final currentTime = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+      final source = SourceInfo(
+        avId: episode.aid!,
+        cid: cid,
+      );
+      final ep = EpInfo(
+        avId: source.avId,
+        page: index,
+        danmaku: source.cid,
+        cover: episode.cover!,
+        episodeId: episode.id!,
+        index: episode.title!,
+        indexTitle: episode.longTitle ?? '',
+        showTitle: episode.showTitle,
+        from: episode.from ?? 'bangumi',
+        seasonType: pgcItem.type ?? (episode.from == 'pugv' ? -1 : 0),
+        width: 0,
+        height: 0,
+        rotate: 0,
+        link: episode.link ?? '',
+        bvid: episode.bvid ?? IdUtils.av2bv(source.avId),
+        sortIndex: index,
+      );
+      final entry = BiliDownloadEntryInfo(
+        mediaType: 2,
+        hasDashAudio: false,
+        isCompleted: false,
+        totalBytes: 0,
+        downloadedBytes: 0,
+        title: pgcItem.seasonTitle ?? pgcItem.title ?? '',
+        typeTag: quality.code.toString(),
+        cover: episode.cover!,
+        preferedVideoQuality: quality.code,
+        preferredAudioQuality: audioQuality.code,
+        qualityPithyDescription: quality.desc,
+        guessedTotalBytes: 0,
+        totalTimeMilli:
+            (episode.duration ?? 0) *
+            (episode.from == 'pugv' ? 1000 : 1), // pgc millisec,, pugv sec
+        danmakuCount: pgcItem.stat?.danmaku ?? 0,
+        timeUpdateStamp: currentTime,
+        timeCreateStamp: currentTime,
+        canPlayInAdvance: true,
+        interruptTransformTempFile: false,
+        spid: 0,
+        seasonId: pgcItem.seasonId!.toString(),
+        bvid: episode.bvid ?? IdUtils.av2bv(source.avId),
+        avid: source.avId,
+        ep: ep,
+        source: source,
+        ownerId: pgcItem.upInfo?.mid,
+        ownerName: pgcItem.upInfo?.uname,
+        pageData: null,
+      );
+      return await _createDownload(entry);
+    } catch (error, stack) {
+      return _failure('创建下载失败，请检查剧集信息后重试', error, stack);
     }
-    if (waitDownloadQueue.indexWhere((e) => e.cid == cid) != -1) {
-      return;
-    }
-    final currentTime = DateTime.now().millisecondsSinceEpoch ~/ 1000;
-    final source = SourceInfo(
-      avId: episode.aid!,
-      cid: cid,
-    );
-    final ep = EpInfo(
-      avId: source.avId,
-      page: index,
-      danmaku: source.cid,
-      cover: episode.cover!,
-      episodeId: episode.id!,
-      index: episode.title!,
-      indexTitle: episode.longTitle ?? '',
-      showTitle: episode.showTitle,
-      from: episode.from ?? 'bangumi',
-      seasonType: pgcItem.type ?? (episode.from == 'pugv' ? -1 : 0),
-      width: 0,
-      height: 0,
-      rotate: 0,
-      link: episode.link ?? '',
-      bvid: episode.bvid ?? IdUtils.av2bv(source.avId),
-      sortIndex: index,
-    );
-    final entry = BiliDownloadEntryInfo(
-      mediaType: 2,
-      hasDashAudio: false,
-      isCompleted: false,
-      totalBytes: 0,
-      downloadedBytes: 0,
-      title: pgcItem.seasonTitle ?? pgcItem.title ?? '',
-      typeTag: quality.code.toString(),
-      cover: episode.cover!,
-      preferedVideoQuality: quality.code,
-      preferredAudioQuality: audioQuality.code,
-      qualityPithyDescription: quality.desc,
-      guessedTotalBytes: 0,
-      totalTimeMilli:
-          (episode.duration ?? 0) *
-          (episode.from == 'pugv' ? 1000 : 1), // pgc millisec,, pugv sec
-      danmakuCount: pgcItem.stat?.danmaku ?? 0,
-      timeUpdateStamp: currentTime,
-      timeCreateStamp: currentTime,
-      canPlayInAdvance: true,
-      interruptTransformTempFile: false,
-      spid: 0,
-      seasonId: pgcItem.seasonId!.toString(),
-      bvid: episode.bvid ?? IdUtils.av2bv(source.avId),
-      avid: source.avId,
-      ep: ep,
-      source: source,
-      ownerId: pgcItem.upInfo?.mid,
-      ownerName: pgcItem.upInfo?.uname,
-      pageData: null,
-    );
-    _createDownload(entry);
   }
 
-  Future<void> _createDownload(BiliDownloadEntryInfo entry) async {
+  Future<LoadingState<void>> _createDownload(
+    BiliDownloadEntryInfo entry,
+  ) async {
+    if (_initializationGeneration > 0 && !initializationState.value.isSuccess) {
+      return const Error('下载记录尚未读取成功，请先重试');
+    }
+    final generation = _initializationGeneration;
     final cid = entry.cid;
-    if (_creatingCids.contains(cid) ||
-        downloadList.any((e) => e.cid == cid) ||
+    if (_creatingCids.contains(cid)) return const Error('下载任务正在创建，请稍后查看');
+    if (downloadList.any((e) => e.cid == cid) ||
         waitDownloadQueue.any((e) => e.cid == cid)) {
-      return;
+      return const Success(null);
     }
     // 在首次 await 前预留 CID，持久化失败时释放以允许重试。
     _creatingCids.add(cid);
     try {
-      await _repository.create(entry);
-      entry.status = DownloadStatus.wait;
-      waitDownloadQueue.add(entry);
-      if (curDownload.value?.status.isDownloading != true) {
-        unawaited(startDownload(entry));
-      }
+      return await _lock.synchronized(() async {
+        if (generation != _initializationGeneration) {
+          return const DownloadCancelled();
+        }
+        await _repository.create(entry);
+        if (generation != _initializationGeneration) {
+          return const DownloadCancelled();
+        }
+        entry.status = DownloadStatus.wait;
+        waitDownloadQueue.add(entry);
+        if (curDownload.value?.status.isDownloading != true) {
+          unawaited(_startAndNotify(entry));
+        }
+        return const Success<void>(null);
+      });
     } catch (error, stackTrace) {
-      logger.e('创建下载失败', error: error, stackTrace: stackTrace);
-      SmartDialog.showToast('创建下载失败，请重试');
+      return _failure('创建下载失败，请检查磁盘或目录权限后重试', error, stackTrace);
     } finally {
       _creatingCids.remove(cid);
     }
   }
 
-  Future<void> startDownload(BiliDownloadEntryInfo entry) async {
-    final operation = await _lock.synchronized(() async {
-      if (entry.isCompleted || !waitDownloadQueue.contains(entry)) return null;
-      _operation = null;
-      // 切换当前项前等待旧音视频流退出，避免两个任务同时写入同一状态。
-      await _downloadManager?.cancel(isDelete: false);
-      await _audioDownloadManager?.cancel(isDelete: false);
-      _downloadManager = null;
-      _audioDownloadManager = null;
-      if (curDownload.value case final curEntry?) {
-        if (curEntry.status.isDownloading) {
-          curEntry.status = DownloadStatus.pause;
-        }
-        await _repository.save(curEntry);
+  /// 成功表示准备完成并启动传输，最终完成状态由当前任务与列表通知交付。
+  Future<LoadingState<void>> startDownload(BiliDownloadEntryInfo entry) async {
+    try {
+      if (_initializationGeneration > 0 &&
+          !initializationState.value.isSuccess) {
+        return const Error('下载记录尚未读取成功，请先重试');
       }
+      final operation = await _lock.synchronized(() async {
+        if (entry.isCompleted || !waitDownloadQueue.contains(entry)) {
+          return null;
+        }
+        _operation = null;
+        // 切换当前项前等待旧音视频流退出，避免两个任务同时写入同一状态。
+        await _downloadManager?.cancel(isDelete: false);
+        await _audioDownloadManager?.cancel(isDelete: false);
+        _downloadManager = null;
+        _audioDownloadManager = null;
+        if (curDownload.value case final curEntry?) {
+          if (curEntry.status.isDownloading) {
+            _updateCurStatus(DownloadStatus.pause);
+          }
+          await _repository.save(curEntry);
+        }
 
-      _curCid = entry.cid;
-      curDownload.value = entry;
-      waitDownloadQueue.refresh();
-      final operation = Object();
-      _operation = operation;
-      return operation;
-    });
-    if (operation != null) await _startDownload(entry, operation);
+        _curCid = entry.cid;
+        curDownload.value = entry;
+        waitDownloadQueue.refresh();
+        final operation = Object();
+        _operation = operation;
+        return operation;
+      });
+      if (operation == null) return const DownloadCancelled();
+      final result = await _startDownload(entry, operation);
+      if (!result.isSuccess) return result;
+      if (!_owns(operation) && !entry.isCompleted) {
+        return const DownloadCancelled();
+      }
+      return const Success(null);
+    } catch (error, stack) {
+      return _failure('下载任务启动失败，请检查目录后重试', error, stack);
+    }
+  }
+
+  Future<void> _startAndNotify(BiliDownloadEntryInfo entry) async {
+    final before = curDownload.value;
+    final result = await startDownload(entry);
+    if (!result.isSuccess &&
+        result is! DownloadCancelled &&
+        (identical(curDownload.value, entry) ||
+            identical(curDownload.value, before))) {
+      result.toast();
+    }
   }
 
   bool _owns(Object operation) => identical(_operation, operation);
@@ -334,35 +420,73 @@ class DownloadService extends GetxService {
     return danmaku.writeToBuffer();
   }
 
-  Future<bool> downloadDanmaku({
+  Future<LoadingState<void>> downloadDanmaku({
     required BiliDownloadEntryInfo entry,
     bool isUpdate = false,
   }) async {
-    final cid = entry.pageData?.cid ?? entry.source?.cid;
-    if (cid == null) {
-      return false;
-    }
-    final danmakuFile = File(
-      path.join(entry.entryDirPath, PathUtils.danmakuName),
-    );
-    if (isUpdate || !danmakuFile.existsSync()) {
-      try {
-        if (!isUpdate) {
+    String? entryPath;
+    final token = Object();
+    final generation = _initializationGeneration;
+    try {
+      if (_initializationGeneration > 0 &&
+          (!initializationState.value.isSuccess ||
+              !(downloadList.contains(entry) ||
+                  waitDownloadQueue.contains(entry)))) {
+        return const Error('下载记录已变化，请重新读取后重试');
+      }
+      final cid = entry.pageData?.cid ?? entry.source?.cid;
+      if (cid == null) return const Error('下载记录缺少弹幕信息');
+      entryPath = entry.entryDirPath;
+      _danmakuOperations[entryPath] = token;
+      final danmakuFile = File(
+        path.join(entry.entryDirPath, PathUtils.danmakuName),
+      );
+      if (isUpdate || !danmakuFile.existsSync()) {
+        if (!isUpdate && identical(curDownload.value, entry)) {
           _updateCurStatus(DownloadStatus.getDanmaku);
         }
-        final bytes = await _fetchDanmaku(entry, () => true);
-        await danmakuFile.writeAsBytes(bytes);
-
-        return true;
-      } catch (e) {
-        if (!isUpdate) {
-          _updateCurStatus(DownloadStatus.failDanmaku);
-        }
-        if (kDebugMode) SmartDialog.showToast(e.toString());
-        return false;
+        bool active() =>
+            generation == _initializationGeneration &&
+            identical(_danmakuOperations[entryPath], token) &&
+            entry.entryDirPath == entryPath &&
+            Directory(entryPath!).existsSync();
+        final bytes = await _fetchDanmaku(entry, active);
+        return await _lock.synchronized(() async {
+          if (!active()) return const DownloadCancelled();
+          await _writeDanmaku(danmakuFile, bytes);
+          return const Success<void>(null);
+        });
+      }
+      return const Success(null);
+    } catch (error, stack) {
+      if (generation != _initializationGeneration ||
+          (entryPath != null &&
+              !identical(_danmakuOperations[entryPath], token))) {
+        return const DownloadCancelled();
+      }
+      if (!isUpdate && identical(curDownload.value, entry)) {
+        _updateCurStatus(DownloadStatus.failDanmaku);
+      }
+      return _failure('弹幕更新失败，请检查网络或目录权限后重试', error, stack);
+    } finally {
+      if (identical(_danmakuOperations[entryPath], token)) {
+        _danmakuOperations.remove(entryPath);
       }
     }
-    return true;
+  }
+
+  Future<void> _writeDanmaku(File target, List<int> bytes) async {
+    final temporary = File('${target.path}.tmp');
+    try {
+      // 写完后再替换，失败时保留上次可用的弹幕文件。
+      await temporary.writeAsBytes(bytes, flush: true);
+      await temporary.rename(target.path);
+    } catch (_) {
+      try {
+        if (temporary.existsSync()) await temporary.delete();
+      } catch (_) {}
+      rethrow;
+    }
   }
 
   Future<File?> _fetchCover(BiliDownloadEntryInfo entry) async {
@@ -377,11 +501,11 @@ class DownloadService extends GetxService {
     }
   }
 
-  Future<void> _startDownload(
+  Future<LoadingState<void>> _startDownload(
     BiliDownloadEntryInfo entry,
     Object operation,
   ) async {
-    if (!_owns(operation)) return;
+    if (!_owns(operation)) return const DownloadCancelled();
     try {
       final danmakuFile = File(
         path.join(entry.entryDirPath, PathUtils.danmakuName),
@@ -391,17 +515,19 @@ class DownloadService extends GetxService {
         try {
           final bytes = await _fetchDanmaku(entry, () => _owns(operation));
           await _lock.synchronized(() async {
-            if (_owns(operation)) await danmakuFile.writeAsBytes(bytes);
+            if (_owns(operation) && !danmakuFile.existsSync()) {
+              await _writeDanmaku(danmakuFile, bytes);
+            }
           });
-        } catch (error) {
+        } catch (error, stack) {
+          if (!_owns(operation)) return const DownloadCancelled();
           if (_owns(operation)) {
             _updateCurStatus(DownloadStatus.failDanmaku);
-            if (kDebugMode) SmartDialog.showToast(error.toString());
           }
-          return;
+          return _failure('弹幕准备失败，请检查网络或目录权限后重试', error, stack);
         }
       }
-      if (!_owns(operation)) return;
+      if (!_owns(operation)) return const DownloadCancelled();
       _updateCurStatus(DownloadStatus.getPlayUrl);
       // 地址解析会修改画质字段；旧请求只能修改自己的快照。
       final snapshot = BiliDownloadEntryInfo.fromJson(entry.toJson())
@@ -416,7 +542,7 @@ class DownloadService extends GetxService {
                 source: snapshot.source,
                 pageData: snapshot.pageData,
               ));
-      if (!_owns(operation)) return;
+      if (!_owns(operation)) return const DownloadCancelled();
       final cover = await _fetchCover(snapshot);
       await _lock.synchronized(() async {
         if (!_owns(operation)) return;
@@ -494,11 +620,14 @@ class DownloadService extends GetxService {
             break;
         }
       });
-    } catch (e) {
-      if (_owns(operation)) {
-        _updateCurStatus(DownloadStatus.failPlayUrl);
-        logger.w('get download url error', error: e);
+      if (!_owns(operation) && !entry.isCompleted) {
+        return const DownloadCancelled();
       }
+      return const Success(null);
+    } catch (error, stack) {
+      if (!_owns(operation)) return const DownloadCancelled();
+      _updateCurStatus(DownloadStatus.failPlayUrl);
+      return _failure('下载准备失败，请检查网络或目录权限后重试', error, stack);
     }
   }
 
@@ -577,7 +706,7 @@ class DownloadService extends GetxService {
         if (queued && !downloadList.contains(entry)) {
           downloadList.insert(0, entry);
         }
-        flagNotifier.refresh();
+        _publishDeletion(true);
         // 保存期间可能已切换任务，旧完成回调不能清空新任务。
         if (identical(curDownload.value, entry)) {
           _operation = null;
@@ -592,7 +721,7 @@ class DownloadService extends GetxService {
           ..isCompleted = false
           ..status = DownloadStatus.failDownload;
         curDownload.refresh();
-        logger.e('下载完成记录保存失败', error: error, stackTrace: stack);
+        logger.e('下载完成记录保存失败', error: error.runtimeType, stackTrace: stack);
         SmartDialog.showToast('下载文件已保留，但完成记录保存失败，请检查磁盘后重试');
       } finally {
         _completing.remove(entry);
@@ -602,15 +731,7 @@ class DownloadService extends GetxService {
 
   void nextDownload() {
     if (waitDownloadQueue.isNotEmpty) {
-      unawaited(
-        startDownload(waitDownloadQueue.first).catchError((
-          Object error,
-          StackTrace stack,
-        ) {
-          logger.e('下一下载任务启动失败', error: error.runtimeType, stackTrace: stack);
-          SmartDialog.showToast('下载任务启动失败，请检查目录后重试');
-        }),
-      );
+      unawaited(_startAndNotify(waitDownloadQueue.first));
     }
   }
 
@@ -629,6 +750,7 @@ class DownloadService extends GetxService {
         current!.status = DownloadStatus.pause;
       }
       await _repository.remove(entry);
+      _danmakuOperations.remove(entry.entryDirPath);
     } catch (error, stack) {
       return _deleteFailure(error, stack);
     }
@@ -661,6 +783,9 @@ class DownloadService extends GetxService {
         current!.status = DownloadStatus.pause;
       }
       await _repository.removePage(pageDirPath);
+      _danmakuOperations.removeWhere(
+        (key, _) => path.dirname(key) == pageDirPath,
+      );
     } catch (error, stack) {
       return _deleteFailure(error, stack);
     }
@@ -689,12 +814,17 @@ class DownloadService extends GetxService {
     }
   }
 
-  Future<void> cancelDownload({
+  Future<LoadingState<void>> cancelDownload({
     required bool isDelete,
     bool downloadNext = true,
-  }) => _lock.synchronized(
-    () => _cancelCurrent(isDelete: isDelete, downloadNext: downloadNext),
-  );
+  }) => _lock.synchronized(() async {
+    try {
+      await _cancelCurrent(isDelete: isDelete, downloadNext: downloadNext);
+      return const Success(null);
+    } catch (error, stack) {
+      return _failure('暂停未完成，请检查目录权限后重试', error, stack);
+    }
+  });
 
   Future<void> _cancelCurrent({
     required bool isDelete,
@@ -705,6 +835,7 @@ class DownloadService extends GetxService {
     await _audioDownloadManager?.cancel(isDelete: isDelete);
     _downloadManager = null;
     _audioDownloadManager = null;
+    if (!isDelete) _updateCurStatus(DownloadStatus.pause);
     if (!isDelete) {
       // 暂停保留已写入的字节数，后续由 DownloadManager 发送 Range 请求续传。
       final entry = curDownload.value;

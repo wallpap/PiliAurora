@@ -8,6 +8,7 @@ import 'package:pili_aurora/http/loading_state.dart';
 import 'package:pili_aurora/models/remote/download/bili_download_entry_info.dart';
 import 'package:pili_aurora/pages/download/controller.dart';
 import 'package:pili_aurora/pages/download/deletion.dart';
+import 'package:pili_aurora/pages/download/danmaku_update.dart';
 import 'package:pili_aurora/pages/download/search/controller.dart';
 import 'package:pili_aurora/services/download/download_service.dart';
 import 'package:pili_aurora/utils/storage.dart';
@@ -32,8 +33,23 @@ class _Service extends GetxService implements DownloadService {
   @override
   final SetNotifier flagNotifier = {};
   @override
-  Future<void> waitForInitialization = Future.value();
+  Future<LoadingState<void>> waitForInitialization = Future.value(
+    const Success(null),
+  );
   final requests = <BiliDownloadEntryInfo>[];
+  final updates = <BiliDownloadEntryInfo>[];
+  final updateReplies = <Completer<LoadingState<void>>>[];
+  @override
+  Future<LoadingState<void>> downloadDanmaku({
+    required BiliDownloadEntryInfo entry,
+    bool isUpdate = false,
+  }) {
+    updates.add(entry);
+    final reply = Completer<LoadingState<void>>();
+    updateReplies.add(reply);
+    return reply.future;
+  }
+
   final pageRequests = <String>[];
   final replies = <Completer<LoadingState<void>>>[];
   @override
@@ -243,6 +259,80 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('下载已删除，请刷新列表'), findsOneWidget);
     expect(find.textContaining('private-refresh'), findsNothing);
+    await finish(tester);
+  });
+  testWidgets('弹幕批量更新互斥并返回成功项，失败提示不显示原始异常', (tester) async {
+    await mount(tester);
+    final a = downloadEntry(cid: 1);
+    final b = downloadEntry(cid: 2);
+    final helper = DownloadDanmakuUpdate();
+    Future<Set<BiliDownloadEntryInfo>> update() => helper.run(
+      service: service,
+      entries: [a, b],
+      isCurrent: () => true,
+    );
+    final pending = update();
+    expect(await update(), isEmpty);
+    expect(service.updates, [a]);
+    service.updateReplies[0].complete(
+      Error('弹幕更新失败，请重试', cause: StateError('private-update')),
+    );
+    await tester.pump();
+    expect(service.updates, [a, b]);
+    service.updateReplies[1].complete(const Success(null));
+    expect(await pending, {b});
+    expect(helper.busy, false);
+    await tester.pumpAndSettle();
+    expect(find.text('弹幕更新失败，请重试'), findsOneWidget);
+    expect(find.textContaining('private-update'), findsNothing);
+    await finish(tester);
+  });
+  testWidgets('弹幕更新离页后停止后续项，不显示迟到成功提示', (tester) async {
+    await mount(tester);
+    final a = downloadEntry(cid: 1);
+    final b = downloadEntry(cid: 2);
+    var current = true;
+    final helper = DownloadDanmakuUpdate();
+    final pending = helper.run(
+      service: service,
+      entries: [a, b],
+      isCurrent: () => current,
+    );
+    current = false;
+    service.updateReplies.single.complete(const Success(null));
+    expect(await pending, {a});
+    expect(service.updates, [a]);
+    expect(helper.busy, false);
+    await tester.pumpAndSettle();
+    expect(find.text('更新成功'), findsNothing);
+    await finish(tester);
+  });
+  test('搜索传播初始化失败，不将保留的旧下载记录当作查询成功', () async {
+    const failure = Error('下载记录读取失败，请重试');
+    service.waitForInitialization = Future.value(failure);
+    service.downloadList.add(downloadEntry(completed: true));
+    final controller = DownloadSearchController();
+    addTearDown(controller.onDelete.call);
+    expect(await controller.customGetData(), same(failure));
+  });
+  testWidgets('旧初始化失败不清空较新目录已经发布的分组', (tester) async {
+    await mount(tester);
+    final old = Completer<LoadingState<void>>();
+    service.waitForInitialization = old.future;
+    final controller = DownloadPageController()..onInit();
+    addTearDown(controller.onDelete.call);
+    final fresh = downloadEntry(completed: true)..pageDirPath = 'fresh';
+    service.downloadList.add(fresh);
+    service.waitForInitialization = Future.value(const Success(null));
+    for (final listener in service.flagNotifier.toList()) {
+      listener();
+    }
+    await tester.pump();
+    expect(controller.pages, hasLength(1));
+    old.complete(const Error('旧目录读取失败'));
+    await tester.pump();
+    expect(controller.pages, hasLength(1));
+    expect(controller.pages.single.entries.single, same(fresh));
     await finish(tester);
   });
 }

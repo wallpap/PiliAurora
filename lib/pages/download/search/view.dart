@@ -4,9 +4,9 @@ import 'package:pili_aurora/models/remote/download/bili_download_entry_info.dart
 import 'package:pili_aurora/pages/common/search/common_search_page.dart';
 import 'package:pili_aurora/pages/download/detail/widgets/item.dart';
 import 'package:pili_aurora/pages/download/search/controller.dart';
+import 'package:pili_aurora/pages/download/danmaku_update.dart';
 import 'package:pili_aurora/services/download/download_service.dart';
 import 'package:pili_aurora/utils/grid.dart';
-import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:get/get.dart';
 import 'package:material_ui/material_ui.dart'
     hide SliverGridDelegateWithMaxCrossAxisExtent;
@@ -34,6 +34,30 @@ class _DownloadSearchPageState
   @override
   DownloadSearchController controller = Get.put(DownloadSearchController());
   final _downloadService = Get.find<DownloadService>();
+  final _danmakuUpdate = DownloadDanmakuUpdate();
+
+  Future<void> _updateDanmaku() async {
+    final source = controller.loadingState.value.dataOrNull;
+    if (source == null) return;
+    bool current() =>
+        mounted &&
+        !controller.isClosed &&
+        identical(source, controller.loadingState.value.dataOrNull);
+    final updated = await _danmakuUpdate.run(
+      service: _downloadService,
+      entries: controller.allChecked,
+      isCurrent: current,
+    );
+    if (!current()) return;
+    for (final entry in updated) {
+      entry.checked = false;
+    }
+    controller.loadingState.refresh();
+    controller.rxCount.value = controller.allChecked.length;
+    if (controller.checkedCount == 0) {
+      controller.enableMultiSelect.value = false;
+    }
+  }
 
   @override
   List<Widget>? get extraActions => [
@@ -57,23 +81,7 @@ class _DownloadSearchPageState
   List<Widget>? get multiSelectActions => [
     TextButton(
       style: TextButton.styleFrom(visualDensity: VisualDensity.compact),
-      onPressed: () async {
-        final future = controller.allChecked
-            .map(
-              (e) => _downloadService.downloadDanmaku(
-                entry: e,
-                isUpdate: true,
-              ),
-            )
-            .toList();
-        controller.handleSelect();
-        final res = await Future.wait(future);
-        if (res.every((e) => e)) {
-          SmartDialog.showToast('更新成功');
-        } else {
-          SmartDialog.showToast('更新失败');
-        }
-      },
+      onPressed: _updateDanmaku,
       child: Text(
         '更新',
         style: TextStyle(color: ColorScheme.of(context).onSurface),

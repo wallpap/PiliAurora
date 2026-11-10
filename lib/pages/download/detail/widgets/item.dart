@@ -63,7 +63,7 @@ class DetailItem extends StatelessWidget {
     void onLongPress() => canDel && !enableMultiSelect
         ? showDialog(
             context: context,
-            builder: (context) => SimpleDialog(
+            builder: (_) => SimpleDialog(
               clipBehavior: Clip.hardEdge,
               contentPadding: const EdgeInsets.symmetric(vertical: 12),
               children: [
@@ -85,10 +85,11 @@ class DetailItem extends StatelessWidget {
                       entry: entry,
                       isUpdate: true,
                     );
-                    if (res) {
+                    if (!context.mounted) return;
+                    if (res.isSuccess) {
                       SmartDialog.showToast('更新成功');
-                    } else {
-                      SmartDialog.showToast('更新失败');
+                    } else if (res is! DownloadCancelled) {
+                      res.toast();
                     }
                   },
                   child: const Text('更新弹幕', style: TextStyle(fontSize: 14)),
@@ -136,12 +137,23 @@ class DetailItem extends StatelessWidget {
             if (curDownload != null &&
                 curDownload.cid == cid &&
                 curDownload.status.isDownloading) {
-              downloadService.cancelDownload(
+              final result = await downloadService.cancelDownload(
                 isDelete: false,
                 downloadNext: false,
               );
+              if (context.mounted && !result.isSuccess) result.toast();
             } else {
-              downloadService.startDownload(entry);
+              final result = await downloadService.startDownload(entry);
+              if (context.mounted &&
+                  !result.isSuccess &&
+                  result is! DownloadCancelled &&
+                  (identical(downloadService.curDownload.value, entry) ||
+                      identical(
+                        downloadService.curDownload.value,
+                        curDownload,
+                      ))) {
+                result.toast();
+              }
             }
           }
         },

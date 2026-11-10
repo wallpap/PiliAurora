@@ -4,6 +4,7 @@ import 'package:pili_aurora/common/widgets/badge.dart';
 import 'package:pili_aurora/common/widgets/dialog/dialog.dart';
 import 'package:pili_aurora/common/widgets/image/network_img_layer.dart';
 import 'package:pili_aurora/common/widgets/stat/stat.dart';
+import 'package:pili_aurora/http/loading_state.dart';
 import 'package:pili_aurora/models/common/badge_type.dart';
 import 'package:pili_aurora/models/common/stat_type.dart';
 import 'package:pili_aurora/models/common/video/audio_quality.dart';
@@ -20,6 +21,7 @@ import 'package:pili_aurora/pages/video/controller.dart';
 import 'package:pili_aurora/pages/video/introduction/ugc/controller.dart';
 import 'package:pili_aurora/pages/video/introduction/ugc/widgets/page.dart';
 import 'package:pili_aurora/services/download/download_service.dart';
+import 'package:pili_aurora/services/logger.dart';
 import 'package:pili_aurora/utils/accounts.dart';
 import 'package:pili_aurora/utils/date_utils.dart';
 import 'package:pili_aurora/utils/duration_utils.dart';
@@ -27,7 +29,6 @@ import 'package:pili_aurora/utils/extension/num_ext.dart';
 import 'package:pili_aurora/utils/id_utils.dart';
 import 'package:pili_aurora/utils/platform_utils.dart';
 import 'package:pili_aurora/utils/storage_pref.dart';
-import 'package:pili_aurora/utils/utils.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/foundation.dart' show kDebugMode, kReleaseMode;
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
@@ -70,6 +71,7 @@ class _DownloadPanelState extends State<DownloadPanel> {
   final ListController _listController = ListController();
 
   late final cidSet = widget.cidSet;
+  final _creating = <int>{};
   VideoQuality _quality = VideoQuality.fromCode(Pref.defaultVideoQa);
   AudioQuality _audioQuality = AudioQuality.fromCode(Pref.defaultAudioQa);
 
@@ -242,17 +244,18 @@ class _DownloadPanelState extends State<DownloadPanel> {
 
   late final int? vipStatus = Pref.userInfoCache?.vipStatus;
   @pragma('vm:notify-debugger-on-exception')
-  bool _onDownload({
+  Future<bool> _onDownload({
     required int index,
     required ugc.BaseEpisodeItem episode,
     bool isFromList = false,
     bool isDownloadAll = false,
     ugc.EpisodeItem? parent,
-  }) {
+  }) async {
+    if (!mounted) return false;
     final cid = episode.cid;
     // on download
     if (cid == null) {
-      SmartDialog.showToast('null cid');
+      SmartDialog.showToast('视频信息不完整，无法缓存');
       return false;
     }
 
@@ -273,29 +276,38 @@ class _DownloadPanelState extends State<DownloadPanel> {
     }
 
     if (episode is ugc.EpisodeItem) {
-      final pages = episode.pages!;
+      final pages = episode.pages;
+      if (pages == null || pages.isEmpty) {
+        SmartDialog.showToast('视频分 P 信息不完整，请重新打开后重试');
+        return false;
+      }
       if (pages.length > 1) {
         if (isFromList && kDebugMode) {
           SmartDialog.showToast('hasParts');
         }
         if (isDownloadAll) {
+          var created = false;
           for (int i = 0; i < pages.length; i++) {
-            _onDownload(
-              index: i,
-              episode: pages[i],
-              parent: episode,
-            );
+            created =
+                await _onDownload(
+                  index: i,
+                  episode: pages[i],
+                  parent: episode,
+                ) ||
+                created;
           }
-          return true;
+          return created;
         }
         return false;
       }
     }
 
+    if (!_creating.add(cid)) return false;
     try {
+      LoadingState<void> result;
       switch (episode) {
         case Part part:
-          _downloadService.downloadVideo(
+          result = await _downloadService.downloadVideo(
             part,
             parent == null ? widget.videoDetail : null,
             parent,
@@ -304,7 +316,7 @@ class _DownloadPanelState extends State<DownloadPanel> {
           );
           break;
         case ugc.EpisodeItem episode:
-          _downloadService.downloadVideo(
+          result = await _downloadService.downloadVideo(
             episode.pages!.first,
             null,
             episode,
@@ -313,7 +325,7 @@ class _DownloadPanelState extends State<DownloadPanel> {
           );
           break;
         case pgc.EpisodeItem episode:
-          _downloadService.downloadBangumi(
+          result = await _downloadService.downloadBangumi(
             index,
             widget.pgcItem!,
             episode,
@@ -321,12 +333,21 @@ class _DownloadPanelState extends State<DownloadPanel> {
             _audioQuality,
           );
           break;
+        default:
+          return false;
+      }
+      if (!mounted) return false;
+      if (!result.isSuccess) {
+        if (result is! DownloadCancelled) result.toast();
+        return false;
       }
       cidSet.add(cid);
       return true;
     } catch (e, s) {
-      Utils.reportError(e, s);
-      SmartDialog.showToast(e.toString());
+      logger.e('创建下载失败', error: e.runtimeType, stackTrace: s);
+      if (mounted) SmartDialog.showToast('创建下载失败，请重试');
+    } finally {
+      _creating.remove(cid);
     }
     return false;
   }
@@ -400,12 +421,13 @@ class _DownloadPanelState extends State<DownloadPanel> {
             return Material(
               type: MaterialType.transparency,
               child: InkWell(
-                onTap: () {
-                  if (_onDownload(
-                    index: index,
-                    episode: episode,
-                    isFromList: true,
-                  )) {
+                onTap: () async {
+                  if (await _onDownload(
+                        index: index,
+                        episode: episode,
+                        isFromList: true,
+                      ) &&
+                      context.mounted) {
                     (context as Element).markNeedsBuild();
                   }
                 },
@@ -557,9 +579,10 @@ class _DownloadPanelState extends State<DownloadPanel> {
               showConfirmDialog(
                 context: context,
                 title: const Text('确定缓存全部？'),
-                onConfirm: () {
+                onConfirm: () async {
                   for (int i = 0; i < widget.episodes.length; i++) {
-                    _onDownload(
+                    if (!mounted) break;
+                    await _onDownload(
                       index: i,
                       episode: widget.episodes[i],
                       isDownloadAll: true,

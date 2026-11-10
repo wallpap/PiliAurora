@@ -10,8 +10,11 @@ import 'package:pili_aurora/common/widgets/image/network_img_layer.dart';
 import 'package:pili_aurora/common/widgets/loading_widget/http_error.dart';
 import 'package:pili_aurora/common/widgets/scaffold/simple_scaffold.dart';
 import 'package:pili_aurora/common/widgets/select_mask.dart';
+import 'package:pili_aurora/http/loading_state.dart';
 import 'package:pili_aurora/models/common/badge_type.dart';
 import 'package:pili_aurora/models/remote/download/download_info.dart';
+import 'package:pili_aurora/models/remote/download/bili_download_entry_info.dart';
+import 'package:pili_aurora/pages/download/danmaku_update.dart';
 import 'package:pili_aurora/pages/download/controller.dart';
 import 'package:pili_aurora/pages/download/detail/view.dart';
 import 'package:pili_aurora/pages/download/detail/widgets/item.dart';
@@ -21,7 +24,6 @@ import 'package:pili_aurora/utils/cache_manager.dart';
 import 'package:pili_aurora/utils/grid.dart';
 import 'package:pili_aurora/utils/platform_utils.dart';
 import 'package:collection/collection.dart';
-import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:get/get.dart';
 import 'package:material_ui/material_ui.dart'
     hide SliverGridDelegateWithMaxCrossAxisExtent;
@@ -37,6 +39,24 @@ class _DownloadPageState extends State<DownloadPage> with GridMixin {
   final _downloadService = Get.find<DownloadService>();
   final _controller = Get.put(DownloadPageController());
   final _progress = ChangeNotifier();
+  final _danmakuUpdate = DownloadDanmakuUpdate();
+
+  Future<void> _updateDanmaku(Iterable<BiliDownloadEntryInfo> entries) async {
+    final updated = await _danmakuUpdate.run(
+      service: _downloadService,
+      entries: entries,
+      isCurrent: () => mounted && !_controller.isClosed,
+    );
+    if (!mounted || _controller.isClosed) return;
+    for (final page in _controller.pages) {
+      if (page.entries.every(updated.contains)) page.checked = false;
+    }
+    _controller.pages.refresh();
+    _controller.rxCount.value = _controller.allChecked.length;
+    if (_controller.checkedCount == 0) {
+      _controller.enableMultiSelect.value = false;
+    }
+  }
 
   @override
   void dispose() {
@@ -65,23 +85,9 @@ class _DownloadPageState extends State<DownloadPage> with GridMixin {
                 style: TextButton.styleFrom(
                   visualDensity: VisualDensity.compact,
                 ),
-                onPressed: () async {
-                  final future = [
-                    for (final page in _controller.allChecked)
-                      for (final e in page.entries)
-                        _downloadService.downloadDanmaku(
-                          entry: e,
-                          isUpdate: true,
-                        ),
-                  ];
-                  _controller.handleSelect();
-                  final res = await Future.wait(future);
-                  if (res.every((e) => e)) {
-                    SmartDialog.showToast('更新成功');
-                  } else {
-                    SmartDialog.showToast('更新失败');
-                  }
-                },
+                onPressed: () => _updateDanmaku([
+                  for (final page in _controller.allChecked) ...page.entries,
+                ]),
                 child: Text(
                   '更新',
                   style: TextStyle(color: theme.colorScheme.onSurface),
@@ -94,8 +100,12 @@ class _DownloadPageState extends State<DownloadPage> with GridMixin {
                 IconButton(
                   tooltip: '搜索',
                   onPressed: () async {
-                    await _downloadService.waitForInitialization;
+                    final result = await _downloadService.waitForInitialization;
                     if (!mounted) return;
+                    if (!result.isSuccess) {
+                      result.toast();
+                      return;
+                    }
                     Get.to(DownloadSearchPage(progress: _progress));
                   },
                   icon: const Icon(Icons.search),
@@ -120,6 +130,9 @@ class _DownloadPageState extends State<DownloadPage> with GridMixin {
             child: CustomScrollView(
               slivers: [
                 Obx(() {
+                  if (!_controller.initializationState.value.isSuccess) {
+                    return const SliverToBoxAdapter();
+                  }
                   final entry =
                       _downloadService.waitDownloadQueue.firstWhereOrNull(
                         (e) => e.cid == _downloadService.curCid,
@@ -155,6 +168,18 @@ class _DownloadPageState extends State<DownloadPage> with GridMixin {
                   return const SliverToBoxAdapter();
                 }),
                 Obx(() {
+                  final initialization = _controller.initializationState.value;
+                  if (!initialization.isSuccess) {
+                    if (initialization is Error) {
+                      return HttpError(
+                        errMsg: initialization.toString(),
+                        onReload: _controller.retryInitialization,
+                      );
+                    }
+                    return const SliverToBoxAdapter(
+                      child: Center(child: CircularProgressIndicator()),
+                    );
+                  }
                   if (_controller.pages.isNotEmpty) {
                     return SliverMainAxisGroup(
                       slivers: [
@@ -237,19 +262,7 @@ class _DownloadPageState extends State<DownloadPage> with GridMixin {
                 DialogOption(
                   onPressed: () async {
                     Get.back();
-                    final res = await Future.wait(
-                      pageInfo.entries.map(
-                        (e) => _downloadService.downloadDanmaku(
-                          entry: e,
-                          isUpdate: true,
-                        ),
-                      ),
-                    );
-                    if (res.every((e) => e)) {
-                      SmartDialog.showToast('更新成功');
-                    } else {
-                      SmartDialog.showToast('更新失败');
-                    }
+                    await _updateDanmaku(pageInfo.entries);
                   },
                   child: const Text('更新弹幕', style: TextStyle(fontSize: 14)),
                 ),

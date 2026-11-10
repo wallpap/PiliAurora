@@ -26,6 +26,9 @@ class DownloadSearchController
 
   @override
   Future<LoadingState<List<BiliDownloadEntryInfo>>> customGetData() async {
+    final initialization = await _downloadService.waitForInitialization;
+    if (initialization is Error) return initialization;
+    if (!initialization.isSuccess) return const Error('下载记录尚未读取完成');
     final text = editController.text.toLowerCase();
     return Success(
       _downloadService.downloadList

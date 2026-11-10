@@ -1734,8 +1734,12 @@ class VideoDetailController extends GetxController
     }
     if (episodes != null && episodes.isNotEmpty) {
       final downloadService = Get.find<DownloadService>();
-      await downloadService.waitForInitialization;
+      final initialization = await downloadService.waitForInitialization;
       if (!context.mounted) {
+        return;
+      }
+      if (!initialization.isSuccess) {
+        initialization.toast();
         return;
       }
       final Set<int> cidSet = downloadService.downloadList

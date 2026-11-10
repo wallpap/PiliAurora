@@ -28,8 +28,9 @@ class _SchedulingDownloadService extends DownloadService {
   final started = <int>[];
 
   @override
-  Future<void> startDownload(BiliDownloadEntryInfo entry) async {
+  Future<LoadingState<void>> startDownload(BiliDownloadEntryInfo entry) async {
     started.add(entry.cid);
+    return const Success(null);
   }
 }
 
@@ -108,6 +109,21 @@ class _DeletionRepository extends DownloadRepository {
   }
 }
 
+class _ControlledRepository extends DownloadRepository {
+  _ControlledRepository({required super.rootPath});
+  Future<List<BiliDownloadEntryInfo>> Function()? read;
+  Object? saveFailure;
+
+  @override
+  Future<List<BiliDownloadEntryInfo>> load() => read?.call() ?? super.load();
+
+  @override
+  Future<void> save(BiliDownloadEntryInfo entry) async {
+    if (saveFailure case final error?) throw error;
+    await super.save(entry);
+  }
+}
+
 void main() {
   late Directory directory;
   late DownloadRepository repository;
@@ -129,6 +145,290 @@ void main() {
   Future<void> reload() async {
     service.initDownloadList();
     await service.waitForInitialization;
+  }
+
+  test('初始化失败返回可诊断结果并可重试，不伪装为空列表', () async {
+    const failure = FileSystemException('private-initialization');
+    final repo = _ControlledRepository(rootPath: () => directory.path)
+      ..read = () async => throw failure;
+    final pending = DownloadService(repository: repo, downloadClient: client);
+    final old = downloadEntry(completed: true);
+    pending.downloadList.add(old);
+    final result = await pending.initDownloadList();
+    expect(result, isA<Error>());
+    expect((result as Error).cause, same(failure));
+    expect(result.stackTrace, isNotNull);
+    expect(result.toString(), isNot(contains('private-initialization')));
+    expect(pending.initializationState.value, same(result));
+    expect(pending.downloadList, [old]);
+    final fresh = downloadEntry(cid: 22, completed: true);
+    repo.read = () async => [fresh];
+    expect((await pending.initDownloadList()).isSuccess, true);
+    expect(pending.initializationState.value.isSuccess, true);
+    expect(pending.downloadList, [fresh]);
+  });
+
+  test('目录重读只接受最新快照，旧读取结果不覆盖新目录', () async {
+    final reads = <Completer<List<BiliDownloadEntryInfo>>>[];
+    final repo = _ControlledRepository(rootPath: () => directory.path)
+      ..read = () {
+        final reply = Completer<List<BiliDownloadEntryInfo>>();
+        reads.add(reply);
+        return reply.future;
+      };
+    final pending = DownloadService(repository: repo, downloadClient: client);
+    final old = pending.initDownloadList();
+    final fresh = pending.initDownloadList();
+    expect(reads, hasLength(1));
+    reads[0].complete([downloadEntry(completed: true)]);
+    expect(await old, isA<DownloadCancelled>());
+    await Future<void>.delayed(Duration.zero);
+    final entry = downloadEntry(cid: 22, completed: true);
+    reads[1].complete([entry]);
+    expect((await fresh).isSuccess, true);
+    expect(pending.downloadList, [entry]);
+    expect(pending.initializationState.value.isSuccess, true);
+  });
+
+  test('切换目录时相同 CID 不继承旧目录的当前任务状态', () async {
+    final repo = _ControlledRepository(rootPath: () => directory.path);
+    final old = downloadEntry()..status = DownloadStatus.downloading;
+    await repo.create(old);
+    old.downloadedBytes = 42;
+    final fresh = downloadEntry()
+      ..pageDirPath = path.join(directory.path, 'new')
+      ..entryDirPath = path.join(directory.path, 'new', 'entry');
+    repo.read = () async => [fresh];
+    final pending = DownloadService(repository: repo, downloadClient: client);
+    pending.waitDownloadQueue.add(old);
+    pending.curDownload.value = old;
+    expect((await pending.initDownloadList()).isSuccess, true);
+    expect(old.status, DownloadStatus.pause);
+    expect(pending.curDownload.value, isNull);
+    expect(pending.curCid, isNull);
+    expect(pending.waitDownloadQueue.single, same(fresh));
+    expect(fresh.downloadedBytes, 0);
+    expect(fresh.status, DownloadStatus.wait);
+  });
+
+  test('初始化读取期间删除等待快照发布，删除后旧记录不复活', () async {
+    final entry = downloadEntry(completed: true);
+    await repository.create(entry);
+    final readStarted = Completer<void>();
+    final release = Completer<void>();
+    final repo = _ControlledRepository(rootPath: () => directory.path)
+      ..read = () async {
+        final entries = await repository.load();
+        readStarted.complete();
+        await release.future;
+        return entries;
+      };
+    final pending = DownloadService(repository: repo, downloadClient: client);
+    final initialization = pending.initDownloadList();
+    await readStarted.future;
+    var deleted = false;
+    final deletion = pending
+        .deleteDownload(entry: entry, removeList: true)
+        .then((result) {
+          deleted = true;
+          return result;
+        });
+    await Future<void>.delayed(Duration.zero);
+    expect(deleted, false);
+    release.complete();
+    expect((await initialization).isSuccess, true);
+    expect((await deletion).isSuccess, true);
+    expect(pending.downloadList, isEmpty);
+    expect(await repository.load(), isEmpty);
+  });
+
+  test('初始化等待在途创建落盘，旧创建不回写新快照且记录可恢复', () async {
+    final repo = _BarrierRepository(rootPath: () => directory.path);
+    final pending = _SchedulingDownloadService(
+      repository: repo,
+      downloadClient: client,
+    );
+    final creating = pending.downloadVideo(
+      Part(cid: 11, page: 1, duration: 60),
+      VideoDetailData(
+        aid: 1,
+        bvid: 'BV-test',
+        title: 'test',
+        pic: 'https://example.test/cover.jpg',
+      ),
+      null,
+      VideoQuality.high1080,
+      AudioQuality.k192,
+    );
+    final initialization = pending.initDownloadList();
+    repo.gate.complete();
+    expect(await creating, isA<DownloadCancelled>());
+    expect((await initialization).isSuccess, true);
+    expect(pending.waitDownloadQueue, hasLength(1));
+    expect(pending.started, isEmpty);
+  });
+
+  test('创建落盘失败返回失败，重试成功后才进入队列', () async {
+    const failure = FileSystemException('private-create');
+    final repo = _ControlledRepository(rootPath: () => directory.path)
+      ..saveFailure = failure;
+    final pending = _SchedulingDownloadService(
+      repository: repo,
+      downloadClient: client,
+    );
+    Future<LoadingState<void>> create() => pending.downloadVideo(
+      Part(cid: 11, page: 1, duration: 60),
+      VideoDetailData(
+        aid: 1,
+        bvid: 'BV-test',
+        title: 'test',
+        pic: 'https://example.test/cover.jpg',
+      ),
+      null,
+      VideoQuality.high1080,
+      AudioQuality.k192,
+    );
+    final result = await create();
+    expect(result, isA<Error>());
+    expect((result as Error).cause, same(failure));
+    expect(result.stackTrace, isNotNull);
+    expect(result.toString(), isNot(contains('private-create')));
+    expect(pending.waitDownloadQueue, isEmpty);
+    expect(pending.started, isEmpty);
+    repo.saveFailure = null;
+    expect((await create()).isSuccess, true);
+    expect(pending.waitDownloadQueue, hasLength(1));
+    expect(pending.started, [11]);
+  });
+
+  for (final switching in [false, true]) {
+    test('${switching ? '切换任务' : '暂停'}保存失败后原任务显示暂停且返回失败', () async {
+      const failure = FileSystemException('private-save');
+      final repo = _ControlledRepository(rootPath: () => directory.path);
+      final old = downloadEntry()..status = DownloadStatus.downloading;
+      final next = downloadEntry(cid: 22);
+      await repo.create(old);
+      await repo.create(next);
+      repo.saveFailure = failure;
+      final pending = DownloadService(repository: repo, downloadClient: client);
+      pending.waitDownloadQueue.addAll([old, next]);
+      pending.curDownload.value = old;
+      final result = switching
+          ? await pending.startDownload(next)
+          : await pending.cancelDownload(isDelete: false, downloadNext: false);
+      expect(result, isA<Error>());
+      expect((result as Error).cause, same(failure));
+      expect(result.stackTrace, isNotNull);
+      expect(result.toString(), isNot(contains('private-save')));
+      expect(old.status, DownloadStatus.pause);
+      expect(pending.curDownload.value, same(old));
+      expect(pending.waitDownloadQueue, [old, next]);
+    });
+  }
+
+  for (final danmaku in [true, false]) {
+    test('${danmaku ? '弹幕' : '媒体'}准备失败返回原始原因及安全提示', () async {
+      final entry = downloadEntry();
+      await repository.create(entry);
+      if (!danmaku) {
+        await File(path.join(entry.entryDirPath, PathUtils.danmakuName))
+            .writeAsBytes([]);
+      }
+      final failure = StateError('private-preparation');
+      final pending = DownloadService(
+        repository: repository,
+        downloadClient: client,
+        prepareDanmaku: (_) async => throw failure,
+        prepareMedia: (_) async => throw failure,
+      );
+      pending.waitDownloadQueue.add(entry);
+      final result = await pending.startDownload(entry);
+      expect(result, isA<Error>());
+      expect((result as Error).cause, same(failure));
+      expect(result.stackTrace, isNotNull);
+      expect(result.toString(), isNot(contains('private-preparation')));
+      expect(
+        entry.status,
+        danmaku ? DownloadStatus.failDanmaku : DownloadStatus.failPlayUrl,
+      );
+    });
+  }
+
+  test('手动弹幕失败保留原文件并返回失败原因', () async {
+    final entry = downloadEntry(completed: true);
+    await repository.create(entry);
+    final file = File(path.join(entry.entryDirPath, PathUtils.danmakuName));
+    await file.writeAsBytes([1]);
+    final failure = StateError('private-danmaku');
+    final pending = DownloadService(
+      repository: repository,
+      downloadClient: client,
+      prepareDanmaku: (_) async => throw failure,
+    );
+    final result = await pending.downloadDanmaku(entry: entry, isUpdate: true);
+    expect(result, isA<Error>());
+    expect((result as Error).cause, same(failure));
+    expect(result.stackTrace, isNotNull);
+    expect(result.toString(), isNot(contains('private-danmaku')));
+    expect(await file.readAsBytes(), [1]);
+  });
+
+  test('删除后同路径重建，旧弹幕结果不能写入新任务', () async {
+    final entry = downloadEntry(completed: true);
+    await repository.create(entry);
+    final reply = Completer<List<int>>();
+    final pending = DownloadService(
+      repository: repository,
+      downloadClient: client,
+      prepareDanmaku: (_) => reply.future,
+    );
+    pending.downloadList.add(entry);
+    final updating = pending.downloadDanmaku(entry: entry, isUpdate: true);
+    expect(
+      (await pending.deleteDownload(entry: entry, removeList: true)).isSuccess,
+      true,
+    );
+    final fresh = downloadEntry(completed: true);
+    await repository.create(fresh);
+    pending.downloadList.add(fresh);
+    reply.complete([1]);
+    expect((await updating).isSuccess, false);
+    expect(
+      File(path.join(fresh.entryDirPath, PathUtils.danmakuName)).existsSync(),
+      false,
+    );
+  });
+
+  for (final lateFailure in [false, true]) {
+    test('较新弹幕更新成功后，旧${lateFailure ? '异常' : '响应'}返回取消且不覆盖', () async {
+      final entry = downloadEntry(completed: true);
+      await repository.create(entry);
+      final replies = <Completer<List<int>>>[];
+      final pending = DownloadService(
+        repository: repository,
+        downloadClient: client,
+        prepareDanmaku: (_) {
+          final reply = Completer<List<int>>();
+          replies.add(reply);
+          return reply.future;
+        },
+      );
+      final old = pending.downloadDanmaku(entry: entry, isUpdate: true);
+      final fresh = pending.downloadDanmaku(entry: entry, isUpdate: true);
+      replies[1].complete([2]);
+      expect((await fresh).isSuccess, true);
+      if (lateFailure) {
+        replies[0].completeError(StateError('private-old-danmaku'));
+      } else {
+        replies[0].complete([1]);
+      }
+      expect(await old, isA<DownloadCancelled>());
+      expect(
+        await File(path.join(entry.entryDirPath, PathUtils.danmakuName))
+            .readAsBytes(),
+        [2],
+      );
+    });
   }
 
   for (final wholePage in [false, true]) {
@@ -456,7 +756,7 @@ void main() {
     final newStart = pending.startDownload(newEntry);
     await newStarted.future;
     pendingRequests[oldEntry.cid]!.completeError(StateError('旧请求失败'));
-    await oldStart;
+    expect(await oldStart, isA<DownloadCancelled>());
     expect(pending.curDownload.value, same(newEntry));
     expect(newEntry.status, DownloadStatus.getDanmaku);
     await pending.cancelDownload(isDelete: false, downloadNext: false);
