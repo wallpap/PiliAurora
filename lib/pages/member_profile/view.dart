@@ -1,30 +1,20 @@
-import 'dart:async';
 import 'dart:io' show File;
 
-import 'package:pili_aurora/common/constants.dart';
 import 'package:pili_aurora/common/widgets/image/network_img_layer.dart';
 import 'package:pili_aurora/common/widgets/loading_widget/loading_widget.dart';
 import 'package:pili_aurora/common/widgets/scaffold/simple_scaffold.dart';
-import 'package:pili_aurora/http/constants.dart';
-import 'package:pili_aurora/http/init.dart';
 import 'package:pili_aurora/http/loading_state.dart';
 import 'package:pili_aurora/models/common/member/profile_type.dart';
-import 'package:pili_aurora/models/user/info.dart';
 import 'package:pili_aurora/models/remote/account_myinfo/data.dart';
-import 'package:pili_aurora/pages/mine/controller.dart';
-import 'package:pili_aurora/services/account_service.dart';
+import 'package:pili_aurora/pages/member_profile/controller.dart';
+import 'package:pili_aurora/services/logger.dart';
 import 'package:pili_aurora/utils/accounts.dart';
-import 'package:pili_aurora/utils/app_sign.dart';
 import 'package:pili_aurora/utils/date_utils.dart';
 import 'package:pili_aurora/utils/extension/file_ext.dart';
 import 'package:pili_aurora/utils/extension/theme_ext.dart';
 import 'package:pili_aurora/utils/page_utils.dart';
 import 'package:pili_aurora/utils/platform_utils.dart';
-import 'package:pili_aurora/utils/storage.dart';
-import 'package:pili_aurora/utils/storage_pref.dart';
 import 'package:pili_aurora/utils/utils.dart';
-import 'package:pili_aurora/utils/rate_limiter.dart';
-import 'package:dio/dio.dart';
 import 'package:flutter/services.dart' show LengthLimitingTextInputFormatter;
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:get/get.dart';
@@ -41,22 +31,24 @@ class EditProfilePage extends StatefulWidget {
 }
 
 class _EditProfilePageState extends State<EditProfilePage> {
-  LoadingState<AccountMyInfoData> _loadingState =
-      LoadingState<AccountMyInfoData>.loading();
-  late final TextEditingController _textController;
-  late final _imagePicker = ImagePicker();
-  AccountService accountService = Get.find<AccountService>();
+  final _controller = MemberProfileController();
+  final _imagePicker = ImagePicker();
+  bool _picking = false;
 
   @override
   void initState() {
     super.initState();
-    _textController = TextEditingController();
+    _controller.addListener(_changed);
     _getInfo();
+  }
+
+  void _changed() {
+    if (mounted) setState(() {});
   }
 
   @override
   void dispose() {
-    _textController.dispose();
+    _controller.dispose();
     super.dispose();
   }
 
@@ -64,54 +56,21 @@ class _EditProfilePageState extends State<EditProfilePage> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return SimpleScaffold(
-      appBar: AppBar(title: const Text('账号资料')),
-      body: _buildBody(theme, _loadingState),
+      appBar: AppBar(
+        title: const Text('账号资料'),
+        actions: [
+          IconButton(
+            tooltip: '刷新资料',
+            onPressed: _controller.saving || _picking ? null : _getInfo,
+            icon: const Icon(Icons.refresh),
+          ),
+        ],
+      ),
+      body: _buildBody(theme, _controller.state),
     );
   }
 
-  Future<void> _getInfo() async {
-    Map<String, String> data = {
-      'build': '2001100',
-      'c_locale': 'zh_CN',
-      'channel': 'master',
-      'mobi_app': 'android_hd',
-      'platform': 'android',
-      's_locale': 'zh_CN',
-      'statistics': Constants.statistics,
-    };
-    Request()
-        .get(
-          '${HttpString.appBaseUrl}/x/v2/account/myinfo',
-          queryParameters: data,
-        )
-        .then((res) {
-          if (mounted) {
-            setState(() {
-              if (res.data['code'] == 0) {
-                AccountMyInfoData data = AccountMyInfoData.fromJson(
-                  res.data['data'],
-                );
-                _loadingState = Success(data);
-                accountService.face.value = data.face!;
-                try {
-                  UserInfoData userInfo = Pref.userInfoCache!
-                    ..uname = data.name
-                    ..face = data.face;
-                  GStorage.userInfo.put('userInfoCache', userInfo);
-                } catch (_) {}
-                try {
-                  Get.find<MineController>().userInfo
-                    ..value.uname = data.name
-                    ..value.face = data.face
-                    ..refresh();
-                } catch (_) {}
-              } else {
-                _loadingState = Error(res.data['message']);
-              }
-            });
-          }
-        });
-  }
+  Future<void> _getInfo() => _controller.load();
 
   Widget _buildBody(
     ThemeData theme,
@@ -147,13 +106,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
                 src: response.face,
               ),
             ),
-            onTap: () => ActionThrottle.run(
-              'imagePicker',
-              const Duration(milliseconds: 500),
-              () {
-                _pickImg(theme);
-              },
-            ),
+            onTap: () => _pickImg(theme),
           ),
           divider,
           _item(
@@ -161,13 +114,13 @@ class _EditProfilePageState extends State<EditProfilePage> {
             title: '昵称',
             text: response.name,
             onTap: () {
-              if (response.coins! < 6) {
+              if ((response.coins ?? 0) < 6) {
                 SmartDialog.showToast('硬币不足');
               } else {
                 _editDialog(
                   type: ProfileType.uname,
                   title: '昵称',
-                  text: response.name!,
+                  text: response.name ?? '',
                 );
               }
             },
@@ -176,10 +129,10 @@ class _EditProfilePageState extends State<EditProfilePage> {
           _item(
             theme: theme,
             title: '性别',
-            text: _sex(response.sex!),
+            text: _sex((response.sex ?? 0)),
             onTap: () => showDialog(
               context: context,
-              builder: (context_) => _sexDialog(response.sex!),
+              builder: (context_) => _sexDialog((response.sex ?? 0)),
             ),
           ),
           divider,
@@ -187,20 +140,33 @@ class _EditProfilePageState extends State<EditProfilePage> {
             theme: theme,
             title: '出生年月',
             text: response.birthday,
-            onTap: () =>
-                showDatePicker(
-                  context: context,
-                  initialDate: DateTime.parse(response.birthday!),
-                  firstDate: DateTime(0001, 1, 1),
-                  lastDate: DateTime.now(),
-                ).then((res) {
-                  if (res != null) {
-                    _update(
-                      type: ProfileType.birthday,
-                      datum: DateFormatUtils.longFormat.format(res),
-                    );
-                  }
-                }),
+            onTap: () async {
+              final owner = _controller.account;
+              final source = response;
+              final now = DateTime.now();
+              final first = DateTime(1, 1, 1);
+              final parsed = DateTime.tryParse(response.birthday ?? '');
+              final date = await showDatePicker(
+                context: context,
+                initialDate:
+                    parsed == null ||
+                        parsed.isAfter(now) ||
+                        parsed.isBefore(first)
+                    ? now
+                    : parsed,
+                firstDate: first,
+                lastDate: now,
+              );
+              if (!mounted ||
+                  !_controller.owns(owner, source) ||
+                  date == null) {
+                return;
+              }
+              await _update(
+                type: ProfileType.birthday,
+                value: DateFormatUtils.longFormat.format(date),
+              );
+            },
           ),
           divider,
           _item(
@@ -248,13 +214,16 @@ class _EditProfilePageState extends State<EditProfilePage> {
   }
 
   Widget _sexDialog(int current) {
+    final owner = _controller.account;
+    final source = _controller.state.dataOrNull;
+    bool isCurrent() => mounted && _controller.owns(owner, source);
     return SimpleDialog(
       clipBehavior: Clip.hardEdge,
       contentPadding: const EdgeInsets.symmetric(vertical: 12),
       children: [
-        _sexDialogItem(1, current, '男'),
-        _sexDialogItem(0, current, '保密'),
-        _sexDialogItem(2, current, '女'),
+        _sexDialogItem(1, current, '男', isCurrent),
+        _sexDialogItem(0, current, '保密', isCurrent),
+        _sexDialogItem(2, current, '女', isCurrent),
       ],
     );
   }
@@ -263,6 +232,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
     int sex,
     int current,
     String text,
+    bool Function() isCurrent,
   ) {
     return ListTile(
       dense: true,
@@ -276,142 +246,157 @@ class _EditProfilePageState extends State<EditProfilePage> {
       ),
       trailing: current == sex ? const Icon(size: 22, Icons.check) : null,
       onTap: () {
+        if (!isCurrent()) return;
         Get.back();
-        _update(type: ProfileType.sex, datum: sex);
+        _update(type: ProfileType.sex, value: sex.toString());
       },
     );
   }
 
-  void _editDialog({
+  Future<void> _editDialog({
     required ProfileType type,
     required String title,
     required String text,
-  }) {
-    _textController.text = text;
-    final lines = type == ProfileType.uname ? 1 : 4;
-    showDialog(
-      context: context,
-      builder: (BuildContext context) {
-        final theme = Theme.of(context);
-        return AlertDialog(
-          title: Text('修改$title'),
-          content: TextField(
-            controller: _textController,
-            minLines: lines,
-            maxLines: lines,
-            autofocus: true,
-            style: const TextStyle(fontSize: 14),
-            textInputAction: type == ProfileType.sign
-                ? TextInputAction.newline
-                : null,
-            inputFormatters: [
-              LengthLimitingTextInputFormatter(
-                type == ProfileType.uname ? 16 : 70,
-              ),
-            ],
-            decoration: InputDecoration(
-              hintText: text,
-              hintStyle: TextStyle(
-                fontSize: 14,
-                color: theme.colorScheme.outline,
-              ),
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: Get.back,
-              child: Text(
-                '取消',
-                style: TextStyle(color: theme.colorScheme.outline),
-              ),
-            ),
-            TextButton(
-              onPressed: () {
-                if (_textController.text == text) {
-                  SmartDialog.showToast('与原$title相同');
-                } else {
-                  _update(type: type);
-                }
-              },
-              child: const Text('确定'),
-            ),
-          ],
-        );
-      },
-    ).whenComplete(_textController.clear);
-  }
-
-  Future<void> _update({
-    required ProfileType type,
-    dynamic datum,
   }) async {
-    final accessKey = Accounts.main.accessKey;
-    if (accessKey == null || accessKey.isEmpty) {
-      SmartDialog.showToast('请退出账号后重新登录');
+    final owner = _controller.account;
+    var source = _controller.state.dataOrNull;
+    if (_controller.saving || _picking || !_controller.owns(owner, source)) {
       return;
     }
-    final data = <String, String>{
-      'access_key': accessKey,
-      'build': '2001100',
-      'c_locale': 'zh_CN',
-      'channel': 'master',
-      'mobi_app': 'android_hd',
-      'platform': 'android',
-      's_locale': 'zh_CN',
-      'statistics': Constants.statistics,
-      if (type == ProfileType.uname)
-        'uname': _textController.text
-      else if (type == ProfileType.sign)
-        'user_sign': _textController.text
-      else if (type == ProfileType.birthday)
-        'birthday': datum
-      else if (type == ProfileType.sex)
-        'sex': datum.toString(),
-    };
-    AppSign.appSign(data);
-    Request()
-        .post(
-          '/x/member/app/${type.name}/update',
-          data: data,
-          options: Options(
-            contentType: Headers.formUrlEncodedContentType,
-          ),
-        )
-        .then((res) {
-          if (res.data['code'] == 0) {
-            AccountMyInfoData data = _loadingState.data;
-            if (type == ProfileType.uname) {
-              data
-                ..name = _textController.text
-                ..coins = data.coins! - 6;
-              try {
-                UserInfoData userInfo = Pref.userInfoCache!
-                  ..uname = _textController.text;
-                GStorage.userInfo.put('userInfoCache', userInfo);
-              } catch (_) {}
-              try {
-                Get.find<MineController>().userInfo
-                  ..value.uname = _textController.text
-                  ..refresh();
-              } catch (_) {}
-            } else if (type == ProfileType.sign) {
-              data.sign = _textController.text;
-            } else if (type == ProfileType.birthday) {
-              data.birthday = datum;
-            } else if (type == ProfileType.sex) {
-              data.sex = datum;
-            }
-            SmartDialog.showToast('修改成功');
-            if (mounted) {
-              setState(() {});
-            }
-            if (type == ProfileType.uname || type == ProfileType.sign) {
-              Get.back();
-            }
-          } else {
-            SmartDialog.showToast(res.data['message']);
-          }
-        });
+    final input = TextEditingController(text: text);
+    var saving = false;
+    final dialogRoute = DialogRoute<void>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (dialogContext, setDialogState) {
+          final theme = Theme.of(dialogContext);
+          final lines = type == ProfileType.uname ? 1 : 4;
+          return AlertDialog(
+            title: Text('修改$title'),
+            content: TextField(
+              controller: input,
+              minLines: lines,
+              maxLines: lines,
+              enabled: !saving,
+              autofocus: true,
+              style: const TextStyle(fontSize: 14),
+              textInputAction: type == ProfileType.sign
+                  ? TextInputAction.newline
+                  : null,
+              inputFormatters: [
+                LengthLimitingTextInputFormatter(
+                  type == ProfileType.uname ? 16 : 70,
+                ),
+              ],
+              decoration: InputDecoration(
+                hintText: text,
+                hintStyle: TextStyle(
+                  fontSize: 14,
+                  color: theme.colorScheme.outline,
+                ),
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(),
+                child: const Text('取消'),
+              ),
+              TextButton(
+                onPressed: saving
+                    ? null
+                    : () async {
+                        if (!mounted || !identical(owner, Accounts.main)) {
+                          return;
+                        }
+                        if (_controller.needsVerification) {
+                          setDialogState(() => saving = true);
+                          await _getInfo();
+                          if (!mounted ||
+                              !dialogContext.mounted ||
+                              !identical(owner, Accounts.main)) {
+                            return;
+                          }
+                          source = _controller.state.dataOrNull;
+                          if (_controller.state case final Error error) {
+                            error.toast();
+                          }
+                          setDialogState(() => saving = false);
+                          return;
+                        }
+                        if (!_controller.owns(owner, source)) return;
+                        final submitted = input.text;
+                        if (submitted == text) {
+                          SmartDialog.showToast('与原$title相同');
+                          return;
+                        }
+                        setDialogState(() => saving = true);
+                        try {
+                          final succeeded = await _update(
+                            type: type,
+                            value: submitted,
+                            isCurrent: () =>
+                                dialogContext.mounted &&
+                                ModalRoute.of(dialogContext)?.isCurrent == true,
+                          );
+                          if (!mounted ||
+                              !dialogContext.mounted ||
+                              !_controller.owns(owner, source)) {
+                            return;
+                          }
+                          if (succeeded &&
+                              ModalRoute.of(dialogContext)?.isCurrent == true) {
+                            Navigator.of(dialogContext).pop();
+                          }
+                        } finally {
+                          if (dialogContext.mounted) {
+                            setDialogState(() => saving = false);
+                          }
+                        }
+                      },
+                child: Text(
+                  saving
+                      ? '提交中'
+                      : _controller.needsVerification
+                      ? '刷新核对'
+                      : '确定',
+                ),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+    try {
+      await Navigator.of(context).push(dialogRoute);
+    } finally {
+      await dialogRoute.completed;
+      input.dispose();
+    }
+  }
+
+  Future<bool> _update({
+    required ProfileType type,
+    required String value,
+    bool Function()? isCurrent,
+  }) async {
+    final owner = _controller.account;
+    final source = _controller.state.dataOrNull;
+    final route = ModalRoute.of(context);
+    if (_controller.saving || _picking || !_controller.owns(owner, source)) {
+      return false;
+    }
+    final result = await _controller.update(type, value);
+    if (!mounted ||
+        !_controller.owns(owner, source) ||
+        !(isCurrent?.call() ?? route?.isCurrent == true)) {
+      return false;
+    }
+    if (result.isSuccess) {
+      SmartDialog.showToast('修改成功');
+      return true;
+    }
+    result.toast();
+    return false;
   }
 
   String _sex(int sex) {
@@ -472,73 +457,73 @@ class _EditProfilePageState extends State<EditProfilePage> {
   }
 
   Future<void> _pickImg(ThemeData theme) async {
+    final owner = _controller.account;
+    final source = _controller.state.dataOrNull;
+    if (_picking || _controller.saving || !_controller.owns(owner, source)) {
+      return;
+    }
+    setState(() => _picking = true);
+    final route = ModalRoute.of(context);
+    bool current() =>
+        mounted && _controller.owns(owner, source) && route?.isCurrent == true;
+    String? temporaryCrop;
+    String? pickedPath;
     try {
-      final pickedFile = await _imagePicker.pickImage(
+      final picked = await _imagePicker.pickImage(
         source: ImageSource.gallery,
         imageQuality: 100,
         requestFullMetadata: false,
       );
-      if (pickedFile != null && mounted) {
-        String? imagePath = pickedFile.path;
-        String? mimeType = (pickedFile.mimeType ?? lookupMimeType(imagePath))
-            ?.split('/')
-            .elementAtOrNull(1);
-        if (mimeType == 'gif') {
-          SmartDialog.showToast('不能选GIF');
-          return;
-        }
-        if (PlatformUtils.isMobile) {
-          final croppedFile = await ImageCropper.platform.cropImage(
-            sourcePath: imagePath,
-            uiSettings: [
-              AndroidUiSettings(
-                toolbarTitle: '裁剪',
-                toolbarColor: theme.colorScheme.secondaryContainer,
-                toolbarWidgetColor: theme.colorScheme.onSecondaryContainer,
-                statusBarLight: theme.isLight,
-                aspectRatioPresets: const [CropAspectRatioPresetCustom()],
-                lockAspectRatio: true,
-                hideBottomControls: true,
-                cropStyle: CropStyle.circle,
-                initAspectRatio: const CropAspectRatioPresetCustom(),
-              ),
-            ],
-          );
-          File(imagePath).tryDel();
-          imagePath = croppedFile?.path;
-        }
-        if (imagePath != null) {
-          Request()
-              .post(
-                '/x/member/web/face/update',
-                queryParameters: {
-                  'csrf': Accounts.main.csrf,
-                },
-                data: FormData.fromMap({
-                  'dopost': 'save',
-                  'DisplayRank': 10000,
-                  'face': await MultipartFile.fromFile(imagePath),
-                }),
-              )
-              .then((res) {
-                if (res.data['code'] == 0) {
-                  SmartDialog.showToast('修改成功');
-                  Timer(const Duration(milliseconds: 500), () {
-                    if (mounted) {
-                      _getInfo();
-                    }
-                  });
-                } else {
-                  SmartDialog.showToast(res.data['message']);
-                }
-                if (PlatformUtils.isMobile && imagePath != null) {
-                  File(imagePath).tryDel();
-                }
-              });
-        }
+      if (picked == null || !current()) return;
+      var imagePath = picked.path;
+      pickedPath = imagePath;
+      final subtype = (picked.mimeType ?? lookupMimeType(imagePath))
+          ?.split('/')
+          .last;
+      if (subtype == 'gif') {
+        SmartDialog.showToast('不能选GIF');
+        return;
       }
-    } catch (e) {
-      SmartDialog.showToast(e.toString());
+      if (PlatformUtils.isMobile) {
+        final cropped = await ImageCropper.platform.cropImage(
+          sourcePath: imagePath,
+          uiSettings: [
+            AndroidUiSettings(
+              toolbarTitle: '裁剪',
+              toolbarColor: theme.colorScheme.secondaryContainer,
+              toolbarWidgetColor: theme.colorScheme.onSecondaryContainer,
+              statusBarLight: theme.isLight,
+              aspectRatioPresets: const [CropAspectRatioPresetCustom()],
+              lockAspectRatio: true,
+              hideBottomControls: true,
+              cropStyle: CropStyle.circle,
+              initAspectRatio: const CropAspectRatioPresetCustom(),
+            ),
+          ],
+        );
+        temporaryCrop = cropped?.path;
+        if (cropped == null || !current()) return;
+        imagePath = cropped.path;
+      }
+      final result = await _controller.avatar(imagePath);
+      if (!current()) return;
+      if (result.isSuccess) {
+        SmartDialog.showToast('修改成功');
+        await _getInfo();
+      } else {
+        result.toast();
+        if (result is UnknownResult) await _getInfo();
+      }
+    } catch (error, stackTrace) {
+      logger.w('头像选择或上传失败', error: error.runtimeType, stackTrace: stackTrace);
+      if (current()) SmartDialog.showToast('头像处理失败，请重新选择后重试');
+    } finally {
+      // 选择器来源可能是用户原文件，只清理本次裁剪产生的独立产物。
+      if (temporaryCrop != null && temporaryCrop != pickedPath) {
+        await File(temporaryCrop).tryDel();
+      }
+      _picking = false;
+      if (mounted) setState(() {});
     }
   }
 }
