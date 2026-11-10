@@ -21,11 +21,16 @@ import 'package:pili_aurora/utils/wbi_sign.dart';
 import 'package:dio/dio.dart';
 
 abstract final class FavHttp {
-  static Future<LoadingState<bool>> subscriptionVideoAvailable(int aid) async {
+  static Future<LoadingState<bool>> subscriptionVideoAvailable(
+    int aid, {
+    Account? account,
+  }) async {
+    account ??= Accounts.main;
     try {
       final result = await Request().requestApi<bool>(
         Api.videoIntro,
         kind: ApiCallKind.query,
+        options: Options(extra: {'account': account}),
         decode: (body) {
           if (body['data'] is! Map) throw const FormatException('视频状态响应不完整');
           return true;
@@ -110,9 +115,11 @@ abstract final class FavHttp {
 
   // 取消订阅
   static Future<LoadingState<void>> cancelSub({
+    Account? account,
     required int id,
     required int type,
   }) async {
+    account ??= Accounts.main;
     return await Request().requestApi<void>(
       type == 11 ? Api.unfavFolder : Api.unfavSeason,
       kind: ApiCallKind.mutation,
@@ -120,18 +127,22 @@ abstract final class FavHttp {
       data: type == 11
           ? {
               'media_id': id,
-              'csrf': Accounts.main.csrf,
+              'csrf': account.csrf,
             }
           : {
               'platform': 'web',
               'season_id': id,
-              'csrf': Accounts.main.csrf,
+              'csrf': account.csrf,
             },
-      options: Options(contentType: Headers.formUrlEncodedContentType),
+      options: Options(
+        extra: {'account': account},
+        contentType: Headers.formUrlEncodedContentType,
+      ),
     );
   }
 
   static Future<LoadingState<SubDetailData>> favSeasonList({
+    Account? account,
     required int id,
     required int pn,
     required int ps,
@@ -139,6 +150,7 @@ abstract final class FavHttp {
     return await Request().requestApi(
       Api.favSeasonList,
       kind: ApiCallKind.query,
+      options: Options(extra: {'account': account ?? Accounts.main}),
       decode: (body) => SubDetailData.fromJson(body['data']),
       queryParameters: {
         'season_id': id,
@@ -308,52 +320,61 @@ abstract final class FavHttp {
   }
 
   static Future<LoadingState<List<FavNoteItemModel>?>> userNoteList({
+    Account? account,
     required int page,
   }) async {
+    account ??= Accounts.main;
     return await Request().requestApi(
       Api.userNoteList,
       kind: ApiCallKind.query,
+      options: Options(extra: {'account': account}),
       decode: (body) => (body['data']?['list'] as List?)
           ?.map((item) => FavNoteItemModel.fromJson(item))
           .toList(),
       queryParameters: {
         'pn': page,
         'ps': 10,
-        'csrf': Accounts.main.csrf,
+        'csrf': account.csrf,
       },
     );
   }
 
   static Future<LoadingState<List<FavNoteItemModel>?>> noteList({
+    Account? account,
     required int page,
   }) async {
+    account ??= Accounts.main;
     return await Request().requestApi(
       Api.noteList,
       kind: ApiCallKind.query,
+      options: Options(extra: {'account': account}),
       decode: (body) => (body['data']?['list'] as List?)
           ?.map((item) => FavNoteItemModel.fromJson(item))
           .toList(),
       queryParameters: {
         'pn': page,
         'ps': 10,
-        'csrf': Accounts.main.csrf,
+        'csrf': account.csrf,
       },
     );
   }
 
   static Future<LoadingState<void>> delNote({
+    Account? account,
     required bool isPublish,
     required String noteIds,
   }) async {
+    account ??= Accounts.main;
     return await Request().requestApi<void>(
       isPublish ? Api.delPublishNote : Api.delNote,
       kind: ApiCallKind.mutation,
       decode: (_) {},
       data: {
         isPublish ? 'cvids' : 'note_ids': noteIds,
-        'csrf': Accounts.main.csrf,
+        'csrf': account.csrf,
       },
       options: Options(
+        extra: {'account': account},
         contentType: Headers.formUrlEncodedContentType,
       ),
     );

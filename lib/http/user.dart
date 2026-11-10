@@ -276,6 +276,7 @@ abstract final class UserHttp {
 
   // 我的订阅
   static Future<LoadingState<SubData>> userSubFolder({
+    Account? account,
     required int mid,
     required int pn,
     required int ps,
@@ -283,6 +284,7 @@ abstract final class UserHttp {
     return await Request().requestApi(
       Api.userSubFolder,
       kind: ApiCallKind.query,
+      options: Options(extra: {'account': account ?? Accounts.main}),
       decode: (body) => SubData.fromJson(body['data']),
       queryParameters: {
         'up_mid': mid,

@@ -20,6 +20,7 @@ class SubscriptionCleanupResult {
   int removed = 0;
   int hidden = 0;
   int failed = 0;
+  int pending = 0;
 }
 
 class SubscriptionCleaner {
@@ -47,6 +48,17 @@ class SubscriptionCleaner {
     void Function(int processed, int total)? onProgress,
   }) async {
     final result = SubscriptionCleanupResult();
+    Future<void> remove(SubItemModel item) async {
+      switch (await cancel(item)) {
+        case Success():
+          result.removed++;
+        case UnknownResult():
+          result.pending++;
+        case Error() || Loading():
+          result.failed++;
+      }
+    }
+
     final checkedVideos = <int, LoadingState<bool>>{};
     for (var index = 0; index < subscriptions.length; index++) {
       if (isCurrent?.call() == false) break;
@@ -59,11 +71,7 @@ class SubscriptionCleaner {
           continue;
         }
         if (subscription.state == 1) {
-          if ((await cancel(subscription)).isSuccess) {
-            result.removed++;
-          } else {
-            result.failed++;
-          }
+          await remove(subscription);
           continue;
         }
         final invalid = <(int, int)>{};
@@ -125,11 +133,7 @@ class SubscriptionCleaner {
         if (!hasValid && total != null && seen.length < total) complete = false;
         // 全部内容均已确认失效才取消订阅；空合集及请求失败保留。
         if (complete && !hasValid && invalid.isNotEmpty) {
-          if ((await cancel(subscription)).isSuccess) {
-            result.removed++;
-          } else {
-            result.failed++;
-          }
+          await remove(subscription);
         } else if (hasValid && hideInvalid && invalid.isNotEmpty) {
           result.hidden += await saveHidden(subscription, invalid);
         }

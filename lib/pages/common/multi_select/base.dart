@@ -109,22 +109,20 @@ mixin CommonMultiSelectMixin<T extends MultiSelectData>
 mixin DeleteItemMixin<R, T extends MultiSelectData>
     on CommonListController<R, T>, CommonMultiSelectMixin<T> {
   Future<void> afterDelete(Set<T> removeList) async {
-    final list = loadingState.value.data!;
-    if (removeList.length == list.length) {
-      list.clear();
-    } else if (removeList.length == 1) {
-      list.remove(removeList.first);
-    } else {
-      list.removeWhere(removeList.contains);
+    final list = loadingState.value.dataOrNull;
+    if (isClosed || list == null) return;
+    final before = list.length;
+    // 数量相同不能证明是同一批条目；只删除请求中实际确认的对象。
+    list.removeWhere(removeList.contains);
+    if (list.length == before) return;
+    if (enableMultiSelect.value) {
+      rxCount.value = 0;
+      enableMultiSelect.value = false;
     }
     if (list.isNotEmpty || isEnd) {
       loadingState.refresh();
     } else {
-      onReload();
-    }
-    if (enableMultiSelect.value) {
-      rxCount.value = 0;
-      enableMultiSelect.value = false;
+      await onReload();
     }
   }
 }

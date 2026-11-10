@@ -79,18 +79,22 @@ class _FavNoteChildPageState extends State<FavNoteChildPage>
                   tooltip: '取消',
                   context: context,
                   icon: const Icon(Icons.clear),
-                  onPressed: _favNoteController.onDisable,
+                  onPressed: _favNoteController.isRemoving.value
+                      ? null
+                      : _favNoteController.onDisable,
                 ),
                 const SizedBox(width: 12),
                 Obx(
                   () => Checkbox(
                     value: _favNoteController.allSelected.value,
-                    onChanged: (value) {
-                      _favNoteController.handleSelect(
-                        checked: !_favNoteController.allSelected.value,
-                        disableSelect: false,
-                      );
-                    },
+                    onChanged: _favNoteController.isRemoving.value
+                        ? null
+                        : (value) {
+                            _favNoteController.handleSelect(
+                              checked: !_favNoteController.allSelected.value,
+                              disableSelect: false,
+                            );
+                          },
                   ),
                 ),
                 GestureDetector(
@@ -114,16 +118,20 @@ class _FavNoteChildPageState extends State<FavNoteChildPage>
                     visualDensity: VisualDensity.compact,
                     tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                   ),
-                  onPressed: () {
-                    if (_favNoteController.checkedCount != 0) {
-                      showConfirmDialog(
-                        context: context,
-                        title: const Text('确定删除已选中的笔记吗？'),
-                        onConfirm: _favNoteController.onRemove,
-                      );
-                    }
-                  },
-                  child: const Text('删除'),
+                  onPressed: _favNoteController.isRemoving.value
+                      ? null
+                      : () {
+                          if (_favNoteController.checkedCount != 0) {
+                            showConfirmDialog(
+                              context: context,
+                              title: const Text('确定删除已选中的笔记吗？'),
+                              onConfirm: _favNoteController.onRemove,
+                            );
+                          }
+                        },
+                  child: Text(
+                    _favNoteController.isRemoving.value ? '删除中' : '删除',
+                  ),
                 ),
                 const SizedBox(width: 16),
               ],
