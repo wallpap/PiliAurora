@@ -7,6 +7,7 @@ import 'dart:isolate';
 import 'package:pili_aurora/http/browser_ua.dart';
 import 'package:pili_aurora/services/logger.dart';
 import 'package:pili_aurora/http/constants.dart';
+import 'package:pili_aurora/plugin/pl_player/widgets/webp_capture_operation.dart';
 import 'package:pili_aurora/utils/storage_pref.dart';
 import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:get/get_rx/get_rx.dart';
@@ -17,7 +18,7 @@ import 'package:media_kit/media_kit.dart';
 import 'package:media_kit/src/player/native/core/initializer.dart';
 import 'package:media_kit/src/player/native/core/native_library.dart';
 
-class MpvConvertWebp {
+class MpvConvertWebp implements WebpConversion {
   final _mpv = NativePlayer.mpv;
   Pointer<generated.mpv_handle> _ctx = nullptr;
   final _completer = Completer<bool>();
@@ -82,6 +83,7 @@ class MpvConvertWebp {
     calloc.free(level);
   }
 
+  @override
   Future<void> dispose() => _finish(false);
 
   Future<void> _finish(bool success) {
@@ -107,7 +109,7 @@ class MpvConvertWebp {
       }
       if (!_completer.isCompleted) _completer.complete(success);
     } catch (error, stack) {
-      logger.e('WebP 转换资源回收失败', error: error, stackTrace: stack);
+      logger.e('WebP 转换资源回收失败', error: error.runtimeType, stackTrace: stack);
       if (!_completer.isCompleted) _completer.complete(false);
     }
   }
@@ -121,11 +123,15 @@ class MpvConvertWebp {
             ),
       );
 
+  @override
   Future<bool> convert() => _conversion ??= _convert();
 
   Future<bool> _convert() async {
     if (_disposed) return false;
     try {
+      if (!start.isFinite || start < 0 || !duration.isFinite || duration <= 0) {
+        throw ArgumentError('动态截图时间范围无效');
+      }
       await (_initialization ??= _init());
       if (!_disposed) _command(['loadfile', url]);
       return await _completer.future;
@@ -144,7 +150,8 @@ class MpvConvertWebp {
         final prop = event.ref.data.cast<generated.mpv_event_property>().ref;
         if (prop.name.toDartString() == 'time-pos' &&
             prop.format == generated.mpv_format.MPV_FORMAT_DOUBLE) {
-          progress!.value = (prop.data.cast<Double>().value - start) / duration;
+          final value = (prop.data.cast<Double>().value - start) / duration;
+          if (value.isFinite) progress?.value = value.clamp(0.0, 1.0);
         }
         break;
       case generated.mpv_event_id.MPV_EVENT_FILE_LOADED:
@@ -152,10 +159,9 @@ class MpvConvertWebp {
         break;
       case generated.mpv_event_id.MPV_EVENT_LOG_MESSAGE:
         final log = event.ref.data.cast<generated.mpv_event_log_message>().ref;
-        final prefix = log.prefix.toDartString().trim();
         final level = log.level.toDartString().trim();
-        final text = log.text.toDartString().trim();
-        logger.d('WebpConvert: $level $prefix : $text');
+        // 原生日志正文可能包含带签名的媒体 URL，仅保留错误等级。
+        logger.d('WebP 转换原生日志: $level');
         if (kDebugMode) {
           if (level == 'error' || level == 'fatal') _success = false;
         } else {

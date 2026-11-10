@@ -15,7 +15,6 @@ import 'package:pili_aurora/common/widgets/disabled_icon.dart';
 import 'package:pili_aurora/common/widgets/gesture/immediate_tap_gesture_recognizer.dart';
 import 'package:pili_aurora/common/widgets/gesture/mouse_interactive_viewer.dart';
 import 'package:pili_aurora/common/widgets/gesture/player_gesture_recognizer.dart';
-import 'package:pili_aurora/common/widgets/loading_widget.dart';
 import 'package:pili_aurora/common/widgets/pair.dart';
 import 'package:pili_aurora/common/widgets/player_bar.dart';
 import 'package:pili_aurora/common/widgets/progress_bar/audio_video_progress_bar.dart';
@@ -62,6 +61,7 @@ import 'package:pili_aurora/plugin/pl_player/widgets/seek_indicator.dart';
 import 'package:pili_aurora/plugin/pl_player/widgets/bottom_control.dart';
 import 'package:pili_aurora/plugin/pl_player/widgets/common_btn.dart';
 import 'package:pili_aurora/plugin/pl_player/widgets/mpv_convert_webp.dart';
+import 'package:pili_aurora/plugin/pl_player/widgets/webp_capture_operation.dart';
 import 'package:pili_aurora/plugin/pl_player/widgets/play_pause_btn.dart';
 import 'package:pili_aurora/services/diagnostics/diagnostics.dart';
 import 'package:pili_aurora/services/android_video_output_limit.dart';
@@ -447,6 +447,7 @@ class _PLVideoPlayerState extends State<PLVideoPlayer>
 
   @override
   void dispose() {
+    unawaited(_webpCapture?.cancel());
     plPlayerController.removeDanmakuRuleListener(_removeDmAction);
     _unregisterVideoDiagnostics?.call();
     _danmakuListener?.cancel();
@@ -1271,6 +1272,13 @@ class _PLVideoPlayerState extends State<PLVideoPlayer>
   @override
   void didUpdateWidget(covariant PLVideoPlayer oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (!identical(oldWidget.plPlayerController, widget.plPlayerController) ||
+        !identical(
+          oldWidget.videoDetailController,
+          widget.videoDetailController,
+        )) {
+      unawaited(_webpCapture?.cancel());
+    }
     if (Platform.isAndroid && AndroidHelper.isPipMode) {
       plPlayerController.controls = false;
     }
@@ -2446,32 +2454,64 @@ class _PLVideoPlayerState extends State<PLVideoPlayer>
     );
   }
 
+  WebpCaptureOperation? _webpCapture;
+
   Future<void> _screenshotWebp() async {
-    final videoInfo = videoDetailController.data;
-    final ids = videoInfo.dash!.video!.availableVideoQualities;
-    final video = videoDetailController.findVideoByQa(ids.min);
-
-    String? url = video.baseUrl;
-    if (url == null) return;
-    VideoQuality qa = video.quality;
-
+    if (_webpCapture != null || !mounted) return;
     final ctr = plPlayerController;
-    final theme = Theme.of(context);
-    final currentPos = ctr.positionInMilliseconds / 1000.0;
-    final duration = ctr.durationInMilliseconds / 1000.0;
-    final segment = Pair(first: currentPos, second: currentPos);
-    final model = PostSegmentModel(
-      segment: segment,
-      category: SegmentType.sponsor,
-      actionType: ActionType.skip,
+    final details = widget.videoDetailController;
+    final owner = ctr.activePlaybackOwner;
+    if (details == null ||
+        details.isClosed ||
+        owner == null ||
+        !owner.isActive) {
+      SmartDialog.showToast('视频尚未准备好，请稍后重试');
+      return;
+    }
+    final videoInfo = details.data;
+    final snapshot = ctr.currentPlaybackSnapshot;
+    final cid = ctr.cid;
+    final operation = WebpCaptureOperation(
+      owner: owner,
+      ownsSource: () =>
+          mounted &&
+          identical(widget.plPlayerController, ctr) &&
+          identical(widget.videoDetailController, details) &&
+          !details.isClosed &&
+          identical(details.data, videoInfo) &&
+          identical(ctr.activePlaybackOwner, owner) &&
+          ctr.cid == cid &&
+          ctr.currentPlaybackSnapshot.requestId == snapshot.requestId &&
+          ctr.currentPlaybackSnapshot.loadId == snapshot.loadId,
     );
-    final isPlay = ctr.playerStatus.isPlaying;
-    if (isPlay) ctr.pause();
-
-    WebpPreset preset = WebpPreset.def;
-
-    final success =
-        await showDialog<bool>(
+    _webpCapture = operation;
+    try {
+      await operation.run(() async {
+        final ids = videoInfo.dash?.video?.availableVideoQualities;
+        final currentPos = ctr.positionInMilliseconds / 1000.0;
+        final duration = ctr.durationInMilliseconds / 1000.0;
+        if (ids == null || ids.isEmpty || duration <= 0) {
+          SmartDialog.showToast('当前视频暂不支持动态截图');
+          return;
+        }
+        final video = details.findVideoByQa(ids.min);
+        String? url = video.baseUrl;
+        if (url == null || url.isEmpty) {
+          SmartDialog.showToast('当前视频暂不支持动态截图');
+          return;
+        }
+        VideoQuality qa = video.quality;
+        WebpPreset preset = WebpPreset.def;
+        final theme = Theme.of(context);
+        final segment = Pair(first: currentPos, second: currentPos);
+        final model = PostSegmentModel(
+          segment: segment,
+          category: SegmentType.sponsor,
+          actionType: ActionType.skip,
+        );
+        final navigator = Navigator.of(context, rootNavigator: true);
+        final dialog = WebpCaptureDialogRoute(
+          operation: operation,
           context: context,
           builder: (context) => AlertDialog(
             title: const Text('动态截图'),
@@ -2489,26 +2529,29 @@ class _PLVideoPlayerState extends State<PLVideoPlayer>
                   title: '选择画质',
                   value: () => qa.code,
                   onSelected: (value) {
-                    final video = videoDetailController.findVideoByQa(value);
+                    if (!operation.isCurrent) return false;
+                    final video = details.findVideoByQa(value);
                     url = video.baseUrl;
                     qa = video.quality;
                     return false;
                   },
-                  itemBuilder: (context) => videoInfo.supportFormats!
-                      .map(
-                        (i) => PopupMenuItem(
-                          enabled: ids.contains(i.quality),
-                          value: i.quality,
-                          child: Text(i.newDesc ?? ''),
-                        ),
-                      )
-                      .toList(),
+                  itemBuilder: (context) =>
+                      (videoInfo.supportFormats ?? <FormatItem>[])
+                          .map(
+                            (i) => PopupMenuItem(
+                              enabled: ids.contains(i.quality),
+                              value: i.quality,
+                              child: Text(i.newDesc ?? ''),
+                            ),
+                          )
+                          .toList(),
                   getSelectTitle: (_) => qa.shortDesc,
                 ),
                 PopupMenuText(
                   title: 'webp预设',
                   value: () => preset,
                   onSelected: (value) {
+                    if (!operation.isCurrent) return false;
                     preset = value;
                     return false;
                   },
@@ -2525,7 +2568,11 @@ class _PLVideoPlayerState extends State<PLVideoPlayer>
             ),
             actions: [
               TextButton(
-                onPressed: Get.back,
+                onPressed: () {
+                  if (ModalRoute.of(context)?.isCurrent == true) {
+                    Navigator.of(context).pop();
+                  }
+                },
                 child: Text(
                   '取消',
                   style: TextStyle(
@@ -2535,54 +2582,62 @@ class _PLVideoPlayerState extends State<PLVideoPlayer>
               ),
               TextButton(
                 onPressed: () {
-                  if (segment.first < segment.second) {
-                    Get.back(result: true);
+                  if (operation.isCurrent &&
+                      ModalRoute.of(context)?.isCurrent == true &&
+                      segment.first.isFinite &&
+                      segment.second.isFinite &&
+                      segment.first >= 0 &&
+                      segment.first < segment.second &&
+                      segment.second <= duration) {
+                    Navigator.of(context).pop(true);
                   }
                 },
                 child: const Text('确定'),
               ),
             ],
           ),
-        ) ??
-        false;
-    if (!success) return;
-
-    final progress = 0.0.obs;
-    final name =
-        '${ctr.cid}-${segment.first.toStringAsFixed(3)}_${segment.second.toStringAsFixed(3)}.webp';
-    final file = '$tmpDirPath/$name';
-
-    final mpv = MpvConvertWebp(
-      url!,
-      file,
-      segment.first,
-      segment.second,
-      progress: progress,
-      preset: preset,
-    );
-    final future = mpv.convert().whenComplete(
-      () => SmartDialog.dismiss(status: SmartStatus.loading),
-    );
-
-    SmartDialog.showLoading(
-      backType: SmartBackType.normal,
-      builder: (_) => LoadingWidget(progress: progress, msg: '正在保存，可能需要较长时间'),
-      onDismiss: () async {
-        if (progress.value < 1.0) {
-          mpv.dispose();
+        );
+        operation.onCancel = () {
+          if (dialog.isActive) navigator.removeRoute(dialog);
+        };
+        final success = await navigator.push(dialog) ?? false;
+        operation.onCancel = null;
+        if (!success || !operation.isCurrent || url == null || url!.isEmpty) {
+          return;
         }
-        if (await future) {
-          await ImageUtils.saveFileImg(
-            filePath: file,
-            fileName: name,
-            needToast: true,
-          );
-        } else {
-          SmartDialog.showToast('转码出现错误或已取消');
+
+        final name =
+            '$cid-${segment.first.toStringAsFixed(3)}_${segment.second.toStringAsFixed(3)}.webp';
+        final file = await operation.createFile(tmpDirPath, name);
+        if (file == null || !operation.isCurrent) return;
+        final converted = await operation.convert(
+          MpvConvertWebp(
+            url!,
+            file,
+            segment.first,
+            segment.second,
+            progress: operation.progress,
+            preset: preset,
+          ),
+        );
+        if (!converted || !operation.isCurrent) return;
+        final output = File(file);
+        if (!output.existsSync() || await output.length() == 0) {
+          if (operation.isCurrent) SmartDialog.showToast('转码未生成有效图片，请重试');
+          return;
         }
-        if (isPlay) ctr.play();
-      },
-    );
+        if (!operation.isCurrent) return;
+        final result = await ImageUtils.saveFileImg(
+          filePath: file,
+          fileName: name,
+        );
+        if (operation.isCurrent && result != null) {
+          SmartDialog.showToast(result.isSuccess ? '已保存' : '保存失败，请检查权限后重试');
+        }
+      });
+    } finally {
+      if (identical(_webpCapture, operation)) _webpCapture = null;
+    }
   }
 
   static const _overlaySpacing = 5.0;
