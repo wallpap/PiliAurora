@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:cached_network_image_ce/cached_network_image.dart' as cache;
@@ -7,6 +8,7 @@ import 'package:get/get.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:pili_aurora/pages/setting/widgets/clear_cache_item.dart';
 import 'package:pili_aurora/pages/setting/widgets/normal_item.dart';
+import 'package:pili_aurora/common/widgets/route_aware_mixin.dart';
 import 'package:path/path.dart' as path;
 import 'package:path_provider_platform_interface/path_provider_platform_interface.dart';
 import 'package:pili_aurora/utils/cache_manager.dart';
@@ -15,10 +17,14 @@ class _Cache extends Fake implements cache.DefaultCacheManager {
   @override
   late String cacheDir;
   Object? failure;
+  Completer<void>? clearing;
+  int clearCount = 0;
   @override
   int getTotalLength() => 0;
   @override
   Future<void> emptyCache() async {
+    clearCount++;
+    await clearing?.future;
     if (failure case final error?) throw error;
   }
 }
@@ -48,10 +54,124 @@ void main() {
         .create();
     manager
       ..cacheDir = cacheDirectory.path
-      ..failure = null;
+      ..failure = null
+      ..clearing = null
+      ..clearCount = 0;
     paths.temporaryPath = temporary.path;
   });
   tearDown(() => temporary.delete(recursive: true));
+  Future<void> until(WidgetTester tester, bool Function() ready) async {
+    for (var attempt = 0; attempt < 100; attempt++) {
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 10)),
+      );
+      await tester.pump(const Duration(milliseconds: 50));
+      if (ready()) return;
+    }
+    fail('缓存页面未完成预期状态转换');
+  }
+
+  Future<void> mount(WidgetTester tester) async {
+    await tester.pumpWidget(
+      GetMaterialApp(
+        navigatorObservers: [routeObserver, FlutterSmartDialog.observer],
+        builder: FlutterSmartDialog.init(),
+        home: const Scaffold(body: ClearCacheItem()),
+      ),
+    );
+    await until(
+      tester,
+      () => find.textContaining('0.00B').evaluate().isNotEmpty,
+    );
+  }
+
+  Future<void> finish(WidgetTester tester) async {
+    SmartDialog.dismiss(status: .allToast);
+    SmartDialog.dismiss(status: .allDialog);
+    SmartDialog.dismiss(status: .loading);
+    await tester.pumpAndSettle();
+    await tester.pumpWidget(const SizedBox());
+    await tester.pumpAndSettle();
+    Get.reset();
+  }
+
+  testWidgets('取消清理保留缓存并允许再次确认', (tester) async {
+    await mount(tester);
+    await tester.tap(find.text('清除缓存'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('取消'));
+    await tester.pumpAndSettle();
+    expect(manager.clearCount, 0);
+    expect(tester.widget<NormalItem>(find.byType(NormalItem)).onTap, isNotNull);
+    await tester.tap(find.text('清除缓存'));
+    await tester.pumpAndSettle();
+    expect(find.text('确认'), findsOneWidget);
+    await tester.tap(find.text('取消'));
+    await finish(tester);
+  });
+
+  testWidgets('清理只关闭自己的提示，失败解除锁并允许重试', (tester) async {
+    await mount(tester);
+    final pending = manager.clearing = Completer<void>();
+    await tester.tap(find.text('清除缓存'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('确认'));
+    await tester.pump(const Duration(milliseconds: 500));
+    expect(manager.clearCount, 1);
+    expect(tester.widget<NormalItem>(find.byType(NormalItem)).onTap, isNull);
+    SmartDialog.showLoading(msg: '其他任务');
+    await tester.pump(const Duration(milliseconds: 500));
+    manager.failure = StateError('private cache path');
+    pending.complete();
+    await until(
+      tester,
+      () => find.text('部分缓存未能清除，请稍后重试').evaluate().isNotEmpty,
+    );
+    expect(find.text('正在清除...'), findsNothing);
+    expect(find.text('其他任务'), findsOneWidget);
+    expect(find.textContaining('private cache path'), findsNothing);
+    await until(
+      tester,
+      () => tester.widget<NormalItem>(find.byType(NormalItem)).onTap != null,
+    );
+    SmartDialog.dismiss(status: .loading);
+    SmartDialog.dismiss(status: .allToast);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('清除缓存'));
+    await tester.pumpAndSettle();
+    expect(find.text('确认'), findsOneWidget);
+    await tester.tap(find.text('取消'));
+    await finish(tester);
+  });
+
+  testWidgets('清理期间离页再返回不交付旧结果，保留新页面加载提示', (tester) async {
+    await mount(tester);
+    final pending = manager.clearing = Completer<void>();
+    await tester.tap(find.text('清除缓存'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('确认'));
+    await tester.pump(const Duration(milliseconds: 500));
+    expect(find.text('正在清除...'), findsOneWidget);
+    Get.key.currentState!.push<void>(
+      MaterialPageRoute(builder: (_) => const Scaffold(body: Text('其他页面'))),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('正在清除...'), findsNothing);
+    Get.key.currentState!.pop();
+    await tester.pumpAndSettle();
+    SmartDialog.showLoading(msg: '新页面任务');
+    await tester.pump(const Duration(milliseconds: 500));
+    manager.failure = StateError('late failure');
+    pending.complete();
+    await until(
+      tester,
+      () => tester.widget<NormalItem>(find.byType(NormalItem)).onTap != null,
+    );
+    expect(find.text('清除成功'), findsNothing);
+    expect(find.text('部分缓存未能清除，请稍后重试'), findsNothing);
+    expect(find.text('新页面任务'), findsOneWidget);
+    await finish(tester);
+  });
   test('按实际图片文件统计，元数据为空不能把残留缓存显示为0', () async {
     await File(path.join(cacheDirectory.path, 'orphan'))
         .writeAsBytes([1, 2, 3]);

@@ -1,3 +1,7 @@
+import 'dart:async' show unawaited;
+
+import 'package:pili_aurora/common/widgets/custom_toast.dart';
+import 'package:pili_aurora/common/widgets/route_aware_mixin.dart';
 import 'package:pili_aurora/services/logger.dart';
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:material_ui/material_ui.dart';
@@ -47,6 +51,32 @@ class _ClearCacheItemState extends State<ClearCacheItem> {
 
   Future<void> _confirmClear(BuildContext context) async {
     if (_busy) return;
+    final route = ModalRoute.of(context);
+    var invalidated = false;
+    String? loadingTag;
+    bool current() => mounted && !invalidated && (route?.isCurrent ?? true);
+    Future<void> closeLoading() async {
+      final tag = loadingTag;
+      if (tag == null) return;
+      loadingTag = null;
+      try {
+        await SmartDialog.dismiss(tag: tag);
+      } catch (error, stackTrace) {
+        logger.w(
+          '关闭缓存清理提示失败',
+          error: error.runtimeType,
+          stackTrace: stackTrace,
+        );
+      }
+    }
+
+    void onNavigation() {
+      if (identical(routeObserver.currentRoute, route)) return;
+      invalidated = true;
+      unawaited(closeLoading());
+    }
+
+    routeObserver.addNavigationListener(onNavigation);
     setState(() => _busy = true);
     try {
       final confirmed = await showConfirmDialog(
@@ -54,9 +84,16 @@ class _ClearCacheItemState extends State<ClearCacheItem> {
         title: const Text('提示'),
         content: const Text('该操作将清除图片及网络请求缓存数据，确认清除？'),
       );
-      if (!confirmed || !mounted) return;
+      if (!confirmed || !current()) return;
       _loadVersion++;
-      SmartDialog.showLoading(msg: '正在清除...');
+      final tag = loadingTag = 'cache-clear-${UniqueKey()}';
+      SmartDialog.show<void>(
+        tag: tag,
+        builder: (_) => const LoadingWidget('正在清除...'),
+        debounce: false,
+        clickMaskDismiss: false,
+        backType: SmartBackType.normal,
+      );
       String message;
       try {
         await CacheManager.clearLibraryCache();
@@ -65,13 +102,18 @@ class _ClearCacheItemState extends State<ClearCacheItem> {
         logger.w('缓存未完全清除', error: error.runtimeType, stackTrace: stackTrace);
         message = '部分缓存未能清除，请稍后重试';
       } finally {
-        await SmartDialog.dismiss(status: .loading);
+        await closeLoading();
       }
-      if (mounted) {
+      if (current()) {
         SmartDialog.showToast(message);
         await _loadCacheSize();
       }
+    } catch (error, stackTrace) {
+      logger.w('缓存清理操作未完成', error: error.runtimeType, stackTrace: stackTrace);
+      if (current()) SmartDialog.showToast('清理缓存未完成，请重试');
     } finally {
+      routeObserver.removeNavigationListener(onNavigation);
+      await closeLoading();
       if (mounted) setState(() => _busy = false);
     }
   }
