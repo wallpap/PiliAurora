@@ -7,16 +7,16 @@ import 'package:pili_aurora/pages/live_room/controller.dart';
 import 'package:pili_aurora/pages/live_room/widgets/live_stream_panel.dart';
 import 'package:pili_aurora/pages/video/widgets/header_control.dart';
 import 'package:pili_aurora/plugin/pl_player/controller.dart';
+import 'package:pili_aurora/plugin/pl_player/playback/playback_contracts.dart';
 import 'package:pili_aurora/plugin/pl_player/widgets/desktop_playback_menu.dart';
 import 'package:pili_aurora/plugin/pl_player/widgets/desktop_window_controls.dart';
 import 'package:pili_aurora/plugin/pl_player/widgets/common_btn.dart';
 import 'package:pili_aurora/services/shutdown_timer_service.dart'
     show shutdownTimerService;
+import 'package:pili_aurora/services/logger.dart';
 import 'package:pili_aurora/utils/android/bindings.g.dart';
 import 'package:pili_aurora/utils/extension/context_ext.dart';
 import 'package:pili_aurora/utils/platform_utils.dart';
-import 'package:pili_aurora/utils/storage.dart';
-import 'package:pili_aurora/utils/storage_key.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:get/get.dart';
 import 'package:material_design_icons_flutter/material_design_icons_flutter.dart';
@@ -50,6 +50,7 @@ class LiveHeaderControl extends StatefulWidget {
 
 class _LiveHeaderControlState extends State<LiveHeaderControl>
     with TimeBatteryMixin {
+  bool _streamMenuOpen = false;
   @override
   late final plPlayerController = widget.plPlayerController;
 
@@ -292,35 +293,60 @@ class _LiveHeaderControlState extends State<LiveHeaderControl>
   }
 
   Future<void> _showLiveStreamDialog() async {
+    if (_streamMenuOpen || !mounted) return;
+    _streamMenuOpen = true;
     final controller = widget.liveController;
-    plPlayerController.setControlsMenuOpen(true);
-    Widget panel(BuildContext context) => LiveStreamPanel(
-      streams: controller.stream,
-      current: (
-        stream: controller.streamIndex,
-        format: controller.formatIndex,
-        codec: controller.codecIndex,
-        url: controller.liveUrlIndex,
-      ),
-      onClose: () => Navigator.of(context).pop(),
-      onSelected: (selection) {
-        Navigator.of(context).pop();
-        controller.initLiveUrl(
-          streamIndex: selection.stream,
-          formatIndex: selection.format,
-          codecIndex: selection.codec,
-          liveUrlIndex: selection.url,
-        );
-        final stream = controller.stream[selection.stream];
-        final format = stream.format[selection.format];
-        final codec = format.codec[selection.codec];
-        GStorage.setting.put(SettingBoxKey.liveStream, [
-          stream.protocolName,
-          format.formatName,
-          codec.codecName,
-        ]);
-      },
-    );
+    final player = plPlayerController;
+    final sourceRoute = ModalRoute.of(context);
+    final roomId = controller.roomId;
+    final streams = controller.stream;
+    Future<LoadResult>? loading;
+    bool current() =>
+        mounted &&
+        identical(widget.liveController, controller) &&
+        !controller.isClosed &&
+        controller.roomId == roomId &&
+        identical(streams, controller.stream) &&
+        (sourceRoute?.isCurrent ?? true);
+    player.setControlsMenuOpen(true);
+    Widget panel(BuildContext context) {
+      final panelRoute = ModalRoute.of(context);
+      void close() {
+        if (context.mounted && (panelRoute?.isCurrent ?? false)) {
+          Navigator.of(context).pop();
+        }
+      }
+
+      return LiveStreamPanel(
+        streams: streams,
+        current: (
+          stream: controller.streamIndex,
+          format: controller.formatIndex,
+          codec: controller.codecIndex,
+          url: controller.liveUrlIndex,
+        ),
+        onClose: close,
+        onSelected: (selection) {
+          if (loading != null ||
+              !mounted ||
+              controller.isClosed ||
+              !identical(streams, controller.stream) ||
+              controller.roomId != roomId ||
+              !(panelRoute?.isCurrent ?? false)) {
+            return;
+          }
+          close();
+          loading = controller.initLiveUrl(
+            streamIndex: selection.stream,
+            formatIndex: selection.format,
+            codecIndex: selection.codec,
+            liveUrlIndex: selection.url,
+            isCurrent: current,
+          );
+        },
+      );
+    }
+
     try {
       if (PlatformUtils.isDesktop) {
         await showDialog<void>(
@@ -348,8 +374,12 @@ class _LiveHeaderControlState extends State<LiveHeaderControl>
           builder: panel,
         );
       }
+      await loading;
+    } catch (error, stackTrace) {
+      logger.w('直播线路菜单操作失败', error: error.runtimeType, stackTrace: stackTrace);
     } finally {
-      plPlayerController.setControlsMenuOpen(false);
+      _streamMenuOpen = false;
+      player.setControlsMenuOpen(false);
     }
   }
 }

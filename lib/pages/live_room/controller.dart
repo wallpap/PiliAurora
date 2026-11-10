@@ -19,6 +19,7 @@ import 'package:pili_aurora/models/remote/live/live_dm_info/data.dart';
 import 'package:pili_aurora/models/remote/live/live_medal_wall/uinfo_medal.dart';
 import 'package:pili_aurora/models/remote/live/live_room_info_h5/data.dart';
 import 'package:pili_aurora/models/remote/live/live_room_play_info/codec.dart';
+import 'package:pili_aurora/models/remote/live/live_room_play_info/data.dart';
 import 'package:pili_aurora/models/remote/live/live_room_play_info/stream.dart';
 import 'package:pili_aurora/models/remote/live/live_superchat/item.dart';
 import 'package:pili_aurora/pages/common/publish/publish_route.dart';
@@ -39,11 +40,12 @@ import 'package:pili_aurora/utils/android/bindings.g.dart';
 import 'package:pili_aurora/utils/connectivity_utils.dart';
 import 'package:pili_aurora/utils/danmaku_utils.dart';
 import 'package:pili_aurora/utils/duration_utils.dart';
-import 'package:pili_aurora/utils/extension/iterable_ext.dart';
 import 'package:pili_aurora/utils/global_data.dart';
 import 'package:pili_aurora/utils/num_utils.dart';
 import 'package:pili_aurora/utils/platform_utils.dart';
 import 'package:pili_aurora/utils/storage_pref.dart';
+import 'package:pili_aurora/utils/storage.dart';
+import 'package:pili_aurora/utils/storage_key.dart';
 import 'package:pili_aurora/utils/theme_utils.dart';
 import 'package:pili_aurora/utils/utils.dart';
 import 'package:pili_aurora/utils/video_utils.dart';
@@ -51,7 +53,7 @@ import 'package:pili_aurora/utils/rate_limiter.dart';
 import 'package:canvas_danmaku/canvas_danmaku.dart';
 import 'package:dio/dio.dart' show CancelToken;
 import 'package:flutter/foundation.dart'
-    show kDebugMode, kReleaseMode, protected;
+    show kDebugMode, kReleaseMode, listEquals, protected;
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:get/get.dart';
 import 'package:material_ui/material_ui.dart';
@@ -75,6 +77,7 @@ class LiveRoomController extends GetxController {
   NetworkSource? _networkSource;
   PlaybackPlan? _playbackPlan;
   PlaybackInhibitorToken? _routeInhibitor;
+  int _sourceGeneration = 0;
 
   final isLoaded = false.obs;
   final roomInfoH5 = Rxn<RoomInfoH5Data>();
@@ -261,9 +264,30 @@ class LiveRoomController extends GetxController {
     bool autoFullScreenFlag = false,
     PlaybackStartPolicy? startPolicy,
   }) async {
-    if (isClosed || !playbackOwner.isActive) return;
+    await _loadLiveQuery(
+      autoFullScreenFlag: autoFullScreenFlag,
+      startPolicy: startPolicy,
+    );
+  }
+
+  Future<LoadResult> _loadLiveQuery({
+    bool autoFullScreenFlag = false,
+    PlaybackStartPolicy? startPolicy,
+    int? requestedQn,
+  }) async {
+    if (isClosed) return const LoadResult.closed();
+    if (!playbackOwner.isActive) return const LoadResult.inactive();
+    final generation = ++_sourceGeneration;
+    final ownsPlayback = playbackOwner.guard();
+    final account = Accounts.heartbeat;
     final cancelToken = CancelToken();
     final requestedRoomId = roomId;
+    bool current() =>
+        !isClosed &&
+        ownsPlayback() &&
+        generation == _sourceGeneration &&
+        roomId == requestedRoomId &&
+        identical(account, Accounts.heartbeat);
     final contentKey = 'live:$requestedRoomId';
     final start =
         startPolicy ??
@@ -272,26 +296,68 @@ class LiveRoomController extends GetxController {
             : plPlayerController.wantsToPlay || _networkSource == null
             ? PlaybackStartPolicy.play
             : PlaybackStartPolicy.pause);
-    final configuration = plPlayerController.capturePlaybackConfiguration(
-      live: true,
-      audioOnly: plPlayerController.onlyPlayAudio.value,
-    );
-    final result = await playbackOwner.query(
-      (query) => _queryLiveUrl(
-        requestedRoomId,
-        configuration,
-        cancelToken,
-        query,
-      ),
-      start: start,
-    );
-    if (isClosed || !playbackOwner.isActive) return;
-    if (result.outcome == LoadOutcome.ready) {
-      isLoaded.value = true;
-      _startSizeSub();
-      plPlayerController.onPlaybackQueryReady(
-        autoFullScreenFlag: autoFullScreenFlag,
+    try {
+      final configuration = plPlayerController.capturePlaybackConfiguration(
+        live: true,
+        audioOnly: plPlayerController.onlyPlayAudio.value,
       );
+      _LiveSourceSelection? selection;
+      PlaybackPlan? plan;
+      RoomPlayInfoData? info;
+      final result = await playbackOwner.query(
+        (query) async {
+          try {
+            return await _queryLiveUrl(
+              requestedRoomId,
+              configuration,
+              cancelToken,
+              query,
+              requestedQn ?? currentQn,
+              current,
+              (selected, prepared, response) {
+                selection = selected;
+                plan = prepared;
+                info = response;
+              },
+              showFailureDialog: requestedQn == null,
+            );
+          } catch (error, stackTrace) {
+            _sourceFailure('直播地址准备失败', error, stackTrace);
+            if (current() && requestedQn == null) {
+              _showDialog('直播地址准备失败，请重试');
+            }
+            throw const FormatException('直播地址准备失败');
+          }
+        },
+        start: start,
+        shouldLoad: current,
+      );
+      if (!current()) return const LoadResult.superseded();
+      if (result.outcome == LoadOutcome.ready &&
+          selection != null &&
+          plan != null &&
+          info != null) {
+        final firstLoad = !isLoaded.value;
+        _confirmLiveSource(selection!, plan!);
+        ruid = info!.uid;
+        _updateRoomId(info!.roomId ?? requestedRoomId);
+        liveTime.value = info!.liveTime;
+        startLiveTimer();
+        isPortrait.value = info!.isPortrait ?? false;
+        isLoaded.value = true;
+        _startSizeSub();
+        plPlayerController.onPlaybackQueryReady(
+          autoFullScreenFlag: autoFullScreenFlag,
+        );
+        if (firstLoad && account.isLogin) unawaited(_fetchBlockRules());
+      } else if (requestedQn != null && result.outcome == LoadOutcome.failed) {
+        SmartDialog.showToast('直播画质切换失败，请重试');
+      }
+      return result;
+    } catch (error, stackTrace) {
+      final result = _sourceFailure('直播地址准备失败', error, stackTrace);
+      if (current()) SmartDialog.showToast('直播地址准备失败，请重试');
+      return current() ? result : const LoadResult.superseded();
     }
   }
 
@@ -300,68 +366,62 @@ class LiveRoomController extends GetxController {
     PlaybackConfiguration configuration,
     CancelToken cancelToken,
     PlaybackQuery query,
-  ) async {
+    int? qn,
+    bool Function() ownsSource,
+    void Function(_LiveSourceSelection, PlaybackPlan, RoomPlayInfoData)
+    prepared, {
+    required bool showFailureDialog,
+  }) async {
     query.registerCancel(cancelToken.cancel);
-    bool isCurrent() => !isClosed && playbackOwner.isActive && query.isCurrent;
-    if (currentQn == null) {
+    bool isCurrent() => ownsSource() && query.isCurrent;
+    if (qn == null) {
       final isWiFi = await ConnectivityUtils.isWiFi;
       if (!isCurrent()) return null;
-      currentQn = isWiFi ? Pref.liveQuality : Pref.liveQualityCellular;
+      qn = isWiFi ? Pref.liveQuality : Pref.liveQualityCellular;
     }
     final res = await LiveHttp.liveRoomInfo(
       roomId: requestedRoomId,
-      qn: currentQn,
-      onlyAudio: plPlayerController.onlyPlayAudio.value,
+      qn: qn,
+      onlyAudio: configuration.audioOnly,
       cancelToken: cancelToken,
     );
     if (!isCurrent()) return null;
     if (res case Success(:final response)) {
       if (response.liveStatus != 1) {
-        _showDialog('当前直播间未开播');
+        if (showFailureDialog) _showDialog('当前直播间未开播');
         return null;
       }
       final playurl = response.playurlInfo?.playurl;
       if (playurl == null) {
-        _showDialog('无法获取播放地址');
+        if (showFailureDialog) _showDialog('无法获取播放地址');
         return null;
       }
-      ruid = response.uid;
-      if (response.roomId case final roomId?) {
-        _updateRoomId(roomId);
-      }
-      liveTime.value = response.liveTime;
-      startLiveTimer();
-      isPortrait.value = response.isPortrait ?? false;
-      stream = playurl.stream;
-      _initStreamIndex();
-      _selectLiveSource(
-        streamIndex: streamIndex,
-        formatIndex: formatIndex,
-        codecIndex: codecIndex,
-        liveUrlIndex: liveUrlIndex,
+      final preferred = _preferredLiveStream(playurl.stream);
+      final selection = _selectLiveSource(
+        streams: playurl.stream,
+        streamIndex: preferred.stream,
+        formatIndex: preferred.format,
+        codecIndex: preferred.codec,
+        liveUrlIndex: preferred.url,
       );
-      final source = _networkSource;
-      if (source == null || !isCurrent()) return null;
+      if (!isCurrent()) return null;
       final plan = plPlayerController.createPlaybackPlan(
-        contentKey: 'live:$roomId',
-        source: source,
+        contentKey: 'live:${response.roomId ?? requestedRoomId}',
+        source: selection.source,
         configuration: configuration,
         timelineKind: PlaybackTimelineKind.live,
         seekPolicy: PlaybackSeekPolicy.disabled,
       );
-      _playbackPlan = plan;
       plPlayerController.preparePlaybackPlan(
         owner: playbackOwner,
         plan: plan,
         live: true,
-        isVertical: isPortrait.value,
+        isVertical: response.isPortrait ?? false,
       );
-      if (!isLoaded.value && Accounts.heartbeat.isLogin) {
-        unawaited(_fetchBlockRules());
-      }
+      prepared(selection, plan, response);
       return plan;
     } else {
-      _showDialog(res.toString());
+      if (showFailureDialog) _showDialog(res.toString());
       return null;
     }
   }
@@ -372,34 +432,36 @@ class LiveRoomController extends GetxController {
   int codecIndex = 0;
   int liveUrlIndex = 0;
 
-  void _initStreamIndex() {
+  ({int stream, int format, int codec, int url}) _preferredLiveStream(
+    List<Stream> streams,
+  ) {
     final pref = Pref.liveStream;
-    if (pref != null) {
-      try {
-        final String protocolName = pref[0];
-        final String formatName = pref[1];
-        final String codecName = pref[2];
-        for (var (i, s) in stream.indexed) {
-          if (s.protocolName == protocolName) {
-            streamIndex = i;
-            for (var (j, f) in s.format.indexed) {
-              if (f.formatName == formatName) {
-                formatIndex = j;
-                for (var (k, c) in f.codec.indexed) {
-                  if (c.codecName == codecName) {
-                    codecIndex = k;
-                    return;
-                  }
-                }
-              }
+    if (pref != null && pref.length == 3) {
+      for (final (i, s) in streams.indexed) {
+        if (s.protocolName != pref[0]) continue;
+        for (final (j, f) in s.format.indexed) {
+          if (f.formatName != pref[1]) continue;
+          for (final (k, c) in f.codec.indexed) {
+            if (c.codecName == pref[2] && c.urlInfo.isNotEmpty) {
+              return (stream: i, format: j, codec: k, url: 0);
             }
           }
         }
-      } catch (_) {}
+      }
     }
+    for (final (i, s) in streams.indexed) {
+      for (final (j, f) in s.format.indexed) {
+        for (final (k, c) in f.codec.indexed) {
+          if (c.urlInfo.isNotEmpty) {
+            return (stream: i, format: j, codec: k, url: 0);
+          }
+        }
+      }
+    }
+    throw const FormatException('直播响应缺少可用线路');
   }
 
-  Future<void>? initLiveUrl({
+  Future<LoadResult> initLiveUrl({
     int streamIndex = 0,
     int formatIndex = 0,
     int codecIndex = 0,
@@ -407,75 +469,127 @@ class LiveRoomController extends GetxController {
     bool autoFullScreenFlag = false,
     bool? autoplay,
     bool Function()? isCurrent,
-  }) {
-    if (isClosed || !playbackOwner.isActive || !(isCurrent?.call() ?? true)) {
-      return null;
-    }
+  }) async {
+    if (isClosed) return const LoadResult.closed();
+    if (!playbackOwner.isActive) return const LoadResult.inactive();
+    if (!(isCurrent?.call() ?? true)) return const LoadResult.superseded();
     if (isCurrent == null) playbackOwner.invalidateRequests();
-    this.streamIndex = streamIndex;
-    this.formatIndex = formatIndex;
-    this.codecIndex = codecIndex;
-    this.liveUrlIndex = liveUrlIndex;
-
-    final source = _selectLiveSource(
-      streamIndex: streamIndex,
-      formatIndex: formatIndex,
-      codecIndex: codecIndex,
-      liveUrlIndex: liveUrlIndex,
-    );
-    if (source == null) return null;
-    final configuration = plPlayerController.capturePlaybackConfiguration(
-      live: true,
-      source: source,
-      audioOnly: plPlayerController.onlyPlayAudio.value,
-    );
-    final plan = plPlayerController.createPlaybackPlan(
-      contentKey: 'live:$roomId',
-      source: source,
-      configuration: configuration,
-      timelineKind: PlaybackTimelineKind.live,
-      seekPolicy: PlaybackSeekPolicy.disabled,
-    );
-    _playbackPlan = plan;
-    final start = autoplay == null
-        ? PlaybackStartPolicy.preserve
-        : autoplay
-        ? PlaybackStartPolicy.play
-        : PlaybackStartPolicy.pause;
-    return plPlayerController
-        .loadPlaybackPlan(
-          owner: playbackOwner,
-          plan: plan,
-          start: start,
-          live: true,
-          isVertical: isPortrait.value,
-          autoFullScreenFlag: autoFullScreenFlag,
-        )
-        .then((_) {
-          if (!isClosed &&
-              playbackOwner.isActive &&
-              identical(source, _networkSource)) {
-            _startSizeSub();
-          }
-        });
+    final generation = ++_sourceGeneration;
+    final ownsPlayback = playbackOwner.guard();
+    final account = Accounts.heartbeat;
+    final requestedRoomId = roomId;
+    final streams = stream;
+    bool current() =>
+        !isClosed &&
+        ownsPlayback() &&
+        generation == _sourceGeneration &&
+        roomId == requestedRoomId &&
+        identical(account, Accounts.heartbeat) &&
+        identical(streams, stream) &&
+        (isCurrent?.call() ?? true);
+    try {
+      final selection = _selectLiveSource(
+        streams: streams,
+        streamIndex: streamIndex,
+        formatIndex: formatIndex,
+        codecIndex: codecIndex,
+        liveUrlIndex: liveUrlIndex,
+      );
+      final configuration = plPlayerController.capturePlaybackConfiguration(
+        live: true,
+        source: selection.source,
+        audioOnly: plPlayerController.onlyPlayAudio.value,
+      );
+      final plan = plPlayerController.createPlaybackPlan(
+        contentKey: 'live:$requestedRoomId',
+        source: selection.source,
+        configuration: configuration,
+        timelineKind: PlaybackTimelineKind.live,
+        seekPolicy: PlaybackSeekPolicy.disabled,
+      );
+      final result = await plPlayerController.loadPlaybackPlan(
+        owner: playbackOwner,
+        plan: plan,
+        start: autoplay == null
+            ? PlaybackStartPolicy.preserve
+            : autoplay
+            ? PlaybackStartPolicy.play
+            : PlaybackStartPolicy.pause,
+        live: true,
+        isVertical: isPortrait.value,
+        autoFullScreenFlag: autoFullScreenFlag,
+      );
+      if (!current()) return const LoadResult.superseded();
+      if (result.outcome == LoadOutcome.ready) {
+        _confirmLiveSource(selection, plan);
+        _startSizeSub();
+        try {
+          await GStorage.setting.put(SettingBoxKey.liveStream, [
+            streams[streamIndex].protocolName,
+            streams[streamIndex].format[formatIndex].formatName,
+            selection.codec.codecName,
+          ]);
+        } catch (error, stackTrace) {
+          _sourceFailure('直播线路偏好保存失败', error, stackTrace);
+          if (current()) SmartDialog.showToast('线路已切换，但偏好保存失败');
+        }
+      } else if (result.outcome == LoadOutcome.failed) {
+        SmartDialog.showToast('直播线路切换失败，请重试');
+      }
+      return result;
+    } catch (error, stackTrace) {
+      final result = _sourceFailure('直播线路准备失败', error, stackTrace);
+      if (!current()) return const LoadResult.superseded();
+      SmartDialog.showToast('直播线路准备失败，请重试');
+      return result;
+    }
   }
 
-  NetworkSource? _selectLiveSource({
+  _LiveSourceSelection _selectLiveSource({
+    required List<Stream> streams,
     required int streamIndex,
     required int formatIndex,
     required int codecIndex,
     required int liveUrlIndex,
   }) {
-    this.streamIndex = streamIndex;
-    this.formatIndex = formatIndex;
-    this.codecIndex = codecIndex;
-    this.liveUrlIndex = liveUrlIndex;
-    final CodecItem item = stream
-        .getOrFirst(streamIndex)
-        .format
-        .getOrFirst(formatIndex)
-        .codec
-        .getOrFirst(codecIndex);
+    if (streamIndex < 0 || streamIndex >= streams.length) {
+      throw const FormatException('直播线路已失效');
+    }
+    final formats = streams[streamIndex].format;
+    if (formatIndex < 0 || formatIndex >= formats.length) {
+      throw const FormatException('直播格式已失效');
+    }
+    final codecs = formats[formatIndex].codec;
+    if (codecIndex < 0 || codecIndex >= codecs.length) {
+      throw const FormatException('直播编码已失效');
+    }
+    final item = codecs[codecIndex];
+    if (liveUrlIndex < 0 || liveUrlIndex >= item.urlInfo.length) {
+      throw const FormatException('直播地址已失效');
+    }
+    final urls = VideoUtils.getLiveCdnUrls(item, index: liveUrlIndex);
+    return _LiveSourceSelection(
+      streams: streams,
+      streamIndex: streamIndex,
+      formatIndex: formatIndex,
+      codecIndex: codecIndex,
+      liveUrlIndex: liveUrlIndex,
+      codec: item,
+      source: NetworkSource(
+        videoSource: urls.first,
+        audioSource: null,
+        videoCandidates: urls,
+      ),
+    );
+  }
+
+  void _confirmLiveSource(_LiveSourceSelection selection, PlaybackPlan plan) {
+    stream = selection.streams;
+    streamIndex = selection.streamIndex;
+    formatIndex = selection.formatIndex;
+    codecIndex = selection.codecIndex;
+    liveUrlIndex = selection.liveUrlIndex;
+    final item = selection.codec;
     // 以服务端返回的码率为准
     currentQn = item.currentQn;
     acceptQnList = item.acceptQn.map((e) {
@@ -486,23 +600,47 @@ class LiveRoomController extends GetxController {
     }).toList();
     currentQnDesc.value =
         LiveQuality.fromCode(currentQn)?.desc ?? currentQn.toString();
-    final urls = VideoUtils.getLiveCdnUrls(item, index: liveUrlIndex);
-    final source = _networkSource = NetworkSource(
-      videoSource: urls.first,
-      audioSource: null,
-      videoCandidates: urls,
+    _networkSource = selection.source;
+    videoUrl = selection.source.videoSource;
+    _playbackPlan = plan;
+  }
+
+  LoadResult _sourceFailure(String operation, Object error, StackTrace stack) {
+    // 原生错误可能包含带签名的地址，诊断只保留类型与调用栈。
+    logger.w(operation, error: error.runtimeType, stackTrace: stack);
+    return LoadResult.failed(
+      PlaybackFailure(
+        category: PlaybackFailureCategory.source,
+        operation: operation,
+        stage: PlaybackStage.resolving,
+        recoverable: true,
+        cause: operation,
+      ),
     );
-    videoUrl = source.videoSource;
-    return source;
+  }
+
+  bool _matchesConfirmedLivePlan(PlaybackPlan? plan) {
+    final confirmed = _playbackPlan;
+    return plan != null &&
+        confirmed != null &&
+        plan.contentKey == confirmed.contentKey &&
+        listEquals(
+          plan.source.videoCandidates,
+          confirmed.source.videoCandidates,
+        ) &&
+        listEquals(
+          plan.source.audioCandidates,
+          confirmed.source.audioCandidates,
+        );
   }
 
   void holdPlaybackForRoute() {
+    _sourceGeneration++;
+    playbackOwner.invalidateRequests();
     final snapshot = plPlayerController.currentPlaybackSnapshot;
     final plan = plPlayerController.currentPlaybackPlan;
     final position = snapshot.actual.position;
-    if (plan != null &&
-        plan.contentKey == _playbackPlan?.contentKey &&
-        position != null) {
+    if (plan != null && _matchesConfirmedLivePlan(plan) && position != null) {
       _playbackPlan = PlaybackPlan(
         contentKey: plan.contentKey,
         source: plan.source,
@@ -870,14 +1008,18 @@ class LiveRoomController extends GetxController {
   }
 
   // 修改画质
-  Future<void>? changeQn(int qn) {
-    if (currentQn == qn) {
-      return null;
+  Future<LoadResult> changeQn(int qn) {
+    final snapshot = plPlayerController.currentPlaybackSnapshot;
+    if (!isClosed &&
+        playbackOwner.isActive &&
+        currentQn == qn &&
+        snapshot.phase == PlaybackPhase.ready &&
+        snapshot.loadId != null &&
+        _matchesConfirmedLivePlan(plPlayerController.currentPlaybackPlan) &&
+        plPlayerController.currentPlaybackContentKey == 'live:$roomId') {
+      return Future.value(LoadResult.ready(snapshot.loadId!));
     }
-    currentQn = qn;
-    currentQnDesc.value =
-        LiveQuality.fromCode(currentQn)?.desc ?? currentQn.toString();
-    return queryLiveUrl();
+    return _loadLiveQuery(requestedQn: qn);
   }
 
   Future<void> _initDm(
@@ -1214,4 +1356,24 @@ class LiveRoomController extends GetxController {
       },
     );
   }
+}
+
+class _LiveSourceSelection {
+  const _LiveSourceSelection({
+    required this.streams,
+    required this.streamIndex,
+    required this.formatIndex,
+    required this.codecIndex,
+    required this.liveUrlIndex,
+    required this.codec,
+    required this.source,
+  });
+
+  final List<Stream> streams;
+  final int streamIndex;
+  final int formatIndex;
+  final int codecIndex;
+  final int liveUrlIndex;
+  final CodecItem codec;
+  final NetworkSource source;
 }
