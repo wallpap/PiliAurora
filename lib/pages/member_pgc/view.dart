@@ -1,6 +1,8 @@
 import 'package:pili_aurora/common/style.dart';
 import 'package:pili_aurora/common/widgets/flutter/refresh_indicator.dart';
 import 'package:pili_aurora/common/widgets/loading_widget/http_error.dart';
+import 'package:pili_aurora/common/widgets/loading_widget/loading_widget.dart'
+    show m3eLoading;
 import 'package:pili_aurora/http/loading_state.dart';
 import 'package:pili_aurora/models/remote/space/space_archive/item.dart';
 import 'package:pili_aurora/pages/member_pgc/controller.dart';
@@ -28,18 +30,29 @@ class _MemberBangumiState extends State<MemberBangumi>
   @override
   bool get wantKeepAlive => true;
 
-  late final MemberBangumiCtr _controller;
+  late MemberBangumiCtr _controller;
 
   @override
   void initState() {
     super.initState();
-    _controller = Get.put(
-      MemberBangumiCtr(
-        heroTag: widget.heroTag,
-        mid: widget.mid,
-      ),
-      tag: widget.heroTag,
-    );
+    _controller = MemberBangumiCtr(heroTag: widget.heroTag, mid: widget.mid)
+      ..onStart();
+  }
+
+  @override
+  void didUpdateWidget(MemberBangumi oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.mid != widget.mid || oldWidget.heroTag != widget.heroTag) {
+      _controller.onDelete();
+      _controller = MemberBangumiCtr(heroTag: widget.heroTag, mid: widget.mid)
+        ..onStart();
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.onDelete();
+    super.dispose();
   }
 
   @override
@@ -62,6 +75,16 @@ class _MemberBangumiState extends State<MemberBangumi>
               () => _buildBody(_controller.loadingState.value),
             ),
           ),
+          Obx(() {
+            final error = _controller.paginationError.value;
+            if (error == null) return const SliverToBoxAdapter();
+            return SliverToBoxAdapter(
+              child: TextButton(
+                onPressed: _controller.onLoadMore,
+                child: Text('$error，点击重试'),
+              ),
+            );
+          }),
         ],
       ),
     );
@@ -77,13 +100,16 @@ class _MemberBangumiState extends State<MemberBangumi>
 
   Widget _buildBody(LoadingState<List<SpaceArchiveItem>?> loadingState) {
     return switch (loadingState) {
-      Loading() => const SliverToBoxAdapter(),
+      Loading() => const SliverToBoxAdapter(
+        child: SizedBox(height: 125, child: m3eLoading),
+      ),
       Success(:final response) =>
         response != null && response.isNotEmpty
             ? SliverGrid.builder(
                 gridDelegate: gridDelegate,
                 itemBuilder: (context, index) {
-                  if (index == response.length - 1) {
+                  if (index == response.length - 1 &&
+                      _controller.paginationError.value == null) {
                     _controller.onLoadMore();
                   }
                   return PgcCardVMemberPgc(
@@ -93,8 +119,8 @@ class _MemberBangumiState extends State<MemberBangumi>
                 itemCount: response.length,
               )
             : HttpError(onReload: _controller.onReload),
-      Error(:final errMsg) => HttpError(
-        errMsg: errMsg,
+      Error error => HttpError(
+        errMsg: error.toString(),
         onReload: _controller.onReload,
       ),
     };
