@@ -23,6 +23,7 @@
 | 修改账号、状态、分页或异步结果 | [状态管理](development/state-management.md)、[账号拦截器](../lib/utils/accounts/account_manager/README.md) |
 | 修改播放状态、原生输出与释放 | [播放状态模型](development/playback-model.md)、[Windows 视频输出](maintenance/windows-video-output.md) |
 | 核对设置的生效时机 | [设置行为](development/settings-behavior.md) |
+| 修改桌面标题栏与提示浮层 | [桌面窗口与标题栏](development/architecture.md#桌面窗口与标题栏) |
 | 修改消息、私信、未读或分享 | [消息模块](../lib/services/messaging/README.md) |
 | 运行检查、构建或制作发布包 | [构建与测试](development/build-and-test.md)、[测试目录](../test/README.md)、[工具入口](../tool/README.md) |
 | 更新依赖或定制引擎 | [第三方依赖](../third_party/README.md)、[引擎差异](development/engine-patches/README.md)、[引擎工具](../tool/engine/README.md) |

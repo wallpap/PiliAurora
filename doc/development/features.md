@@ -37,6 +37,8 @@
 
 ## 播放与窗口
 
+主窗口和启动失败页的自绘标题栏在 `lib/app/desktop_title_bar.dart`，独立播放窗口沿用播放器控件。系统窗口初始化、浮层层级和全屏约束见[桌面窗口与标题栏](architecture.md#桌面窗口与标题栏)，设置生效时机见[桌面窗口设置](settings-behavior.md#桌面窗口)。
+
 页面修改前核对 aid、bvid、cid、`contentKey`、候选来源和起播策略，页面副作用提交时检查资源及 owner 身份。URL 不承担业务内容身份，页面通过 owner 控制播放。约束见[播放状态模型](playback-model.md)，原生交接见[运行流程](runtime-flows.md#播放器切源与网络恢复)。
 
 `lib/services/desktop_playback_windows.dart` 为每个小窗启动独立进程与播放器；主窗口管理排列、声音、设置快照和离线进度。Windows 超分重载、纹理释放与原生验证见[Windows 视频输出](../maintenance/windows-video-output.md)。Android 的 Surface 预挂载、旋转和 MediaCodec 恢复须单独验收。

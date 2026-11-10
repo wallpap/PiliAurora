@@ -64,6 +64,16 @@ flowchart LR
 
 消息及已迁移的查询、列表和偏好页面使用 Riverpod。各功能的状态所有者、账号切换和异步失效约定见[状态管理](state-management.md)。
 
+## 桌面窗口与标题栏
+
+`lib/app/platform_setup.dart` 隐藏系统标题栏和系统窗口按钮。主窗口由 `app.dart` 在路由外装配 `DesktopWindowFrame`（`desktop_title_bar.dart`），启动失败页复用同一组件；独立播放窗口继续使用播放器自己的窗口控件。
+
+`DesktopTitleBar` 随 Flutter 主题和应用图标设置更新，提供拖动、双击最大化、最小化、最大化／还原和关闭入口。关闭按钮调用普通窗口关闭事件，沿用主窗口已有的托盘驻留与播放器释放流程。最大化状态由窗口事件更新，初始化查询通过修订号隔离迟到结果，组件释放时移除监听。
+
+`DesktopWindowFrame` 的 Overlay 覆盖整个窗口，标题栏与页面作为同一基础内容绘制，按钮提示显示在页面上方。不要把 Overlay 缩到标题栏高度：即便关闭裁剪，越界提示仍可能被随后绘制的页面遮挡。页面的 `MediaQuery.size` 使用扣除标题栏后的实际内容尺寸。
+
+标题栏订阅 `DesktopWindowBackground.fullscreen`，全屏时隐藏、退出后恢复，页面子树状态保留。“显示窗口标题栏”的生效时机见[设置行为](settings-behavior.md#桌面窗口)。回归入口为 `test/app/desktop_title_bar_test.dart`，包含提示像素检查、主题、窗口事件和全屏状态保留；测试边界见[测试目录](../../test/README.md)。
+
 ## 播放统一架构
 
 状态变量、不变量、反例构造和验证边界见[播放器状态模型](playback-model.md)。
