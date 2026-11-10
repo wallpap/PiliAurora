@@ -7,6 +7,7 @@ import 'package:get/get.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:pili_aurora/utils/utils.dart';
 import 'package:pili_aurora/utils/share_utils.dart';
+import 'package:pili_aurora/utils/platform_utils.dart';
 
 void main() {
   late Completer<void> receipt;
@@ -78,6 +79,6 @@ void main() {
       expect(find.text('已复制'), findsNothing);
       expect(tester.takeException(), isNull);
       await finish(tester);
-    });
+    }, skip: share && !PlatformUtils.isDesktop);
   }
 }
