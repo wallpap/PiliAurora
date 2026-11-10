@@ -1,5 +1,7 @@
+import 'dart:async' show unawaited;
 import 'dart:io' show Platform;
 
+import 'package:pili_aurora/common/widgets/route_aware_mixin.dart';
 import 'package:pili_aurora/common/widgets/selection_text.dart';
 import 'package:pili_aurora/services/logger.dart';
 import 'package:pili_aurora/grpc/bilibili/main/community/reply/v1.pb.dart'
@@ -18,15 +20,55 @@ import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:get/get.dart';
 import 'package:material_ui/material_ui.dart';
 
+/// 自动检查在发布页关闭后交付给原评论页；离开来源后不再交付迟到结果。
+final class _ReplyCheck with RouteAware {
+  _ReplyCheck(Route<dynamic>? route, this.ownerIsCurrent)
+    : route = route ?? Get.routing.route {
+    if (this.route case final GetPageRoute route) {
+      routeObserver.subscribe(this, route);
+    }
+  }
+
+  final Route<dynamic>? route;
+  final bool Function()? ownerIsCurrent;
+  final Account account = Accounts.main;
+  bool _cancelled = false;
+  bool ownsDialog = false;
+
+  bool get isValid =>
+      !_cancelled &&
+      identical(account, Accounts.main) &&
+      (ownerIsCurrent?.call() ?? true) &&
+      (route?.isActive ?? true) &&
+      Get.context?.mounted == true;
+
+  bool get isCurrent => isValid && (route?.isCurrent ?? true);
+
+  @override
+  void didPushNext() => _cancelled = true;
+
+  @override
+  void didPop() => _cancelled = true;
+
+  void dispose() {
+    _cancelled = true;
+    routeObserver.unsubscribe(this);
+  }
+}
+
 abstract final class ReplyUtils {
   static Future<void> onCheckReply({
     required ReplyInfo replyInfo,
     required bool biliSendCommAntifraud,
     required sourceId,
     required bool isManual,
+    Route<dynamic>? sourceRoute,
+    bool Function()? ownerIsCurrent,
   }) async {
+    final check = _ReplyCheck(sourceRoute, ownerIsCurrent);
     try {
       await _checkReply(
+        check: check,
         oid: replyInfo.oid.toInt(),
         type: replyInfo.type.toInt(),
         id: replyInfo.id.toInt(),
@@ -45,12 +87,16 @@ abstract final class ReplyUtils {
         sourceId: sourceId,
       );
     } catch (error, stackTrace) {
-      Error.fromException(error, stackTrace).toast();
+      final failure = Error.fromException(error, stackTrace);
+      if (check.isCurrent) failure.toast();
+    } finally {
+      if (!check.ownsDialog) check.dispose();
     }
   }
 
   // ref https://github.com/freedom-introvert/biliSendCommAntifraud
   static Future<void> _checkReply({
+    required _ReplyCheck check,
     required int oid,
     required int type,
     required int id,
@@ -64,9 +110,9 @@ abstract final class ReplyUtils {
     required bool biliSendCommAntifraud,
     required sourceId,
   }) async {
-    final account = Accounts.main;
-    bool isCurrent() =>
-        identical(account, Accounts.main) && Get.context?.mounted == true;
+    final account = check.account;
+    bool isCurrent() => check.isCurrent;
+    if (!check.isValid) return;
     // biliSendCommAntifraud
     if (Platform.isAndroid && biliSendCommAntifraud) {
       try {
@@ -90,7 +136,11 @@ abstract final class ReplyUtils {
           cookieString,
         );
       } catch (e, stackTrace) {
-        logger.w('biliSendCommAntifraud: $e', error: e, stackTrace: stackTrace);
+        logger.w(
+          '调用评论检查助手失败',
+          error: e.runtimeType,
+          stackTrace: stackTrace,
+        );
       }
       return;
     }
@@ -102,17 +152,22 @@ abstract final class ReplyUtils {
     if (!isCurrent()) return;
     void showReplyCheckResult(String message, {bool isBan = false}) {
       if (!isCurrent()) return;
-      showDialog(
+      final dialog = showDialog<void>(
         context: Get.context!,
         barrierDismissible: isManual,
         builder: (context) {
+          final dialogRoute = ModalRoute.of(context);
+          final navigator = Navigator.of(context);
           final colorScheme = ColorScheme.of(context);
           final color = isBan ? colorScheme.error : colorScheme.primary;
           final actions = [
             if (isBan)
               TextButton(
                 onPressed: () {
-                  Get.back();
+                  if (dialogRoute?.isCurrent != true) return;
+                  final canAppeal = check.isValid;
+                  navigator.pop();
+                  if (!canAppeal) return;
                   String? uri;
                   switch (type) {
                     case 1:
@@ -135,7 +190,9 @@ abstract final class ReplyUtils {
               ),
             if (!isManual)
               TextButton(
-                onPressed: Get.back,
+                onPressed: () {
+                  if (dialogRoute?.isCurrent == true) navigator.pop();
+                },
                 child: Text(
                   '关闭',
                   style: TextStyle(color: colorScheme.outline),
@@ -171,6 +228,21 @@ abstract final class ReplyUtils {
             actions: actions.isEmpty ? null : actions,
           );
         },
+      );
+      check.ownsDialog = true;
+      // Future 表示查询已交付；弹窗自己的完成负责释放路由观察者。
+      unawaited(
+        dialog.then(
+          (_) => check.dispose(),
+          onError: (Object error, StackTrace stackTrace) {
+            check.dispose();
+            logger.w(
+              '评论检查弹窗失败',
+              error: error.runtimeType,
+              stackTrace: stackTrace,
+            );
+          },
+        ),
       );
     }
 

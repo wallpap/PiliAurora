@@ -138,6 +138,8 @@ class _MyReplyState extends State<MyReply> with DynMixin {
         _ => oid.toString(),
       },
       isManual: true,
+      sourceRoute: ModalRoute.of(context),
+      ownerIsCurrent: () => mounted,
     );
   }
 

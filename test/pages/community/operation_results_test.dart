@@ -8,6 +8,7 @@ import 'package:get/get.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:pili_aurora/grpc/bilibili/main/community/reply/v1.pb.dart';
 import 'package:pili_aurora/common/widgets/dialog/report.dart';
+import 'package:pili_aurora/common/widgets/route_aware_mixin.dart';
 import 'package:pili_aurora/http/api.dart';
 import 'package:pili_aurora/http/init.dart';
 import 'package:pili_aurora/http/loading_state.dart';
@@ -485,6 +486,136 @@ void main() {
     sourceId: 1,
     isManual: true,
   );
+
+  Future<void> mountReplyCheck(WidgetTester tester) async {
+    await tester.pumpWidget(
+      GetMaterialApp(
+        builder: FlutterSmartDialog.init(),
+        navigatorObservers: [routeObserver],
+        initialRoute: '/comments',
+        getPages: [
+          GetPage(
+            name: '/comments',
+            page: () => const Scaffold(body: Text('原评论页')),
+          ),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+  }
+
+  testWidgets('评论管理：离开再返回原页，迟到响应不继续查询或弹窗', (tester) async {
+    await mountReplyCheck(tester);
+    final action = checkReply(reply(2));
+    await until(tester, () => requests.length == 1);
+    Get.to<void>(() => const Scaffold(body: Text('其他页面')));
+    await settle(tester);
+    Get.back<void>();
+    await settle(tester);
+    requests[0].reply.complete({'code': 0, 'data': <String, dynamic>{}});
+    await settle(tester);
+    await action;
+    expect(requests, hasLength(1));
+    expect(find.byType(AlertDialog), findsNothing);
+    await finish(tester);
+  });
+
+  testWidgets('评论管理：自动检查延迟期间离开后不发请求', (tester) async {
+    await mountReplyCheck(tester);
+    final action = ReplyUtils.onCheckReply(
+      replyInfo: reply(2),
+      biliSendCommAntifraud: false,
+      sourceId: 1,
+      isManual: false,
+    );
+    Get.to<void>(() => const Scaffold(body: Text('其他页面')));
+    await settle(tester);
+    Get.back<void>();
+    await settle(tester);
+    await tester.pump(const Duration(seconds: 8));
+    await action;
+    expect(requests, isEmpty);
+    expect(find.byType(AlertDialog), findsNothing);
+    await finish(tester);
+  });
+
+  testWidgets('评论管理：发布页关闭后自动检查仍交付原评论页', (tester) async {
+    await mountReplyCheck(tester);
+    final sourceRoute = Get.routing.route;
+    Get.to<void>(() => const Scaffold(body: Text('发布页')));
+    await settle(tester);
+    final action = ReplyUtils.onCheckReply(
+      replyInfo: reply(2),
+      biliSendCommAntifraud: false,
+      sourceId: 1,
+      isManual: false,
+      sourceRoute: sourceRoute,
+    );
+    Get.back<void>();
+    await settle(tester);
+    await tester.pump(const Duration(seconds: 8));
+    await until(tester, () => requests.length == 1);
+    requests[0].reply.complete({
+      'code': 0,
+      'data': {
+        'replies': [
+          {'rpid': 2},
+        ],
+      },
+    });
+    await settle(tester);
+    await action;
+    expect(find.textContaining('无账号状态下找到了你的评论'), findsOneWidget);
+    await tester.tap(find.text('关闭'));
+    await settle(tester);
+    expect(find.text('原评论页'), findsOneWidget);
+    await finish(tester);
+  });
+
+  testWidgets('评论管理：来源替换或账号切换不交付旧检查结果', (tester) async {
+    await mountReplyCheck(tester);
+    var current = true;
+    final replaced = ReplyUtils.onCheckReply(
+      replyInfo: reply(2),
+      biliSendCommAntifraud: false,
+      sourceId: 1,
+      isManual: true,
+      ownerIsCurrent: () => current,
+    );
+    await until(tester, () => requests.length == 1);
+    current = false;
+    requests[0].reply.complete({'code': -403, 'message': '旧来源查询失败'});
+    await settle(tester);
+    await replaced;
+    final switched = checkReply(reply(2));
+    await until(tester, () => requests.length == 2);
+    Accounts.accountMode[AccountType.main.index] = replacement;
+    requests[1].reply.complete({'code': -403, 'message': '旧账号查询失败'});
+    await settle(tester);
+    await switched;
+    expect(find.textContaining('旧来源查询失败'), findsNothing);
+    expect(find.textContaining('旧账号查询失败'), findsNothing);
+    expect(find.byType(AlertDialog), findsNothing);
+    await finish(tester);
+  });
+
+  testWidgets('评论管理：结果弹窗账号失效后申诉只关闭自己的弹窗', (tester) async {
+    await mountReplyCheck(tester);
+    final action = checkReply(reply(2));
+    await until(tester, () => requests.length == 1);
+    requests[0].reply.complete({'code': 0, 'data': <String, dynamic>{}});
+    await until(tester, () => requests.length == 2);
+    requests[1].reply.complete({'code': 12022, 'message': '不存在'});
+    await settle(tester);
+    await action;
+    expect(find.text('申诉'), findsOneWidget);
+    Accounts.accountMode[AccountType.main.index] = replacement;
+    await tester.tap(find.text('申诉'));
+    await settle(tester);
+    expect(find.byType(AlertDialog), findsNothing);
+    expect(find.text('原评论页'), findsOneWidget);
+    await finish(tester);
+  });
 
   testWidgets('评论管理：可见性查询故障和重复页不会误报 shadow ban', (tester) async {
     await mount(tester, const SizedBox());

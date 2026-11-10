@@ -192,6 +192,7 @@ abstract class ReplyController<R> extends CommonListController<R, ReplyInfo> {
 
     final account = Accounts.main;
     final source = sourceId;
+    final sourceRoute = Get.routing.route;
     final targetOid = oid ?? replyItem!.oid.toInt();
     final type = replyItem?.type.toInt() ?? replyType!;
     final root = oid != null
@@ -230,7 +231,11 @@ abstract class ReplyController<R> extends CommonListController<R, ReplyInfo> {
               savedReplies.remove(key);
               onReplyPublished(replyInfo, parent: replyItem);
               if (replyInfo != null && enableCommAntifraud) {
-                onCheckReply(replyInfo, isManual: false);
+                onCheckReply(
+                  replyInfo,
+                  isManual: false,
+                  sourceRoute: sourceRoute,
+                );
               }
             },
           );
@@ -286,12 +291,19 @@ abstract class ReplyController<R> extends CommonListController<R, ReplyInfo> {
     loadingState.refresh();
   }
 
-  void onCheckReply(ReplyInfo replyInfo, {bool isManual = true}) {
+  void onCheckReply(
+    ReplyInfo replyInfo, {
+    bool isManual = true,
+    Route<dynamic>? sourceRoute,
+  }) {
+    final source = sourceId;
     ReplyUtils.onCheckReply(
       replyInfo: replyInfo,
       biliSendCommAntifraud: _biliSendCommAntifraud,
-      sourceId: sourceId,
+      sourceId: source,
       isManual: isManual,
+      sourceRoute: sourceRoute,
+      ownerIsCurrent: () => !isClosed && source == sourceId,
     );
   }
 
