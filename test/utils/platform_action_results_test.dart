@@ -17,8 +17,9 @@ void main() {
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(SystemChannels.platform, (call) async {
           if (call.method == 'Clipboard.setData') {
-            if (fail)
+            if (fail) {
               throw PlatformException(code: 'fixture', message: 'private text');
+            }
             await receipt.future;
           }
           return null;
