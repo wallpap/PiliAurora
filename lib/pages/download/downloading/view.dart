@@ -10,7 +10,7 @@ import 'package:pili_aurora/pages/common/multi_select/base.dart'
 import 'package:pili_aurora/pages/download/detail/widgets/item.dart';
 import 'package:pili_aurora/services/download/download_service.dart';
 import 'package:pili_aurora/utils/grid.dart';
-import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
+import 'package:pili_aurora/pages/download/deletion.dart';
 import 'package:get/get.dart';
 import 'package:material_ui/material_ui.dart'
     hide SliverGridDelegateWithMaxCrossAxisExtent;
@@ -25,6 +25,7 @@ class DownloadingPage extends StatefulWidget {
 class _DownloadingPageState extends State<DownloadingPage>
     with BaseMultiSelectMixin<BiliDownloadEntryInfo>, GridMixin {
   final _downloadService = Get.find<DownloadService>();
+  final _deletion = DownloadDeletion();
   late final _waitDownloadQueue = _downloadService.waitDownloadQueue;
   @override
   RxList<BiliDownloadEntryInfo> get list => _waitDownloadQueue;
@@ -79,11 +80,7 @@ class _DownloadingPageState extends State<DownloadingPage>
                           downloadService: _downloadService,
                           showTitle: true,
                           isCurr: isCurr,
-                          onDelete: () => _downloadService.deleteDownload(
-                            entry: entry,
-                            removeQueue: true,
-                            downloadNext: isCurr && entry.status.isDownloading,
-                          ),
+                          onDelete: () => _remove([entry]),
                           controller: this,
                         );
                       },
@@ -99,33 +96,58 @@ class _DownloadingPageState extends State<DownloadingPage>
     });
   }
 
+  Future<void> _remove(
+    List<BiliDownloadEntryInfo> selected, {
+    bool showLoading = false,
+  }) async {
+    if (_deletion.busy || !mounted) return;
+    final initialCurrent = _downloadService.curDownload.value;
+    final wasDownloading = initialCurrent?.status.isDownloading == true;
+    var hadFailure = false;
+    final snapshot = selected.where(list.contains).toList();
+    final removed = await _deletion.run(
+      items: snapshot,
+      delete: (entry) async {
+        try {
+          final result = await _downloadService.deleteDownload(
+            entry: entry,
+            removeQueue: true,
+            downloadNext: false,
+          );
+          if (!result.isSuccess) hadFailure = true;
+          return result;
+        } catch (_) {
+          hadFailure = true;
+          rethrow;
+        }
+      },
+      entries: (entry) => [entry],
+      isCurrent: () => mounted,
+      showLoading: showLoading,
+      onDeleted: (entry) => entry.checked = false,
+    );
+    // 页面释放仅停止后续删除，已确认删除当前任务后仍由服务续行队列。
+    if (wasDownloading &&
+        !hadFailure &&
+        removed.any(
+          (entry) => entry.entryDirPath == initialCurrent!.entryDirPath,
+        ) &&
+        _downloadService.curDownload.value == null) {
+      _downloadService.nextDownload();
+    }
+    if (!mounted) return;
+    rxCount.value = list.where((item) => item.checked).length;
+    if (rxCount.value == 0) enableMultiSelect.value = false;
+  }
+
   @override
   void onRemove() {
+    if (_deletion.busy) return;
+    final selected = allChecked.toList();
     showConfirmDialog(
       context: context,
       title: const Text('确定删除选中视频？'),
-      onConfirm: () async {
-        SmartDialog.showLoading();
-        final allChecked = this.allChecked.toSet();
-        final isDownloading =
-            _downloadService.curDownload.value?.status.isDownloading == true;
-        for (final entry in allChecked) {
-          await _downloadService.deleteDownload(
-            entry: entry,
-            refresh: false,
-            downloadNext: false,
-          );
-        }
-        _downloadService.waitDownloadQueue.removeWhere(allChecked.contains);
-        if (isDownloading && _downloadService.curDownload.value == null) {
-          _downloadService.nextDownload();
-        }
-        if (enableMultiSelect.value) {
-          rxCount.value = 0;
-          enableMultiSelect.value = false;
-        }
-        SmartDialog.dismiss();
-      },
+      onConfirm: () => _remove(selected, showLoading: true),
     );
   }
 }

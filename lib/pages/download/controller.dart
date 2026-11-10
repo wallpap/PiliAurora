@@ -5,10 +5,10 @@ import 'package:pili_aurora/models/remote/download/download_info.dart';
 import 'package:pili_aurora/pages/common/multi_select/base.dart'
     show BaseMultiSelectMixin;
 import 'package:pili_aurora/services/download/download_service.dart';
-import 'package:pili_aurora/utils/storage.dart';
+import 'package:pili_aurora/pages/download/deletion.dart';
+import 'package:pili_aurora/models/remote/download/bili_download_entry_info.dart';
 import 'package:collection/collection.dart';
 import 'package:flutter/widgets.dart' show Text;
-import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:get/get.dart';
 
 class DownloadPageController extends GetxController
@@ -16,6 +16,7 @@ class DownloadPageController extends GetxController
   final _downloadService = Get.find<DownloadService>();
   final pages = RxList<DownloadPageInfo>();
   final flag = RxInt(0);
+  final deletion = DownloadDeletion();
 
   @override
   List<DownloadPageInfo> get list => pages;
@@ -40,6 +41,9 @@ class DownloadPageController extends GetxController
     if (isClosed) return;
     if (_downloadService.downloadList.isEmpty) {
       pages.clear();
+      rxCount.value = 0;
+      enableMultiSelect.value = false;
+      flag.value++;
       return;
     }
     final list = <DownloadPageInfo>[];
@@ -69,34 +73,50 @@ class DownloadPageController extends GetxController
         );
       }
     }
+    final selected = pages
+        .where((item) => item.checked)
+        .map((item) => item.pageId)
+        .toSet();
+    for (final item in list) {
+      item.checked = selected.contains(item.pageId);
+    }
     pages.value = list;
+    rxCount.value = list.where((item) => item.checked).length;
+    if (rxCount.value == 0) enableMultiSelect.value = false;
     flag.value++;
+  }
+
+  Future<void> removeEntry(BiliDownloadEntryInfo entry) async {
+    await deletion.run(
+      items: [entry],
+      delete: (entry) =>
+          _downloadService.deleteDownload(entry: entry, removeList: true),
+      entries: (entry) => [entry],
+      isCurrent: () => !isClosed,
+    );
+  }
+
+  Future<void> removePages(
+    List<DownloadPageInfo> selected, {
+    bool showLoading = false,
+  }) async {
+    await deletion.run(
+      items: selected.where(pages.contains),
+      delete: (page) => _downloadService.deletePage(pageDirPath: page.dirPath),
+      entries: (page) => page.entries,
+      isCurrent: () => !isClosed,
+      showLoading: showLoading,
+    );
   }
 
   @override
   void onRemove() {
+    if (deletion.busy) return;
+    final selected = allChecked.toList();
     showConfirmDialog(
       context: Get.context!,
       title: const Text('确定删除选中视频？'),
-      onConfirm: () async {
-        SmartDialog.showLoading();
-        final watchProgress = GStorage.watchProgress;
-        for (final page in allChecked) {
-          await watchProgress.deleteAll(
-            page.entries.map((e) => e.cid.toString()),
-          );
-          await _downloadService.deletePage(
-            pageDirPath: page.dirPath,
-            refresh: false,
-          );
-        }
-        _downloadService.flagNotifier.refresh();
-        if (enableMultiSelect.value) {
-          rxCount.value = 0;
-          enableMultiSelect.value = false;
-        }
-        SmartDialog.dismiss();
-      },
+      onConfirm: () => removePages(selected, showLoading: true),
     );
   }
 }

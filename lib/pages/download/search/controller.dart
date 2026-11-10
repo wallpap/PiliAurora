@@ -5,9 +5,8 @@ import 'package:pili_aurora/pages/common/multi_select/base.dart'
     show BaseMultiSelectMixin;
 import 'package:pili_aurora/pages/common/search/common_search_controller.dart';
 import 'package:pili_aurora/services/download/download_service.dart';
-import 'package:pili_aurora/utils/storage.dart';
+import 'package:pili_aurora/pages/download/deletion.dart';
 import 'package:flutter/widgets.dart' show Text;
-import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:get/get.dart';
 
 class DownloadSearchController
@@ -18,6 +17,7 @@ class DownloadSearchController
         >
     with BaseMultiSelectMixin<BiliDownloadEntryInfo> {
   final _downloadService = Get.find<DownloadService>();
+  final deletion = DownloadDeletion();
 
   @override
   List<BiliDownloadEntryInfo> get list => loadingState.value.data!;
@@ -39,42 +39,48 @@ class DownloadSearchController
     );
   }
 
-  void onRemoveSingle(int index, BiliDownloadEntryInfo entry) {
-    loadingState
-      ..value.data!.removeAt(index)
-      ..refresh();
-    _downloadService.deleteDownload(
-      entry: entry,
-      removeList: true,
+  Future<void> onRemoveSingle(int index, BiliDownloadEntryInfo entry) =>
+      removeEntries([entry]);
+
+  Future<void> removeEntries(
+    List<BiliDownloadEntryInfo> entries, {
+    bool showLoading = false,
+  }) async {
+    final source = loadingState.value.dataOrNull;
+    if (source == null) return;
+    bool current() =>
+        !isClosed && identical(source, loadingState.value.dataOrNull);
+    await deletion.run(
+      items: entries.where(source.contains),
+      delete: (entry) =>
+          _downloadService.deleteDownload(entry: entry, removeList: true),
+      entries: (entry) => [entry],
+      isCurrent: current,
+      showLoading: showLoading,
+      onDeleted: (entry) {
+        source.remove(entry);
+        entry.checked = false;
+        loadingState.refresh();
+      },
     );
-    GStorage.watchProgress.delete(entry.cid.toString());
+    if (current()) {
+      rxCount.value = source.where((entry) => entry.checked).length;
+      if (rxCount.value == 0) enableMultiSelect.value = false;
+    }
   }
 
   @override
   void onRemove() {
+    if (deletion.busy) return;
+    final source = loadingState.value.dataOrNull;
+    final selected = allChecked.toList();
     showConfirmDialog(
       context: Get.context!,
       title: const Text('确定删除选中视频？'),
       onConfirm: () async {
-        SmartDialog.showLoading();
-        final allChecked = this.allChecked.toSet();
-        for (final entry in allChecked) {
-          await GStorage.watchProgress.delete(entry.cid.toString());
-          await _downloadService.deleteDownload(
-            entry: entry,
-            removeList: true,
-            refresh: false,
-          );
+        if (!isClosed && identical(source, loadingState.value.dataOrNull)) {
+          await removeEntries(selected, showLoading: true);
         }
-        loadingState
-          ..value.data!.removeWhere(allChecked.contains)
-          ..refresh();
-        _downloadService.flagNotifier.refresh();
-        if (enableMultiSelect.value) {
-          rxCount.value = 0;
-          enableMultiSelect.value = false;
-        }
-        SmartDialog.dismiss();
       },
     );
   }

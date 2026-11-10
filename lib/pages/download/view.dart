@@ -20,7 +20,6 @@ import 'package:pili_aurora/services/download/download_service.dart';
 import 'package:pili_aurora/utils/cache_manager.dart';
 import 'package:pili_aurora/utils/grid.dart';
 import 'package:pili_aurora/utils/platform_utils.dart';
-import 'package:pili_aurora/utils/storage.dart';
 import 'package:collection/collection.dart';
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:get/get.dart';
@@ -182,15 +181,7 @@ class _DownloadPageState extends State<DownloadPage> with GridMixin {
                                 progress: _progress,
                                 downloadService: _downloadService,
                                 showTitle: true,
-                                onDelete: () {
-                                  _downloadService.deleteDownload(
-                                    entry: entry,
-                                    removeList: true,
-                                  );
-                                  GStorage.watchProgress.delete(
-                                    entry.cid.toString(),
-                                  );
-                                },
+                                onDelete: () => _controller.removeEntry(entry),
                                 checked: item.checked,
                                 onSelect: (_) => _controller.onSelect(item),
                                 controller: _controller,
@@ -238,14 +229,7 @@ class _DownloadPageState extends State<DownloadPage> with GridMixin {
                     showConfirmDialog(
                       context: context,
                       title: const Text('确定删除？'),
-                      onConfirm: () async {
-                        await GStorage.watchProgress.deleteAll(
-                          pageInfo.entries.map((e) => e.cid.toString()),
-                        );
-                        _downloadService.deletePage(
-                          pageDirPath: pageInfo.dirPath,
-                        );
-                      },
+                      onConfirm: () => _controller.removePages([pageInfo]),
                     );
                   },
                   child: const Text('删除', style: TextStyle(fontSize: 14)),

@@ -13,7 +13,7 @@ import 'package:pili_aurora/pages/download/controller.dart';
 import 'package:pili_aurora/pages/download/detail/widgets/item.dart';
 import 'package:pili_aurora/services/download/download_service.dart';
 import 'package:pili_aurora/utils/grid.dart';
-import 'package:pili_aurora/utils/storage.dart';
+import 'package:pili_aurora/pages/download/deletion.dart';
 import 'package:collection/collection.dart';
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:get/get.dart';
@@ -42,6 +42,7 @@ class _DownloadDetailPageState extends State<DownloadDetailPage>
   final _downloadItems = RxList<BiliDownloadEntryInfo>();
   final _controller = Get.find<DownloadPageController>();
   final _downloadService = Get.find<DownloadService>();
+  final _deletion = DownloadDeletion();
   @override
   RxList<BiliDownloadEntryInfo> get list => _downloadItems;
   @override
@@ -157,23 +158,7 @@ class _DownloadDetailPageState extends State<DownloadDetailPage>
                           progress: widget.progress,
                           downloadService: _downloadService,
                           showTitle: false,
-                          onDelete: () async {
-                            if (_downloadItems.length == 1) {
-                              await _closeSub();
-                              await _downloadService.deletePage(
-                                pageDirPath: entry.pageDirPath,
-                              );
-                              if (mounted) {
-                                Get.back();
-                              }
-                            } else {
-                              _downloadService.deleteDownload(
-                                entry: entry,
-                                removeList: true,
-                              );
-                            }
-                            GStorage.watchProgress.delete(entry.cid.toString());
-                          },
+                          onDelete: () => _remove([entry]),
                           controller: this,
                         );
                       },
@@ -190,41 +175,43 @@ class _DownloadDetailPageState extends State<DownloadDetailPage>
     });
   }
 
+  Future<void> _remove(
+    List<BiliDownloadEntryInfo> selected, {
+    bool showLoading = false,
+  }) async {
+    if (_deletion.busy || !mounted) return;
+    final route = ModalRoute.of(context);
+    final removed = await _deletion.run(
+      items: selected.where(_downloadItems.contains),
+      delete: (entry) =>
+          _downloadService.deleteDownload(entry: entry, removeList: true),
+      entries: (entry) => [entry],
+      isCurrent: () => mounted,
+      showLoading: showLoading,
+      onDeleted: (entry) {
+        entry.checked = false;
+        _downloadItems.remove(entry);
+      },
+    );
+    if (!mounted) return;
+    rxCount.value = list.where((item) => item.checked).length;
+    if (rxCount.value == 0) enableMultiSelect.value = false;
+    if (removed.isNotEmpty &&
+        _downloadItems.isEmpty &&
+        route?.isCurrent == true) {
+      await _closeSub();
+      if (mounted && route?.isCurrent == true) Navigator.of(context).pop();
+    }
+  }
+
   @override
   void onRemove() {
+    if (_deletion.busy) return;
+    final selected = allChecked.toList();
     showConfirmDialog(
       context: context,
       title: const Text('确定删除选中视频？'),
-      onConfirm: () async {
-        SmartDialog.showLoading();
-        final allChecked = this.allChecked.toList();
-        final isDeleteAll = allChecked.length == _downloadItems.length;
-        await Future.wait([
-          if (isDeleteAll) _closeSub(),
-          GStorage.watchProgress.deleteAll(
-            allChecked.map((e) => e.cid.toString()),
-          ),
-          for (final entry in allChecked)
-            _downloadService.deleteDownload(
-              entry: entry,
-              removeList: true,
-              refresh: false,
-            ),
-        ]);
-        _downloadService.flagNotifier.refresh();
-        if (isDeleteAll) {
-          SmartDialog.dismiss();
-          if (mounted) {
-            Get.back();
-          }
-        } else {
-          if (enableMultiSelect.value) {
-            rxCount.value = 0;
-            enableMultiSelect.value = false;
-          }
-          SmartDialog.dismiss();
-        }
-      },
+      onConfirm: () => _remove(selected, showLoading: true),
     );
   }
 }
