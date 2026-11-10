@@ -96,7 +96,9 @@ fvm flutter test test/services/diagnostics/ test/pages/about/diagnostics_page_te
 
 `utils/video_utils_test.dart` 检查 CDN 签名来源优先级、回退、相对来源、空输入和解析异常；安全异常保留 cause／stack，日志不记录签名地址。真实 CDN 可达性另行验证。
 
-`pages/audio/playback_results_test.dart` 检查空播放响应／地址、乱序查询、账号替换、播放器创建失败重试，以及旧原生打开排空后才打开并确认新曲目。`pages/setting/cdn_probe_results_test.dart` 检查采样为空、短响应完成和测速异常的安全终态。音频和 HTTP 使用受控替身，真实媒体服务、原生播放及 CDN 速度需设备验证。
+`pages/audio/playback_results_test.dart` 检查空播放响应／地址、乱序查询、账号替换、播放器创建失败重试，以及旧原生打开排空后才打开并确认新曲目；`playlist_order_test.dart` 检查列表初始化／排序重试、切号隔离、分页互斥去重、游标限界及旧行快照。`pages/setting/cdn_probe_results_test.dart` 检查采样为空、短响应完成和测速异常的安全终态。音频和 HTTP 使用受控替身，真实媒体服务、原生播放及 CDN 速度需设备验证。
+
+`pages/audio/control_results_test.dart` 检查速度／音量／进度等待原生回执、失败重试与设置保存部分成功、账号替换、系统命令错误交付及旧页面关闭不清新回调；`playback_results_test.dart` 另检查迟到 seek 不污染新歌、旧曲目不抢占新通知。音频页独立 Player 的系统焦点接入仍待补齐，测试不代表真实来电或耳机行为已验收。
 
 `pages/video/cast_results_test.dart` 检查投屏地址查询互斥、失败后的重试与独立加载提示、换分 P 不打开旧设备页，以及离页返回仍丢弃旧错误。投屏服务交互和设备发现另见 DLNA 对应回归；真实局域网和电视设备仍需验收。
 
@@ -202,7 +204,7 @@ Windows 保活页面内存回归：先执行 `pwsh -File lib/scripts/patch.ps1 w
 
 ## 播放会话与平台输出
 
-`services/app_exit_test.dart` 检查退出合并、必要清理等待、独立步骤失败继续、实际退出失败后的重试，以及诊断超时与迟到异常。`services/audio_session_initialization_test.dart` 检查音频配置的单次共享初始化、激活等待、原始失败与重试；真实插件配置和进程退出需设备验证。
+`services/app_exit_test.dart` 检查退出合并、必要清理等待、独立步骤失败继续、实际退出失败后的重试，以及诊断超时与迟到异常。`services/audio_session_initialization_test.dart` 检查音频配置的单次共享初始化、激活等待、原始失败与重试；`shutdown_timer_service_test.dart` 检查暂停回执前不提示成功、同步／异步失败消费及取消后的迟到结果。真实插件配置和进程退出需设备验证。
 
 `plugin/pl_player/playback/controller_recovery_test.dart` 的“音量回执”用例检查静音／音量失败回滚、会话期望撤回、重试、迟到操作／切源隔离和控件提示；真实音量输出与子窗口声音交接仍需设备验证。
 
@@ -228,7 +230,11 @@ EOF 回归覆盖 keep-open 播放结束通知的文件归属、重复合并与 s
 
 `plugin/pl_player/playback/super_resolution_policy_test.dart` 检查源视频与当前屏幕物理分辨率的长短边比较，以及尺寸未知时延后加载超分的判定。`super_resolution_selection_test.dart` 检查不可用的显式选择保留档位和设置。超分入口由播放器底栏和视频更多设置面板提供。
 
-`pages/video/playback_lifecycle_test.dart` 覆盖点播查询与媒体标识绑定、旧响应取消、暂停期间重载意图保留和字幕迟到结果隔离。`pages/live_room/controller_test.dart` 覆盖消息连接 single-flight、token/history 代次隔离、暂停/恢复以及关闭后的迟到回调；`services/audio_session_test.dart` 覆盖音频 duck 重复开始、结束先于音量命令完成及用户新音量保护；`services/audio_handler_lifecycle_test.dart` 覆盖多页面媒体归属与最后一项释放 keepalive。播放器会话、候选恢复和命令序列回归集中在 `plugin/pl_player/playback/`；其中 `playback_session_test.dart` 检查成功查询在加载完成后仍允许当前媒体的业务回写，并在新加载或 owner 失效后拒绝旧结果。`tool/run-ci-tests.ps1` 显式选择页面生命周期、播放会话与原生输出的关键回归，完整目录测试按需运行。deadline 验收通过虚拟时钟检查截止边界，不依赖机器执行耗时；播放／暂停预算回归同时检查原生调用未返回和排队等待，超时后仍串行落实最新意图。
+`pages/video/playback_lifecycle_test.dart` 覆盖查询与媒体绑定、旧响应取消、重载意图和字幕归属，以及重选来源成功后确认、连续选择合并、失败重试和离页恢复；`playback_source_test.dart` 检查候选优先级及缺失来源／编码的安全异常。`pages/live_room/source_results_test.dart` 检查切流／画质的加载回执、偏好保存部分成功、迟到结果隔离和确认来源恢复；`controller_test.dart` 继续覆盖消息连接 single-flight、token/history 代次、暂停／恢复及关闭后的迟到回调。
+
+`services/audio_session_test.dart` 覆盖 duck 重复开始、结束先于音量命令完成及用户新音量保护；`audio_handler_lifecycle_test.dart` 覆盖多页面媒体归属、最后一项释放 keepalive、音频未就绪不触发底层视频，以及停止回执不清新媒体。以上使用受控请求与播放器替身，真实音视频、耳机和系统媒体控制需设备验证。
+
+播放器会话、候选恢复和命令序列回归集中在 `plugin/pl_player/playback/`；其中 `playback_session_test.dart` 检查加载完成后仍允许当前媒体的业务回写，并在新加载或 owner 失效后拒绝旧结果。`tool/run-ci-tests.ps1` 显式选择关键回归，完整目录测试按需运行。deadline 验收使用虚拟时钟；播放／暂停预算同时检查原生调用未返回和排队等待，超时后仍串行落实最新意图。
 
 ## 弹幕来源与显示
 
