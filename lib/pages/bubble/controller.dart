@@ -5,13 +5,15 @@ import 'package:pili_aurora/models/remote/bubble/data.dart';
 import 'package:pili_aurora/models/remote/bubble/dyn_list.dart';
 import 'package:pili_aurora/models/remote/bubble/sort_info.dart';
 import 'package:pili_aurora/pages/common/common_list_controller.dart';
+import 'package:pili_aurora/utils/accounts.dart';
 import 'package:get/get.dart';
 import 'package:material_ui/material_ui.dart' show TabController;
 
 class BubbleController extends CommonListController<BubbleData, DynList>
     with GetSingleTickerProviderStateMixin {
-  BubbleController(this.categoryId);
+  BubbleController(this.categoryId, {this._tribeId});
   final Object? categoryId;
+  final Object? _tribeId;
 
   late final Object tribeId;
   int? sortType;
@@ -22,10 +24,20 @@ class BubbleController extends CommonListController<BubbleData, DynList>
   final Rxn<List<CategoryList>> tabs = Rxn<List<CategoryList>>();
 
   @override
+  Object get queryContext => Accounts.main;
+
+  @override
   void onInit() {
     super.onInit();
-    tribeId = Get.arguments['id'];
+    tribeId = _tribeId ?? Get.arguments['id'];
+    Accounts.mainChanges.addListener(_onAccountChanged);
     queryData();
+  }
+
+  void _onAccountChanged() {
+    sortInfo.value = null;
+    tribeName.value = null;
+    onReload();
   }
 
   @override
@@ -57,6 +69,7 @@ class BubbleController extends CommonListController<BubbleData, DynList>
 
   @override
   Future<LoadingState<BubbleData>> customGetData() => DynamicsHttp.bubble(
+    account: Accounts.main,
     tribeId: tribeId,
     categoryId: categoryId,
     sortType: sortType,
@@ -65,13 +78,14 @@ class BubbleController extends CommonListController<BubbleData, DynList>
 
   @override
   void onClose() {
+    Accounts.mainChanges.removeListener(_onAccountChanged);
     tabController?.dispose();
     tabController = null;
     super.onClose();
   }
 
-  void onSort(int? sortType) {
+  Future<void> onSort(int? sortType) {
     this.sortType = sortType;
-    onReload();
+    return onReload();
   }
 }
