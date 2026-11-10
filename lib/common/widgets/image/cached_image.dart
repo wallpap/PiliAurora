@@ -32,6 +32,76 @@ class ImageLoadingScope extends InheritedWidget {
       enabled != oldWidget.enabled;
 }
 
+/// 静态帧沿用 LRU；动图 codec 的隐含成本不在像素预算内，最后一个监听
+/// 退出时交还缓存句柄。显式 keepAlive 仍可保留暂停中的动画。
+class CachedImageCache extends ImageCache {
+  final _entries = <Object, _ImageCacheEntry>{};
+
+  @override
+  ImageStreamCompleter? putIfAbsent(
+    Object key,
+    ImageStreamCompleter Function() loader, {
+    ImageErrorListener? onError,
+  }) {
+    final completer = super.putIfAbsent(key, loader, onError: onError);
+    if (completer is _ImageCompleter &&
+        !identical(_entries[key]?.completer, completer)) {
+      _entries.remove(key)?.detach();
+      late _ImageCacheEntry entry;
+      entry = _ImageCacheEntry(
+        completer,
+        onIdle: () {
+          if (completer._animated && identical(_entries[key], entry)) {
+            // 使用 ImageCache 收到的真实键，兼容 ResizeImage 等外层 provider。
+            evict(key, includeLive: false);
+          }
+        },
+        onRelease: () {
+          if (identical(_entries[key], entry)) _entries.remove(key);
+          entry.detach();
+        },
+      );
+      _entries[key] = entry;
+    }
+    return completer;
+  }
+
+  @override
+  bool evict(Object key, {bool includeLive = true}) {
+    _entries.remove(key)?.detach();
+    return super.evict(key, includeLive: includeLive);
+  }
+
+  @override
+  void clear() {
+    for (final entry in _entries.values) {
+      entry.detach();
+    }
+    _entries.clear();
+    super.clear();
+  }
+}
+
+class _ImageCacheEntry {
+  _ImageCacheEntry(
+    this.completer, {
+    required this.onIdle,
+    required this.onRelease,
+  }) {
+    completer._onIdle.add(onIdle);
+    completer._onRelease.add(onRelease);
+  }
+
+  final _ImageCompleter completer;
+  final VoidCallback onIdle;
+  final VoidCallback onRelease;
+
+  void detach() {
+    completer._onIdle.remove(onIdle);
+    completer._onRelease.remove(onRelease);
+  }
+}
+
 /// 复用磁盘缓存和 Flutter 图片缓存，统一管理解码器与帧的生命周期。
 class CachedImageProvider extends ImageProvider<CachedImageProvider> {
   const CachedImageProvider(
@@ -191,6 +261,7 @@ class _ImageCompleter extends ImageStreamCompleter {
         return;
       }
       _codec = value;
+      _animated = value.frameCount > 1;
       _resume();
     }, onError: _reportDecodeError);
   }
@@ -209,6 +280,9 @@ class _ImageCompleter extends ImageStreamCompleter {
   bool _released = false;
   int _handles = 0;
   bool _hadListener = false;
+  bool _animated = false;
+  final _onIdle = <VoidCallback>{};
+  final _onRelease = <VoidCallback>{};
 
   void _resume() {
     if (!hasListeners || _released || _emitting) return;
@@ -321,6 +395,9 @@ class _ImageCompleter extends ImageStreamCompleter {
         _frameCallback = null;
       }
       _owner.releaseIdleAdmission();
+      for (final callback in _onIdle.toList()) {
+        callback();
+      }
     }
     _releaseIfUnused();
   }
@@ -360,6 +437,11 @@ class _ImageCompleter extends ImageStreamCompleter {
     _nextFrame = null;
     _owner.dispose();
     _codec = null;
+    for (final callback in _onRelease.toList()) {
+      callback();
+    }
+    _onIdle.clear();
+    _onRelease.clear();
   }
 }
 

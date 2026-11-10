@@ -5,6 +5,7 @@ import 'dart:ui' show PointerDataPacket;
 import 'package:flutter/gestures.dart' show PointerEventConverter;
 import 'package:flutter/rendering.dart' show RenderView, ViewConfiguration;
 import 'package:flutter/widgets.dart';
+import 'package:pili_aurora/common/widgets/image/cached_image.dart';
 
 /// ref https://github.com/LastMonopoly/scaled_app
 
@@ -35,7 +36,7 @@ class ScaledWidgetsFlutterBinding extends WidgetsFlutterBinding {
       _binding ??= ScaledWidgetsFlutterBinding._(scaleFactor: scaleFactor);
 
   @override
-  ImageCache createImageCache() => super.createImageCache()
+  ImageCache createImageCache() => CachedImageCache()
     // 磁盘缓存负责回看；内存仅保留近期解码结果。可见图片不受 LRU 淘汰影响。
     ..maximumSizeBytes = 64 << 20
     ..maximumSize = 256;

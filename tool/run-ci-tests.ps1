@@ -154,6 +154,7 @@ $ciTests = @(
     "test/pages/download/deletion_results_test.dart",
     # 页面退出、音频归属与播放会话
     "test/common/widgets/image/image_lifecycle_test.dart",
+    "test/common/widgets/image/image_cache_lifecycle_test.dart",
     "test/common/widgets/image/cached_image_transition_test.dart",
     "test/common/widgets/image/image_resume_inflight_test.dart",
     "test/common/widgets/image/decode_budget_cancel_test.dart",
