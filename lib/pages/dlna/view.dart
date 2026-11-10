@@ -1,10 +1,8 @@
-import 'dart:async';
-
 import 'package:pili_aurora/common/widgets/loading_widget/http_error.dart';
 import 'package:pili_aurora/common/widgets/loading_widget/loading_widget.dart';
 import 'package:pili_aurora/common/widgets/scaffold/simple_scaffold.dart';
 import 'package:pili_aurora/common/widgets/view_sliver_safe_area.dart';
-import 'package:dlna_dart/dlna.dart';
+import 'package:pili_aurora/pages/dlna/controller.dart';
 import 'package:get/get.dart';
 import 'package:material_ui/material_ui.dart';
 
@@ -16,55 +14,24 @@ class DLNAPage extends StatefulWidget {
 }
 
 class _DLNAPageState extends State<DLNAPage> {
-  final _searcher = DLNAManager();
-  final Map<String, DLNADevice> _deviceList = {};
-  late final _url = Get.parameters['url']!;
+  final _controller = DlnaController();
+  late final _url = Get.parameters['url'] ?? '';
   late final _title = Get.parameters['title'];
-
-  Timer? _timer;
-  bool _isSearching = false;
-  DLNADevice? _lastDevice;
-  String? _lastDeviceKey;
 
   @override
   void initState() {
     super.initState();
-    _onSearch(isInit: true);
+    _controller.addListener(_changed);
+    _controller.search();
   }
 
-  Future<void> _onSearch({bool isInit = false}) async {
-    if (_isSearching) return;
-    _isSearching = true;
-    if (!isInit && mounted) {
-      _lastDevice = null;
-      _deviceList.clear();
-      setState(() {});
-    }
-    final deviceManager = await _searcher.start();
-    if (!mounted) {
-      return;
-    }
-    _timer = Timer(const Duration(seconds: 20), _searcher.stop);
-    await for (final deviceList in deviceManager.devices.stream) {
-      if (mounted) {
-        _deviceList.addAll(deviceList);
-        setState(() {});
-      }
-    }
-    if (mounted) {
-      setState(() {
-        _isSearching = false;
-      });
-    }
+  void _changed() {
+    if (mounted) setState(() {});
   }
 
   @override
   void dispose() {
-    _timer?.cancel();
-    _timer = null;
-    _searcher.stop();
-    _lastDevice = null;
-    _lastDeviceKey = null;
+    _controller.dispose();
     super.dispose();
   }
 
@@ -77,7 +44,9 @@ class _DLNAPageState extends State<DLNAPage> {
         actions: [
           IconButton(
             tooltip: '搜索',
-            onPressed: _onSearch,
+            onPressed: _controller.searching || _controller.connecting
+                ? null
+                : _controller.search,
             icon: const Icon(Icons.refresh),
           ),
           const SizedBox(width: 6),
@@ -85,7 +54,10 @@ class _DLNAPageState extends State<DLNAPage> {
       ),
       body: CustomScrollView(
         slivers: [
-          if (_isSearching) linearLoading,
+          if (_controller.searching || _controller.connecting) linearLoading,
+          if (_controller.searchError case final error?)
+            if (_controller.devices.isNotEmpty)
+              SliverToBoxAdapter(child: ListTile(title: Text(error))),
           ViewSliverSafeArea(sliver: _buildBody(colorScheme)),
         ],
       ),
@@ -93,21 +65,23 @@ class _DLNAPageState extends State<DLNAPage> {
   }
 
   Widget _buildBody(ColorScheme colorScheme) {
-    if (!_isSearching && _deviceList.isEmpty) {
+    final devices = _controller.devices;
+    if (!_controller.searching && devices.isEmpty) {
       return HttpError(
-        errMsg: '没有设备',
-        onReload: _onSearch,
+        errMsg: _controller.searchError ?? '没有设备',
+        onReload: _controller.search,
       );
     }
-    if (_deviceList.isNotEmpty) {
-      final keys = _deviceList.keys.toList();
+    if (devices.isNotEmpty) {
+      final keys = devices.keys.toList();
       return SliverList.builder(
         itemCount: keys.length,
         itemBuilder: (context, index) {
           final key = keys[index];
-          final device = _deviceList[key]!;
-          final isCurr = key == _lastDeviceKey;
+          final device = devices[key]!;
+          final isCurr = key == _controller.selectedKey;
           return ListTile(
+            enabled: !_controller.connecting,
             title: Text(
               device.info.friendlyName,
               style: isCurr ? TextStyle(color: colorScheme.primary) : null,
@@ -115,12 +89,15 @@ class _DLNAPageState extends State<DLNAPage> {
             subtitle: Text(key),
             onTap: () async {
               if (isCurr) return;
-              _lastDevice?.pause();
-              _lastDevice = device;
-              _lastDeviceKey = key;
-              setState(() {});
-              await device.setUrl(_url, title: _title ?? '');
-              await device.play();
+              final route = ModalRoute.of(context);
+              bool current() => mounted && route?.isCurrent == true;
+              final result = await _controller.connect(
+                key: key,
+                url: _url,
+                title: _title ?? '',
+                isCurrent: current,
+              );
+              if (current() && !result.isSuccess) result.toast();
             },
           );
         },
