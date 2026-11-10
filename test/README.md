@@ -84,6 +84,10 @@ fvm flutter test test/services/diagnostics/ test/pages/about/diagnostics_page_te
 
 `http/fav_response_test.dart` 覆盖收藏接口及分支的成功、业务拒绝、损坏响应和传输不确定性，并保留可空列表语义、确认后的收藏夹 ID 和账号绑定。`pages/fav/operation_results_test.dart` 检查快速收藏的 Future／重复提交／空收藏夹／切号，以及创建草稿、编辑加载、迟到查询和操作锁释放；原生封面选择与裁剪不由这些模拟测试证明。
 
+`pages/fav/account_favorite_results_test.dart` 检查课程／话题收藏取消的账号与来源快照、重复提交、失败保留、迟到确认及删除后的分页重读；`pages/pgc/pugv_favorite_results_test.dart` 与 `pages/episode_panel/favorite_results_test.dart` 检查播放器收藏／订阅的在途锁、账号隔离、待确认后的状态重查及离页回执。`pages/subscription/detail_filter_test.dart` 检查隐藏页补读上限、失败停止与切号后的迟到查询隔离。
+
+`pages/member_favorite/pagination_lifecycle_test.dart` 检查成员收藏双分页的失败重试、完整响应、账号订阅与凭据替换、迟到删除回调及订阅释放。
+
 `pages/fav/note_results_test.dart` 检查笔记删除互斥、失败／待确认保留选择、补页等待、凭据替换与刷新后的旧回执隔离，以及公共删除助手按对象删除。`pages/subscription/operation_results_test.dart` 检查取消订阅弹窗和清理流程的账号绑定、失败保留弹窗、在途互斥、确认成功后的本地清理失败、待确认汇总及完成后实际刷新；清理算法另见 `pages/subscription/cleanup_test.dart`。
 
 `http/validate_response_test.dart` 检查风控挑战与通过／拒绝结果、缺失证明、业务码和传输待确认；`utils/gaia_validation_test.dart` 通过导航替身返回验证结果，检查取消、过期操作、字段校验、一次性成功通知及等待异步消费者，消费者失败不重发请求。原生极验 WebView 的加载、脚本与设备行为需单独验证。
@@ -99,6 +103,10 @@ fvm flutter test test/services/diagnostics/ test/pages/about/diagnostics_page_te
 `http/pgc_response_test.dart` 覆盖番剧 11 个接口的业务码、解析原因、写入待确认、账号／CSRF、可空内容和追番状态类型。`pages/pgc/operation_results_test.dart` 覆盖时间表部分失败与日期合并、乱序／关闭、点评分页游标与去重、赞踩／删除互斥和未知计数，以及提交草稿与迟到面板。真实评分写入与番剧播放仍需另行验收。
 
 `http/metadata_response_test.dart` 与 `pages/metadata/` 覆盖音乐／赛事响应、可选封面和评论、空赛事、重复加载、乱序与账号隔离；音乐页面检查加载、错误重试和无评论降级，点赞检查在途禁用、未知计数与写入待确认，旧详情的评论不覆盖刷新后的空状态。
+
+`http/video_reporting_results_test.dart` 检查四个后台上报的成功、拒绝、损坏响应／传输待确认、写入禁重试及账号／CSRF 快照；播放器历史暂停与退出登录检查见 `plugin/pl_player/playback/controller_recovery_test.dart` 的“历史上报”用例。
+
+`pages/search_panel/esports_fallback_test.dart` 检查损坏赛事卡片保留其余搜索结果、空赛事安全隐藏；`pages/sponsor_block/operation_results_test.dart` 另检查偏好落盘失败保留值／重试，以及手动时间格式和范围校验。
 
 `http/sponsor_block_response_test.dart` 覆盖空降助手 8 个接口的 HTTP 状态、损坏响应、写入待确认、账号隔离与本地参数校验；`pages/sponsor_block/operation_results_test.dart` 挂真实提交／设置页面，检查草稿、防重入、关闭／切换视频后的迟到结果、投票和查询代次，另检查查询等待消费者完成。既有 `block_mixin_test.dart` 与 `utils/sponsor_block_settings_test.dart` 检查跳过／静音行为和配置兼容。真实服务写入、播放器动作和 UGC 搬运绑定确认流需另外验收。
 

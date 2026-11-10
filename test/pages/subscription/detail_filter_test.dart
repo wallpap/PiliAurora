@@ -4,7 +4,6 @@ import 'dart:async';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hive_ce/hive.dart';
 import 'package:pili_aurora/http/loading_state.dart';
-import 'package:pili_aurora/http/init.dart';
 import 'package:pili_aurora/models/remote/sub/sub/list.dart';
 import 'package:pili_aurora/models/remote/sub/sub_detail/data.dart';
 import 'package:pili_aurora/models/remote/sub/sub_detail/media.dart';
