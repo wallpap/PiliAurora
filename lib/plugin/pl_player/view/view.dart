@@ -42,6 +42,7 @@ import 'package:pili_aurora/pages/video/widgets/header_control.dart';
 import 'package:pili_aurora/pages/video/widgets/danmaku_like_control.dart';
 import 'package:pili_aurora/plugin/pl_player/controller.dart';
 import 'package:pili_aurora/plugin/pl_player/playback/audio_recovery.dart';
+import 'package:pili_aurora/plugin/pl_player/playback/playback_contracts.dart';
 import 'package:pili_aurora/plugin/pl_player/playback/super_resolution_policy.dart';
 import 'package:pili_aurora/plugin/pl_player/models/bottom_control_type.dart';
 import 'package:pili_aurora/plugin/pl_player/widgets/desktop_volume_control.dart';
@@ -900,8 +901,10 @@ class _PLVideoPlayerState extends State<PLVideoPlayer>
           if (videoInfo.dash == null) {
             return const SizedBox.shrink();
           }
-          final videoFormat = videoInfo.supportFormats!;
-          final availableQa = videoInfo.dash!.video!.availableVideoQualities;
+          final videoFormat = videoInfo.supportFormats ?? const <FormatItem>[];
+          final tracks = videoInfo.dash?.video;
+          if (tracks == null || tracks.isEmpty) return const SizedBox.shrink();
+          final availableQa = tracks.availableVideoQualities;
           return PopupMenuButton<int>(
             tooltip: '画质',
             requestFocus: false,
@@ -918,22 +921,38 @@ class _PLVideoPlayerState extends State<PLVideoPlayer>
                     value: item.quality,
                     selected: currentVideoQa.code == item.quality,
                     onTap: () async {
-                      if (currentVideoQa.code == item.quality) {
+                      final details = videoDetailController;
+                      if (details.currentVideoQa.value?.code == item.quality &&
+                          details.playbackSourceMatchesSelection &&
+                          plPlayerController.currentPlaybackSnapshot.phase ==
+                              PlaybackPhase.ready) {
                         return;
                       }
                       final int quality = item.quality!;
                       final newQa = VideoQuality.fromCode(quality);
-                      videoDetailController
-                        ..plPlayerController.cacheVideoQa = newQa.code
-                        ..currentVideoQa.value = newQa
-                        ..updatePlayer();
+                      if (!identical(details.data, videoInfo)) return;
+                      final ownsPlayback = details.playbackOwner.guard();
+                      final result = await details.updatePlayer(
+                        videoQuality: newQa,
+                      );
+                      if (!mounted ||
+                          !identical(widget.videoDetailController, details) ||
+                          details.isClosed ||
+                          !ownsPlayback() ||
+                          !identical(details.data, videoInfo) ||
+                          result.outcome != LoadOutcome.ready) {
+                        return;
+                      }
 
                       SmartDialog.showToast("画质已变为：${newQa.desc}");
 
                       if (!plPlayerController.tempPlayerConf) {
                         final network = await ConnectivityUtils.queryWiFi();
                         if (!mounted ||
-                            videoDetailController.isClosed ||
+                            !identical(widget.videoDetailController, details) ||
+                            details.isClosed ||
+                            !ownsPlayback() ||
+                            !identical(details.data, videoInfo) ||
                             plPlayerController.tempPlayerConf ||
                             plPlayerController.cacheVideoQa != quality) {
                           return;

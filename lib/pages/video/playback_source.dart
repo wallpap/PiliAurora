@@ -29,26 +29,35 @@ class VideoPlaybackSource {
     VideoDecodeFormatType? codec,
   }) {
     if (data.dash == null) {
-      final segments = data.durl!;
+      final segments = data.durl;
+      final quality = data.quality;
+      if (segments == null || segments.isEmpty || quality == null) {
+        throw const FormatException('响应缺少视频来源或画质');
+      }
       final List<String> candidates;
       if (segments.length == 1) {
         candidates = VideoUtils.getCdnUrls(segments.single.playUrls);
       } else {
         final edl = StringBuffer('edl://!no_chapters;');
         for (final segment in segments) {
+          final length = segment.length;
+          if (length == null || length < 0) {
+            throw const FormatException('分段来源缺少有效时长');
+          }
           final url = VideoUtils.getCdnUrl(segment.playUrls);
           edl.write(
-            '%${utf8.encode(url).length}%$url,length=${segment.length! / 1000};',
+            '%${utf8.encode(url).length}%$url,length=${length / 1000};',
           );
         }
         candidates = [edl.toString()];
       }
+      if (candidates.isEmpty) throw const FormatException('视频来源地址为空');
       return VideoPlaybackSource(
         video: VideoItem(
-          id: data.quality!,
+          id: quality,
           baseUrl: candidates.first,
           codecs: 'avc1',
-          quality: VideoQuality.fromCode(data.quality!),
+          quality: VideoQuality.fromCode(quality),
         ),
         audio: null,
         codec: VideoDecodeFormatType.AVC,
@@ -60,7 +69,7 @@ class VideoPlaybackSource {
       );
     }
     final video = selectVideoTrack(
-      data.dash!.video!,
+      data.dash!.video ?? const [],
       quality: videoQuality,
       codec: codec,
       preferredCodecs: preferredCodecs,
@@ -70,6 +79,9 @@ class VideoPlaybackSource {
     final audios = audio == null
         ? const <String>[]
         : VideoUtils.getCdnUrls(audio.playUrls, isAudio: true);
+    if (videos.isEmpty || (audio != null && audios.isEmpty)) {
+      throw const FormatException('视频或音轨来源地址为空');
+    }
     return VideoPlaybackSource(
       video: video,
       audio: audio,
@@ -95,7 +107,10 @@ class VideoPlaybackSource {
     for (final track in tracks) {
       if (track.id != quality) continue;
       first ??= track;
-      final code = track.codecs!;
+      final code = track.codecs;
+      if (code == null || code.isEmpty) {
+        throw const FormatException('视频来源缺少编码信息');
+      }
       if (codec?.codes.any(code.startsWith) == true) return track;
       for (var i = 0; i < rank; i++) {
         if (preferredCodecs[i].codes.any(code.startsWith)) {
@@ -105,7 +120,7 @@ class VideoPlaybackSource {
         }
       }
     }
-    return best ?? first ?? (throw StateError('没有可用的画质：$quality'));
+    return best ?? first ?? (throw const FormatException('没有可用的指定画质'));
   }
 
   static AudioItem? selectAudioTrack(List<AudioItem>? tracks, int quality) {

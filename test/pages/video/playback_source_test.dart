@@ -99,4 +99,34 @@ void main() {
     expect(resolved.source.videoSource, startsWith('edl://!no_chapters;%33%'));
     expect(resolved.source.videoSource, contains('length=2.0;'));
   });
+
+  test('空旧格式和缺少分段时长不能构造伪可播放来源', () {
+    VideoPlaybackSource resolve(PlayUrlModel data) =>
+        VideoPlaybackSource.resolve(
+          data,
+          videoQuality: 80,
+          audioQuality: 30280,
+          preferredCodecs: [VideoDecodeFormatType.AVC],
+        );
+    for (final data in [
+      PlayUrlModel(quality: 80)..durl = [],
+      PlayUrlModel(quality: 80)
+        ..durl = [
+          Durl(url: 'https://example.com/1'),
+          Durl(url: 'https://example.com/2', length: 1000),
+        ],
+      PlayUrlModel(dash: Dash(video: [])),
+      PlayUrlModel(
+        dash: Dash(
+          video: [
+            video('avc1')
+              ..baseUrl = ' '
+              ..backupUrl = [],
+          ],
+        ),
+      ),
+    ]) {
+      expect(() => resolve(data), throwsFormatException);
+    }
+  });
 }

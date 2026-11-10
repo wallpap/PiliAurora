@@ -141,6 +141,14 @@ class VideoDetailController extends GetxController
       _networkSource == null ? null : _networkSource!.audioSource ?? '';
   late final PlaybackOwner playbackOwner;
   PlaybackPlan? _playbackPlan;
+  int _sourceSelectionGeneration = 0;
+  ({
+    VideoPlaybackSource source,
+    bool videoChanged,
+    bool audioChanged,
+    bool Function() isCurrent,
+  })?
+  _pendingSourceSelection;
   PlaybackInhibitorToken? _routeInhibitor;
   Duration? defaultST;
   Duration? playedTime;
@@ -706,21 +714,125 @@ class VideoDetailController extends GetxController
         : AudioQuality.fromCode(selection.audio!.id);
   }
 
+  bool get playbackSourceMatchesSelection => _samePlaybackSource(
+    plPlayerController.currentPlaybackPlan,
+    _playbackPlan,
+  );
+
+  static bool _samePlaybackSource(PlaybackPlan? a, PlaybackPlan? b) {
+    const equality = ListEquality<String>();
+    return a != null &&
+        b != null &&
+        a.contentKey == b.contentKey &&
+        equality.equals(a.source.videoCandidates, b.source.videoCandidates) &&
+        equality.equals(a.source.audioCandidates, b.source.audioCandidates);
+  }
+
   /// 切换质量沿用播放意图，原生 open 期间的短暂暂停不改变用户选择。
-  void updatePlayer() {
-    final quality = currentVideoQa.value;
-    if (quality == null || isClosed || !playbackOwner.isActive) return;
-    _rememberPlaybackState();
-    _applyPlaybackSource(
-      VideoPlaybackSource.resolve(
-        data,
+  Future<LoadResult> updatePlayer({
+    VideoQuality? videoQuality,
+    AudioQuality? audioQuality,
+    VideoDecodeFormatType? codec,
+  }) async {
+    if (isClosed || !playbackOwner.isActive) {
+      return const LoadResult.inactive();
+    }
+    final pending = _pendingSourceSelection;
+    final previous = pending?.isCurrent() == true ? pending : null;
+    final quality =
+        videoQuality ?? previous?.source.video.quality ?? currentVideoQa.value;
+    if (quality == null || isFileSource || _networkSource == null) {
+      return const LoadResult.noMedia();
+    }
+    if (playbackOwner.isQuerying) return const LoadResult.deferred();
+    final generation = ++_sourceSelectionGeneration;
+    final identity = (bvid, cid.value, epId, seasonId);
+    final sourceData = data;
+    final account = Accounts.get(AccountType.video);
+    final ownsPlayback = playbackOwner.guard();
+    bool valid() =>
+        !isClosed &&
+        ownsPlayback() &&
+        generation == _sourceSelectionGeneration &&
+        identity == (bvid, cid.value, epId, seasonId) &&
+        identical(data, sourceData) &&
+        identical(account, Accounts.get(AccountType.video));
+    try {
+      final selection = VideoPlaybackSource.resolve(
+        sourceData,
         videoQuality: quality.code,
-        audioQuality: currentAudioQa?.code ?? plPlayerController.cacheAudioQa,
-        codec: currentDecodeFormats,
+        audioQuality:
+            audioQuality?.code ??
+            previous?.source.audio?.id ??
+            currentAudioQa?.code ??
+            plPlayerController.cacheAudioQa,
+        codec: codec ?? previous?.source.codec ?? currentDecodeFormats,
         preferredCodecs: preferCodecs,
-      ),
-    );
-    playerInit();
+      );
+      final videoChanged =
+          videoQuality != null || previous?.videoChanged == true;
+      final audioChanged =
+          audioQuality != null || previous?.audioChanged == true;
+      // 连续调整画质和音质时沿用仍有效的目标；确认值仍等最新加载完成。
+      _pendingSourceSelection = (
+        source: selection,
+        videoChanged: videoChanged,
+        audioChanged: audioChanged,
+        isCurrent: valid,
+      );
+      _rememberPlaybackState();
+      final configuration = plPlayerController.capturePlaybackConfiguration(
+        live: false,
+        source: selection.source,
+        mediaVolume: volume,
+      );
+      final plan = _buildPlaybackPlan(
+        selection.source,
+        configuration,
+        video: selection.video,
+      );
+      final result = await loadPlaybackPlanForRoute(
+        plan,
+        start: PlaybackStartPolicy.preserve,
+        onReady: () {},
+      );
+      if (!valid()) return const LoadResult.superseded();
+      if (result.outcome == LoadOutcome.ready) {
+        // 页面选择与默认偏好只确认真实加载成功的来源，失败保留原选择以便重试。
+        _applyPlaybackSource(selection);
+        _playbackPlan = plan;
+        if (videoChanged) {
+          plPlayerController.cacheVideoQa = selection.video.quality.code;
+        }
+        if (audioChanged && selection.audio != null) {
+          plPlayerController.cacheAudioQa = selection.audio!.id;
+        }
+        videoState.value = true;
+        unawaited(setSubtitle(vttSubtitlesIndex.value));
+        afterPlaybackReady(valid);
+        defaultST = null;
+      } else if (result.outcome == LoadOutcome.failed ||
+          result.outcome == LoadOutcome.noMedia) {
+        SmartDialog.showToast('播放源切换失败，请重试');
+      }
+      return result;
+    } catch (error, stackTrace) {
+      final failure = PlaybackFailure(
+        category: PlaybackFailureCategory.capability,
+        operation: 'selectSource',
+        stage: plPlayerController.currentPlaybackSnapshot.stage,
+        recoverable: true,
+        cause: '播放源选择或加载失败（${error.runtimeType}）',
+      );
+      logger.w('切换播放源失败', error: error.runtimeType, stackTrace: stackTrace);
+      if (!valid()) return const LoadResult.superseded();
+      SmartDialog.showToast('播放源切换失败，请重试');
+      return LoadResult.failed(failure);
+    } finally {
+      if (generation == _sourceSelectionGeneration) {
+        _pendingSourceSelection = null;
+      }
+    }
   }
 
   void _rememberPlaybackState() {
@@ -750,6 +862,7 @@ class VideoDetailController extends GetxController
     if (isClosed || !playbackOwner.isActive) {
       return;
     }
+    _sourceSelectionGeneration++;
     final identity = (bvid, cid.value, epId, seasonId);
     final source = isFileSource
         ? FileSource(
@@ -807,8 +920,9 @@ class VideoDetailController extends GetxController
 
   PlaybackPlan _buildPlaybackPlan(
     DataSource source,
-    PlaybackConfiguration configuration,
-  ) {
+    PlaybackConfiguration configuration, {
+    VideoItem? video,
+  }) {
     Duration? seek = defaultST ?? playedTime;
     if (seek == .zero) seek = null;
     seek ??= getFirstSegment();
@@ -832,8 +946,8 @@ class VideoDetailController extends GetxController
       reloadPosition: playedTime,
       metadata: PlaybackMetadataHint(
         trust: PlaybackMetadataTrust.sourceHint,
-        width: firstVideo.width,
-        height: firstVideo.height,
+        width: (video ?? firstVideo).width,
+        height: (video ?? firstVideo).height,
       ),
       mediaVolume: volume,
     );
@@ -881,16 +995,30 @@ class VideoDetailController extends GetxController
   ) => playbackOwner.setSubtitleTrack(track);
 
   void holdPlaybackForRoute() {
+    _sourceSelectionGeneration++;
+    _pendingSourceSelection = null;
+    playbackOwner.invalidateRequests();
     final snapshot = plPlayerController.currentPlaybackSnapshot;
-    final plan = plPlayerController.currentPlaybackPlan;
-    if (plan?.contentKey == _playbackPlan?.contentKey) {
+    final currentPlan = plPlayerController.currentPlaybackPlan;
+    final confirmedPlan = _playbackPlan;
+    // 会话计划可能已指向尚未成功的选择；返回页面时仍恢复已确认来源。
+    final plan =
+        currentPlan != null &&
+            confirmedPlan != null &&
+            currentPlan.contentKey == confirmedPlan.contentKey &&
+            !_samePlaybackSource(currentPlan, confirmedPlan)
+        ? confirmedPlan
+        : currentPlan;
+    if (plan != null &&
+        confirmedPlan != null &&
+        plan.contentKey == confirmedPlan.contentKey) {
       final position =
           plPlayerController.videoPlayerController?.state.position ??
           playedTime ??
           snapshot.actual.position;
       if (position != null) {
         _playbackPlan = PlaybackPlan(
-          contentKey: plan!.contentKey,
+          contentKey: plan.contentKey,
           source: plan.source,
           timeline: plan.timeline,
           configuration: snapshot.configuration.desired,
@@ -1030,6 +1158,7 @@ class VideoDetailController extends GetxController
     PlaybackStartPolicy? startPolicy,
   }) async {
     if (isClosed || !playbackOwner.isActive) return;
+    _sourceSelectionGeneration++;
     if (isFileSource) {
       return _initPlayerIfNeeded(autoFullScreenFlag, force: fromReset);
     }

@@ -5,13 +5,21 @@ import 'dart:typed_data';
 
 import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:get/get.dart';
 import 'package:hive_ce/hive.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:pili_aurora/http/init.dart';
+import 'package:pili_aurora/models/common/account_type.dart';
+import 'package:pili_aurora/models/common/video/audio_quality.dart';
+import 'package:pili_aurora/models/common/video/video_quality.dart';
 import 'package:pili_aurora/models/common/video/video_type.dart';
+import 'package:pili_aurora/models/video/play/url.dart';
 import 'package:pili_aurora/models/remote/video/video_play_info/subtitle.dart';
 import 'package:pili_aurora/pages/video/controller.dart';
 import 'package:pili_aurora/plugin/pl_player/playback/playback_contracts.dart';
+import 'package:pili_aurora/utils/accounts.dart';
+import 'package:pili_aurora/utils/accounts/account.dart';
 import 'package:pili_aurora/utils/storage.dart';
 import 'package:pili_aurora/utils/storage_key.dart';
 
@@ -158,8 +166,9 @@ void main() {
     await second;
     expect(controller.currentAudioQa, isNull);
     await controller.plPlayerController.pause();
-    controller.updatePlayer();
-    expect(controller.loads.last.autoplay, isFalse);
+    final switched = await controller.updatePlayer();
+    expect(switched.outcome, LoadOutcome.ready);
+    expect(controller.routeLoads.last.start, PlaybackStartPolicy.preserve);
     expect(controller.audioUrl, isEmpty);
     controller.closePlayback();
   });
@@ -210,7 +219,7 @@ void main() {
   });
 
   test('查询被新页面取代时，返回会用保留意图重新解析', () async {
-    final controller = page();
+    final controller = page()..playedTime = const Duration(seconds: 27);
     final holdForRoute = controller.holdPlaybackForRoute;
     final restoreAfterRoute = controller.restorePlaybackAfterRoute;
     holdForRoute();
@@ -257,6 +266,207 @@ void main() {
     expect(controller.vttSubtitlesIndex.value, 0);
     expect(controller.vttSubtitles, isEmpty);
     controller.closePlayback();
+  });
+
+  Future<_VideoController> selectionPage() async {
+    final controller = page();
+    final initial = controller.queryVideoUrl();
+    (await adapter.next()).complete(media(1));
+    await initial;
+    controller.data.dash!.video!.add(
+      PlayUrlModel.fromJson(media(2, quality: 64)).dash!.video!.single,
+    );
+    return controller;
+  }
+
+  test('切换来源等待 ready 后确认画质和缓存，保留暂停与续播位置', () async {
+    final controller = await selectionPage();
+    await controller.plPlayerController.pause();
+    controller.playedTime = const Duration(seconds: 27);
+    final completion = Completer<LoadResult>();
+    controller.sourceLoad = (_) => completion.future;
+    final switching = controller.updatePlayer(
+      videoQuality: VideoQuality.high720,
+    );
+    expect(controller.currentVideoQa.value, VideoQuality.high1080);
+    expect(controller.plPlayerController.cacheVideoQa, 80);
+    expect(controller.videoUrl, 'https://example.com/video/1');
+    expect(controller.routeLoads.last.start, PlaybackStartPolicy.preserve);
+    expect(
+      controller.routeLoads.last.plan.reloadPosition,
+      const Duration(seconds: 27),
+    );
+    completion.complete(const LoadResult.ready(2));
+    expect((await switching).outcome, LoadOutcome.ready);
+    expect(controller.currentVideoQa.value, VideoQuality.high720);
+    expect(controller.plPlayerController.cacheVideoQa, 64);
+    expect(controller.videoUrl, 'https://example.com/video/2');
+    controller.closePlayback();
+  });
+
+  test('同媒体较早切换成功回执不能覆盖较新选择', () async {
+    final controller = await selectionPage();
+    final completion = Completer<LoadResult>();
+    controller.sourceLoad = (_) => completion.future;
+    final first = controller.updatePlayer(videoQuality: VideoQuality.high720);
+    controller.sourceLoad = null;
+    final latest = await controller.updatePlayer(
+      videoQuality: VideoQuality.high1080,
+    );
+    expect(latest.outcome, LoadOutcome.ready);
+    completion.complete(const LoadResult.ready(2));
+    expect((await first).outcome, LoadOutcome.superseded);
+    expect(controller.currentVideoQa.value, VideoQuality.high1080);
+    expect(controller.plPlayerController.cacheVideoQa, 80);
+    controller.closePlayback();
+  });
+
+  test('画质切换中再选音质，最新加载保留两项用户目标', () async {
+    final controller = await selectionPage();
+    controller.data.dash!.audio!.add(
+      AudioItem.fromJson({
+        'id': 30216,
+        'base_url': 'https://example.com/audio/64',
+      }),
+    );
+    final completion = Completer<LoadResult>();
+    controller.sourceLoad = (_) => completion.future;
+    final first = controller.updatePlayer(videoQuality: VideoQuality.high720);
+    controller.sourceLoad = null;
+    final latest = await controller.updatePlayer(
+      audioQuality: AudioQuality.k64,
+    );
+    expect(latest.outcome, LoadOutcome.ready);
+    completion.complete(const LoadResult.ready(2));
+    expect((await first).outcome, LoadOutcome.superseded);
+    expect(controller.currentVideoQa.value, VideoQuality.high720);
+    expect(controller.currentAudioQa, AudioQuality.k64);
+    expect(controller.plPlayerController.cacheVideoQa, 64);
+    expect(controller.plPlayerController.cacheAudioQa, 30216);
+    controller.closePlayback();
+  });
+
+  test('换分 P 后迟到加载不能确认旧来源', () async {
+    final controller = await selectionPage();
+    final completion = Completer<LoadResult>();
+    controller.sourceLoad = (_) => completion.future;
+    final switching = controller.updatePlayer(
+      videoQuality: VideoQuality.high720,
+    );
+    controller.cid.value = 2;
+    completion.complete(const LoadResult.ready(2));
+    expect((await switching).outcome, LoadOutcome.superseded);
+    expect(controller.currentVideoQa.value, VideoQuality.high1080);
+    expect(controller.plPlayerController.cacheVideoQa, 80);
+    controller.closePlayback();
+  });
+
+  test('切换播放账号后迟到加载不能确认旧偏好', () async {
+    final controller = await selectionPage();
+    expect(controller.playbackSourceMatchesSelection, isTrue);
+    final previous = Accounts.video;
+    final completion = Completer<LoadResult>();
+    controller.sourceLoad = (_) => completion.future;
+    final switching = controller.updatePlayer(
+      videoQuality: VideoQuality.high720,
+    );
+    Accounts.accountMode[AccountType.video.index] = const NoAccount();
+    try {
+      completion.complete(const LoadResult.ready(2));
+      expect((await switching).outcome, LoadOutcome.superseded);
+      expect(controller.currentVideoQa.value, VideoQuality.high1080);
+      expect(controller.plPlayerController.cacheVideoQa, 80);
+      expect(controller.playbackSourceMatchesSelection, isFalse);
+      controller.sourceLoad = null;
+      final restored = await controller.updatePlayer(
+        videoQuality: VideoQuality.high1080,
+      );
+      expect(restored.outcome, LoadOutcome.ready);
+      expect(
+        controller.routeLoads.last.plan.source.currentVideoSource,
+        'https://example.com/video/1',
+      );
+      expect(controller.playbackSourceMatchesSelection, isTrue);
+    } finally {
+      Accounts.accountMode[AccountType.video.index] = previous;
+      controller.closePlayback();
+    }
+  });
+
+  test('加载中离页持有已确认来源，返回时不恢复未确认画质', () async {
+    final controller = await selectionPage();
+    final completion = Completer<LoadResult>();
+    controller.sourceLoad = (_) => completion.future;
+    final switching = controller.updatePlayer(
+      videoQuality: VideoQuality.high720,
+    );
+    controller.holdPlaybackForRoute();
+    completion.complete(const LoadResult.ready(2));
+    expect((await switching).outcome, LoadOutcome.superseded);
+    controller.sourceLoad = null;
+    await controller.restorePlaybackAfterRoute();
+    expect(
+      controller.routeLoads.last.plan.source.currentVideoSource,
+      'https://example.com/video/1',
+    );
+    expect(controller.currentVideoQa.value, VideoQuality.high1080);
+    controller.closePlayback();
+  });
+
+  testWidgets('切换失败保留确认值并消费异常，同一画质可以重试', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(builder: FlutterSmartDialog.init(), home: const SizedBox()),
+    );
+    final controller = (await tester.runAsync(selectionPage))!;
+    try {
+      const failure = PlaybackFailure(
+        category: PlaybackFailureCategory.network,
+        operation: 'open',
+        stage: PlaybackStage.opening,
+        recoverable: true,
+        cause: 'fixture',
+      );
+      controller.sourceLoad = (_) async => const LoadResult.failed(failure);
+      final rejected = await tester.runAsync(
+        () => controller.updatePlayer(videoQuality: VideoQuality.high720),
+      );
+      expect(rejected!.outcome, LoadOutcome.failed);
+      expect(rejected.failure, same(failure));
+      expect(controller.currentVideoQa.value, VideoQuality.high1080);
+      controller.sourceLoad = (_) async => throw StateError('private-url');
+      final failed = await tester.runAsync(
+        () => controller.updatePlayer(videoQuality: VideoQuality.high720),
+      );
+      expect(failed!.outcome, LoadOutcome.failed);
+      expect(controller.currentVideoQa.value, VideoQuality.high1080);
+      expect(controller.plPlayerController.cacheVideoQa, 80);
+      expect(controller.videoUrl, 'https://example.com/video/1');
+      await tester.pump();
+      expect(find.text('播放源切换失败，请重试'), findsOneWidget);
+      expect(find.textContaining('private-url'), findsNothing);
+      controller.sourceLoad = null;
+      final audioOnly = await tester.runAsync(
+        () => controller.updatePlayer(audioQuality: AudioQuality.k192),
+      );
+      expect(audioOnly!.outcome, LoadOutcome.ready);
+      expect(controller.currentVideoQa.value, VideoQuality.high1080);
+      expect(controller.plPlayerController.cacheVideoQa, 80);
+      final retry = await tester.runAsync(
+        () => controller.updatePlayer(videoQuality: VideoQuality.high720),
+      );
+      expect(retry!.outcome, LoadOutcome.ready);
+      expect(controller.currentVideoQa.value, VideoQuality.high720);
+    } finally {
+      await tester.runAsync(() async {
+        controller.closePlayback();
+        await Future<void>.delayed(Duration.zero);
+      });
+      final dismissed = SmartDialog.dismiss(status: SmartStatus.allToast);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+      await dismissed;
+      await tester.pumpWidget(const SizedBox());
+    }
   });
 }
 
@@ -309,6 +519,7 @@ class _VideoController extends VideoDetailController {
   final loads = <({int cid, String? source, bool autoplay})>[];
   final plans = <PlaybackPlan>[];
   final routeLoads = <({PlaybackPlan plan, PlaybackStartPolicy start})>[];
+  Future<LoadResult> Function(PlaybackPlan plan)? sourceLoad;
   @override
   bool get isClosed => closed;
   @override
@@ -368,6 +579,12 @@ class _VideoController extends VideoDetailController {
     required void Function() onReady,
   }) async {
     routeLoads.add((plan: plan, start: start));
+    plPlayerController.preparePlaybackPlan(
+      owner: playbackOwner,
+      plan: plan,
+      live: false,
+    );
+    if (sourceLoad case final load?) return load(plan);
     return LoadResult.ready(++_routeLoadGeneration);
   }
 

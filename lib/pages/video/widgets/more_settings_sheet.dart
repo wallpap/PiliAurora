@@ -17,6 +17,7 @@ import 'package:pili_aurora/pages/common/common_intro_controller.dart';
 import 'package:pili_aurora/pages/main/controller.dart';
 import 'package:pili_aurora/pages/video/controller.dart';
 import 'package:pili_aurora/plugin/pl_player/models/play_repeat.dart';
+import 'package:pili_aurora/plugin/pl_player/playback/playback_contracts.dart';
 import 'package:pili_aurora/plugin/pl_player/playback/super_resolution_policy.dart';
 import 'package:pili_aurora/plugin/pl_player/widgets/player_info_dialog.dart';
 import 'package:pili_aurora/services/shutdown_timer_service.dart';
@@ -377,16 +378,29 @@ class _VideoMoreSettingsSheetState extends State<VideoMoreSettingsSheet> {
           ],
           enabled: controller.currentAudioQa != null && audio.isNotEmpty,
           onSelected: (value) async {
-            if (value == controller.currentAudioQa) return;
-            controller
-              ..currentAudioQa = value
-              ..plPlayerController.cacheAudioQa = value.code
-              ..updatePlayer();
+            if (value == controller.currentAudioQa &&
+                controller.playbackSourceMatchesSelection &&
+                player.currentPlaybackSnapshot.phase == PlaybackPhase.ready) {
+              return;
+            }
+            if (!identical(controller.data, data)) return;
+            final sourceData = data;
+            final ownsPlayback = controller.playbackOwner.guard();
+            final result = await controller.updatePlayer(audioQuality: value);
+            if (!mounted ||
+                !ownsPlayback() ||
+                controller.isClosed ||
+                !identical(controller.data, sourceData) ||
+                result.outcome != LoadOutcome.ready) {
+              return;
+            }
             setState(() {});
             if (!player.tempPlayerConf) {
               final network = await ConnectivityUtils.queryWiFi();
               if (!mounted ||
                   controller.isClosed ||
+                  !ownsPlayback() ||
+                  !identical(controller.data, sourceData) ||
                   player.tempPlayerConf ||
                   controller.currentAudioQa != value) {
                 return;
@@ -424,12 +438,17 @@ class _VideoMoreSettingsSheetState extends State<VideoMoreSettingsSheet> {
               : controller.currentDecodeFormats.description,
           options: [for (final format in formats) (format, format.description)],
           enabled: formats.isNotEmpty,
-          onSelected: (value) {
-            if (controller.currentDecodeFormats == value) return;
-            controller
-              ..currentDecodeFormats = value
-              ..updatePlayer();
-            setState(() {});
+          onSelected: (value) async {
+            if (controller.currentDecodeFormats == value &&
+                controller.playbackSourceMatchesSelection &&
+                player.currentPlaybackSnapshot.phase == PlaybackPhase.ready) {
+              return;
+            }
+            if (!identical(controller.data, data)) return;
+            final result = await controller.updatePlayer(codec: value);
+            if (mounted && result.outcome == LoadOutcome.ready) {
+              setState(() {});
+            }
           },
         ),
         _select<CDNService>(
