@@ -8,13 +8,12 @@ import 'package:pili_aurora/common/widgets/route_aware_mixin.dart';
 import 'package:pili_aurora/services/logger.dart';
 
 /// 查询导航只允许当前页面的最后一次操作交付结果。
-final class NavigationRequest with RouteAware {
-  NavigationRequest() : _route = Get.routing.route {
+final class NavigationRequest {
+  NavigationRequest()
+    : _route = routeObserver.currentRoute ?? Get.routing.route {
     _latest?._invalidate();
     _latest = this;
-    if (_route case final GetPageRoute route) {
-      routeObserver.subscribe(this, route);
-    }
+    routeObserver.addNavigationListener(_onNavigation);
   }
 
   static NavigationRequest? _latest;
@@ -27,7 +26,7 @@ final class NavigationRequest with RouteAware {
   bool get isCurrent =>
       !_cancelled &&
       identical(_latest, this) &&
-      identical(Get.routing.route, _route) &&
+      identical(routeObserver.currentRoute ?? Get.routing.route, _route) &&
       (_route?.isCurrent ?? true);
 
   void showLoading([String message = '获取中...']) {
@@ -61,14 +60,12 @@ final class NavigationRequest with RouteAware {
     unawaited(closeLoading());
   }
 
-  @override
-  void didPushNext() => _invalidate();
-
-  @override
-  void didPop() => _invalidate();
+  void _onNavigation() {
+    if (!identical(routeObserver.currentRoute, _route)) _invalidate();
+  }
 
   Future<void> close() async {
-    routeObserver.unsubscribe(this);
+    routeObserver.removeNavigationListener(_onNavigation);
     if (identical(_latest, this)) _latest = null;
     _cancelled = true;
     await closeLoading();

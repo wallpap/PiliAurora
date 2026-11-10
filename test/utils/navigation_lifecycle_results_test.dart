@@ -12,6 +12,7 @@ import 'package:pili_aurora/utils/accounts.dart';
 import 'package:pili_aurora/utils/accounts/account.dart';
 import 'package:pili_aurora/utils/app_scheme.dart';
 import 'package:pili_aurora/utils/page_utils.dart';
+import 'package:pili_aurora/utils/navigation_request.dart';
 import 'package:pili_aurora/utils/request_utils.dart';
 import 'package:pili_aurora/utils/storage.dart';
 import 'package:pili_aurora/utils/url_utils.dart';
@@ -230,6 +231,83 @@ void main() {
     expect(openedVideos, isEmpty);
     expect(find.text('来源页面'), findsOneWidget);
     expect(find.text('获取中...'), findsNothing);
+    await finish(tester);
+  });
+
+  testWidgets('普通路由离页再返回后丢弃旧查询', (tester) async {
+    await mount(tester);
+    final navigator = Get.key.currentState!
+      ..push<void>(
+        MaterialPageRoute(builder: (_) => const Scaffold(body: Text('普通来源'))),
+      );
+    await tester.pumpAndSettle();
+    final operation = PiliScheme.videoPush(123, null);
+    await until(tester, () => requests.length == 1);
+    navigator.push<void>(
+      MaterialPageRoute(builder: (_) => const Scaffold(body: Text('普通下一页'))),
+    );
+    await tester.pumpAndSettle();
+    navigator.pop();
+    await tester.pumpAndSettle();
+    await complete(tester, operation, 0, video(42));
+    expect(openedVideos, isEmpty);
+    expect(find.text('普通来源'), findsOneWidget);
+    expect(find.text('获取中...'), findsNothing);
+    await finish(tester);
+  });
+
+  testWidgets('当前普通路由的成功查询正常导航', (tester) async {
+    await mount(tester);
+    Get.key.currentState!.push<void>(
+      MaterialPageRoute(builder: (_) => const Scaffold(body: Text('普通来源'))),
+    );
+    await tester.pumpAndSettle();
+    final operation = PiliScheme.videoPush(123, null);
+    await until(tester, () => requests.length == 1);
+    await complete(tester, operation, 0, video(42));
+    expect(openedVideos, hasLength(1));
+    expect(openedVideos.single['cid'], 42);
+    await finish(tester);
+  });
+
+  testWidgets('普通路由移除后旧查询不提示失败', (tester) async {
+    await mount(tester);
+    final navigator = Get.key.currentState!;
+    final route = MaterialPageRoute<void>(
+      builder: (_) => const Scaffold(body: Text('普通来源')),
+    );
+    navigator.push(route);
+    await tester.pumpAndSettle();
+    final operation = PiliScheme.videoPush(123, null);
+    await until(tester, () => requests.length == 1);
+    navigator.removeRoute(route);
+    await tester.pumpAndSettle();
+    await complete(tester, operation, 0, failed);
+    expect(find.text('迟到错误'), findsNothing);
+    expect(openedVideos, isEmpty);
+    await finish(tester);
+  });
+
+  testWidgets('查询自己的确认弹窗关闭后仍可消费结果', (tester) async {
+    await mount(tester);
+    final request = NavigationRequest();
+    final confirmation = showDialog<bool>(
+      context: Get.key.currentContext!,
+      builder: (context) => AlertDialog(
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('确认操作'),
+          ),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('确认操作'));
+    await tester.pumpAndSettle();
+    expect(await confirmation, isTrue);
+    expect(request.isCurrent, isTrue);
+    await request.close();
     await finish(tester);
   });
 
