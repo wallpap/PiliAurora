@@ -59,6 +59,11 @@ effectivePlaying = mediaReady ∧ ownerLoaded ∧ intent.playing
 确认命令写入，`actual.playing` 仍由观测事件更新。令牌释放只能移除持有者的抑制，
 不能将用户暂停改为播放。旧 writer 的成功或失败都不能结算新修订的调用方。
 
+独立音频 Player 通过 `AudioSessionHandler` 的租约栈接管声音。当前租约持有视频会话
+抑制，等待视频或前一音频的暂停回执后才播放；系统焦点变更串行执行并重新检查归属。
+音频页关闭等待创建、open 和 Player 销毁，销毁失败继续持有抑制。系统中断只影响有效
+播放，拔耳机更新暂停意图；duck 结束只恢复尚未被用户修改的音量。
+
 ### I3：配置收敛与真实结算
 
 对配置键 `k`：
