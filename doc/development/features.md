@@ -7,7 +7,7 @@
 | 领域 | 页面 | API／服务／模型 | 回归入口 |
 | --- | --- | --- | --- |
 | 首页、热门、排行、搜索 | `main/`、`home/`、`rcmd/`、`hot/`、`rank/`、`popular_*`、`search*` | `api.dart`、`search.dart`；`models/remote/popular/`、`search/` | `test/pages/rcmd/`、`test/pages/search/`、`test/pages/search_results/` |
-| 视频、文章、番剧、音频 | `video/`、`article/`、`article_list/`、`pgc/`、`audio/`、`music/` | `video.dart`、`pgc.dart`、`music.dart`、`reply.dart` | `test/pages/video/`、`test/pages/article/`、`test/pages/pgc/` |
+| 视频、文章、番剧、音频 | `video/`、`article/`、`article_list/`、`pgc/`、`audio/`、`music/` | `video.dart`、`pgc.dart`、`music.dart`、`reply.dart` | `test/pages/video/`、`test/pages/article/`、`test/pages/pgc/`、`test/pages/audio/` |
 | 播放器与原生输出 | 页面通过 `PlaybackOwner` 提交计划及命令 | `lib/plugin/pl_player/playback/`；`playback_contracts.dart`、`playback_session.dart`、`native_playback_runtime.dart` | `test/plugin/pl_player/`、`tool/probes/playback/` |
 | 弹幕与评论 | `danmaku/`、`danmaku_block/`、`main_reply/`、`my_reply/`、`video/reply/` | `danmaku.dart`、`reply.dart`；远端同名模型 | `test/pages/danmaku/`、`test/pages/danmaku_block/`、`test/pages/community/` |
 | 表情包 | `emote/manage.dart`、`preview.dart` | `ReplyHttp`；兼容详情 `emotes` 与列表 `emote` | `test/pages/community/`、`test/http/community_response_test.dart` |
@@ -18,7 +18,7 @@
 | 收藏、历史、稍后再看、订阅 | `fav*`、`history*`、`later*`、`subscription*` | `fav.dart`、`pgc.dart`；`models/remote/fav/`、`history/`、`later/` | `test/pages/fav/`、`test/pages/history/`、`test/pages/subscription/` |
 | 下载与离线 | `download/` | `download.dart`；`lib/services/download/`；路径在 `lib/app/app_paths.dart` | `test/services/download/` |
 | 设置与主题 | `setting/`、`settings_search/`、`space_setting/` | `lib/common/style.dart`、`lib/utils/theme_utils.dart`、`storage_pref.dart` | `test/pages/setting/`、`test/pages/space_setting/` |
-| WebView、DLNA、空降助手 | `webview/`、`dlna/`、`sponsor_block/` | 从 import 定位插件，核对 `third_party/` 的平台实现 | `test/pages/dlna/`、`test/pages/video/cast_results_test.dart`、`test/pages/sponsor_block/`、对应依赖包测试 |
+| WebView、DLNA、空降助手 | `webview/`、`dlna/`、`sponsor_block/` | 从 import 定位插件，核对 `third_party/` 的平台实现 | `test/pages/webview/`、`test/pages/dlna/`、`test/pages/video/cast_results_test.dart`、`test/pages/sponsor_block/`、对应依赖包测试 |
 
 表中的 `models/` 相对 `lib/`；测试及探针路径相对仓库根目录。测试选择、夹具和设备边界见[测试目录](../../test/README.md)，设置生效时机见[设置行为](settings-behavior.md)。
 

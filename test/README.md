@@ -72,7 +72,7 @@ fvm flutter test test/services/diagnostics/ test/pages/about/diagnostics_page_te
 
 `http/api_response_test.dart` 和 `http/relationship_response_test.dart` 检查业务码、损坏响应、领域空数据、原始异常和写入待确认；同时检查操作语义对应的重试策略、未分发取消、账号／CSRF 和屏蔽规则 ID。弹幕屏蔽页面另检查删除已确认但添加待确认时保留部分成功与待确认类型。
 
-`http/community_response_test.dart` 检查弹幕与评论业务码、解析原因、写入待确认、匿名查询、管理端点和表情包分页。`pages/community/operation_results_test.dart` 检查赞踩／置顶防重入、草稿快照、切号／关闭／更换对象后的迟到结果、评论可见性检查、表情包重试，以及举报成功但屏蔽同步未确认的反馈。真实服务写入、原生输入和播放器回显需设备验收。
+`http/community_response_test.dart` 检查弹幕与评论业务码、解析原因、写入待确认、匿名查询、管理端点和表情包分页。`pages/community/operation_results_test.dart` 检查赞踩／置顶防重入、草稿快照、切号／关闭／更换对象后的迟到结果、评论可见性检查、表情包重试，以及举报成功但屏蔽同步未确认的反馈。评论延迟检查另覆盖离页再返回、发布页正常关闭、来源或账号失效及申诉弹窗归属。真实服务写入、原生输入和播放器回显需设备验收。
 
 `http/reply_write_results_test.dart` 检查发布／删除的拒绝与待确认、账号和 CSRF 绑定、禁止重试、可空回显及本地缓存失败后保留已确认成功。`pages/community/reply_publish_results_test.dart` 检查上传前固定草稿、保留新草稿、楼中楼根 ID、重复提交和弹窗取消；`reply_list_results_test.dart` 检查按身份插入／删除、未知计数及账号订阅；`reply_search_results_test.dart` 检查已提交词与分页、凭据替换和子控制器释放。原生图片选择／裁剪和输入法仍需设备验收。
 
@@ -90,7 +90,13 @@ fvm flutter test test/services/diagnostics/ test/pages/about/diagnostics_page_te
 
 `pages/member/operation_results_test.dart` 检查成员主页面的账号／目标／刷新归属、关系写入和经验领取互斥；`pages/member/child_list_results_test.dart` 与 `pages/member_pgc/controller_results_test.dart` 检查成员视频／图文／Web／番剧子列表的账号订阅、查询失效和页面释放，以及继续播放的迟到结果。番剧页独立查询，不消费无账号归属的父缓存。
 
-`utils/app_scheme_test.dart` 与 `utils/url_navigation_results_test.dart` 检查链接入口同步／异步错误消费、静默探测、相对重定向、分 P 查询空结果及安全失败提示；`utils/navigation_lifecycle_results_test.dart` 通过生产 Get 路由验证最后一次导航生效、离页后返回仍丢弃旧查询、动态／番剧／课程／短链／播放列表迟到结果，以及空结果收尾和其他加载提示的隔离。UGC 绑定完整确认流、系统外链启动与真实 WebView 仍需专项验收。
+`utils/app_scheme_test.dart` 与 `utils/url_navigation_results_test.dart` 检查链接入口同步／异步错误消费、静默探测、相对重定向、分 P 查询空结果及安全失败提示；`utils/navigation_lifecycle_results_test.dart` 通过生产 Get 路由验证最后一次导航生效、离页后返回仍丢弃旧查询、动态／番剧／课程／短链／播放列表迟到结果，以及空结果收尾和其他加载提示的隔离；实名查询还覆盖账号替换和结果弹窗关闭。UGC 绑定完整确认流、系统外链启动与真实 WebView 仍需专项验收。
+
+`pages/webview/action_results_test.dart` 使用插件通道替身检查菜单与脚本 Future 失败消费、新加载解除旧菜单锁、旧 controller／离页后的回调，以及复制、缓存清理和返回的安全提示。原生网页、脚本执行与缓存实际效果需设备验收。
+
+`utils/video_utils_test.dart` 检查 CDN 签名来源优先级、回退、相对来源、空输入和解析异常；安全异常保留 cause／stack，日志不记录签名地址。真实 CDN 可达性另行验证。
+
+`pages/audio/playback_results_test.dart` 检查空播放响应／地址、乱序查询、账号替换、播放器创建失败重试，以及旧原生打开排空后才打开并确认新曲目。`pages/setting/cdn_probe_results_test.dart` 检查采样为空、短响应完成和测速异常的安全终态。音频和 HTTP 使用受控替身，真实媒体服务、原生播放及 CDN 速度需设备验证。
 
 `pages/video/cast_results_test.dart` 检查投屏地址查询互斥、失败后的重试与独立加载提示、换分 P 不打开旧设备页，以及离页返回仍丢弃旧错误。投屏服务交互和设备发现另见 DLNA 对应回归；真实局域网和电视设备仍需验收。
 
@@ -126,9 +132,11 @@ fvm flutter test test/services/diagnostics/ test/pages/about/diagnostics_page_te
 
 `http/sponsor_block_response_test.dart` 覆盖空降助手 8 个接口的 HTTP 状态、损坏响应、写入待确认、账号隔离与本地参数校验；`pages/sponsor_block/operation_results_test.dart` 挂真实提交／设置页面，检查草稿、防重入、关闭／切换视频后的迟到结果、投票和查询代次，另检查查询等待消费者完成。既有 `block_mixin_test.dart` 与 `utils/sponsor_block_settings_test.dart` 检查跳过／静音行为和配置兼容。真实服务写入、播放器动作和 UGC 搬运绑定确认流需另外验收。
 
-`utils/image_save_results_test.dart` 检查取消保存不误报成功、选择器收到真实字节、保存结果和共享缓存文件保留。Windows 文件选择使用模拟 adapter；Android 图库写入与权限需目标设备验收。
+`utils/image_save_results_test.dart` 检查取消保存不误报成功、选择器收到真实字节、保存结果、共享缓存保留、普通／动态图片互斥、独立加载提示、迟到下载取消和临时目录清理；桌面批量同名／已有文件自动编号，选择缓存原目录保留源文件。Windows 文件选择使用模拟 adapter；Android 图库写入与权限需目标设备验收。
 
 `utils/screenshot_test.dart` 检查离屏截图树在成功、等待失败和尺寸异常时释放 Widget／Focus 资源，返回图片由调用方持有。`plugin/pl_player/playback/controller_recovery_test.dart` 的“截图：”用例检查原生截图异常后的重试、换源迟到图片释放、预览关闭与保存取消后的成功重试。SC／评论／二维码／保存面板沿实际调用链检查资源及结果消费；这些页面的完整交互、原生截图／相册／分享仍需设备验证。
+
+`plugin/pl_player/webp_capture_operation_test.dart` 使用实际播放会话和转换替身，检查动态截图的临时暂停令牌、用户新播放意图、来源失效、独立提示与转换／保存后的资源清理。真实 libmpv 转码与平台保存仍需设备验收。
 
 `utils/image_permission_results_test.dart` 检查图片分享取消／无法确认、重复分享互斥、迟到分享不关闭其他加载提示，以及权限受限、查询失败和打开设置失败。`utils/theme_utils_test.dart`、`utils/theme_palette_results_test.dart` 和 `utils/window_position_results_test.dart` 检查损坏平台颜色输入、取色失败保留偏好、并发探测与重试、有限窗口尺寸／坐标和多屏原点恢复。真实系统分享、动态色、多屏 DPI／热插拔仍需设备验收。
 
