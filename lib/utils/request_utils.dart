@@ -34,6 +34,7 @@ import 'package:pili_aurora/utils/extension/string_ext.dart';
 import 'package:pili_aurora/utils/extension/theme_ext.dart';
 import 'package:pili_aurora/utils/feed_back.dart';
 import 'package:pili_aurora/utils/platform_utils.dart';
+import 'package:pili_aurora/utils/navigation_request.dart';
 import 'package:pili_aurora/utils/storage.dart';
 import 'package:pili_aurora/utils/storage_key.dart';
 import 'package:pili_aurora/utils/storage_pref.dart';
@@ -632,26 +633,41 @@ abstract final class RequestUtils {
   }
 
   static Future<void> showUserRealName(String mid) async {
-    final res = await UserHttp.getUserRealName(mid);
-    if (res case Success(:final response)) {
-      final show = !response.name.isNullOrEmpty;
-      showDialog(
-        context: Get.context!,
-        builder: (context) => AlertDialog(
-          title: SelectionText(
-            show ? response.name! : response.rejectPage?.title ?? '',
-          ),
-          content: show ? null : Text(response.rejectPage?.text ?? ''),
-          actions: [
-            TextButton(
-              onPressed: Get.back,
-              child: const Text('关闭'),
+    final request = NavigationRequest();
+    final account = Accounts.main;
+    bool current() => request.isCurrent && identical(account, Accounts.main);
+    try {
+      final res = await UserHttp.getUserRealName(mid, account: account);
+      if (!current() || Get.context?.mounted != true) return;
+      if (res case Success(:final response)) {
+        final show = !response.name.isNullOrEmpty;
+        showDialog<void>(
+          context: Get.context!,
+          builder: (context) => AlertDialog(
+            title: SelectionText(
+              show ? response.name! : response.rejectPage?.title ?? '',
             ),
-          ],
-        ),
-      );
-    } else {
-      res.toast();
+            content: show ? null : Text(response.rejectPage?.text ?? ''),
+            actions: [
+              TextButton(
+                onPressed: () {
+                  if (ModalRoute.of(context)?.isCurrent == true) {
+                    Navigator.of(context).pop();
+                  }
+                },
+                child: const Text('关闭'),
+              ),
+            ],
+          ),
+        );
+      } else {
+        res.toast();
+      }
+    } catch (error, stackTrace) {
+      logger.w('实名信息查询失败', error: error.runtimeType, stackTrace: stackTrace);
+      if (current()) SmartDialog.showToast('实名信息查询失败，请重试');
+    } finally {
+      await request.close();
     }
   }
 }
