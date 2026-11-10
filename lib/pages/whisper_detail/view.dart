@@ -2,6 +2,8 @@ import 'dart:async';
 import 'dart:io' show File;
 
 import 'package:pili_aurora/common/widgets/app_popup_menu_item.dart';
+import 'package:pili_aurora/common/widgets/custom_toast.dart';
+import 'package:pili_aurora/common/widgets/route_aware_mixin.dart';
 import 'package:pili_aurora/common/assets.dart';
 import 'package:pili_aurora/common/widgets/dialog/report.dart';
 import 'package:pili_aurora/common/widgets/flutter/chat_list_view.dart';
@@ -21,6 +23,7 @@ import 'package:pili_aurora/services/messaging/conversation.dart';
 import 'package:pili_aurora/services/messaging/conversation_providers.dart';
 import 'package:pili_aurora/services/messaging/message_models.dart';
 import 'package:pili_aurora/services/messaging/providers.dart';
+import 'package:pili_aurora/services/logger.dart';
 import 'package:pili_aurora/utils/extension/file_ext.dart';
 import 'package:pili_aurora/utils/extension/num_ext.dart';
 import 'package:pili_aurora/utils/feed_back.dart';
@@ -51,6 +54,7 @@ class _WhisperDetailPageState
   late final int? mid;
   late final bool isLive;
   late final ConversationTarget _target;
+  final _imageBusy = false.obs;
 
   @override
   void initState() {
@@ -393,7 +397,9 @@ class _WhisperDetailPageState
           Obx(() {
             final enablePublish = this.enablePublish.value;
             return IconButton(
-              onPressed: enablePublish
+              onPressed: _imageBusy.value
+                  ? null
+                  : enablePublish
                   ? () => _sendText(conversation)
                   : () => _pickAndSendImage(conversation),
               icon: Icon(
@@ -428,6 +434,39 @@ class _WhisperDetailPageState
   }
 
   Future<void> _pickAndSendImage(Conversation conversation) async {
+    if (_imageBusy.value || !conversation.session.isActive) return;
+    _imageBusy.value = true;
+    final route = ModalRoute.of(context);
+    var invalidated = false;
+    String? loadingTag;
+    String? pickedPath;
+    bool current() =>
+        mounted &&
+        !invalidated &&
+        conversation.session.isActive &&
+        (route?.isCurrent ?? true);
+    Future<void> closeLoading() async {
+      final tag = loadingTag;
+      if (tag == null) return;
+      loadingTag = null;
+      try {
+        await SmartDialog.dismiss(tag: tag);
+      } catch (error, stackTrace) {
+        logger.w(
+          '关闭私信图片发送提示失败',
+          error: error.runtimeType,
+          stackTrace: stackTrace,
+        );
+      }
+    }
+
+    void onNavigation() {
+      if (identical(routeObserver.currentRoute, route)) return;
+      invalidated = true;
+      unawaited(closeLoading());
+    }
+
+    routeObserver.addNavigationListener(onNavigation);
     try {
       final pickedFile = await imagePicker.pickImage(
         source: ImageSource.gallery,
@@ -435,20 +474,23 @@ class _WhisperDetailPageState
         requestFullMetadata: false,
       );
       if (pickedFile == null) return;
-      final path = pickedFile.path;
-      if (!mounted || !conversation.session.isActive) {
-        if (PlatformUtils.isMobile) File(path).tryDel();
-        return;
-      }
-      SmartDialog.showLoading(msg: '正在上传并发送图片');
+      pickedPath = pickedFile.path;
+      if (!current()) return;
+      final tag = loadingTag = 'whisper-image-${UniqueKey()}';
+      SmartDialog.show<void>(
+        tag: tag,
+        builder: (_) => const LoadingWidget('正在上传并发送图片'),
+        debounce: false,
+        clickMaskDismiss: false,
+        backType: SmartBackType.normal,
+      );
       OperationResult result;
       try {
-        result = await conversation.sendImage(path);
+        result = await conversation.sendImage(pickedPath);
       } finally {
-        SmartDialog.dismiss();
-        if (PlatformUtils.isMobile) File(path).tryDel();
+        await closeLoading();
       }
-      if (!mounted || !conversation.session.isActive) return;
+      if (!current()) return;
       if (result.isSuccess) {
         SmartDialog.showToast('发送成功');
       } else if (result.status == OperationStatus.unknown) {
@@ -456,9 +498,17 @@ class _WhisperDetailPageState
       } else {
         SmartDialog.showToast(result.message ?? '图片发送失败');
       }
-    } catch (error) {
-      SmartDialog.dismiss();
-      SmartDialog.showToast(error.toString());
+    } catch (error, stackTrace) {
+      logger.w('私信图片操作失败', error: error.runtimeType, stackTrace: stackTrace);
+      if (current()) SmartDialog.showToast('图片操作失败，请重试');
+    } finally {
+      routeObserver.removeNavigationListener(onNavigation);
+      await closeLoading();
+      // 原生上传结束后再释放选择器生成的临时文件。
+      if (PlatformUtils.isMobile && pickedPath != null) {
+        await File(pickedPath).tryDel();
+      }
+      _imageBusy.value = false;
     }
   }
 
