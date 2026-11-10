@@ -80,6 +80,8 @@ fvm flutter test test/services/diagnostics/ test/pages/about/diagnostics_page_te
 
 `http/validate_response_test.dart` 检查风控挑战与通过／拒绝结果、缺失证明、业务码和传输待确认；`utils/gaia_validation_test.dart` 通过导航替身返回验证结果，检查取消、过期操作、字段校验、一次性成功通知及等待异步消费者，消费者失败不重发请求。原生极验 WebView 的加载、脚本与设备行为需单独验证。
 
+`http/video_feedback_results_test.dart` 使用真实重试拦截器检查 GET 反馈／撤销的写入禁重试、账号角色、拒绝／待确认和参数校验。`common/widgets/video_feedback_results_test.dart` 检查弹窗互斥、可选提示、列表回调失败、拒绝重试／撤销及切号／来源失效后的迟到隔离。真实反馈服务另行验收。
+
 `http/pgc_follow_results_test.dart` 与 `pages/pgc/follow_results_test.dart` 检查追番写入的业务拒绝／待确认、可选提示、目标校验和账号绑定，以及状态查询重试／迟到隔离、批量互斥、选择保留和删除后的分页重读。真实服务写入与完整番剧页面另行验收。
 
 `http/pgc_response_test.dart` 覆盖番剧 11 个接口的业务码、解析原因、写入待确认、账号／CSRF、可空内容和追番状态类型。`pages/pgc/operation_results_test.dart` 覆盖时间表部分失败与日期合并、乱序／关闭、点评分页游标与去重、赞踩／删除互斥和未知计数，以及提交草稿与迟到面板。真实评分写入与番剧播放仍需另行验收。

@@ -2,7 +2,7 @@
 
 ## 当前进度（2026-11-10）
 
-本轮继续逐模块检查：番剧 11 个 HTTP 入口已接入查询／写入契约，时间表、推荐与短评消费已检查；播放器静音和音量命令已消费回执。仅运行直接关联回归和定向分析，未重跑全量测试。追番写入、状态重试与批量管理已补查，失败保留选择，成功后分页从边界重读。全仓异常处理检查尚未完成，其余视频互动和空间接口按下列入口继续检查。
+本轮继续逐模块检查：番剧 11 个 HTTP 入口已接入查询／写入契约，时间表、推荐与短评消费已检查；播放器静音和音量命令已消费回执。仅运行直接关联回归和定向分析，未重跑全量测试。追番写入、状态重试与批量管理已补查，失败保留选择，成功后分页从边界重读。视频反馈／撤销和 Web 点踩也已接入写入契约，GET 写入关闭自动重试。全仓异常处理检查尚未完成，其余视频互动和空间接口按下列入口继续检查。
 
 上一轮只修复全量测试发现的失败。Windows libmpv 已独立回退到 20261104（`10968442e`），没有保留应用层分片回退适配。
 
@@ -67,6 +67,8 @@
 
 | 追番写入与分组管理：`VideoHttp.pgcAdd/Del/Update`、番剧介绍和 `pages/fav/pgc` | 三个写入固定账号／CSRF 并禁重试，保留拒绝与待确认；可选 toast 缺失不覆盖已确认成功。追番状态查询有明确的加载／失败／未关注状态，可重试且淘汰早于写入的查询。管理页拒绝重叠批量写入，失败保留选择，成功保留后来新增选择；切号、刷新和菜单失效后不回写。分页从边界重读并去重，分组按页面实例注册并释放控制器，对端刷新失败不覆盖已确认写入。 | `test/http/pgc_follow_results_test.dart`、`test/pages/pgc/follow_results_test.dart` |
 
+| 视频推荐反馈／撤销与 Web 点踩：`VideoHttp.feedDislike/Cancel/dislikeVideo`、视频卡片菜单和反馈弹窗 | 三个入口按写入处理，两个 GET 写入禁重试，保留业务码与待确认；App 反馈绑定推荐账号，Web 点踩绑定主账号。目标／原因不完整时本地拒绝。弹窗持有在途状态，失败保留选择入口；确认后只关闭所属弹窗，账号、来源卡片或路由失效时不删除卡片。可选提示缺失和列表回调失败均保留远端成功。 | `test/http/video_feedback_results_test.dart`、`test/common/widgets/video_feedback_results_test.dart` |
+
 ## 检查后保留的实现
 
 - 消息 Session、聊天和分享已区分成功、失败与结果待确认。Session 保留传输不确定性，切号后拒绝旧结果，分享保留部分成功信息。统一 HTTP 与 gRPC 返回值时继续保留 unknown 语义。见[消息模块](../../lib/services/messaging/README.md)。
@@ -80,11 +82,11 @@
 
 源码盘点后的优先入口（尚未完成验收）：
 
-- `VideoHttp.feedDislike/feedDislikeCancel`：业务写入实际使用 GET，尚未禁重试；从 `common/widgets/video_popup_menu.dart` 核对反馈、撤销及卡片归属。
-- `VideoHttp.coinVideo/ugcTriple/pgcTriple/likeVideo/dislikeVideo`：保留业务码、原始原因与待确认，并核对 UGC／PGC 介绍和公共投币调用方。
+- `VideoHttp.coinVideo/ugcTriple/pgcTriple/likeVideo`：保留业务码、原始原因与待确认，并核对 UGC／PGC 介绍和公共投币调用方。
 - `MemberHttp.specialAction/addUsers/createFollowTag/updateFollowTag/delFollowTag`：已有账号绑定和禁重试保留；raw 层吞掉传输异常，调用方的 UnknownResult 兜底捕获不到真实失败。创建分组必须取得有效 ID。
 - `MemberHttp.reportMember` 使用 `status: bool` 协议，需独立结果契约与举报弹窗的提交归属，不能直接套 `code/message/data`。
-- 当前 `member.dart` 还剩 28 个 raw 入口（22 查询、5 分组写入和上述举报），`video.dart` 还剩 32 个（21 查询、7 互动写入、4 后台上报）。`spaceShop` 虽为 POST，仍是查询；播放器地址、字幕、二进制和后台上报需沿各自协议检查，避免仅因 raw 就改写。
+- `LoginHttp.logout/loginDevices`：分别补查撤销结果待确认和设备列表解析；核心 LoginResult 登录流程保留。
+- 当前 `member.dart` 还剩 28 个 raw 入口（22 查询、5 分组写入和上述举报），`video.dart` 还剩 29 个（21 查询、4 互动写入、4 后台上报）。`spaceShop` 虽为 POST，仍是查询；播放器地址、字幕、二进制和后台上报需沿各自协议检查，避免仅因 raw 就改写。
 
 
 - HTTP 传输、重试和其余业务适配器：逐接口核对响应结构、写入重试和调用方对可空返回值的处理。通用错误捕获的修正只覆盖部分问题，其余接口仍需逐一验收。
@@ -101,6 +103,11 @@
 ## 验证记录
 
 新增关键回归已列入 `tool/run-ci-tests.ps1`。测试使用模拟 HTTP、文件选择器和平台输入；文件保存回归还用临时目录核对实际字节。Android 图库、真实账号登录、服务器写入、原生播放器、GPU 和窗口行为仍需设备验收，各次运行结果随提交记录。
+
+2026-11-10 视频反馈必要验证：
+
+- 新增 HTTP 3 项与弹窗 3 项，共 6 个不同用例通过。HTTP 用例接入真实重试拦截器，确认 GET 写入超时只分发一次（`build/video-feedback-tests.log`）。页面夹具参数和菜单迁移后的卡片引用编译问题修正后，再修正真实异步响应排空；只逐项复验反馈提交、拒绝／撤销和切号／来源失效，分别通过（`build/video-feedback-submit-test.log`、`video-feedback-cancel-test.log`、`video-feedback-stale-test.log`）。
+- 修改文件定向分析与后续受影响文件复查无问题，首轮问题见 `build/video-feedback-final-analyze.log`，最终通过记录见 `build/video-feedback-last-analyze.log`、`video-feedback-test-last-analyze.log`。未跑完整 CI，未验证真实平台反馈、Web 点踩和推荐列表刷新。
 
 2026-11-10 追番写入与管理必要验证：
 

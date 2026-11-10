@@ -473,81 +473,96 @@ abstract final class VideoHttp {
   static Future<LoadingState<void>> dislikeVideo({
     required String bvid,
     required bool type,
+    Account? account,
   }) async {
-    if (Accounts.main.accessKey.isNullOrEmpty) {
-      return const Error('请退出账号后重新登录');
+    account ??= Accounts.main;
+    if (account.accessKey.isNullOrEmpty) {
+      return Error(account.isLogin ? '请退出账号后重新登录' : '账号未登录');
     }
-    final res = await Request().post(
+    final int aid;
+    try {
+      if (!IdUtils.bvRegexExact.hasMatch(bvid)) {
+        throw const FormatException('无效的视频标识');
+      }
+      aid = IdUtils.bv2av(bvid);
+    } catch (error, stackTrace) {
+      return Error('视频信息不完整，请刷新后重试', cause: error, stackTrace: stackTrace);
+    }
+    return await Request().requestApi<void>(
       Api.dislikeVideo,
-      data: {
-        'aid': IdUtils.bv2av(bvid).toString(),
-        'dislike': type ? '0' : '1',
-      },
-      options: Options(contentType: Headers.formUrlEncodedContentType),
+      kind: ApiCallKind.mutation,
+      decode: (_) {},
+      data: {'aid': '$aid', 'dislike': type ? '0' : '1'},
+      options: Options(
+        contentType: Headers.formUrlEncodedContentType,
+        extra: {'account': account},
+      ),
     );
-    if (res.data is! String && res.data['code'] == 0) {
-      return const Success(null);
-    } else {
-      return Error(res.data is String ? res.data : res.data['message']);
-    }
   }
 
-  // 推送不感兴趣反馈
+  static Future<LoadingState<void>> _feedFeedback(
+    String api, {
+    required String goto,
+    required int id,
+    int? reasonId,
+    int? feedbackId,
+    Account? account,
+  }) async {
+    account ??= Accounts.get(AccountType.recommend);
+    if (account.accessKey.isNullOrEmpty) {
+      return Error(account.isLogin ? '请退出账号后重新登录' : '账号未登录');
+    }
+    if (goto.trim().isEmpty ||
+        id <= 0 ||
+        (reasonId != null && feedbackId != null) ||
+        (api == Api.feedDislike && reasonId == null && feedbackId == null)) {
+      return const Error('推荐反馈信息不完整，请刷新后重试');
+    }
+    return await Request().requestApi<void>(
+      api,
+      kind: ApiCallKind.mutation,
+      decode: (_) {},
+      options: Options(method: 'GET', extra: {'account': account}),
+      queryParameters: {
+        'goto': goto,
+        'id': id,
+        'reason_id': ?reasonId,
+        'feedback_id': ?feedbackId,
+        'build': 1,
+        'mobi_app': 'android',
+      },
+    );
+  }
+
   static Future<LoadingState<void>> feedDislike({
     required String goto,
     required int id,
     int? reasonId,
     int? feedbackId,
-  }) async {
-    if (Accounts.get(AccountType.recommend).accessKey.isNullOrEmpty) {
-      return const Error('请退出账号后重新登录');
-    }
-    assert((reasonId != null) ^ (feedbackId != null));
-    final res = await Request().get(
-      Api.feedDislike,
-      queryParameters: {
-        'goto': goto,
-        'id': id,
-        'reason_id': ?reasonId,
-        'feedback_id': ?feedbackId,
-        'build': 1,
-        'mobi_app': 'android',
-      },
-    );
-    if (res.data['code'] == 0) {
-      return const Success(null);
-    } else {
-      return Error(res.data['message']);
-    }
-  }
+    Account? account,
+  }) => _feedFeedback(
+    Api.feedDislike,
+    goto: goto,
+    id: id,
+    reasonId: reasonId,
+    feedbackId: feedbackId,
+    account: account,
+  );
 
-  // 推送不感兴趣取消
   static Future<LoadingState<void>> feedDislikeCancel({
     required String goto,
     required int id,
     int? reasonId,
     int? feedbackId,
-  }) async {
-    if (Accounts.get(AccountType.recommend).accessKey.isNullOrEmpty) {
-      return const Error('请退出账号后重新登录');
-    }
-    final res = await Request().get(
-      Api.feedDislikeCancel,
-      queryParameters: {
-        'goto': goto,
-        'id': id,
-        'reason_id': ?reasonId,
-        'feedback_id': ?feedbackId,
-        'build': 1,
-        'mobi_app': 'android',
-      },
-    );
-    if (res.data['code'] == 0) {
-      return const Success(null);
-    } else {
-      return Error(res.data['message']);
-    }
-  }
+    Account? account,
+  }) => _feedFeedback(
+    Api.feedDislikeCancel,
+    goto: goto,
+    id: id,
+    reasonId: reasonId,
+    feedbackId: feedbackId,
+    account: account,
+  );
 
   // 发表评论 replyAdd
 

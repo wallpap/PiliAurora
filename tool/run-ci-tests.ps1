@@ -22,6 +22,8 @@ $ciTests = @(
     "test/http/relationship_response_test.dart",
     "test/http/fav_response_test.dart",
     "test/http/validate_response_test.dart",
+    "test/http/video_feedback_results_test.dart",
+    "test/common/widgets/video_feedback_results_test.dart",
     "test/http/pgc_response_test.dart",
     "test/http/pgc_follow_results_test.dart",
     "test/pages/pgc/follow_results_test.dart",
