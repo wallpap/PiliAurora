@@ -130,9 +130,22 @@ abstract final class SearchHttp {
     dynamic bvid,
     int? part,
   }) async {
-    final result = await Request().requestApi<PageItem?>(
+    final result = await pageWithDimension(aid: aid, bvid: bvid, part: part);
+    if (result is Error) result.toast();
+    return result.dataOrNull;
+  }
+
+  /// 由页面消费结果，查询失败或无分 P 时不在 HTTP 层触发迟到提示。
+  static Future<LoadingState<PageItem?>> pageWithDimension({
+    Account? account,
+    Object? aid,
+    Object? bvid,
+    int? part,
+  }) {
+    return Request().requestApi<PageItem?>(
       Api.ab2c,
       kind: ApiCallKind.query,
+      options: Options(extra: {'account': account ?? Accounts.heartbeat}),
       decode: (body) {
         final list = body['data'] as List;
         final target = part != null
@@ -145,8 +158,6 @@ abstract final class SearchHttp {
       },
       queryParameters: {'aid': ?aid, 'bvid': ?bvid},
     );
-    if (result is Error) result.toast();
-    return result.dataOrNull;
   }
 
   static Future<LoadingState<PgcInfoModel>> pgcInfo({

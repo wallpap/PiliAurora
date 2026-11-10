@@ -189,15 +189,23 @@ abstract class BaseVideoWebState<
 
   void showJumpDialog(int page) {
     var pageStr = page.toString();
+    final owner = controller.queryContext;
+    final source = controller.loadingState.value;
 
     void onSubmit([_]) {
-      try {
-        controller.jumpToPage(
-          int.parse(pageStr).clamp(1, controller.totalPage!),
-        );
-      } catch (e) {
-        SmartDialog.showToast(e.toString());
+      if (controller.isClosed ||
+          !identical(owner, controller.queryContext) ||
+          !identical(source, controller.loadingState.value)) {
+        SmartDialog.showToast('列表已更新，请重新选择页数');
+        return;
       }
+      final target = int.tryParse(pageStr);
+      final total = controller.totalPage;
+      if (target == null || total == null || total < 1) {
+        SmartDialog.showToast('请输入有效页数');
+        return;
+      }
+      controller.jumpToPage(target.clamp(1, total));
     }
 
     showConfirmDialog(

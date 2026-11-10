@@ -1,3 +1,4 @@
+import 'package:pili_aurora/utils/accounts.dart';
 import 'package:pili_aurora/http/loading_state.dart';
 import 'package:pili_aurora/http/member.dart';
 import 'package:pili_aurora/models/remote/space/space/tab2.dart';
@@ -27,13 +28,28 @@ class MemberOpusController
   List<SpaceTabFilter>? filter;
 
   @override
+  Object get queryContext => Accounts.main;
+
+  void _onAccountChanged() => onReload();
+
+  @override
+  void onClose() {
+    Accounts.mainChanges.removeListener(_onAccountChanged);
+    super.onClose();
+  }
+
+  @override
   void onInit() {
     super.onInit();
-    filter = Get.find<MemberController>(tag: heroTag).tab2
-        ?.firstWhereOrNull((e) => e.param == 'contribute')
-        ?.items
-        ?.firstWhereOrNull((e) => e.param == 'opus')
-        ?.filter;
+    Accounts.mainChanges.addListener(_onAccountChanged);
+    filter =
+        (Get.isRegistered<MemberController>(tag: heroTag)
+                ? Get.find<MemberController>(tag: heroTag).tab2
+                : null)
+            ?.firstWhereOrNull((e) => e.param == 'contribute')
+            ?.items
+            ?.firstWhereOrNull((e) => e.param == 'opus')
+            ?.filter;
     queryData();
   }
 
@@ -54,6 +70,7 @@ class MemberOpusController
 
   @override
   Future<LoadingState<SpaceOpusData>> customGetData() => MemberHttp.spaceOpus(
+    account: Accounts.main,
     hostMid: mid,
     page: page,
     offset: offset,

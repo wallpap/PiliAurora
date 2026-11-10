@@ -64,7 +64,8 @@ class _MemberVideoWebState
                 : item.tid == controller.tid;
             return SearchText(
               padding: const .symmetric(horizontal: 8, vertical: 4),
-              text: '${item.name!} ${item.count}',
+              text:
+                  '${item.name ?? '分类'}${item.count == null ? '' : ' ${item.count}'}',
               bgColor: isCurr ? colorScheme.secondaryContainer : null,
               textColor: isCurr ? colorScheme.onSecondaryContainer : null,
               onTap: (_) {

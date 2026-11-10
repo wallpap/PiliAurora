@@ -1,6 +1,8 @@
+import 'package:pili_aurora/utils/accounts.dart';
 import 'package:pili_aurora/common/widgets/flutter/refresh_indicator.dart'
     show RefreshIndicatorState;
-import 'package:pili_aurora/common/widgets/scroll_physics.dart' show ReloadMixin;
+import 'package:pili_aurora/common/widgets/scroll_physics.dart'
+    show ReloadMixin;
 import 'package:pili_aurora/http/loading_state.dart';
 import 'package:pili_aurora/http/member.dart';
 import 'package:pili_aurora/http/search.dart';
@@ -19,6 +21,7 @@ import 'package:pili_aurora/utils/id_utils.dart';
 import 'package:pili_aurora/utils/page_utils.dart';
 import 'package:flutter/widgets.dart' show GlobalKey;
 import 'package:get/get.dart';
+import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 
 class MemberVideoCtr
     extends CommonListController<SpaceArchiveData, SpaceArchiveItem>
@@ -60,6 +63,7 @@ class MemberVideoCtr
   }
 
   set onlyInnerScroll(bool value) {
+    if (!Get.isRegistered<MemberController>(tag: heroTag)) return;
     final state = Get.find<MemberController>(tag: heroTag)
         .scrollKey
         .currentState;
@@ -75,6 +79,10 @@ class MemberVideoCtr
 
   @override
   Future<void> onRefresh() {
+    _playAllVersion++;
+    count = null;
+    hasPrev = null;
+    episodicButton = null;
     isLoadPrevious = false;
     firstAid = null;
     lastAid = null;
@@ -85,8 +93,21 @@ class MemberVideoCtr
   }
 
   @override
+  Object get queryContext => Accounts.main;
+
+  void _onAccountChanged() => onReload();
+
+  @override
+  void onClose() {
+    _playAllVersion++;
+    Accounts.mainChanges.removeListener(_onAccountChanged);
+    super.onClose();
+  }
+
+  @override
   void onInit() {
     super.onInit();
+    Accounts.mainChanges.addListener(_onAccountChanged);
     if (isVideo) {
       fromViewAid = Get.parameters['from_view_aid'];
       if (fromViewAid?.isNotEmpty ?? false) {
@@ -138,6 +159,7 @@ class MemberVideoCtr
   @override
   Future<LoadingState<SpaceArchiveData>> customGetData() =>
       MemberHttp.spaceArchive(
+        account: Accounts.main,
         type: type,
         mid: mid,
         aid: isVideo
@@ -169,38 +191,69 @@ class MemberVideoCtr
     onReload();
   }
 
+  int _playAllVersion = 0;
+  bool _openingPlayAll = false;
+
   Future<void> toViewPlayAll() async {
-    final episodicButton = this.episodicButton!;
+    final episodicButton = this.episodicButton;
+    if (isClosed || isLoading || _openingPlayAll || episodicButton == null) {
+      return;
+    }
+    final account = Accounts.main;
+    final source = loadingState.value;
+    final version = _playAllVersion;
+    bool current() =>
+        !isClosed &&
+        !isLoading &&
+        identical(account, Accounts.main) &&
+        version == _playAllVersion &&
+        identical(source, loadingState.value);
     if (episodicButton.text == '继续播放' &&
         episodicButton.uri?.isNotEmpty == true) {
-      final params = Uri.parse(episodicButton.uri!).queryParameters;
-      String? oid = params['oid'];
-      if (oid != null) {
-        final bvid = IdUtils.av2bv(int.parse(oid));
-        final res = await SearchHttp.ab2cWithDimension(aid: oid, bvid: bvid);
-        final cid = res?.cid;
-        if (cid != null) {
-          PageUtils.toVideoPage(
-            aid: int.parse(oid),
-            bvid: bvid,
-            cid: cid,
-            dimension: res!.dimension,
-            // title: res.title,
-            extraArguments: {
-              'sourceType': SourceType.archive,
-              'mediaId': seasonId ?? seriesId ?? mid,
-              'oid': oid,
-              'favTitle':
-                  '$username: ${title ?? episodicButton.text ?? '播放全部'}',
-              if (seriesId == null) 'count': ?count,
-              if (seasonId != null || seriesId != null)
-                'mediaType': params['page_type'],
-              'desc': params['desc'] == '1',
-              'sortField': params['sort_field'],
-              'isContinuePlaying': true,
-            },
-          );
+      final params = Uri.tryParse(episodicButton.uri!)?.queryParameters;
+      final oid = int.tryParse(params?['oid'] ?? '');
+      if (oid == null || oid <= 0 || oid >= IdUtils.MAX_AID) {
+        SmartDialog.showToast('继续播放地址无效，请刷新后重试');
+        return;
+      }
+      final bvid = IdUtils.av2bv(oid);
+      _openingPlayAll = true;
+      try {
+        final result = await SearchHttp.pageWithDimension(
+          account: account,
+          aid: oid,
+          bvid: bvid,
+        );
+        if (!current()) return;
+        if (result is Error) {
+          result.toast();
+          return;
         }
+        final detail = result.dataOrNull;
+        if (detail == null) {
+          SmartDialog.showToast('暂无可播放的分 P，请刷新后重试');
+          return;
+        }
+        PageUtils.toVideoPage(
+          aid: oid,
+          bvid: bvid,
+          cid: detail.cid,
+          dimension: detail.dimension,
+          extraArguments: {
+            'sourceType': SourceType.archive,
+            'mediaId': seasonId ?? seriesId ?? mid,
+            'oid': '$oid',
+            'favTitle': '$username: ${title ?? episodicButton.text ?? '播放全部'}',
+            if (seriesId == null) 'count': ?count,
+            if (seasonId != null || seriesId != null)
+              'mediaType': params?['page_type'],
+            'desc': params?['desc'] == '1',
+            'sortField': params?['sort_field'],
+            'isContinuePlaying': true,
+          },
+        );
+      } finally {
+        _openingPlayAll = false;
       }
       return;
     }
@@ -209,7 +262,13 @@ class MemberVideoCtr
       if (response == null || response.isEmpty) return;
 
       for (SpaceArchiveItem element in response) {
-        if (element.cid == null) {
+        if (element.cid == null ||
+            element.cid! <= 0 ||
+            element.bvid == null ||
+            !IdUtils.bvRegexExact.hasMatch(element.bvid!) ||
+            !element.bvid!.codeUnits
+                .skip(3)
+                .every(IdUtils.invData.containsKey)) {
           continue;
         } else {
           bool desc = seasonId != null ? false : true;
@@ -236,9 +295,8 @@ class MemberVideoCtr
                   '$username: ${title ?? episodicButton.text ?? '播放全部'}',
               if (seriesId == null) 'count': ?count,
               if (seasonId != null || seriesId != null)
-                'mediaType': Uri.parse(
-                  episodicButton.uri!,
-                ).queryParameters['page_type'],
+                'mediaType': Uri.tryParse(episodicButton.uri ?? '')
+                    ?.queryParameters['page_type'],
               'desc': desc,
               if (isVideo) 'sortField': order == .click ? 2 : 1,
             },

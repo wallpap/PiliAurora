@@ -1,3 +1,4 @@
+import 'package:pili_aurora/utils/accounts.dart';
 import 'package:pili_aurora/http/loading_state.dart';
 import 'package:pili_aurora/http/member.dart';
 import 'package:pili_aurora/models/common/member/archive_order_type_web.dart';
@@ -21,6 +22,12 @@ class MemberVideoWebCtr
   int tid = 0;
   String? specialType;
   List<ListTag>? tags;
+
+  @override
+  void resetMetadata() {
+    _totalCount = null;
+    tags = null;
+  }
 
   @override
   List<VListItemModel>? getDataList(SearchArchiveData response) {
@@ -53,6 +60,7 @@ class MemberVideoWebCtr
   @override
   Future<LoadingState<SearchArchiveData>> customGetData() =>
       MemberHttp.searchArchive(
+        account: Accounts.main,
         mid: mid,
         ps: ps,
         pn: page,

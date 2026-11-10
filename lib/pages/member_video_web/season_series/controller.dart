@@ -1,3 +1,4 @@
+import 'package:pili_aurora/utils/accounts.dart';
 import 'package:pili_aurora/http/loading_state.dart';
 import 'package:pili_aurora/http/member.dart';
 import 'package:pili_aurora/models/common/member/archive_sort_type_app.dart';
@@ -46,6 +47,7 @@ class MemberSSWebCtr
   Future<LoadingState<SeasonWebData>> customGetData() =>
       MemberHttp.seasonSeriesWeb(
         type: _type,
+        account: Accounts.main,
         mid: mid,
         id: _id,
         ps: ps,
