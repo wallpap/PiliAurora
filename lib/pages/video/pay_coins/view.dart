@@ -14,10 +14,12 @@ import 'package:pili_aurora/utils/global_data.dart';
 import 'package:pili_aurora/utils/storage.dart';
 import 'package:pili_aurora/utils/storage_key.dart';
 import 'package:pili_aurora/utils/storage_pref.dart';
+import 'package:pili_aurora/services/logger.dart';
+import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:get/get.dart';
 import 'package:material_ui/material_ui.dart';
 
-typedef OnPayCoin = Function(int coin, bool coinWithLike);
+typedef OnPayCoin = FutureOr<void> Function(int coin, bool coinWithLike);
 
 class PayCoinsPage extends StatefulWidget {
   const PayCoinsPage({
@@ -500,15 +502,31 @@ class _PayCoinsPageState extends State<PayCoinsPage>
     _completePayment = () {
       if (!mounted || ModalRoute.of(context)?.isCurrent != true) return;
       Get.back();
-      widget.onPayCoin(index + 1, coinWithLike);
+      unawaited(_submitCoin(index + 1, coinWithLike));
     };
-    final data = await _tossAssets[index];
-    if (!mounted || ModalRoute.of(context)?.isCurrent != true) return;
-    setState(() {
-      // 每次创建独立 MemoryImage，单次 GIF 再次打开时从首帧开始。
-      _tossBytes = Uint8List.fromList(
-        data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes),
-      );
-    });
+    try {
+      final data = await _tossAssets[index];
+      if (!mounted || ModalRoute.of(context)?.isCurrent != true) return;
+      setState(() {
+        // 每次创建独立 MemoryImage，单次 GIF 再次打开时从首帧开始。
+        _tossBytes = Uint8List.fromList(
+          data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes),
+        );
+      });
+    } catch (error, stackTrace) {
+      logger.w('加载投币动画失败', error: error.runtimeType, stackTrace: stackTrace);
+      if (!mounted || ModalRoute.of(context)?.isCurrent != true) return;
+      setState(() => _isPaying = false);
+      SmartDialog.showToast('投币动画加载失败，请重新打开面板');
+    }
+  }
+
+  Future<void> _submitCoin(int coin, bool withLike) async {
+    try {
+      await widget.onPayCoin(coin, withLike);
+    } catch (error, stackTrace) {
+      logger.w('投币回调未完成', error: error.runtimeType, stackTrace: stackTrace);
+      SmartDialog.showToast('投币结果待确认，请先核对后再操作');
+    }
   }
 }

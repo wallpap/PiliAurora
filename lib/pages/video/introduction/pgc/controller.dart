@@ -89,21 +89,35 @@ class PgcIntroController extends CommonIntroController {
     }
   }
 
+  @override
+  Object get interactionTarget => (bvid, epId);
+
+  int _relationQuery = 0;
+
   // 获取点赞/投币/收藏状态
   Future<void> queryPgcLikeCoinFav() async {
-    final result = await VideoHttp.pgcLikeCoinFav(epId: epId!);
+    if (interactionBusy || isClosed || epId == null) return;
+    final account = Accounts.main;
+    final target = interactionTarget;
+    final revision = interactionRevision;
+    final query = ++_relationQuery;
+    final result = await VideoHttp.pgcLikeCoinFav(
+      epId: epId!,
+      account: account,
+    );
+    if (!ownsInteraction(account, target) ||
+        revision != interactionRevision ||
+        query != _relationQuery) {
+      return;
+    }
     if (result case Success(:final response)) {
       final hasLike = response.like == 1;
       final hasFav = response.favorite == 1;
-      late final stat = pgcItem.stat;
-      if (hasLike) {
-        stat?.like = max(1, stat.like);
-      }
-      if (hasFav) {
-        stat?.favorite = max(1, stat.favorite);
-      }
+      final stat = getStat();
+      if (hasLike) stat?.like = max(1, stat.like);
+      if (hasFav) stat?.favorite = max(1, stat.favorite);
       this.hasLike.value = hasLike;
-      coinNum.value = response.coinNumber!;
+      coinNum.value = response.coinNumber;
       this.hasFav.value = hasFav;
     } else {
       result.toast();
@@ -112,21 +126,22 @@ class PgcIntroController extends CommonIntroController {
 
   // （取消）点赞
   @override
-  Future<void> actionLikeVideo() async {
-    if (!isLogin) {
-      SmartDialog.showToast('账号未登录');
-      return;
-    }
+  Future<void> actionLikeVideo() => runInteraction((account, current) async {
     final newVal = !hasLike.value;
-    final result = await VideoHttp.likeVideo(bvid: bvid, type: newVal);
+    final result = await VideoHttp.likeVideo(
+      bvid: bvid,
+      type: newVal,
+      account: account,
+    );
+    if (!current()) return;
     if (result case Success(:final response)) {
-      SmartDialog.showToast(newVal ? response : '取消赞');
-      pgcItem.stat?.like += newVal ? 1 : -1;
+      SmartDialog.showToast(newVal ? response ?? '点赞成功' : '取消赞');
+      getStat()?.like += newVal ? 1 : -1;
       hasLike.value = newVal;
     } else {
       result.toast();
     }
-  }
+  });
 
   @override
   int get copyright => 1;
@@ -416,42 +431,47 @@ class PgcIntroController extends CommonIntroController {
 
   // 一键三连
   @override
-  Future<void> actionTriple() async {
+  Future<void> actionTriple() => runInteraction((account, current) async {
     feedBack();
-    if (!isLogin) {
-      SmartDialog.showToast('账号未登录');
-      return;
-    }
-    if (hasLike.value && hasCoin && hasFav.value) {
-      // 已点赞、投币、收藏
+    if (hasTriple) {
       SmartDialog.showToast('已三连');
       return;
     }
-    final result = await VideoHttp.pgcTriple(epId: epId!, seasonId: seasonId);
+    final episode = epId;
+    if (episode == null) {
+      SmartDialog.showToast('剧集信息不完整，请刷新后重试');
+      return;
+    }
+    final previousCoins = coinNum.value;
+    final result = await VideoHttp.pgcTriple(
+      epId: episode,
+      seasonId: seasonId,
+      account: account,
+    );
     if (result case Success(:final response)) {
-      late final stat = pgcItem.stat;
+      final paid = response.coin == 1
+          ? max(0, response.coinNumber - previousCoins)
+          : 0;
+      if (identical(account, Accounts.main)) GlobalData().afterCoin(paid);
+      if (!current()) return;
+      final stat = getStat();
       if (response.like == 1 && !hasLike.value) {
         stat?.like++;
         hasLike.value = true;
       }
-      if (response.coin == 1 && !hasCoin) {
-        stat?.coin += 2;
-        coinNum.value = 2;
-        GlobalData().afterCoin(2);
+      if (response.coin == 1) {
+        stat?.coin += paid;
+        coinNum.value = response.coinNumber;
       }
       if (response.favorite == 1 && !hasFav.value) {
         stat?.favorite++;
         hasFav.value = true;
       }
-      if (!hasCoin) {
-        SmartDialog.showToast('投币失败');
-      } else {
-        SmartDialog.showToast('三连成功');
-      }
-    } else {
+      SmartDialog.showToast(hasTriple ? '三连成功' : '三连未全部完成，请核对点赞、投币和收藏状态');
+    } else if (current()) {
       result.toast();
     }
-  }
+  });
 
   void _onFollowAccountChanged() {
     if (identical(_followAccount, Accounts.main)) return;

@@ -168,112 +168,103 @@ class UgcIntroController extends CommonIntroController with ReloadMixin {
     }
   }
 
+  int _relationQuery = 0;
+
   Future<void> queryAllStatus() async {
-    final result = await VideoHttp.videoRelation(bvid: bvid);
+    if (interactionBusy || isClosed) return;
+    final account = Accounts.main;
+    final target = interactionTarget;
+    final revision = interactionRevision;
+    final query = ++_relationQuery;
+    final result = await VideoHttp.videoRelation(bvid: bvid, account: account);
+    if (!ownsInteraction(account, target) ||
+        revision != interactionRevision ||
+        query != _relationQuery) {
+      return;
+    }
     if (result case Success(:final response)) {
-      late final stat = videoDetail.value.stat;
-      if (response.like!) {
-        stat?.like = max(1, stat.like);
-      }
-      if (response.favorite!) {
-        stat?.favorite = max(1, stat.favorite);
-      }
-      hasLike.value = response.like!;
-      hasDislike.value = response.dislike!;
-      coinNum.value = response.coin!;
-      hasFav.value = response.favorite!;
+      final stat = getStat();
+      if (response.like) stat?.like = max(1, stat.like);
+      if (response.favorite) stat?.favorite = max(1, stat.favorite);
+      hasLike.value = response.like;
+      hasDislike.value = response.dislike;
+      coinNum.value = response.coin;
+      hasFav.value = response.favorite;
     }
   }
 
-  // 一键三连
+  // 一键三连：逐项消费回执，部分成功不能提示完整成功。
   @override
-  Future<void> actionTriple() async {
+  Future<void> actionTriple() => runInteraction((account, current) async {
     feedBack();
-    if (!isLogin) {
-      SmartDialog.showToast('账号未登录');
-      return;
-    }
-    if (hasLike.value && hasCoin && hasFav.value) {
-      // 已点赞、投币、收藏
+    if (hasTriple) {
       SmartDialog.showToast('已三连');
       return;
     }
-    final result = await VideoHttp.ugcTriple(bvid: bvid);
+    final result = await VideoHttp.ugcTriple(bvid: bvid, account: account);
     if (result case Success(:final response)) {
-      late final stat = videoDetail.value.stat;
-      if (response.like == true && !hasLike.value) {
+      final paid = response.coin ? response.multiply : 0;
+      if (identical(account, Accounts.main)) GlobalData().afterCoin(paid);
+      if (!current()) return;
+      final stat = getStat();
+      if (response.like && !hasLike.value) {
         stat?.like++;
         hasLike.value = true;
+        hasDislike.value = false;
       }
-      if (response.coin == true && !hasCoin) {
-        stat?.coin += 2;
-        coinNum.value = 2;
-        GlobalData().afterCoin(2);
+      if (paid > 0) {
+        stat?.coin += paid;
+        coinNum.value += paid;
       }
-      if (response.fav == true && !hasFav.value) {
+      if (response.fav && !hasFav.value) {
         stat?.favorite++;
         hasFav.value = true;
       }
-      hasDislike.value = false;
-      if (!hasCoin) {
-        SmartDialog.showToast('投币失败');
-      } else {
-        SmartDialog.showToast('三连成功');
-      }
-    } else {
+      SmartDialog.showToast(hasTriple ? '三连成功' : '三连未全部完成，请核对点赞、投币和收藏状态');
+    } else if (current()) {
       result.toast();
     }
-  }
+  });
 
   // （取消）点赞
   @override
-  Future<void> actionLikeVideo() async {
-    if (!isLogin) {
-      SmartDialog.showToast('账号未登录');
-      return;
-    }
-    if (videoDetail.value.stat == null) {
-      return;
-    }
+  Future<void> actionLikeVideo() => runInteraction((account, current) async {
     final newVal = !hasLike.value;
-    final result = await VideoHttp.likeVideo(bvid: bvid, type: newVal);
+    final result = await VideoHttp.likeVideo(
+      bvid: bvid,
+      type: newVal,
+      account: account,
+    );
+    if (!current()) return;
     if (result case Success(:final response)) {
-      SmartDialog.showToast(newVal ? response : '取消赞');
-      videoDetail.value.stat?.like += newVal ? 1 : -1;
+      SmartDialog.showToast(newVal ? response ?? '点赞成功' : '取消赞');
+      getStat()?.like += newVal ? 1 : -1;
       hasLike.value = newVal;
-      if (newVal) {
-        hasDislike.value = false;
+      if (newVal) hasDislike.value = false;
+    } else {
+      result.toast();
+    }
+  });
+
+  Future<void> actionDislikeVideo() => runInteraction((account, current) async {
+    final newVal = !hasDislike.value;
+    final result = await VideoHttp.dislikeVideo(
+      bvid: bvid,
+      type: newVal,
+      account: account,
+    );
+    if (!current()) return;
+    if (result.isSuccess) {
+      SmartDialog.showToast(newVal ? '点踩成功' : '取消踩');
+      hasDislike.value = newVal;
+      if (newVal && hasLike.value) {
+        getStat()?.like--;
+        hasLike.value = false;
       }
     } else {
       result.toast();
     }
-  }
-
-  Future<void> actionDislikeVideo() async {
-    if (!isLogin) {
-      SmartDialog.showToast('账号未登录');
-      return;
-    }
-    final res = await VideoHttp.dislikeVideo(
-      bvid: bvid,
-      type: !hasDislike.value,
-    );
-    if (res.isSuccess) {
-      if (!hasDislike.value) {
-        SmartDialog.showToast('点踩成功');
-        hasDislike.value = true;
-        if (hasLike.value) {
-          videoDetail.value.stat?.like--;
-          hasLike.value = false;
-        }
-      } else {
-        SmartDialog.showToast('取消踩');
-        hasDislike.value = false;
-      }
-    } else {
-      res.toast();
-    }
-  }
+  });
 
   @override
   int get copyright => videoDetail.value.copyright ?? 1;

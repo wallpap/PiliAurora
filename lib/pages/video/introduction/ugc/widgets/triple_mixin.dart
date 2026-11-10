@@ -32,7 +32,9 @@ mixin TripleMixin on GetxController, TickerProvider {
 
   int get copyright;
 
-  void onPayCoin(int coin, bool coinWithLike);
+  FutureOr<void> onPayCoin(int coin, bool coinWithLike);
+
+  OnPayCoin get payCoinCallback => onPayCoin;
 
   void actionCoinVideo() {
     if (!isLogin) {
@@ -54,7 +56,7 @@ mixin TripleMixin on GetxController, TickerProvider {
     }
 
     PayCoinsPage.toPayCoinsPage(
-      onPayCoin: onPayCoin,
+      onPayCoin: payCoinCallback,
       hasCoin: coinNum == 1,
       hasCopyright: hasCopyright,
     );

@@ -1,6 +1,7 @@
 import 'dart:ui' as ui;
 
 import 'package:flutter/services.dart';
+import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get/get.dart';
 import 'package:material_ui/material_ui.dart';
@@ -38,16 +39,22 @@ Future<void> openPage(
   List<(int, bool)> calls, {
   bool hasCoin = false,
   bool hasCopyright = true,
+  OnPayCoin? onPayCoin,
 }) async {
   await tester.binding.setSurfaceSize(const Size(390, 844));
   addTearDown(() => tester.binding.setSurfaceSize(null));
   await tester.pumpWidget(
     GetMaterialApp(
+      builder: FlutterSmartDialog.init(),
       home: Scaffold(
         body: Center(
           child: TextButton(
             onPressed: () => PayCoinsPage.toPayCoinsPage(
-              onPayCoin: (count, like) => calls.add((count, like)),
+              onPayCoin:
+                  onPayCoin ??
+                  (count, like) {
+                    calls.add((count, like));
+                  },
               hasCoin: hasCoin,
               hasCopyright: hasCopyright,
             ),
@@ -155,6 +162,25 @@ void main() {
     expect(calls, isEmpty);
     expect(find.byType(PayCoinsPage), findsOneWidget);
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('投币回调的异步失败被消费并提示核对结果', (tester) async {
+    await openPage(
+      tester,
+      [],
+      onPayCoin: (count, like) => Future<void>.error(
+        StateError('synthetic callback failure'),
+      ),
+    );
+    await tester.tap(semantics('上滑投1枚硬币'));
+    await decodeImages(tester);
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pumpAndSettle();
+    expect(find.byType(PayCoinsPage), findsNothing);
+    expect(find.text('投币结果待确认，请先核对后再操作'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+    await tester.pump(const Duration(seconds: 5));
+    await tester.pumpAndSettle();
   });
 
   testWidgets('非原创视频保持单币入口，点击可投币', (tester) async {

@@ -48,9 +48,57 @@ abstract class CommonIntroController extends GetxController
   }
 
   @override
-  late final isLogin = Accounts.main.isLogin;
+  bool get isLogin => Accounts.main.isLogin;
 
   StatDetail? getStat();
+
+  Object get interactionTarget => bvid;
+  bool get interactionBusy => _interactionBusy;
+  bool _interactionBusy = false;
+  int interactionRevision = 0;
+
+  bool ownsInteraction(Account account, Object target) =>
+      !isClosed &&
+      identical(account, Accounts.main) &&
+      interactionTarget == target;
+
+  /// 点赞、点踩、投币和三连会改动共同状态，串行执行并淘汰较早的状态查询。
+  Future<void> runInteraction(
+    Future<void> Function(Account account, bool Function() current) action,
+  ) async {
+    if (_interactionBusy || isClosed) return;
+    final account = Accounts.main;
+    if (!account.isLogin) {
+      SmartDialog.showToast('账号未登录');
+      return;
+    }
+    final target = interactionTarget;
+    bool current() => ownsInteraction(account, target);
+    _interactionBusy = true;
+    interactionRevision++;
+    try {
+      await action(account, current);
+    } catch (error, stackTrace) {
+      logger.w('视频互动未完成', error: error.runtimeType, stackTrace: stackTrace);
+      if (current()) const UnknownResult().toast();
+    } finally {
+      _interactionBusy = false;
+      interactionRevision++;
+    }
+  }
+
+  @override
+  Future<void> Function(int, bool) get payCoinCallback {
+    final account = Accounts.main;
+    final target = interactionTarget;
+    return (coin, withLike) async {
+      if (!ownsInteraction(account, target)) {
+        if (!isClosed) SmartDialog.showToast('视频或账号已更新，请重新打开投币面板');
+        return;
+      }
+      await onPayCoin(coin, withLike);
+    };
+  }
 
   @override
   void updateFavCount(int count) {
@@ -127,27 +175,36 @@ abstract class CommonIntroController extends GetxController
 
   @override
   Future<void> onPayCoin(int coin, bool coinWithLike) async {
-    final stat = getStat();
-    if (stat == null) {
-      return;
-    }
-    final res = await VideoHttp.coinVideo(
-      bvid: bvid,
-      multiply: coin,
-      selectLike: coinWithLike ? 1 : 0,
-    );
-    if (res.isSuccess) {
-      SmartDialog.showToast('投币成功');
-      coinNum.value += coin;
-      GlobalData().afterCoin(coin);
-      stat.coin += coin;
-      if (coinWithLike && !hasLike.value) {
-        stat.like++;
-        hasLike.value = true;
+    await runInteraction((account, current) async {
+      final limit = isHasCopyright(copyright) ? 2 : 1;
+      if (coin > 0 && coinNum.value + coin > limit) {
+        SmartDialog.showToast('达到投币上限啦~');
+        return;
       }
-    } else {
-      res.toast();
-    }
+      final res = await VideoHttp.coinVideo(
+        bvid: bvid,
+        multiply: coin,
+        selectLike: coinWithLike ? 1 : 0,
+        account: account,
+      );
+      // 余额属于发起账号；换视频后的已确认扣款仍然有效。
+      if (res.isSuccess && identical(account, Accounts.main)) {
+        GlobalData().afterCoin(coin);
+      }
+      if (!current()) return;
+      if (res.isSuccess) {
+        SmartDialog.showToast('投币成功');
+        coinNum.value += coin;
+        final stat = getStat();
+        stat?.coin += coin;
+        if (coinWithLike && !hasLike.value) {
+          stat?.like++;
+          hasLike.value = true;
+        }
+      } else {
+        res.toast();
+      }
+    });
   }
 
   Future<void> queryVideoTags() async {

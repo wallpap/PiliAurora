@@ -323,16 +323,24 @@ abstract final class VideoHttp {
 
   static Future<LoadingState<VideoRelation>> videoRelation({
     required String bvid,
+    Account? account,
   }) async {
-    final res = await Request().get(
-      Api.videoRelation,
-      queryParameters: {'aid': IdUtils.bv2av(bvid), 'bvid': bvid},
-    );
-    if (res.data['code'] == 0) {
-      return Success(VideoRelation.fromJson(res.data['data']));
-    } else {
-      return Error(res.data['message']);
+    final int aid;
+    try {
+      if (!IdUtils.bvRegexExact.hasMatch(bvid)) {
+        throw const FormatException('无效的视频标识');
+      }
+      aid = IdUtils.bv2av(bvid);
+    } catch (error, stackTrace) {
+      return Error('视频信息不完整，请刷新后重试', cause: error, stackTrace: stackTrace);
     }
+    return await Request().requestApi(
+      Api.videoRelation,
+      kind: ApiCallKind.query,
+      decode: (body) => VideoRelation.fromJson(body['data']),
+      options: Options(extra: {'account': account ?? Accounts.main}),
+      queryParameters: {'aid': aid, 'bvid': bvid},
+    );
   }
 
   // 相关视频
@@ -359,16 +367,18 @@ abstract final class VideoHttp {
   // 获取点赞/投币/收藏状态 pgc
   static Future<LoadingState<PgcLCF>> pgcLikeCoinFav({
     required Object epId,
+    Account? account,
   }) async {
-    final res = await Request().get(
+    if ((int.tryParse('$epId') ?? 0) <= 0) {
+      return const Error('剧集信息不完整，请刷新后重试');
+    }
+    return await Request().requestApi(
       Api.pgcLikeCoinFav,
+      kind: ApiCallKind.query,
+      decode: (body) => PgcLCF.fromJson(body['data']),
+      options: Options(extra: {'account': account ?? Accounts.main}),
       queryParameters: {'ep_id': epId},
     );
-    if (res.data['code'] == 0) {
-      return Success(PgcLCF.fromJson(res.data['data']));
-    } else {
-      return Error(res.data['message']);
-    }
   }
 
   // 投币
@@ -376,34 +386,48 @@ abstract final class VideoHttp {
     required String bvid,
     required int multiply,
     int selectLike = 0,
+    Account? account,
   }) async {
-    final res = await Request().post(
+    account ??= Accounts.main;
+    final invalid = _validateInteraction(bvid, account, app: true);
+    if (invalid != null) return invalid;
+    if (multiply < 1 || multiply > 2 || (selectLike != 0 && selectLike != 1)) {
+      return const Error('投币参数无效，请重新选择');
+    }
+    return await Request().requestApi<void>(
       Api.coinVideo,
+      kind: ApiCallKind.mutation,
+      decode: (_) {},
       data: {
         'aid': IdUtils.bv2av(bvid).toString(),
-        // 'bvid': bvid,
         'multiply': multiply.toString(),
         'select_like': selectLike.toString(),
-        // 'csrf': Accounts.main.csrf,
       },
-      options: Options(contentType: Headers.formUrlEncodedContentType),
+      options: Options(
+        contentType: Headers.formUrlEncodedContentType,
+        extra: {'account': account},
+      ),
     );
-    if (res.data['code'] == 0) {
-      return const Success(null);
-    } else {
-      return Error(res.data['message']);
-    }
   }
 
   // 一键三连 pgc
   static Future<LoadingState<PgcTriple>> pgcTriple({
     required Object epId,
     Object? seasonId,
+    Account? account,
   }) async {
-    final res = await Request().post(
+    account ??= Accounts.main;
+    if (!account.isLogin) return const Error('账号未登录');
+    if ((int.tryParse('$epId') ?? 0) <= 0) {
+      return const Error('剧集信息不完整，请刷新后重试');
+    }
+    return await Request().requestApi(
       Api.pgcTriple,
-      data: {'ep_id': epId, 'csrf': Accounts.main.csrf},
+      kind: ApiCallKind.mutation,
+      decode: (body) => PgcTriple.fromJson(body['data']),
+      data: {'ep_id': epId, 'csrf': account.csrf},
       options: Options(
+        extra: {'account': account},
         contentType: Headers.formUrlEncodedContentType,
         headers: {
           'origin': 'https://www.bilibili.com',
@@ -413,30 +437,32 @@ abstract final class VideoHttp {
         },
       ),
     );
-    if (res.data['code'] == 0) {
-      return Success(PgcTriple.fromJson(res.data['data']));
-    } else {
-      return Error(res.data['message']);
-    }
   }
 
   // 一键三连
   static Future<LoadingState<UgcTriple>> ugcTriple({
     required String bvid,
+    Account? account,
   }) async {
-    final res = await Request().post(
+    account ??= Accounts.main;
+    final invalid = _validateInteraction(bvid, account);
+    if (invalid != null) return invalid;
+    return await Request().requestApi(
       Api.ugcTriple,
+      kind: ApiCallKind.mutation,
+      decode: (body) => UgcTriple.fromJson(body['data']),
       data: {
         'aid': IdUtils.bv2av(bvid),
         'eab_x': 2,
         'ramval': 0,
         'source': 'web_normal',
         'ga': 1,
-        'csrf': Accounts.main.csrf,
+        'csrf': account.csrf,
         'spmid': '333.788.0.0',
         'statistics': '{"appId":100,"platform":5}',
       },
       options: Options(
+        extra: {'account': account},
         contentType: Headers.formUrlEncodedContentType,
         headers: {
           'origin': 'https://www.bilibili.com',
@@ -445,27 +471,53 @@ abstract final class VideoHttp {
         },
       ),
     );
-    if (res.data['code'] == 0) {
-      return Success(UgcTriple.fromJson(res.data['data']));
-    } else {
-      return Error(res.data['message']);
-    }
   }
 
   // （取消）点赞
-  static Future<LoadingState<String>> likeVideo({
+  static Future<LoadingState<String?>> likeVideo({
     required String bvid,
     required bool type,
+    Account? account,
   }) async {
-    final res = await Request().post(
+    account ??= Accounts.main;
+    final invalid = _validateInteraction(bvid, account, app: true);
+    if (invalid != null) return invalid;
+    return await Request().requestApi<String?>(
       Api.likeVideo,
+      kind: ApiCallKind.mutation,
+      // 提示文案是可选的展示字段，缺失不能推翻已经确认的写入。
+      decode: (body) {
+        final data = body['data'];
+        final toast = data is Map ? data['toast'] : null;
+        return toast is String && toast.trim().isNotEmpty
+            ? Error(toast).toString()
+            : null;
+      },
       data: {'aid': IdUtils.bv2av(bvid).toString(), 'like': type ? '0' : '1'},
-      options: Options(contentType: Headers.formUrlEncodedContentType),
+      options: Options(
+        contentType: Headers.formUrlEncodedContentType,
+        extra: {'account': account},
+      ),
     );
-    if (res.data['code'] == 0) {
-      return Success(res.data['data']['toast']);
-    } else {
-      return Error(res.data['message']);
+  }
+
+  static Error? _validateInteraction(
+    String bvid,
+    Account account, {
+    bool app = false,
+  }) {
+    if (!account.isLogin) return const Error('账号未登录');
+    if (app && account.accessKey.isNullOrEmpty) {
+      return const Error('请退出账号后重新登录');
+    }
+    try {
+      if (!IdUtils.bvRegexExact.hasMatch(bvid)) {
+        throw const FormatException('无效的视频标识');
+      }
+      IdUtils.bv2av(bvid);
+      return null;
+    } catch (error, stackTrace) {
+      return Error('视频信息不完整，请刷新后重试', cause: error, stackTrace: stackTrace);
     }
   }
 
