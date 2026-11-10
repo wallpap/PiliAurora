@@ -54,6 +54,10 @@ fvm flutter test test/services/diagnostics/ test/pages/about/diagnostics_page_te
 
 `http/login_test.dart` 与 `pages/login/request_lifecycle_test.dart` 检查登录结果类型、缺失身份／验证码字段、风控响应、损坏公钥、请求防重放，以及失败后的重试、倒计时和页面释放。`utils/accounts/cookie_failure_test.dart` 检查 Cookie 保存失败沿请求 Future 返回、保留原始 HTTP 错误及避免重放写请求。
 
+`http/login_account_results_test.dart` 检查退出撤销的拒绝／待确认、禁重试和设备解析原因；`pages/setting/logout_results_test.dart` 检查多账号退出互斥、部分失败、远端成功后的本地清理重试、同 UID 凭据替换及关闭后的授权清理。真实撤销服务、Hive 和 WebView 清理需另行验收。
+
+`http/member_mutation_results_test.dart`、`common/widgets/member_report_results_test.dart` 检查关注分组写入、新建 ID 和独立举报协议、失败保留选择及迟到弹窗隔离。`http/member_query_results_test.dart` 覆盖成员 22 类查询、可空数据、签名账号与商品 POST 查询；`pages/video/member_results_test.dart` 检查浮层资料／统计的账号、目标和代次，以及单项失败保留其他成功结果。
+
 `http/loading_state_test.dart` 和 `http/search_response_test.dart` 检查成功取值、加载中误用、失败提示兜底及解析错误原因与展示文案的分离。`http/download_response_test.dart` 检查下载失败保留业务码、按实际媒体流选择画质，以及可选元数据缺失和无可下载媒体的区别。
 
 搜索响应回归还检查业务码、签名前账号固定、风控凭据类型和分 P 的空列表／损坏响应。`pages/search/controller_test.dart` 检查推荐账号切换时重载首页与热搜并拒绝迟到结果，已有搜索结果分页回归保留。
@@ -78,9 +82,15 @@ fvm flutter test test/services/diagnostics/ test/pages/about/diagnostics_page_te
 
 `http/fav_response_test.dart` 覆盖收藏接口及分支的成功、业务拒绝、损坏响应和传输不确定性，并保留可空列表语义、确认后的收藏夹 ID 和账号绑定。`pages/fav/operation_results_test.dart` 检查快速收藏的 Future／重复提交／空收藏夹／切号，以及创建草稿、编辑加载、迟到查询和操作锁释放；原生封面选择与裁剪不由这些模拟测试证明。
 
+`pages/fav/note_results_test.dart` 检查笔记删除互斥、失败／待确认保留选择、补页等待、凭据替换与刷新后的旧回执隔离，以及公共删除助手按对象删除。`pages/subscription/operation_results_test.dart` 检查取消订阅弹窗和清理流程的账号绑定、失败保留弹窗、在途互斥、确认成功后的本地清理失败、待确认汇总及完成后实际刷新；清理算法另见 `pages/subscription/cleanup_test.dart`。
+
 `http/validate_response_test.dart` 检查风控挑战与通过／拒绝结果、缺失证明、业务码和传输待确认；`utils/gaia_validation_test.dart` 通过导航替身返回验证结果，检查取消、过期操作、字段校验、一次性成功通知及等待异步消费者，消费者失败不重发请求。原生极验 WebView 的加载、脚本与设备行为需单独验证。
 
 `http/video_feedback_results_test.dart` 使用真实重试拦截器检查 GET 反馈／撤销的写入禁重试、账号角色、拒绝／待确认和参数校验。`common/widgets/video_feedback_results_test.dart` 检查弹窗互斥、可选提示、列表回调失败、拒绝重试／撤销及切号／来源失效后的迟到隔离。真实反馈服务另行验收。
+
+`http/video_interaction_results_test.dart` 与 `pages/video/interaction_results_test.dart` 检查点赞、投币和三连的拒绝／待确认、可选提示、部分成功、实际数量与共用写入锁，以及旧查询、换视频、分 P、切号和关闭后的回执隔离。`pages/video/pay_coins/pay_coins_test.dart` 另检查投币动画和异步回调异常消费。
+
+`http/video_query_results_test.dart` 覆盖视频 15 类资料／列表查询的业务码、原始原因、领域空语义和签名账号；`pages/popular_series/controller_test.dart` 检查无效期数、重试、乱序与退出。`http/video_media_results_test.dart` 检查媒体协议回退的原因与参数、取消、字幕独立正文协议及转换失败、AI 总结内外状态和预览无数据；真实播放、字幕显示和文件选择仍需设备验收。
 
 `http/pgc_follow_results_test.dart` 与 `pages/pgc/follow_results_test.dart` 检查追番写入的业务拒绝／待确认、可选提示、目标校验和账号绑定，以及状态查询重试／迟到隔离、批量互斥、选择保留和删除后的分页重读。真实服务写入与完整番剧页面另行验收。
 

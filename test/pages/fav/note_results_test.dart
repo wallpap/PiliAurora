@@ -47,9 +47,10 @@ void main() {
     requests.clear();
     Accounts.accountMode[AccountType.main.index] = login('old');
   });
-  tearDown(() async {
-    await Get.delete<FavNoteController>(force: true);
-    Get.reset();
+  tearDown(() {
+    Get
+      ..delete<FavNoteController>(force: true)
+      ..reset();
   });
   tearDownAll(() async {
     Request.dio.close(force: true);
@@ -83,8 +84,9 @@ void main() {
     await tester.pump(const Duration(milliseconds: 300));
     await tester.pumpAndSettle();
     await dismiss;
-    await Get.delete<FavNoteController>(force: true);
-    Get.reset();
+    Get
+      ..delete<FavNoteController>(force: true)
+      ..reset();
     await tester.pumpWidget(const SizedBox());
     await tester.pumpAndSettle();
   }
