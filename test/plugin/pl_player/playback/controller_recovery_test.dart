@@ -1,5 +1,5 @@
 import 'dart:async';
-import 'dart:io' show Platform;
+import 'dart:io' show Platform, Directory, File;
 
 import 'package:flutter/services.dart';
 import 'package:flutter/material.dart';
@@ -9,6 +9,9 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:hive_ce/hive.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:pili_aurora/plugin/pl_player/controller.dart';
+import 'package:pili_aurora/models/common/super_resolution_type.dart';
+import 'package:pili_aurora/utils/path_utils.dart';
+import 'package:path/path.dart' as path;
 import 'package:pili_aurora/models/common/account_type.dart';
 import 'package:pili_aurora/utils/accounts.dart';
 import 'package:pili_aurora/utils/accounts/account.dart';
@@ -28,7 +31,10 @@ import 'package:pili_aurora/utils/storage_key.dart';
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
+  late Directory shaderRoot;
   setUpAll(() async {
+    shaderRoot = await Directory.systemTemp.createTemp('shader-preparation-');
+    appSupportDirPath = shaderRoot.path;
     GStorage.setting = await Hive.openBox('setting', bytes: Uint8List(0));
     GStorage.video = await Hive.openBox('video', bytes: Uint8List(0));
     GStorage.localCache = await Hive.openBox('cache', bytes: Uint8List(0));
@@ -38,7 +44,37 @@ void main() {
           (_) async => null,
         );
   });
-  tearDownAll(Hive.close);
+  tearDownAll(() async {
+    await Hive.close();
+    await shaderRoot.delete(recursive: true);
+  });
+
+  _recoveryTest('超分资源准备失败保留档位，同档位选择可以重试', (f) async {
+    await f.tester.pumpWidget(
+      MaterialApp(builder: FlutterSmartDialog.init(), home: const Scaffold()),
+    );
+    await f.load(shaderEligible: true);
+    f.controller.superResolutionType.value = SuperResolutionType.disable;
+    final blocked = File(path.join(shaderRoot.path, 'anime_shaders'))
+      ..writeAsStringSync('blocked');
+    await f.tester.runAsync(
+      () => f.controller.setShader(SuperResolutionType.efficiency),
+    );
+    expect(f.controller.superResolutionType.value, SuperResolutionType.disable);
+    expect(f.controller.shadersDirPath, isNull);
+    blocked.deleteSync();
+    await f.tester.runAsync(
+      () => f.controller.setShader(SuperResolutionType.efficiency),
+    );
+    expect(
+      f.controller.superResolutionType.value,
+      SuperResolutionType.efficiency,
+    );
+    expect(f.controller.shadersDirPath, isNotNull);
+    final dismissed = SmartDialog.dismiss(status: .allToast);
+    await f.tester.pumpAndSettle();
+    await dismissed;
+  });
 
   _recoveryTest('历史上报：启用期间暂停历史或退出账号，发送前立即停止上报', (f) async {
     final previous = Accounts.heartbeat;
@@ -1111,6 +1147,7 @@ class _Fixture {
 
   Future<void> load({
     String key = 'movie',
+    bool shaderEligible = false,
     PlaybackStartPolicy start = PlaybackStartPolicy.play,
     bool local = false,
     List<String> videoCandidates = const [],
@@ -1120,6 +1157,9 @@ class _Fixture {
     runtime.hasAudio = mode != _Mode.videoOnly;
     final plan = PlaybackPlan(
       contentKey: key,
+      metadata: shaderEligible
+          ? const PlaybackMetadataHint(trust: .sourceHint, width: 1, height: 1)
+          : null,
       source: PlaybackSourceSnapshot.fromDataSource(
         local
             ? FileSource(
@@ -1357,6 +1397,12 @@ class _Runtime extends NativePlaybackRuntime {
     repairs++;
     return onRepair?.call() ?? const PlaybackRuntimeCommandResult();
   }
+
+  @override
+  Future<PlaybackRuntimeCommandResult> setShader(
+    List<String> shaders,
+    PlaybackExecutionContext context,
+  ) async => const PlaybackRuntimeCommandResult();
 
   @override
   Future<PlaybackRuntimeCommandResult> setAudioOnly(

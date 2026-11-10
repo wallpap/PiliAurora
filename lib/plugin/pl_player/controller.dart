@@ -1443,12 +1443,15 @@ class PlPlayerController
         eligibility != SuperResolutionEligibility.allowed) {
       return;
     }
-    if (type != null && type == superResolutionType.value) return;
+    if (type != null &&
+        type == superResolutionType.value &&
+        _shaderPendingOwner == null) {
+      return;
+    }
     final rejected =
         requested != SuperResolutionType.disable &&
         eligibility == SuperResolutionEligibility.resolutionTooHigh;
     final mode = rejected ? SuperResolutionType.disable : requested;
-    superResolutionType.value = mode;
     if (rejected) {
       _diagnostics?.event(
         'shader.update.rejected',
@@ -1458,10 +1461,26 @@ class PlPlayerController
           'display': _shaderDisplaySize,
         },
       );
-    } else if (type != null && isAnim && !tempPlayerConf) {
-      setting.put(SettingBoxKey.superResolutionType, mode.index);
     }
-    if (owner == null || !owner.isActive) return;
+    Future<void> confirmMode() async {
+      superResolutionType.value = mode;
+      if (!rejected && type != null && isAnim && !tempPlayerConf) {
+        try {
+          await setting.put(SettingBoxKey.superResolutionType, mode.index);
+        } catch (error, stackTrace) {
+          logger.w(
+            '超分已设置，偏好保存失败',
+            error: error.runtimeType,
+            stackTrace: stackTrace,
+          );
+        }
+      }
+    }
+
+    if (owner == null || !owner.isActive) {
+      await confirmMode();
+      return;
+    }
     if (identical(_shaderPendingOwner, owner) && _shaderPendingMode == mode) {
       return;
     }
@@ -1490,19 +1509,47 @@ class PlPlayerController
         return;
       }
       final currentShaders =
-          _session.currentSnapshot.configuration.desired.shaders;
-      if (_sameShaderPaths(currentShaders, paths)) return;
-      await owner.setShader(paths);
+          _session.currentSnapshot.configuration.applied.shaders;
+      if (!_sameShaderPaths(currentShaders, paths)) {
+        final result = await owner.setShader(paths);
+        if (requestGeneration != _shaderRequestGeneration ||
+            !owner.isActive ||
+            !identical(owner, _activeOwner)) {
+          return;
+        }
+        if (result.outcome != CommandOutcome.applied &&
+            result.outcome != CommandOutcome.accepted) {
+          _diagnostics?.event(
+            'shader.update.failed',
+            level: DiagnosticLogLevel.warning,
+            details: {
+              'mode': mode.name,
+              'outcome': result.outcome.name,
+              'failure': result.failure,
+            },
+          );
+          if (type != null) SmartDialog.showToast('超分设置未完成，请重试');
+          return;
+        }
+      }
+      await confirmMode();
       _diagnostics?.event(
         'shader.update.completed',
         details: {'mode': mode.name, 'shaderCount': paths.length},
       );
-    } catch (error) {
+    } catch (error, stackTrace) {
+      logger.w('超分资源准备失败', error: error.runtimeType, stackTrace: stackTrace);
       _diagnostics?.event(
         'shader.update.failed',
         level: DiagnosticLogLevel.warning,
         details: {'mode': mode.name, 'error': error},
       );
+      if (type != null &&
+          requestGeneration == _shaderRequestGeneration &&
+          owner.isActive &&
+          identical(owner, _activeOwner)) {
+        SmartDialog.showToast('超分资源准备失败，请重试');
+      }
     } finally {
       if (requestGeneration == _shaderRequestGeneration) {
         _shaderPendingOwner = null;

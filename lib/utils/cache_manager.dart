@@ -17,39 +17,23 @@ abstract final class CacheManager {
             : () async => directory,
       ).then((i) => manager = i);
 
-  // 获取缓存目录
-  @pragma('vm:notify-debugger-on-exception')
+  /// 读取失败保留异常；0 仅表示实际没有缓存文件。
   static Future<int> loadApplicationCache() async {
-    try {
-      if (PlatformUtils.isDesktop) {
-        return manager.getTotalLength();
-      }
-
-      final Directory tempDirectory = await getTemporaryDirectory();
-      if (tempDirectory.existsSync()) {
-        return await getTotalSizeOfFilesInDir(tempDirectory);
-      }
-    } catch (_) {}
-    return 0;
+    final directory = PlatformUtils.isDesktop
+        ? Directory(manager.cacheDir)
+        : await getTemporaryDirectory();
+    return getTotalSizeOfFilesInDir(directory);
   }
 
-  // 循环计算文件的大小
-  @pragma('vm:notify-debugger-on-exception')
-  static Future<int> getTotalSizeOfFilesInDir(Directory file) async {
-    int total = 0;
-    await for (final child in file.list(recursive: false)) {
+  static Future<int> getTotalSizeOfFilesInDir(Directory directory) async {
+    var total = 0;
+    final cacheDirectory = path.equals(directory.path, manager.cacheDir);
+    await for (final child in directory.list(followLinks: false)) {
       if (child is File) {
         total += await child.length();
-      } else if (child is Directory) {
-        if (path.equals(child.path, manager.cacheDir)) {
-          total += manager.getTotalLength();
-        } else {
-          await for (final i in child.list(recursive: true)) {
-            if (i is File) {
-              total += await i.length();
-            }
-          }
-        }
+      } else if (child is Directory && !cacheDirectory) {
+        // 图片缓存只计实际文件，Hive 元数据不属于可清除的图片内容。
+        total += await getTotalSizeOfFilesInDir(child);
       }
     }
     return total;
@@ -67,22 +51,21 @@ abstract final class CacheManager {
     return size + (unitArr.elementAtOrNull(index) ?? '');
   }
 
-  // 清除 Library/Caches 目录及文件缓存
-  @pragma('vm:notify-debugger-on-exception')
+  /// 全部步骤完成才确认成功；失败可能发生在部分缓存已删除之后。
   static Future<void> clearLibraryCache() async {
-    try {
-      await manager.emptyCache();
-      if (PlatformUtils.isDesktop) return;
-
-      final tempDirectory = await getTemporaryDirectory();
-      if (tempDirectory.existsSync()) {
-        await for (final file in tempDirectory.list(recursive: false)) {
-          if (file is Directory && path.equals(file.path, manager.cacheDir)) {
-            continue;
-          }
-          await file.delete(recursive: true);
-        }
+    await manager.emptyCache();
+    final cacheDirectory = Directory(manager.cacheDir);
+    // 底层清理会容忍孤立文件删除失败，显式排空残留才能确认清理结果。
+    await for (final file in cacheDirectory.list(followLinks: false)) {
+      if (file is File) await file.delete();
+    }
+    if (PlatformUtils.isDesktop) return;
+    final tempDirectory = await getTemporaryDirectory();
+    await for (final file in tempDirectory.list(followLinks: false)) {
+      if (file is Directory && path.equals(file.path, manager.cacheDir)) {
+        continue;
       }
-    } catch (_) {}
+      await file.delete(recursive: true);
+    }
   }
 }
