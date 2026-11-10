@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pili_aurora/http/loading_state.dart';
 import 'package:pili_aurora/models/dynamics/result.dart';
+import 'package:pili_aurora/models/common/account_type.dart';
 import 'package:pili_aurora/models/model_owner.dart';
 import 'package:pili_aurora/models/model_video.dart';
 import 'package:pili_aurora/models/remote/dynamic/dyn_topic_feed/item.dart';
@@ -37,6 +38,12 @@ class _Feed extends DiscoveryListController<List<Object>, Object> {
   bool paginated = true;
   bool neverEnd = false;
   CooperativeAuthors? authorLookup;
+  bool recommend = false;
+  Completer<void>? preparation;
+
+  @override
+  Account get queryAccount =>
+      recommend ? Accounts.get(AccountType.recommend) : super.queryAccount;
 
   @override
   CooperativeAuthors get cooperativeAuthors =>
@@ -49,7 +56,7 @@ class _Feed extends DiscoveryListController<List<Object>, Object> {
   bool get supportsPagination => paginated;
 
   @override
-  Future<void>? prepareQuery() => null;
+  Future<void>? prepareQuery() => preparation?.future;
 
   @override
   Future<LoadingState<List<Object>>> customGetData() {
@@ -80,6 +87,7 @@ void main() {
   setUp(() {
     settings.data.clear();
     Accounts.accountMode[0] = AnonymousAccount();
+    Accounts.accountMode[AccountType.recommend.index] = AnonymousAccount();
     GlobalData().blackMids = {7};
     feed = _Feed();
   });
@@ -252,6 +260,68 @@ void main() {
     await query;
     expect(feed.loadingState.value, isA<Loading>());
     expect(feed.page, 1);
+  });
+
+  LoginAccount recommendAccount() => LoginAccount(
+    BiliCookieJar.fromJson({'DedeUserID': '123', 'bili_jct': 'fixture-csrf'}),
+    null,
+    null,
+  );
+
+  test('同 UID 推荐凭据替换后拒绝旧结果，主账号上下文继续有效', () async {
+    feed.recommend = true;
+    Accounts.accountMode[AccountType.recommend.index] = recommendAccount();
+    final context = feed.queryContext;
+    expect(identical(context, feed.queryContext), isTrue);
+    final query = feed.onRefresh();
+    Accounts.accountMode[AccountType.recommend.index] = recommendAccount();
+    await feed.respond(Success([_Video(1, 8)]));
+    await query;
+    expect(feed.loadingState.value, isA<Loading>());
+    expect(feed.page, 1);
+    feed.recommend = false;
+    final mainContext = feed.queryContext;
+    Accounts.accountMode[AccountType.recommend.index] = recommendAccount();
+    expect(identical(mainContext, feed.queryContext), isTrue);
+  });
+
+  test('屏蔽准备期间推荐账号更换，不发送新账号请求承接旧查询', () async {
+    feed
+      ..recommend = true
+      ..preparation = Completer<void>();
+    final query = feed.onRefresh();
+    Accounts.accountMode[AccountType.recommend.index] = recommendAccount();
+    feed.preparation!.complete();
+    await query;
+    expect(feed.requests, isEmpty);
+  });
+
+  test('合作作者补查期间推荐账号更换，旧批次不发布或继续补页', () async {
+    feed.recommend = true;
+    final pending = Completer<Set<int>?>();
+    feed.authorLookup = CooperativeAuthors(load: (_) => pending.future);
+    final query = feed.onRefresh();
+    await feed.respond(Success([_Video(1, 8, cooperation: true)]));
+    Accounts.accountMode[AccountType.recommend.index] = recommendAccount();
+    pending.complete({7, 8});
+    await query;
+    expect(feed.loadingState.value, isA<Loading>());
+    expect(feed.requests, hasLength(1));
+  });
+
+  test('切换推荐账号后加载更多从首页重读，避免混入旧账号列表', () async {
+    feed.recommend = true;
+    final initial = feed.onRefresh();
+    await feed.respond(Success([_Video(1, 8)]));
+    await initial;
+    Accounts.accountMode[AccountType.recommend.index] = recommendAccount();
+    final next = feed.onLoadMore();
+    expect(feed.loadingState.value, isA<Loading>());
+    expect(feed.requests.last.page, 1);
+    final replacement = _Video(2, 8);
+    await feed.respond(Success([replacement]));
+    await next;
+    expect(feed.loadingState.value.data, [replacement]);
   });
 
   test('推荐流即使永不标记终点，空响应也结束当前补位', () async {

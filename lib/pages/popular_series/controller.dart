@@ -7,14 +7,18 @@ import 'package:pili_aurora/models/remote/popular/popular_series_list/list.dart'
 import 'package:pili_aurora/models/remote/popular/popular_series_one/config.dart';
 import 'package:pili_aurora/models/remote/popular/popular_series_one/data.dart';
 import 'package:pili_aurora/pages/common/discovery_list_controller.dart';
-import 'package:pili_aurora/utils/extension/iterable_ext.dart';
-import 'package:pili_aurora/utils/accounts.dart';
 import 'package:pili_aurora/models/common/account_type.dart';
+import 'package:pili_aurora/utils/accounts.dart';
+import 'package:pili_aurora/utils/accounts/account.dart';
+import 'package:pili_aurora/utils/extension/iterable_ext.dart';
 import 'package:get/get.dart';
 
 class PopularSeriesController
     extends DiscoveryListController<PopularSeriesOneData, HotVideoItemModel>
     with ReloadMixin {
+  @override
+  Account get queryAccount => Accounts.get(AccountType.recommend);
+
   @override
   bool get supportsPagination => false;
 

@@ -2,6 +2,7 @@ import 'package:pili_aurora/pages/common/common_list_controller.dart';
 import 'package:pili_aurora/services/blocked_authors.dart';
 import 'package:pili_aurora/services/cooperative_authors.dart';
 import 'package:pili_aurora/utils/accounts.dart';
+import 'package:pili_aurora/utils/accounts/account.dart';
 import 'package:pili_aurora/utils/global_data.dart';
 import 'package:pili_aurora/utils/media_author_filter.dart';
 import 'package:pili_aurora/utils/storage_pref.dart';
@@ -18,8 +19,35 @@ abstract class DiscoveryListController<R, T>
   bool get refillFilteredPages =>
       supportsPagination && Pref.filterBlockedAuthors;
 
+  Account get queryAccount => Accounts.main;
+
+  Account? _contextMain;
+  Account? _contextQuery;
+  Object _context = Object();
+  Object? _listContext;
+
   @override
-  Object get queryContext => Accounts.main;
+  Object get queryContext {
+    final main = Accounts.main;
+    final query = queryAccount;
+    // 屏蔽规则属于主账号，内容请求可使用独立推荐账号。
+    if (!identical(main, _contextMain) || !identical(query, _contextQuery)) {
+      _contextMain = main;
+      _contextQuery = query;
+      _context = Object();
+    }
+    return _context;
+  }
+
+  @override
+  Future<void> queryData([bool isRefresh = true]) {
+    final context = queryContext;
+    if (!isRefresh && !identical(_listContext, context)) {
+      return onReload();
+    }
+    _listContext = context;
+    return super.queryData(isRefresh);
+  }
 
   @override
   Future<void>? prepareQuery() => BlockedAuthors.ensureLoaded();
