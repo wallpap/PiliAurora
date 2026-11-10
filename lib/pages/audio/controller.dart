@@ -55,6 +55,7 @@ import 'package:pili_aurora/utils/storage_pref.dart';
 import 'package:pili_aurora/utils/utils.dart';
 import 'package:pili_aurora/utils/video_utils.dart';
 import 'package:fixnum/fixnum.dart' show Int64;
+import 'package:protobuf/protobuf.dart' show GeneratedMessageGenericExtensions;
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:get/get.dart';
 import 'package:material_ui/material_ui.dart';
@@ -82,7 +83,7 @@ class AudioController extends GetxController
   Int64? extraId;
   late final PlaylistSource from;
   @override
-  late final bool isUgc = itemType == 1;
+  bool get isUgc => itemType == 1;
 
   final audioItem = Rxn<DetailItem>();
 
@@ -166,7 +167,7 @@ class AudioController extends GetxController
   late final Rx<PlayRepeat> playMode = Pref.audioPlayMode.obs;
 
   @override
-  late final isLogin = Accounts.main.isLogin;
+  bool get isLogin => Accounts.main.isLogin;
 
   Duration? _start;
   VideoDetailController? _videoDetailController;
@@ -411,6 +412,7 @@ class AudioController extends GetxController
   }
 
   void _updateCurrItem(DetailItem item) {
+    _interactionAccount = Accounts.main;
     audioItem.value = item;
     hasLike.value = item.stat.hasLike_7;
     coinNum.value = item.stat.hasCoin_8 ? 2 : 0;
@@ -888,106 +890,216 @@ class AudioController extends GetxController
     ];
   }
 
-  @override
-  Future<void> actionLikeVideo() async {
-    if (!isLogin) {
+  bool _interactionBusy = false;
+  Account? _interactionAccount;
+
+  bool _canInteract() {
+    final item = audioItem.value;
+    if (item == null ||
+        item.item.oid != oid ||
+        item.item.itemType != itemType ||
+        (_interactionAccount != null &&
+            !identical(_interactionAccount, Accounts.main))) {
+      SmartDialog.showToast('曲目信息待更新，请刷新播放列表后重试');
+      return false;
+    }
+    return true;
+  }
+
+  bool _ownsInteraction(
+    Account account,
+    DetailItem? item,
+    Int64 target,
+    int type,
+    List<Int64> parts,
+  ) =>
+      !_audioClosed &&
+      !isClosed &&
+      identical(account, Accounts.main) &&
+      identical(item, audioItem.value) &&
+      oid == target &&
+      itemType == type &&
+      listEquals(subId, parts);
+
+  Future<void> _runInteraction(
+    Future<void> Function(Account account, bool Function() current) action,
+  ) async {
+    if (_interactionBusy || _audioClosed || isClosed) return;
+    final account = Accounts.main;
+    if (!account.isLogin) {
       SmartDialog.showToast('账号未登录');
       return;
     }
+    if (!_canInteract()) return;
+    final item = audioItem.value;
+    final target = oid;
+    final type = itemType;
+    final parts = List<Int64>.of(subId);
+    bool current() => _ownsInteraction(account, item, target, type, parts);
+    _interactionBusy = true;
+    try {
+      await action(account, current);
+    } catch (error, stack) {
+      logger
+          .scoped('audio')
+          .w('音频互动未完成', error: error.runtimeType, stackTrace: stack);
+      if (current()) const UnknownResult().toast();
+    } finally {
+      _interactionBusy = false;
+    }
+  }
+
+  @override
+  Future<void> Function(int, bool) get payCoinCallback {
+    final account = Accounts.main;
+    final item = audioItem.value;
+    final target = oid;
+    final type = itemType;
+    final parts = List<Int64>.of(subId);
+    return (coin, withLike) async {
+      if (!_ownsInteraction(account, item, target, type, parts)) {
+        if (!isClosed) SmartDialog.showToast('曲目或账号已更新，请重新打开投币面板');
+        return;
+      }
+      await onPayCoin(coin, withLike);
+    };
+  }
+
+  @override
+  Future<void> actionLikeVideo() => _runInteraction((account, current) async {
     final newVal = !hasLike.value;
     final res = await AudioGrpc.audioThumbUp(
+      account: account,
       oid: oid,
-      subId: subId,
+      subId: List.of(subId),
       itemType: itemType,
       type: newVal
           ? ThumbUpReq_ThumbType.LIKE
           : ThumbUpReq_ThumbType.CANCEL_LIKE,
     );
+    if (!current()) return;
     if (res case Success(:final response)) {
       hasLike.value = newVal;
-      try {
-        audioItem.value!.stat
+      final stat = audioItem.value?.stat;
+      if (stat != null) {
+        stat
           ..hasLike_7 = newVal
           ..like += newVal ? 1 : -1;
         audioItem.refresh();
-      } catch (_) {}
+      }
       SmartDialog.showToast(response.message);
     } else {
       res.toast();
     }
-  }
+  });
 
   @override
-  Future<void> actionTriple() async {
-    if (!isLogin) {
-      SmartDialog.showToast('账号未登录');
-      return;
-    }
+  Future<void> actionTriple() => _runInteraction((account, current) async {
+    final previousCoins = coinNum.value;
     final res = await AudioGrpc.audioTripleLike(
+      account: account,
       oid: oid,
-      subId: subId,
+      subId: List.of(subId),
       itemType: itemType,
     );
     if (res case Success(:final response)) {
-      hasLike.value = true;
-      if (response.coinOk && !hasCoin) {
-        coinNum.value = 2;
-        GlobalData().afterCoin(2);
-        try {
-          audioItem.value!.stat
-            ..hasCoin_8 = true
-            ..coin += 2;
-          audioItem.refresh();
-        } catch (_) {}
+      final addedCoins = response.coinOk && previousCoins == 0 ? 2 : 0;
+      if (addedCoins > 0 && identical(account, Accounts.main)) {
+        GlobalData().afterCoin(addedCoins.toInt());
       }
-      hasFav.value = true;
-      if (!hasCoin) {
-        SmartDialog.showToast('投币失败');
-      } else {
-        SmartDialog.showToast('三连成功');
+      if (!current()) return;
+      // 三连允许部分成功，只应用各步骤已确认的状态。
+      final stat = audioItem.value?.stat;
+      if (response.thumbOk && !hasLike.value) {
+        hasLike.value = true;
+        stat
+          ?..hasLike_7 = true
+          ..like += 1;
       }
-    } else {
+      if (addedCoins > 0) {
+        coinNum.value += addedCoins;
+        stat
+          ?..hasCoin_8 = true
+          ..coin += addedCoins.toInt();
+      }
+      if (response.favOk && !hasFav.value) {
+        hasFav.value = true;
+        stat
+          ?..hasFav = true
+          ..favourite += 1;
+      }
+      audioItem.refresh();
+      SmartDialog.showToast(
+        response.thumbOk && response.coinOk && response.favOk
+            ? '三连成功'
+            : '部分操作未完成，请核对点赞、投币和收藏状态',
+      );
+    } else if (current()) {
       res.toast();
     }
-  }
+  });
 
   @override
   int get copyright => audioItem.value?.arc.copyright ?? 1;
 
   @override
-  Future<void> onPayCoin(int coin, bool coinWithLike) async {
-    final res = await AudioGrpc.audioCoinAdd(
-      oid: oid,
-      subId: subId,
-      itemType: itemType,
-      num: coin,
-      thumbUp: coinWithLike,
-    );
-    if (res.isSuccess) {
-      final updateLike = !hasLike.value && coinWithLike;
-      if (updateLike) {
-        hasLike.value = true;
-      }
-      coinNum.value += coin;
-      try {
-        final stat = audioItem.value!.stat
-          ..hasCoin_8 = true
-          ..coin += coin;
-        if (updateLike) {
-          stat
-            ..hasLike_7 = true
-            ..like += 1;
+  Future<void> onPayCoin(int coin, bool coinWithLike) =>
+      _runInteraction((account, current) async {
+        if (coin <= 0 || coinNum.value + coin > (copyright == 2 ? 1 : 2)) {
+          SmartDialog.showToast('达到投币上限啦~');
+          return;
         }
-        audioItem.refresh();
-      } catch (_) {}
-      GlobalData().afterCoin(coin);
-    } else {
-      res.toast();
+        final res = await AudioGrpc.audioCoinAdd(
+          account: account,
+          oid: oid,
+          subId: List.of(subId),
+          itemType: itemType,
+          num: coin,
+          thumbUp: coinWithLike,
+        );
+        if (res.isSuccess && identical(account, Accounts.main)) {
+          GlobalData().afterCoin(coin);
+        }
+        if (!current()) return;
+        if (res.isSuccess) {
+          final updateLike = !hasLike.value && coinWithLike;
+          if (updateLike) hasLike.value = true;
+          coinNum.value += coin;
+          final stat = audioItem.value?.stat;
+          if (stat != null) {
+            stat
+              ..hasCoin_8 = true
+              ..coin += coin;
+            if (updateLike) {
+              stat
+                ..hasLike_7 = true
+                ..like += 1;
+            }
+            audioItem.refresh();
+          }
+          SmartDialog.showToast('投币成功');
+        } else {
+          res.toast();
+        }
+      });
+
+  (Account, (Object, int))? _favPanelTarget;
+
+  @override
+  Future<void> actionFavVideo({bool isQuick = false}) async {
+    if (!isQuick && _favPanelTarget != (Accounts.main, getFavRidType)) {
+      SmartDialog.showToast('曲目或账号已更新，请重新打开收藏面板');
+      return;
     }
+    await _runInteraction(
+      (account, current) => super.actionFavVideo(isQuick: isQuick),
+    );
   }
 
   @override
   void showFavBottomSheet(BuildContext context, {bool isLongPress = false}) {
+    if (!_canInteract()) return;
+    _favPanelTarget = (Accounts.main, getFavRidType);
     if (!isLogin) {
       SmartDialog.showToast('账号未登录');
       return;
@@ -1011,26 +1123,34 @@ class AudioController extends GetxController
   }
 
   void actionShareVideo(BuildContext context) {
-    final audioUrl = isUgc
-        ? '${HttpString.baseUrl}/video/${IdUtils.av2bv(oid.toInt())}'
-        : '${HttpString.baseUrl}/audio/au$oid';
+    final item = audioItem.value?.deepCopy();
+    final target = item?.item.oid ?? oid;
+    final ugc = (item?.item.itemType ?? itemType) == 1;
+    final account = Accounts.main;
+    bool current() =>
+        context.mounted && !isClosed && identical(account, Accounts.main);
+    final audioUrl = ugc
+        ? '${HttpString.baseUrl}/video/${IdUtils.av2bv(target.toInt())}'
+        : '${HttpString.baseUrl}/audio/au$target';
     showDialog(
       context: context,
-      builder: (_) => SimpleDialog(
+      builder: (dialogContext) => SimpleDialog(
         clipBehavior: Clip.hardEdge,
         contentPadding: const EdgeInsets.symmetric(vertical: 12),
         children: [
           DialogOption(
             child: const Text('复制链接', style: TextStyle(fontSize: 14)),
             onPressed: () {
-              Get.back();
+              if (!current()) return;
+              Navigator.of(dialogContext).pop();
               Utils.copyText(audioUrl);
             },
           ),
           DialogOption(
             child: const Text('其它app打开', style: TextStyle(fontSize: 14)),
             onPressed: () {
-              Get.back();
+              if (!current()) return;
+              Navigator.of(dialogContext).pop();
               PiliAndroidHelper.openUrl(audioUrl);
             },
           ),
@@ -1038,8 +1158,9 @@ class AudioController extends GetxController
             DialogOption(
               child: const Text('分享视频', style: TextStyle(fontSize: 14)),
               onPressed: () {
-                Get.back();
-                if (audioItem.value case DetailItem(
+                if (!current()) return;
+                Navigator.of(dialogContext).pop();
+                if (item case DetailItem(
                   :final arc,
                   :final owner,
                 )) {
@@ -1051,12 +1172,13 @@ class AudioController extends GetxController
                 }
               },
             ),
-          if (isLogin)
+          if (account.isLogin)
             DialogOption(
               child: const Text('分享至动态', style: TextStyle(fontSize: 14)),
               onPressed: () {
-                Get.back();
-                if (audioItem.value case DetailItem(
+                if (!current()) return;
+                Navigator.of(dialogContext).pop();
+                if (item case DetailItem(
                   :final arc,
                   :final owner,
                 )) {
@@ -1065,8 +1187,8 @@ class AudioController extends GetxController
                     isScrollControlled: true,
                     useSafeArea: true,
                     builder: (context) => RepostPanel(
-                      rid: oid.toInt(),
-                      dynType: isUgc ? 8 : 256,
+                      rid: target.toInt(),
+                      dynType: ugc ? 8 : 256,
                       pic: arc.cover,
                       title: arc.title,
                       uname: owner.name,
@@ -1075,20 +1197,21 @@ class AudioController extends GetxController
                 }
               },
             ),
-          if (isUgc && isLogin)
+          if (ugc && account.isLogin)
             DialogOption(
               child: const Text('分享至消息', style: TextStyle(fontSize: 14)),
-              onPressed: () {
-                Get.back();
-                if (audioItem.value case DetailItem(
+              onPressed: () async {
+                if (!current()) return;
+                Navigator.of(dialogContext).pop();
+                if (item case DetailItem(
                   :final arc,
                   :final owner,
                 )) {
                   try {
-                    PageUtils.pmShare(
+                    await PageUtils.pmShare(
                       context,
                       content: {
-                        "id": oid.toString(),
+                        "id": target.toString(),
                         "title": arc.title,
                         "headline": arc.title,
                         "source": 5,
@@ -1097,8 +1220,15 @@ class AudioController extends GetxController
                         "author_id": owner.mid.toString(),
                       },
                     );
-                  } catch (e) {
-                    SmartDialog.showToast(e.toString());
+                  } catch (error, stack) {
+                    logger
+                        .scoped('audio')
+                        .w(
+                          '音频消息分享失败',
+                          error: error.runtimeType,
+                          stackTrace: stack,
+                        );
+                    if (current()) SmartDialog.showToast('分享失败，请重试');
                   }
                 }
               },
@@ -1171,7 +1301,9 @@ class AudioController extends GetxController
     final item = audioItem.item;
     final targetSubIds =
         subId ??
-        (item.subId.isNotEmpty ? item.subId : [audioItem.parts.first.subId]);
+        (item.subId.isNotEmpty
+            ? item.subId
+            : [if (audioItem.parts.firstOrNull case final part?) part.subId]);
     if (index == this.index &&
         item.oid == oid &&
         item.itemType == itemType &&

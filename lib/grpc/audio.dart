@@ -5,6 +5,7 @@ import 'package:pili_aurora/grpc/grpc_req.dart';
 import 'package:pili_aurora/grpc/url.dart';
 import 'package:pili_aurora/http/loading_state.dart';
 import 'package:fixnum/fixnum.dart';
+import 'package:pili_aurora/utils/accounts/account.dart';
 
 abstract final class AudioGrpc {
   static Future<LoadingState<PlayURLResp>> audioPlayUrl({
@@ -74,6 +75,7 @@ abstract final class AudioGrpc {
   }
 
   static Future<LoadingState<ThumbUpResp>> audioThumbUp({
+    Account? account,
     required Int64 oid,
     required List<Int64> subId,
     required int itemType,
@@ -91,10 +93,12 @@ abstract final class AudioGrpc {
       ),
       ThumbUpResp.fromBuffer,
       kind: .mutation,
+      account: account,
     );
   }
 
   static Future<LoadingState<TripleLikeResp>> audioTripleLike({
+    Account? account,
     required Int64 oid,
     required List<Int64> subId,
     required int itemType,
@@ -110,10 +114,12 @@ abstract final class AudioGrpc {
       ),
       TripleLikeResp.fromBuffer,
       kind: .mutation,
+      account: account,
     );
   }
 
   static Future<LoadingState<CoinAddResp>> audioCoinAdd({
+    Account? account,
     required Int64 oid,
     required List<Int64> subId,
     required int itemType,
@@ -133,6 +139,7 @@ abstract final class AudioGrpc {
       ),
       CoinAddResp.fromBuffer,
       kind: .mutation,
+      account: account,
     );
   }
 }
