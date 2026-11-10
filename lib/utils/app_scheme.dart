@@ -1,6 +1,6 @@
 // ignore_for_file: constant_identifier_names
 
-import 'dart:async' show StreamSubscription;
+import 'dart:async' show StreamSubscription, unawaited;
 
 import 'package:pili_aurora/common/widgets/scaffold/simple_scaffold.dart';
 import 'package:pili_aurora/services/logger.dart';
@@ -8,6 +8,7 @@ import 'package:pili_aurora/common/widgets/view_safe_area.dart';
 import 'package:pili_aurora/grpc/bilibili/app/listener/v1.pbenum.dart'
     show PlaylistSource;
 import 'package:pili_aurora/http/search.dart';
+import 'package:pili_aurora/http/loading_state.dart';
 import 'package:pili_aurora/models/common/fav_type.dart';
 import 'package:pili_aurora/models/common/video/source_type.dart';
 import 'package:pili_aurora/pages/audio/view.dart';
@@ -45,14 +46,23 @@ abstract final class PiliScheme {
 
     listener?.cancel();
     listener = appLinks.uriLinkStream.listen(
-      PlatformUtils.isDesktop ? _desktopRoutePush : routePush,
+      (uri) => unawaited(_handleAppLink(uri)),
+      onError: (Object error, StackTrace stackTrace) {
+        logger.w('读取应用链接失败', error: error.runtimeType, stackTrace: stackTrace);
+      },
     );
   }
 
-  static Future<bool> _desktopRoutePush(Uri uri) async {
-    await windowManager.show();
-    await windowManager.focus();
-    return routePush(uri);
+  static Future<void> _handleAppLink(Uri uri) async {
+    if (PlatformUtils.isDesktop) {
+      try {
+        await windowManager.show();
+        await windowManager.focus();
+      } catch (error, stackTrace) {
+        logger.w('显示应用窗口失败', error: error.runtimeType, stackTrace: stackTrace);
+      }
+    }
+    await routePush(uri);
   }
 
   static int? _videoProgress(Map<String, String> queryParameters) {
@@ -76,14 +86,14 @@ abstract final class PiliScheme {
     Map? parameters,
     int? businessId,
     int? oid,
-  }) {
+  }) async {
     try {
       if (url.startsWith('//')) {
         url = 'https:$url';
       } else if (!_prefixRegex.hasMatch(url)) {
         url = 'https://$url';
       }
-      return routePush(
+      return await routePush(
         Uri.parse(url),
         selfHandle: selfHandle,
         off: off,
@@ -91,13 +101,39 @@ abstract final class PiliScheme {
         businessId: businessId,
         oid: oid,
       );
-    } catch (_) {
-      return Future.syncValue(false);
+    } catch (error, stackTrace) {
+      logger.w('解析链接失败', error: error.runtimeType, stackTrace: stackTrace);
+      if (!selfHandle) SmartDialog.showToast('链接无效或暂时无法打开');
+      return false;
     }
   }
 
   /// 路由跳转
   static Future<bool> routePush(
+    Uri uri, {
+    bool selfHandle = false,
+    bool off = false,
+    Map? parameters,
+    int? businessId,
+    int? oid,
+  }) async {
+    try {
+      return await _routePush(
+        uri,
+        selfHandle: selfHandle,
+        off: off,
+        parameters: parameters,
+        businessId: businessId,
+        oid: oid,
+      );
+    } catch (error, stackTrace) {
+      logger.w('打开应用链接失败', error: error.runtimeType, stackTrace: stackTrace);
+      if (!selfHandle) SmartDialog.showToast('链接无效或暂时无法打开');
+      return false;
+    }
+  }
+
+  static Future<bool> _routePush(
     Uri uri, {
     bool selfHandle = false,
     bool off = false,
@@ -372,8 +408,8 @@ abstract final class PiliScheme {
                   index = FavTabType.values.byName(tab).index;
                 } catch (e, stackTrace) {
                   logger.w(
-                    'favorite jump: $e',
-                    error: e,
+                    '收藏链接页签无效，使用默认页签',
+                    error: e.runtimeType,
                     stackTrace: stackTrace,
                   );
                 }
@@ -422,7 +458,7 @@ abstract final class PiliScheme {
           default:
             if (!selfHandle) {
               // if (kDebugMode) debugPrint('$uri');
-              SmartDialog.showToast('未知路径:$uri，请截图反馈给开发者');
+              SmartDialog.showToast('暂不支持此链接');
             }
             return false;
         }
@@ -446,7 +482,7 @@ abstract final class PiliScheme {
         }
         if (!selfHandle) {
           // if (kDebugMode) debugPrint('$uri');
-          SmartDialog.showToast('未知路径:$uri，请截图反馈给开发者');
+          SmartDialog.showToast('暂不支持此链接');
         }
         return false;
     }
@@ -904,35 +940,43 @@ abstract final class PiliScheme {
     int? progress, // milliseconds
     String? part,
   }) async {
+    var loadingShown = false;
     try {
       aid ??= IdUtils.bv2av(bvid!);
       bvid ??= IdUtils.av2bv(aid);
       if (showDialog) {
         SmartDialog.showLoading<dynamic>(msg: '获取中...');
+        loadingShown = true;
       }
-      final res = await SearchHttp.ab2cWithDimension(
+      final result = await SearchHttp.pageWithDimension(
         bvid: bvid,
         aid: aid,
         part: parseIntOrNull(part),
       );
+      if (result is Error) {
+        result.toast();
+        return;
+      }
+      final res = result.dataOrNull;
       final cid = res?.cid;
-      if (showDialog) {
-        SmartDialog.dismiss();
+      if (cid == null || cid <= 0) {
+        SmartDialog.showToast('视频暂无可播放内容');
+        return;
       }
-      if (cid != null) {
-        PageUtils.toVideoPage(
-          aid: aid,
-          bvid: bvid,
-          cid: cid,
-          progress: progress,
-          off: off,
-          dimension: res!.dimension,
-          // title: res.title,
-        );
-      }
-    } catch (e) {
-      SmartDialog.dismiss();
-      SmartDialog.showToast('video获取失败: $e');
+      PageUtils.toVideoPage(
+        aid: aid,
+        bvid: bvid,
+        cid: cid,
+        progress: progress,
+        off: off,
+        dimension: res!.dimension,
+        // title: res.title,
+      );
+    } catch (error, stackTrace) {
+      logger.w('获取链接视频失败', error: error.runtimeType, stackTrace: stackTrace);
+      SmartDialog.showToast('视频获取失败，请重试');
+    } finally {
+      if (loadingShown) await SmartDialog.dismiss(status: SmartStatus.loading);
     }
   }
 }

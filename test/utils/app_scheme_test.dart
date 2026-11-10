@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get/get.dart';
 import 'package:pili_aurora/utils/app_scheme.dart';
@@ -40,4 +41,65 @@ void main() {
       expect(arguments!['progress'], expected);
     });
   }
+  for (final direct in [false, true]) {
+    for (final url in [
+      'bilibili://video/12345678?cid=invalid&secret=private-value',
+      'bilibili://comment/detail/17?token=private-value',
+      'https://space.bilibili.com/1/lists?sid=invalid&token=private-value',
+      'bilibili://video/12345678?cid=42&t=NaN&token=private-value',
+    ]) {
+      testWidgets('畸形链接${direct ? '直接' : '字符串'}入口返回失败且不泄露查询内容 $url', (
+        tester,
+      ) async {
+        await tester.pumpWidget(
+          GetMaterialApp(
+            builder: FlutterSmartDialog.init(),
+            home: const Scaffold(),
+          ),
+        );
+        final handled = await (direct
+            ? PiliScheme.routePush(Uri.parse(url))
+            : PiliScheme.routePushFromUrl(url));
+        await tester.pumpAndSettle();
+        expect(handled, isFalse);
+        expect(find.text('链接无效或暂时无法打开'), findsOneWidget);
+        expect(find.textContaining('private-value'), findsNothing);
+        expect(tester.takeException(), isNull);
+        final dismiss = SmartDialog.dismiss(status: .allToast);
+        await tester.pumpAndSettle();
+        await dismiss;
+        await tester.pumpWidget(const SizedBox());
+      });
+    }
+  }
+  testWidgets('探测链接静默失败，未知链接提示不包含URL', (tester) async {
+    await tester.pumpWidget(
+      GetMaterialApp(
+        builder: FlutterSmartDialog.init(),
+        home: const Scaffold(),
+      ),
+    );
+    expect(
+      await PiliScheme.routePushFromUrl(
+        'bilibili://video/1?cid=bad',
+        selfHandle: true,
+      ),
+      isFalse,
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('链接无效或暂时无法打开'), findsNothing);
+    expect(
+      await PiliScheme.routePushFromUrl(
+        'bilibili://unsupported?token=private-value',
+      ),
+      isFalse,
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('暂不支持此链接'), findsOneWidget);
+    expect(find.textContaining('private-value'), findsNothing);
+    final dismiss = SmartDialog.dismiss(status: .allToast);
+    await tester.pumpAndSettle();
+    await dismiss;
+    await tester.pumpWidget(const SizedBox());
+  });
 }

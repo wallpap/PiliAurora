@@ -122,35 +122,38 @@ abstract final class PageUtils {
     bool off = false,
     Object? type,
   }) async {
-    assert(id != null || rid != null);
-    SmartDialog.showLoading();
-    final res = await DynamicsHttp.dynamicDetail(
-      id: id,
-      rid: rid,
-      type: rid != null ? 2 : null,
-    );
-    SmartDialog.dismiss();
-    if (res case Success(:final response)) {
-      if (response.basic?.commentType == 12) {
-        toDupNamed(
-          '/articlePage',
-          parameters: {
-            'id': id!,
-            'type': 'opus',
-          },
-          off: off,
-        );
+    if (id == null && rid == null) {
+      SmartDialog.showToast('动态缺少有效标识');
+      return;
+    }
+    try {
+      SmartDialog.showLoading();
+      final res = await DynamicsHttp.dynamicDetail(
+        id: id,
+        rid: rid,
+        type: rid != null ? 2 : null,
+      );
+      if (res case Success(:final response)) {
+        if (response.basic?.commentType == 12) {
+          toDupNamed(
+            '/articlePage',
+            parameters: {
+              'id': response.idStr.toString(),
+              'type': 'opus',
+            },
+            off: off,
+          );
+        } else {
+          toDupNamed('/dynamicDetail', arguments: {'item': response}, off: off);
+        }
       } else {
-        toDupNamed(
-          '/dynamicDetail',
-          arguments: {
-            'item': response,
-          },
-          off: off,
-        );
+        res.toast();
       }
-    } else {
-      SmartDialog.showToast('${type != null ? 'type: $type ' : ''}$res');
+    } catch (error, stackTrace) {
+      logger.w('打开动态失败', error: error.runtimeType, stackTrace: stackTrace);
+      SmartDialog.showToast('动态加载失败，请重试');
+    } finally {
+      await SmartDialog.dismiss(status: SmartStatus.loading);
     }
   }
 
@@ -310,8 +313,13 @@ abstract final class PageUtils {
               title: archive.title,
             );
           }
-        } catch (err) {
-          SmartDialog.showToast(err.toString());
+        } catch (error, stackTrace) {
+          logger.w(
+            '打开动态视频失败',
+            error: error.runtimeType,
+            stackTrace: stackTrace,
+          );
+          SmartDialog.showToast('视频获取失败，请重试');
         }
         break;
 
@@ -437,10 +445,11 @@ abstract final class PageUtils {
     try {
       final uri = Uri.parse(url);
       if (!await launchUrl(uri, mode: mode)) {
-        SmartDialog.showToast('Could not launch $url');
+        SmartDialog.showToast('无法打开链接，请检查可用的浏览器或应用');
       }
-    } catch (e) {
-      SmartDialog.showToast(e.toString());
+    } catch (error, stackTrace) {
+      logger.w('启动外部链接失败', error: error.runtimeType, stackTrace: stackTrace);
+      SmartDialog.showToast('无法打开链接，请检查可用的浏览器或应用');
     }
   }
 
@@ -451,10 +460,10 @@ abstract final class PageUtils {
   }) async {
     if (!inApp && Pref.openInBrowser) {
       if (!await PiliScheme.routePushFromUrl(url, selfHandle: true)) {
-        launchURL(url);
+        await launchURL(url);
       }
     } else {
-      PiliScheme.routePushFromUrl(url, parameters: parameters);
+      await PiliScheme.routePushFromUrl(url, parameters: parameters);
     }
   }
 
@@ -613,7 +622,7 @@ abstract final class PageUtils {
     try {
       SmartDialog.showLoading(msg: '资源获取中');
       final res = await SearchHttp.pgcInfo(seasonId: seasonId, epId: epId);
-      SmartDialog.dismiss();
+      SmartDialog.dismiss(status: SmartStatus.loading);
       if (res case Success(:final response)) {
         final episodes = response.episodes;
         final hasEpisode = episodes != null && episodes.isNotEmpty;
@@ -699,9 +708,9 @@ abstract final class PageUtils {
         res.toast();
       }
     } catch (e, stackTrace) {
-      SmartDialog.dismiss();
-      SmartDialog.showToast('$e');
-      logger.w('$e', error: e, stackTrace: stackTrace);
+      SmartDialog.dismiss(status: SmartStatus.loading);
+      SmartDialog.showToast('资源加载失败，请重试');
+      logger.w('加载番剧资源失败', error: e.runtimeType, stackTrace: stackTrace);
     }
   }
 
@@ -715,7 +724,7 @@ abstract final class PageUtils {
     try {
       SmartDialog.showLoading(msg: '资源获取中');
       final res = await SearchHttp.pugvInfo(seasonId: seasonId, epId: epId);
-      SmartDialog.dismiss();
+      SmartDialog.dismiss(status: SmartStatus.loading);
       if (res case Success(:final response)) {
         final episodes = response.episodes;
         if (episodes != null && episodes.isNotEmpty) {
@@ -747,9 +756,10 @@ abstract final class PageUtils {
       } else {
         res.toast();
       }
-    } catch (e) {
-      SmartDialog.dismiss();
-      SmartDialog.showToast(e.toString());
+    } catch (error, stackTrace) {
+      SmartDialog.dismiss(status: SmartStatus.loading);
+      logger.w('加载课程资源失败', error: error.runtimeType, stackTrace: stackTrace);
+      SmartDialog.showToast('资源加载失败，请重试');
     }
   }
 

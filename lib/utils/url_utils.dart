@@ -20,13 +20,12 @@ abstract final class UrlUtils {
         options: Options(
           followRedirects: false,
           validateStatus: (status) {
-            return 200 <= status! && status < 400;
+            return status != null && 200 <= status && status < 400;
           },
           extra: {'account': AnonymousAccount()},
         ),
       );
       redirectUrl = response.headers['location']?.firstOrNull;
-      logger.d('redirectUrl: $redirectUrl');
       if (redirectUrl != null && !redirectUrl.startsWith('http')) {
         redirectUrl = Uri.parse(url).resolve(redirectUrl).toString();
       }
@@ -35,7 +34,7 @@ abstract final class UrlUtils {
       final host = uri?.host;
       logger.w(
         '解析重定向失败: ${host == null || host.isEmpty ? '<invalid url>' : host}',
-        error: error,
+        error: error.runtimeType,
         stackTrace: stackTrace,
       );
     }
@@ -68,9 +67,9 @@ abstract final class UrlUtils {
       }
     } else {
       if (redirectUrl.isNotEmpty) {
-        PageUtils.handleWebview(redirectUrl);
+        await PageUtils.handleWebview(redirectUrl);
       } else {
-        SmartDialog.showToast('matchUrlPush: $pathSegment');
+        SmartDialog.showToast('未找到可打开的链接');
       }
     }
   }
