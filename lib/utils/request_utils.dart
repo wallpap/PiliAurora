@@ -1,4 +1,4 @@
-import 'dart:async' show FutureOr;
+import 'dart:async' show FutureOr, unawaited;
 import 'dart:math';
 
 import 'package:pili_aurora/services/logger.dart';
@@ -641,7 +641,7 @@ abstract final class RequestUtils {
       if (!current() || Get.context?.mounted != true) return;
       if (res case Success(:final response)) {
         final show = !response.name.isNullOrEmpty;
-        showDialog<void>(
+        final dialog = showDialog<void>(
           context: Get.context!,
           builder: (context) => AlertDialog(
             title: SelectionText(
@@ -658,6 +658,18 @@ abstract final class RequestUtils {
                 child: const Text('关闭'),
               ),
             ],
+          ),
+        );
+        unawaited(
+          dialog.then(
+            (_) {},
+            onError: (Object error, StackTrace stackTrace) {
+              logger.w(
+                '实名信息弹窗失败',
+                error: error.runtimeType,
+                stackTrace: stackTrace,
+              );
+            },
           ),
         );
       } else {
