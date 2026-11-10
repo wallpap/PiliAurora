@@ -63,6 +63,7 @@ import 'package:pili_aurora/utils/extension/nested_scroll_ext.dart';
 import 'package:pili_aurora/utils/extension/num_ext.dart';
 import 'package:pili_aurora/utils/extension/size_ext.dart';
 import 'package:pili_aurora/utils/page_utils.dart';
+import 'package:pili_aurora/utils/navigation_request.dart';
 import 'package:pili_aurora/utils/platform_utils.dart';
 import 'package:pili_aurora/utils/storage.dart';
 import 'package:pili_aurora/utils/storage_pref.dart';
@@ -1786,46 +1787,64 @@ class VideoDetailController extends GetxController
     }
   }
 
-  @pragma('vm:notify-debugger-on-exception')
-  Future<void> onCast() async {
-    SmartDialog.showLoading();
-    final res = await VideoHttp.tvPlayUrl(
-      cid: cid.value,
-      objectId: epId ?? aid,
-      playurlType: epId != null ? 2 : 1,
-      qn: currentVideoQa.value?.code,
-    );
-    SmartDialog.dismiss();
-    if (res case Success(:final response)) {
-      final first = response.durl?.firstOrNull;
-      if (first == null || first.playUrls.isEmpty) {
-        SmartDialog.showToast('不支持投屏');
-        return;
-      }
-      final url = VideoUtils.getCdnUrl(first.playUrls);
+  bool _casting = false;
 
-      String? title;
-      try {
-        if (isUgc) {
-          title = Get.find<UgcIntroController>(
-            tag: heroTag,
-          ).videoDetail.value.title;
-        } else {
-          title = Get.find<PgcIntroController>(
-            tag: heroTag,
-          ).videoDetail.value.title;
-        }
-      } catch (_) {}
-      logger.d(title);
-      Get.toNamed(
-        '/dlna',
-        parameters: {
-          'url': url,
-          'title': ?title,
-        },
+  Future<void> onCast() async {
+    if (_casting || isClosed) return;
+    _casting = true;
+    final request = NavigationRequest();
+    final requestCid = cid.value;
+    final requestBvid = bvid;
+    final requestAid = aid;
+    final requestEpId = epId;
+    final account = Accounts.get(AccountType.video);
+    bool current() =>
+        !isClosed &&
+        request.isCurrent &&
+        cid.value == requestCid &&
+        bvid == requestBvid &&
+        aid == requestAid &&
+        epId == requestEpId &&
+        identical(account, Accounts.get(AccountType.video));
+    try {
+      request.showLoading('投屏地址获取中');
+      final res = await VideoHttp.tvPlayUrl(
+        cid: requestCid,
+        objectId: requestEpId ?? requestAid,
+        playurlType: requestEpId != null ? 2 : 1,
+        qn: currentVideoQa.value?.code,
       );
-    } else {
-      res.toast();
+      if (!current()) return;
+      if (res case Success(:final response)) {
+        final first = response.durl?.firstOrNull;
+        if (first == null || first.playUrls.isEmpty) {
+          SmartDialog.showToast('不支持投屏');
+          return;
+        }
+        final url = VideoUtils.getCdnUrl(first.playUrls);
+        String? title;
+        if (isUgc && Get.isRegistered<UgcIntroController>(tag: heroTag)) {
+          title = Get.find<UgcIntroController>(tag: heroTag)
+              .videoDetail
+              .value
+              .title;
+        } else if (!isUgc &&
+            Get.isRegistered<PgcIntroController>(tag: heroTag)) {
+          title = Get.find<PgcIntroController>(tag: heroTag)
+              .videoDetail
+              .value
+              .title;
+        }
+        Get.toNamed('/dlna', parameters: {'url': url, 'title': ?title});
+      } else {
+        res.toast();
+      }
+    } catch (error, stackTrace) {
+      logger.w('获取投屏地址失败', error: error.runtimeType, stackTrace: stackTrace);
+      if (current()) SmartDialog.showToast('投屏地址获取失败，请重试');
+    } finally {
+      await request.close();
+      _casting = false;
     }
   }
 }
