@@ -1,5 +1,9 @@
+import 'dart:async' show FutureOr;
+
 import 'package:pili_aurora/common/widgets/dialog/dialog.dart';
 import 'package:pili_aurora/common/widgets/flutter/list_tile.dart';
+import 'package:pili_aurora/common/widgets/route_aware_mixin.dart';
+import 'package:pili_aurora/services/logger.dart';
 import 'package:pili_aurora/utils/storage.dart';
 import 'package:pili_aurora/utils/storage_key.dart';
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
@@ -10,7 +14,7 @@ class SetSwitchItem extends StatefulWidget {
   final String? subtitle;
   final String setKey;
   final bool defaultVal;
-  final ValueChanged<bool>? onChanged;
+  final FutureOr<void> Function(bool)? onChanged;
   final bool needReboot;
   final Widget? leading;
   final void Function(BuildContext context)? onTap;
@@ -41,6 +45,8 @@ class SetSwitchItem extends StatefulWidget {
 
 class _SetSwitchItemState extends State<SetSwitchItem> {
   late bool val;
+  bool _busy = false;
+  int _generation = 0;
 
   void _setVal() {
     val = GStorage.setting.get(widget.setKey, defaultValue: widget.defaultVal);
@@ -50,6 +56,8 @@ class _SetSwitchItemState extends State<SetSwitchItem> {
   void didUpdateWidget(SetSwitchItem oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.setKey != widget.setKey) {
+      _generation++;
+      _busy = false;
       _setVal();
     }
   }
@@ -61,22 +69,51 @@ class _SetSwitchItemState extends State<SetSwitchItem> {
   }
 
   Future<void> switchChange([bool? value]) async {
-    val = value ?? !val;
-
-    if (val && widget.setKey == SettingBoxKey.badCertificateCallback) {
-      val = await showConfirmDialog(
-        context: context,
-        title: const Text('确定禁用 SSL 证书验证？'),
-        content: const Text('禁用容易受到中间人攻击'),
-      );
-      if (!val) return;
+    if (_busy) return;
+    final source = widget;
+    final generation = _generation;
+    final next = value ?? !val;
+    final route = ModalRoute.of(context);
+    var invalidated = false;
+    void onNavigation() {
+      if (!identical(routeObserver.currentRoute, route)) invalidated = true;
     }
 
-    await GStorage.setting.put(widget.setKey, val);
-
-    widget.onChanged?.call(val);
-    if (widget.needReboot) SmartDialog.showToast('重启生效');
-    if (mounted) setState(() {});
+    bool ownsSource() => mounted && generation == _generation;
+    bool canPresent() =>
+        ownsSource() && !invalidated && (route?.isCurrent ?? true);
+    routeObserver.addNavigationListener(onNavigation);
+    setState(() => _busy = true);
+    try {
+      if (next && source.setKey == SettingBoxKey.badCertificateCallback) {
+        final confirmed = await showConfirmDialog(
+          context: context,
+          title: const Text('确定禁用 SSL 证书验证？'),
+          content: const Text('禁用容易受到中间人攻击'),
+        );
+        if (!confirmed || !canPresent()) return;
+      }
+      try {
+        await GStorage.setting.put(source.setKey, next);
+      } catch (error, stackTrace) {
+        logger.w('保存设置开关失败', error: error.runtimeType, stackTrace: stackTrace);
+        if (canPresent()) SmartDialog.showToast('设置保存失败，请重试');
+        return;
+      }
+      if (ownsSource()) setState(() => val = next);
+      // 保存已经确认，应用捕获的原设置回调；新 Widget 不接收旧操作。
+      try {
+        await source.onChanged?.call(next);
+      } catch (error, stackTrace) {
+        logger.w('应用设置开关失败', error: error.runtimeType, stackTrace: stackTrace);
+        if (canPresent()) SmartDialog.showToast('设置已保存，应用失败，请重启后重试');
+        return;
+      }
+      if (source.needReboot && canPresent()) SmartDialog.showToast('重启生效');
+    } finally {
+      routeObserver.removeNavigationListener(onNavigation);
+      if (ownsSource()) setState(() => _busy = false);
+    }
   }
 
   @override
@@ -98,14 +135,18 @@ class _SetSwitchItemState extends State<SetSwitchItem> {
       alignment: .centerRight,
       child: Switch(
         value: val,
-        onChanged: switchChange,
+        onChanged: _busy ? null : switchChange,
       ),
     );
 
     Widget child(Widget? trailing) => ListTile(
       contentPadding: widget.contentPadding,
       enabled: widget.onTap == null ? true : val,
-      onTap: widget.onTap == null ? switchChange : () => widget.onTap!(context),
+      onTap: _busy
+          ? null
+          : widget.onTap == null
+          ? switchChange
+          : () => widget.onTap!(context),
       title: Text(widget.title, style: titleStyle),
       subtitle: widget.subtitle != null
           ? Text(widget.subtitle!, style: subTitleStyle)

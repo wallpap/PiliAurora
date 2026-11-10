@@ -1,14 +1,16 @@
-import 'package:pili_aurora/common/style.dart';
+import 'dart:async' show FutureOr;
+
+import 'package:pili_aurora/common/widgets/route_aware_mixin.dart';
 import 'package:pili_aurora/common/widgets/scaffold/simple_scaffold.dart';
 import 'package:pili_aurora/models/common/enum_with_label.dart';
 import 'package:pili_aurora/pages/setting/widgets/normal_item.dart';
 import 'package:pili_aurora/pages/setting/widgets/popup_item.dart';
 import 'package:pili_aurora/pages/setting/widgets/select_dialog.dart';
 import 'package:pili_aurora/pages/setting/widgets/switch_item.dart';
+import 'package:pili_aurora/pages/setting/widgets/setting_input_dialog.dart';
+import 'package:pili_aurora/services/logger.dart';
 import 'package:pili_aurora/utils/storage.dart';
-import 'package:flutter/services.dart' show FilteringTextInputFormatter;
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
-import 'package:get/get.dart';
 import 'package:material_ui/material_ui.dart' hide PopupMenuItemSelected;
 
 @immutable
@@ -213,7 +215,7 @@ class SwitchModel extends SettingsModel {
   final String? title;
   final String setKey;
   final bool defaultVal;
-  final ValueChanged<bool>? onChanged;
+  final FutureOr<void> Function(bool)? onChanged;
   final bool needReboot;
   final void Function(BuildContext context)? onTap;
   final List<SettingsModel> children;
@@ -270,60 +272,76 @@ class SwitchModel extends SettingsModel {
   );
 }
 
+// 编辑弹窗不改变 PageRoute；离开页面后永久废弃该次交互。
+class _SettingEdit {
+  _SettingEdit(this.context)
+    : source = context.widget,
+      route = ModalRoute.of(context) {
+    routeObserver.addNavigationListener(_onNavigation);
+  }
+
+  final BuildContext context;
+  final Widget source;
+  final Route<dynamic>? route;
+  bool _invalidated = false;
+
+  void _onNavigation() {
+    if (!identical(routeObserver.currentRoute, route)) _invalidated = true;
+  }
+
+  bool get isCurrent =>
+      !_invalidated && context.mounted && identical(context.widget, source);
+
+  void close() => routeObserver.removeNavigationListener(_onNavigation);
+
+  void apply(VoidCallback callback) {
+    try {
+      callback();
+    } catch (error, stackTrace) {
+      logger.w('应用已保存的设置失败', error: error.runtimeType, stackTrace: stackTrace);
+      if (isCurrent) SmartDialog.showToast('设置已保存，应用失败，请重启后重试');
+    }
+  }
+}
+
 SettingsModel getBanWordModel({
   required String title,
   required String key,
   required ValueChanged<RegExp> onChanged,
 }) {
   String banWord = GStorage.setting.get(key, defaultValue: '');
+  bool editing = false;
   return NormalModel(
     leading: const Icon(Icons.filter_alt_outlined),
     title: title,
-    getSubtitle: () => banWord.isEmpty ? "点击添加" : banWord,
-    onTap: (context, setState) {
-      String editValue = banWord;
-      showDialog(
-        context: context,
-        builder: (context) => AlertDialog(
-          constraints: Style.dialogFixedConstraints,
-          title: Text(title),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text('使用|隔开，如：尝试|测试'),
-              TextFormField(
-                autofocus: true,
-                initialValue: editValue,
-                textInputAction: TextInputAction.newline,
-                minLines: 1,
-                maxLines: 4,
-                onChanged: (value) => editValue = value,
-              ),
-            ],
+    getSubtitle: () => banWord.isEmpty ? '点击添加' : banWord,
+    onTap: (context, setState) async {
+      if (editing) return;
+      editing = true;
+      final edit = _SettingEdit(context);
+      try {
+        await showDialog<void>(
+          context: context,
+          barrierDismissible: false,
+          builder: (_) => SettingInputDialog<RegExp>(
+            title: title,
+            initialValue: banWord,
+            description: '使用|隔开，如：尝试|测试',
+            parse: (value) => RegExp(value, caseSensitive: false),
+            validationMessage: '请输入有效的正则表达式',
+            isCurrent: () => edit.isCurrent,
+            save: (pattern) async {
+              await GStorage.setting.put(key, pattern.pattern);
+              banWord = pattern.pattern;
+              edit.apply(() => onChanged(pattern));
+              setState();
+            },
           ),
-          actions: [
-            TextButton(
-              onPressed: Get.back,
-              child: Text(
-                '取消',
-                style: TextStyle(color: ColorScheme.of(context).outline),
-              ),
-            ),
-            TextButton(
-              child: const Text('保存'),
-              onPressed: () {
-                Get.back();
-                banWord = editValue;
-                setState();
-                onChanged(RegExp(banWord, caseSensitive: false));
-                SmartDialog.showToast('已保存');
-                GStorage.setting.put(key, banWord);
-              },
-            ),
-          ],
-        ),
-      );
+        );
+      } finally {
+        edit.close();
+        editing = false;
+      }
     },
   );
 }
@@ -340,6 +358,7 @@ SettingsModel getVideoFilterSelectModel({
 }) {
   assert(!isFilter || onChanged != null);
   int value = GStorage.setting.get(key, defaultValue: defaultValue);
+  bool editing = false;
   return NormalModel(
     title: '$title${isFilter ? '过滤' : ''}',
     leading: const Icon(Icons.timelapse_outlined),
@@ -350,63 +369,61 @@ SettingsModel getVideoFilterSelectModel({
               : '当前$title:「$value${suffix ?? ""}」'
         : null,
     onTap: (context, setState) async {
-      var result = await showDialog<int>(
-        context: context,
-        builder: (context) => SelectDialog<int>(
-          title: '选择$title${isFilter ? '（0即不过滤）' : ''}',
-          value: value,
-          values:
-              (values
-                    ..addIf(!values.contains(value), value)
-                    ..sort())
-                  .map((e) => (e, suffix == null ? e.toString() : '$e $suffix'))
-                  .toList()
-                ..add((-1, '自定义')),
-        ),
-      );
-      if (result != null) {
-        if (result == -1 && context.mounted) {
-          String valueStr = '';
-          await showDialog(
+      if (editing) return;
+      editing = true;
+      final edit = _SettingEdit(context);
+      Future<void> save(int next) async {
+        await GStorage.setting.put(key, next);
+        value = next;
+        edit.apply(() => onChanged?.call(next));
+        setState();
+      }
+
+      try {
+        final choices = {...values, value}.toList()..sort();
+        final result = await showDialog<int>(
+          context: context,
+          builder: (_) => SelectDialog<int>(
+            title: '选择$title${isFilter ? '（0即不过滤）' : ''}',
+            value: value,
+            values: [
+              for (final choice in choices)
+                (choice, suffix == null ? '$choice' : '$choice $suffix'),
+              (-1, '自定义'),
+            ],
+          ),
+        );
+        if (result == null || !context.mounted || !edit.isCurrent) return;
+        if (result == -1) {
+          await showDialog<void>(
             context: context,
-            builder: (context) => AlertDialog(
-              title: Text('自定义$title'),
-              content: TextField(
-                autofocus: true,
-                onChanged: (value) => valueStr = value,
-                keyboardType: TextInputType.number,
-                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                decoration: InputDecoration(suffixText: suffix),
-              ),
-              actions: [
-                TextButton(
-                  onPressed: Get.back,
-                  child: Text(
-                    '取消',
-                    style: TextStyle(color: ColorScheme.of(context).outline),
-                  ),
-                ),
-                TextButton(
-                  onPressed: () {
-                    try {
-                      result = int.parse(valueStr);
-                      Get.back();
-                    } catch (e) {
-                      SmartDialog.showToast(e.toString());
-                    }
-                  },
-                  child: const Text('确定'),
-                ),
-              ],
+            barrierDismissible: false,
+            builder: (_) => SettingInputDialog<int>(
+              title: '自定义$title',
+              initialValue: '',
+              suffix: suffix,
+              numeric: true,
+              parse: int.parse,
+              validationMessage: '请输入有效的非负整数',
+              isCurrent: () => edit.isCurrent,
+              save: save,
             ),
           );
+        } else {
+          try {
+            await save(result);
+          } catch (error, stackTrace) {
+            logger.w(
+              '保存数字设置失败',
+              error: error.runtimeType,
+              stackTrace: stackTrace,
+            );
+            if (edit.isCurrent) SmartDialog.showToast('设置保存失败，请重试');
+          }
         }
-        if (result != -1) {
-          value = result!;
-          setState();
-          onChanged?.call(value);
-          GStorage.setting.put(key, value);
-        }
+      } finally {
+        edit.close();
+        editing = false;
       }
     },
   );
