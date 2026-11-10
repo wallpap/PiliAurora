@@ -116,6 +116,12 @@ fvm flutter test test/services/diagnostics/ test/pages/about/diagnostics_page_te
 
 `pages/setting/doc_provider_results_test.dart` 检查文档提供器设置的原生失败保留确认值、保存互斥、偏好失败后的原生恢复、双失败待确认及重试同步，以及离页返回后的迟到提示隔离。Android PackageManager 实际组件状态仍需设备验收。
 
+`pages/setting/common_settings_results_test.dart` 检查公共开关的保存回执、异步应用失败、来源替换、证书确认取消及离页隔离；屏蔽词和自定义数字检查输入校验、保存互斥、失败保留草稿与重试，数字选项支持不可变列表。`decoder_test_dialog_test.dart` 通过实际 HTTP 边界区分样片查询失败与成功空格式，并检查重试恢复格式选择。真实存储和原生解码仍需设备验收。
+
+`utils/update_results_test.dart` 检查忽略版本等待保存、失败重试、互斥及关闭后的迟到回执；`utils/feed_back_results_test.dart` 检查触感开关与插件失败消费。真实更新服务与设备触感需另行验收。
+
+`pages/whisper_detail/image_send_results_test.dart` 挂实际私信页面，检查选图取消／插件失败重试、选图与上传互斥、发送待确认、独立加载提示及页面／Session 失效。测试使用选图平台通道和消息适配器替身；原生相册、临时文件和实际上传服务需设备验收。
+
 `pages/dynamics/management_results_test.dart` 的成员动态用例另检查刷新后的旧确认回调、分页失败显式重试、重复游标／连续无增长限界和删除后重复页不会复活条目。
 
 `utils/platform_action_results_test.dart` 检查剪贴板确认前不提示成功、平台失败由操作持有者消费，以及桌面分享不泄露异常正文。桌面分享用例仅在 Windows 执行；系统分享面板、文件选择与目录打开仍需目标设备验证。
