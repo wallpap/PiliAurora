@@ -52,6 +52,10 @@ fvm flutter test test/services/diagnostics/ test/pages/about/diagnostics_page_te
 
 ## 页面与账号
 
+`pages/bubble/controller_test.dart` 检查同 UID 凭据替换后的首页重读、旧账号响应隔离、分页失败保留页码、排序废弃旧分页及释放后的迟到结果。`pages/emote/controller_test.dart` 检查损坏历史逐条降级、可选缓存保存失败与串行、账号替换和页签释放。
+
+`pages/article/card_navigation_test.dart` 检查文章、投票与私信直播卡片的损坏 ID 点击提示，避免点击期解析异常。`pages/dynamics/card_input_results_test.dart` 检查动态富文本／附加投票和文章内嵌卡片弹窗的点击校验。
+
 `http/login_test.dart` 与 `pages/login/request_lifecycle_test.dart` 检查登录结果类型、缺失身份／验证码字段、风控响应、损坏公钥、请求防重放，以及失败后的重试、倒计时和页面释放。`utils/accounts/cookie_failure_test.dart` 检查 Cookie 保存失败沿请求 Future 返回、保留原始 HTTP 错误及避免重放写请求。
 
 `http/login_account_results_test.dart` 检查退出撤销的拒绝／待确认、禁重试和设备解析原因；`pages/setting/logout_results_test.dart` 检查多账号退出互斥、部分失败、远端成功后的本地清理重试、同 UID 凭据替换及关闭后的授权清理。真实撤销服务、Hive 和 WebView 清理需另行验收。
@@ -90,7 +94,7 @@ fvm flutter test test/services/diagnostics/ test/pages/about/diagnostics_page_te
 
 `pages/member/operation_results_test.dart` 检查成员主页面的账号／目标／刷新归属、关系写入和经验领取互斥；`pages/member/child_list_results_test.dart` 与 `pages/member_pgc/controller_results_test.dart` 检查成员视频／图文／Web／番剧子列表的账号订阅、查询失效和页面释放，以及继续播放的迟到结果。番剧页独立查询，不消费无账号归属的父缓存。
 
-`utils/app_scheme_test.dart` 与 `utils/url_navigation_results_test.dart` 检查链接入口同步／异步错误消费、静默探测、相对重定向、分 P 查询空结果及安全失败提示；`utils/navigation_lifecycle_results_test.dart` 通过生产 Get 路由和普通 MaterialPageRoute 验证最后一次导航生效、离页后返回及路由移除后的旧查询失效、确认弹窗关闭后继续交付，以及空结果收尾和其他加载提示的隔离；实名查询还覆盖账号替换和结果弹窗关闭。系统外链启动与真实 WebView 仍需设备验收。
+`utils/app_scheme_test.dart` 与 `utils/url_navigation_results_test.dart` 检查链接入口同步／异步错误消费、静默探测、相对重定向、分 P 查询空结果及安全失败提示；`utils/navigation_lifecycle_results_test.dart` 通过生产 Get 路由和普通 MaterialPageRoute 验证最后一次导航生效、离页后返回及路由移除后的旧查询失效、确认弹窗关闭后继续交付，以及空结果收尾和其他加载提示的隔离，链接视频／playlist 的账号替换与空分 P；实名查询还覆盖账号替换和结果弹窗关闭。系统外链启动与真实 WebView 仍需设备验收。
 
 `pages/member/shortcut_action_test.dart` 检查空间快捷方式的资料校验、下载失败重试、原生失败消费、在途互斥、来源失效和独立提示清理。系统仅接收创建请求，启动器最终添加与 Android 外链启动仍需设备验收。
 
@@ -115,6 +119,8 @@ fvm flutter test test/services/diagnostics/ test/pages/about/diagnostics_page_te
 `utils/connectivity_results_test.dart` 检查 Wi-Fi／移动网络判定、探测错误保留与初始化保守降级；按网络保存音视频默认档位的入口在未知时跳过写入。`utils/font_results_test.dart` 检查导入取消／失败、旧字体兼容、启动降级、文件／偏好失败保留确认值、保存互斥和页面草稿。`utils/cache_results_test.dart` 检查实际缓存大小、清理确认取消、失败解锁重试、独立加载提示与离页返回后的迟到结果隔离；`utils/asset_preparation_test.dart` 检查资源复制失败及完整重试。`plugin/pl_player/playback/controller_recovery_test.dart` 的资源准备失败用例检查超分档位与偏好保留、同档位重试。原生文件选择器、系统字体枚举、着色器及真实网络切换需设备验收。
 
 `pages/setting/doc_provider_results_test.dart` 检查文档提供器设置的原生失败保留确认值、保存互斥、偏好失败后的原生恢复、双失败待确认及重试同步，以及离页返回后的迟到提示隔离。Android PackageManager 实际组件状态仍需设备验收。
+
+`pages/setting/independent_settings_results_test.dart` 与 `content_video_results_test.dart` 检查独立设置的保存回执、输入草稿、重复操作及保存后应用失败；`services/app_icon_test.dart` 检查图标选择与启动器同步的串行边界。原生启动器行为仍需 Android 设备验收。
 
 `pages/setting/common_settings_results_test.dart` 检查公共开关的保存回执、异步应用失败、来源替换、证书确认取消及离页隔离；屏蔽词和自定义数字检查输入校验、保存互斥、失败保留草稿与重试，数字选项支持不可变列表。`decoder_test_dialog_test.dart` 通过实际 HTTP 边界区分样片查询失败与成功空格式，并检查重试恢复格式选择。真实存储和原生解码仍需设备验收。
 

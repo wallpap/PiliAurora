@@ -14,6 +14,7 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   late ControlledInterceptor interceptor;
   late BubbleController controller;
+  var closed = false;
   LoginAccount login(String credential) => LoginAccount(
     BiliCookieJar.fromJson({'DedeUserID': '100', 'bili_jct': credential}),
     'access-$credential',
@@ -38,13 +39,14 @@ void main() {
     Request.dio.interceptors.clear();
   });
   setUp(() {
+    closed = false;
     interceptor = ControlledInterceptor();
     Request.dio.interceptors.add(interceptor);
     Accounts.accountMode[AccountType.main.index] = login('old');
     controller = BubbleController(null, tribeId: '1')..onInit();
   });
   tearDown(() async {
-    controller.onClose();
+    if (!closed) controller.onClose();
     for (final request in interceptor.requests) {
       if (!request.reply.isCompleted) {
         request.reply.complete(response('retired'));
@@ -93,10 +95,9 @@ void main() {
   test('释放后消费迟到响应，不更新状态', () async {
     await interceptor.waitForRequests(1);
     controller.onClose();
+    closed = true;
     interceptor.requests[0].reply.complete(response('late'));
     await Future<void>.delayed(Duration.zero);
     expect(controller.loadingState.value, isA<Loading>());
-    // tearDown 不再重复释放资源。
-    controller = BubbleController(null, tribeId: 'unused');
   });
 }
