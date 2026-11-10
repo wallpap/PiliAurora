@@ -33,8 +33,10 @@ import 'package:pili_aurora/plugin/pl_player/controller.dart';
 import 'package:pili_aurora/plugin/pl_player/models/play_repeat.dart';
 import 'package:pili_aurora/plugin/pl_player/models/play_status.dart';
 import 'package:pili_aurora/services/service_locator.dart';
+import 'package:pili_aurora/services/logger.dart';
 import 'package:pili_aurora/services/shutdown_timer_service.dart';
 import 'package:pili_aurora/utils/accounts.dart';
+import 'package:pili_aurora/utils/accounts/account.dart';
 import 'package:pili_aurora/utils/android/android_helper.dart';
 import 'package:pili_aurora/utils/connectivity_utils.dart';
 import 'package:pili_aurora/utils/extension/iterable_ext.dart';
@@ -63,6 +65,13 @@ class AudioController extends GetxController
         BlockConfigMixin,
         BlockMixin,
         AudioNormalizationMixin {
+  AudioController({Future<Player> Function(PlayerConfiguration)? createPlayer})
+    : _createPlayer =
+          createPlayer ??
+          ((configuration) => Player.create(configuration: configuration));
+
+  final Future<Player> Function(PlayerConfiguration) _createPlayer;
+
   late Int64 id;
   late Int64 oid;
   late List<Int64> subId;
@@ -75,7 +84,11 @@ class AudioController extends GetxController
   final audioItem = Rxn<DetailItem>();
 
   int _playlistGeneration = 0;
-  bool _hasInit = false;
+  int _playGeneration = 0;
+  Account? _playAccount;
+  bool _playbackReady = false;
+  Future<void>? _playerInitialization;
+  Future<bool>? _mediaOpening;
   @override
   Player? player;
   late int cacheAudioQa;
@@ -180,14 +193,20 @@ class AudioController extends GetxController
       } catch (_) {}
     }
 
+    animController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 200),
+    );
     _queryPlayList(isInit: true);
 
     final String? audioUrl = args['audioUrl'];
     final hasAudioUrl = audioUrl != null;
     if (hasAudioUrl) {
       _querySponsorBlock();
+      _playAccount = Accounts.main;
       _onOpenMedia(
         audioUrl,
+        generation: ++_playGeneration,
         ua: BrowserUa.pc,
         referer: HttpString.baseUrl,
         volume: _videoDetailController?.volume,
@@ -204,11 +223,6 @@ class AudioController extends GetxController
       ?..onPlay = onPlay
       ..onPause = onPause
       ..onSeek = onSeek;
-
-    animController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 200),
-    );
 
     if (shutdownTimerService.isActive) {
       shutdownTimerService
@@ -307,79 +321,122 @@ class AudioController extends GetxController
     }
   }
 
+  bool _ownsPlayback(int generation) =>
+      !isClosed &&
+      generation == _playGeneration &&
+      identical(_playAccount, Accounts.main);
+
+  bool _playbackFailed(Object error, StackTrace stack, int generation) {
+    if (_ownsPlayback(generation)) {
+      logger
+          .scoped('audio')
+          .w(
+            '音频播放失败',
+            error: error.runtimeType,
+            stackTrace: stack,
+          );
+      SmartDialog.showToast('音频播放失败，请重试');
+    }
+    return false;
+  }
+
   Future<bool> _queryPlayUrl() async {
+    final generation = ++_playGeneration;
+    _playAccount = Accounts.main;
+    _playbackReady = false;
     _querySponsorBlock();
-    final res = await AudioGrpc.audioPlayUrl(
-      itemType: itemType,
-      oid: oid,
-      subId: subId,
-    );
-    if (res case Success(:final response)) {
-      _onPlay(response);
-      return true;
-    } else {
+    try {
+      final res = await AudioGrpc.audioPlayUrl(
+        itemType: itemType,
+        oid: oid,
+        subId: List.of(subId),
+      );
+      if (!_ownsPlayback(generation)) return false;
+      if (res case Success(:final response)) {
+        final opened = await _onPlay(response, generation);
+        return opened && _ownsPlayback(generation);
+      }
       res.toast();
       return false;
+    } catch (error, stack) {
+      return _playbackFailed(error, stack, generation);
     }
   }
 
-  void _onPlay(PlayURLResp data) {
+  Future<bool> _onPlay(PlayURLResp data, int generation) {
     final PlayInfo? playInfo = data.playerInfo.values.firstOrNull;
-    if (playInfo != null) {
-      http_model.Volume? volume;
-      if (playInfo.hasVolume()) {
-        final volumeInfo = playInfo.volume;
-        volume = http_model.Volume(
-          measuredI: volumeInfo.measuredI,
-          measuredLra: volumeInfo.measuredLra,
-          measuredTp: volumeInfo.measuredTp,
-          measuredThreshold: volumeInfo.measuredThreshold,
-          targetOffset: volumeInfo.targetOffset,
-          targetI: volumeInfo.targetI,
-          targetTp: volumeInfo.targetTp,
-        );
-      }
-      if (playInfo.hasPlayDash()) {
-        final playDash = playInfo.playDash;
-        final audios = playDash.audio;
-        if (audios.isEmpty) {
-          return;
-        }
-        position.value = 0;
-        final audio = audios.findClosestTarget(
-          (e) => e.id <= cacheAudioQa,
-          (a, b) => a.id > b.id ? a : b,
-        );
-        _onOpenMedia(VideoUtils.getCdnUrl(audio.playUrls), volume: volume);
-      } else if (playInfo.hasPlayUrl()) {
-        final playUrl = playInfo.playUrl;
-        final durls = playUrl.durl;
-        if (durls.isEmpty) {
-          return;
-        }
-        final durl = durls.first;
-        position.value = 0;
-        _onOpenMedia(VideoUtils.getCdnUrl(durl.playUrls), volume: volume);
-      }
+    if (playInfo == null) throw const FormatException('响应缺少音频信息');
+    http_model.Volume? volume;
+    if (playInfo.hasVolume()) {
+      final volumeInfo = playInfo.volume;
+      volume = http_model.Volume(
+        measuredI: volumeInfo.measuredI,
+        measuredLra: volumeInfo.measuredLra,
+        measuredTp: volumeInfo.measuredTp,
+        measuredThreshold: volumeInfo.measuredThreshold,
+        targetOffset: volumeInfo.targetOffset,
+        targetI: volumeInfo.targetI,
+        targetTp: volumeInfo.targetTp,
+      );
     }
+    final Iterable<String> urls;
+    if (playInfo.hasPlayDash()) {
+      if (playInfo.playDash.audio.isEmpty) {
+        throw const FormatException('响应缺少音频来源');
+      }
+      final audio = playInfo.playDash.audio.findClosestTarget(
+        (e) => e.id <= cacheAudioQa,
+        (a, b) => a.id > b.id ? a : b,
+      );
+      urls = audio.playUrls;
+    } else if (playInfo.hasPlayUrl() && playInfo.playUrl.durl.isNotEmpty) {
+      urls = playInfo.playUrl.durl.first.playUrls;
+    } else {
+      throw const FormatException('响应缺少音频来源');
+    }
+    return _onOpenMedia(
+      VideoUtils.getCdnUrl(urls),
+      generation: generation,
+      volume: volume,
+    );
   }
 
-  Future<void> _onOpenMedia(
+  Future<bool> _onOpenMedia(
     String url, {
+    required int generation,
     String ua = Constants.userAgentApp,
     String? referer,
     http_model.Volume? volume,
-  }) async {
-    await _initPlayerIfNeeded();
-    final extras = audioFilterExtras(volume);
-    player
-      ?..setMediaHeader(
-        userAgent: ua,
-        // mpv cannot clear referer option
-        headers: {'Referer': ?referer},
-      )
-      ..open(Media(url, start: _start, extras: extras));
-    _start = null;
+  }) {
+    final previous = _mediaOpening;
+    // 原生 open 不能撤销，串行打开才能保证最后一次选曲最终拥有播放器。
+    final operation = () async {
+      try {
+        await previous;
+        if (!_ownsPlayback(generation)) return false;
+        if (url.trim().isEmpty) throw const FormatException('音频来源为空');
+        await _initPlayerIfNeeded();
+        if (!_ownsPlayback(generation)) return false;
+        final currentPlayer = player!
+          ..setMediaHeader(
+            userAgent: ua,
+            // mpv cannot clear referer option
+            headers: {'Referer': ?referer},
+          );
+        await currentPlayer.open(
+          Media(url, start: _start, extras: audioFilterExtras(volume)),
+        );
+        if (!_ownsPlayback(generation)) return false;
+        position.value = 0;
+        _playbackReady = true;
+        _start = null;
+        return true;
+      } catch (error, stack) {
+        return _playbackFailed(error, stack, generation);
+      }
+    }();
+    _mediaOpening = operation;
+    return operation;
   }
 
   PlayerStatus _playerStatus = .paused;
@@ -395,11 +452,20 @@ class AudioController extends GetxController
   }
 
   Future<void> _initPlayerIfNeeded() async {
-    if (_hasInit) return;
-    _hasInit = true;
-    assert(player == null, _subscriptions = null);
-    player = await Player.create(
-      configuration: PlayerConfiguration(
+    if (player != null) return;
+    final initialization = _playerInitialization ??= _initializePlayer();
+    try {
+      await initialization;
+    } finally {
+      if (identical(_playerInitialization, initialization)) {
+        _playerInitialization = null;
+      }
+    }
+  }
+
+  Future<void> _initializePlayer() async {
+    final initializedPlayer = await _createPlayer(
+      PlayerConfiguration(
         options: {
           if (Platform.isAndroid) 'ao': Pref.audioOutput,
           'volume': PlatformUtils.isDesktop
@@ -410,11 +476,11 @@ class AudioController extends GetxController
       ),
     );
     if (isClosed) {
-      player!.dispose();
-      player = null;
+      await initializedPlayer.dispose();
       return;
     }
-    final stream = player!.stream;
+    player = initializedPlayer;
+    final stream = initializedPlayer.stream;
     _subscriptions = [
       stream.position.listen((position) {
         if (isDragging) return;
@@ -726,10 +792,13 @@ class AudioController extends GetxController
           final nextIndex = parts.indexWhere((e) => e.subId == subId) + 1;
           if (nextIndex != 0 && nextIndex < parts.length) {
             final nextPart = parts[nextIndex];
+            _start = null;
             oid = nextPart.oid;
             this.subId = [nextPart.subId];
-            _queryPlayUrl().then((res) {
-              if (res) {
+            final operation = _queryPlayUrl();
+            final generation = _playGeneration;
+            operation.then((res) {
+              if (res && _ownsPlayback(generation)) {
                 _videoDetailController = null;
               }
             });
@@ -751,8 +820,11 @@ class AudioController extends GetxController
     return false;
   }
 
-  void playIndex(int index, {List<Int64>? subId}) {
-    if (index == this.index && subId == null) return;
+  Future<void> playIndex(int index, {List<Int64>? subId}) async {
+    if (index == this.index && subId == null && _playbackReady) {
+      return;
+    }
+    _start = null;
     this.index = index;
     final audioItem = playlist![index];
     final item = audioItem.item;
@@ -761,12 +833,12 @@ class AudioController extends GetxController
         subId ??
         (item.subId.isNotEmpty ? item.subId : [audioItem.parts.first.subId]);
     itemType = item.itemType;
-    _queryPlayUrl().then((res) {
-      if (res) {
-        _videoDetailController = null;
-        _updateCurrItem(audioItem);
-      }
-    });
+    final operation = _queryPlayUrl();
+    final generation = _playGeneration;
+    if (await operation && _ownsPlayback(generation)) {
+      _videoDetailController = null;
+      _updateCurrItem(audioItem);
+    }
   }
 
   @override
@@ -834,6 +906,7 @@ class AudioController extends GetxController
   @override
   void onClose() {
     _playlistGeneration++;
+    _playGeneration++;
     _stopStatusTimer();
     shutdownTimerService
       ..onPause = null

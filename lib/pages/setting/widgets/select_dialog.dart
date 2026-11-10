@@ -73,10 +73,13 @@ class SelectDialog<T> extends StatelessWidget {
 
 class CdnSelectDialog extends StatefulWidget {
   final BaseItem? sample;
+  // 与默认客户端一样由弹窗拥有并释放，便于离线验证测速结果。
+  final Dio? client;
 
   const CdnSelectDialog({
     super.key,
     this.sample,
+    this.client,
   });
 
   @override
@@ -90,19 +93,17 @@ class _CdnSelectDialogState extends State<CdnSelectDialog> {
 
   @override
   void initState() {
+    super.initState();
     _cdnSpeedTest = Pref.cdnSpeedTest;
     if (_cdnSpeedTest) {
-      _dio =
-          Dio(
-              BaseOptions(
-                connectTimeout: const Duration(seconds: 15),
-                receiveTimeout: const Duration(seconds: 15),
-              ),
-            )
-            ..options.headers = {
-              'user-agent': BrowserUa.pc,
-              'referer': HttpString.baseUrl,
-            };
+      _dio = widget.client ?? Dio();
+      _dio.options
+        ..connectTimeout = const Duration(seconds: 15)
+        ..receiveTimeout = const Duration(seconds: 15)
+        ..headers.addAll({
+          'user-agent': BrowserUa.pc,
+          'referer': HttpString.baseUrl,
+        });
       final length = CDNService.values.length;
       _cdnResList = List.generate(
         length,
@@ -111,7 +112,6 @@ class _CdnSelectDialogState extends State<CdnSelectDialog> {
       _tokens = List.generate(length, (_) => CancelToken());
       _startSpeedTest();
     }
-    super.initState();
   }
 
   @override
@@ -136,8 +136,9 @@ class _CdnSelectDialogState extends State<CdnSelectDialog> {
       tryLook: false,
       videoType: VideoType.ugc,
     );
-    final item = result.dataOrNull?.dash?.video?.first;
-    if (item == null) throw Exception('无法获取视频流');
+    if (!result.isSuccess) throw result;
+    final item = result.dataOrNull?.dash?.video?.firstOrNull;
+    if (item == null) throw const FormatException('响应缺少测速视频流');
     return item;
   }
 
@@ -146,7 +147,17 @@ class _CdnSelectDialogState extends State<CdnSelectDialog> {
       final videoItem = widget.sample ?? await _getSampleUrl();
       await _testAllCdnServices(videoItem);
     } catch (e, stackTrace) {
-      logger.w('CDN speed test failed: $e', error: e, stackTrace: stackTrace);
+      if (!mounted) return;
+      logger
+          .scoped('cdnProbe')
+          .w(
+            'CDN 测速采样失败',
+            error: e.runtimeType,
+            stackTrace: stackTrace,
+          );
+      for (final notifier in _cdnResList) {
+        notifier.value ??= '无法获取测速来源，请重试';
+      }
     }
   }
 
@@ -164,8 +175,8 @@ class _CdnSelectDialogState extends State<CdnSelectDialog> {
         defaultCDNService: item,
       );
       await _measureDownloadSpeed(cdnUrl, item.index);
-    } catch (e) {
-      _handleSpeedTestError(e, item.index);
+    } catch (e, stack) {
+      _handleSpeedTestError(e, stack, item.index);
     }
   }
 
@@ -174,73 +185,70 @@ class _CdnSelectDialogState extends State<CdnSelectDialog> {
   Future<void> _measureDownloadSpeed(String url, int index) async {
     const maxSize = 8 * 1024 * 1024;
     int downloaded = 0;
-
     final cancelToken = _tokens[index];
-    final start = DateTime.now().microsecondsSinceEpoch;
-
-    void onClose() {
+    final watch = Stopwatch()..start();
+    try {
+      final response = await _dio.get<List<int>>(
+        url,
+        options: Options(responseType: ResponseType.bytes),
+        cancelToken: cancelToken,
+        onReceiveProgress: (count, total) {
+          if (!mounted) return;
+          downloaded = count;
+          if (watch.elapsedMicroseconds >= 15000000 || downloaded >= maxSize) {
+            if (downloaded > 0) {
+              _updateSpeedResult(index, downloaded, watch.elapsedMicroseconds);
+            }
+            cancelToken?.cancel();
+          }
+        },
+      );
+      if (!mounted || _cdnResList[index].value != null) return;
+      downloaded = response.data?.length ?? downloaded;
+      if (downloaded <= 0) throw const FormatException('测速响应为空');
+      // 小于采样上限的完整响应也是有效样本，不能一直停留在等待状态。
+      _updateSpeedResult(index, downloaded, watch.elapsedMicroseconds);
+    } finally {
+      watch.stop();
       cancelToken?.cancel();
       _tokens[index] = null;
     }
-
-    await _dio.get(
-      url,
-      cancelToken: cancelToken,
-      onReceiveProgress: (count, total) {
-        if (!mounted) {
-          return;
-        }
-
-        final duration = DateTime.now().microsecondsSinceEpoch - start;
-
-        downloaded = count;
-
-        if (duration > 15000000) {
-          onClose();
-          if (downloaded > 0) {
-            _updateSpeedResult(index, downloaded, duration);
-            downloaded = 0;
-          } else {
-            throw TimeoutException('测速超时');
-          }
-        } else if (downloaded >= maxSize) {
-          onClose();
-          _updateSpeedResult(index, downloaded, duration);
-          downloaded = 0;
-        }
-      },
-    );
   }
 
   void _updateSpeedResult(int index, int downloaded, int duration) {
-    final speed = (downloaded / duration).toStringAsPrecision(3);
+    if (!mounted) return;
+    final speed = (downloaded / (duration > 0 ? duration : 1))
+        .toStringAsPrecision(3);
     _cdnResList[index].value = '${speed}MB/s';
   }
 
-  void _handleSpeedTestError(dynamic error, int index) {
+  void _handleSpeedTestError(Object error, StackTrace stack, int index) {
+    if (!mounted) return;
     _tokens
       ..[index]?.cancel()
       ..[index] = null;
     final item = _cdnResList[index];
     if (item.value != null) return;
-
-    logger.scoped('cdnProbe').w('CDN speed test error', error: error);
-    if (!mounted) return;
-    String message;
-    if (error is DioException) {
-      final statusCode = error.response?.statusCode;
-      if (statusCode != null && 400 <= statusCode && statusCode < 500) {
-        message = '此视频可能无法替换为该CDN';
-      } else {
-        message = error.toString();
-      }
-    } else {
-      message = error.toString();
-    }
-    if (message.isEmpty) {
-      message = '测速失败';
-    }
-    item.value = message;
+    logger
+        .scoped('cdnProbe')
+        .w(
+          'CDN 测速失败',
+          error: error.runtimeType,
+          stackTrace: stack,
+        );
+    // Dio 异常正文包含请求地址，签名参数不能进入设置页或日志。
+    item.value = switch (error) {
+      DioException(response: Response(statusCode: final int code))
+          when code >= 400 && code < 500 =>
+        '此视频可能无法替换为该CDN',
+      DioException(
+        type: DioExceptionType.connectionTimeout ||
+            DioExceptionType.receiveTimeout ||
+            DioExceptionType.sendTimeout,
+      ) ||
+      TimeoutException() => '测速超时，请重试',
+      _ => '测速失败，请重试',
+    };
   }
 
   @override
