@@ -176,13 +176,7 @@ class _MemberFavoriteState extends State<MemberFavorite>
                   height: 110,
                   child: MemberFavItem(
                     item: item,
-                    onDelete: (isDeleted) {
-                      if (isDeleted ?? false) {
-                        _controller.favState
-                          ..value.mediaListResponse?.list?.remove(item)
-                          ..refresh();
-                      }
-                    },
+                    onDelete: _controller.folderDeletionAction(!isFav, item),
                   ),
                 );
               },
