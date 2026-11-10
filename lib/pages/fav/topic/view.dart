@@ -81,11 +81,15 @@ class _FavTopicPageState extends State<FavTopicPage>
                   }
                   final item = response[index];
 
-                  void onLongPress() => showConfirmDialog(
-                    context: context,
-                    title: const Text('确定取消收藏？'),
-                    onConfirm: () => _controller.onRemove(item.id!),
-                  );
+                  void onLongPress() {
+                    final remove = _controller.removalAction(item.id);
+                    if (remove == null) return;
+                    showConfirmDialog(
+                      context: context,
+                      title: const Text('确定取消收藏？'),
+                      onConfirm: remove,
+                    );
+                  }
 
                   return Material(
                     color: theme.colorScheme.onInverseSurface,

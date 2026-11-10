@@ -160,8 +160,8 @@ class DynTopicController
     _topVersion++;
     try {
       final res = wasFav
-          ? await FavHttp.delFavTopic(topicId)
-          : await FavHttp.addFavTopic(topicId);
+          ? await FavHttp.delFavTopic(topicId, account: account)
+          : await FavHttp.addFavTopic(topicId, account: account);
       if (!_ownsTop(account, item)) return;
       if (res.isSuccess) {
         if (!wasFav) {

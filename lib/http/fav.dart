@@ -161,12 +161,14 @@ abstract final class FavHttp {
   }
 
   static Future<LoadingState<SpaceCheeseData>> favPugv({
+    Account? account,
     required int mid,
     required int page,
   }) async {
     return await Request().requestApi(
       Api.favPugv,
       kind: ApiCallKind.query,
+      options: Options(extra: {'account': account ?? Accounts.main}),
       decode: (body) => SpaceCheeseData.fromJson(body['data']),
       queryParameters: {
         'mid': mid,
@@ -177,38 +179,54 @@ abstract final class FavHttp {
     );
   }
 
-  static Future<LoadingState<void>> addFavPugv(Object seasonId) async {
+  static Future<LoadingState<void>> addFavPugv(
+    Object seasonId, {
+    Account? account,
+  }) async {
+    account ??= Accounts.main;
     return await Request().requestApi<void>(
       Api.addFavPugv,
       kind: ApiCallKind.mutation,
       decode: (_) {},
       data: {
         'season_id': seasonId,
-        'csrf': Accounts.main.csrf,
+        'csrf': account.csrf,
       },
-      options: Options(contentType: Headers.formUrlEncodedContentType),
+      options: Options(
+        contentType: Headers.formUrlEncodedContentType,
+        extra: {'account': account},
+      ),
     );
   }
 
-  static Future<LoadingState<void>> delFavPugv(Object seasonId) async {
+  static Future<LoadingState<void>> delFavPugv(
+    Object seasonId, {
+    Account? account,
+  }) async {
+    account ??= Accounts.main;
     return await Request().requestApi<void>(
       Api.delFavPugv,
       kind: ApiCallKind.mutation,
       decode: (_) {},
       data: {
         'season_id': seasonId,
-        'csrf': Accounts.main.csrf,
+        'csrf': account.csrf,
       },
-      options: Options(contentType: Headers.formUrlEncodedContentType),
+      options: Options(
+        contentType: Headers.formUrlEncodedContentType,
+        extra: {'account': account},
+      ),
     );
   }
 
   static Future<LoadingState<FavTopicData>> favTopic({
+    Account? account,
     required int page,
   }) async {
     return await Request().requestApi(
       Api.favTopicList,
       kind: ApiCallKind.query,
+      options: Options(extra: {'account': account ?? Accounts.main}),
       decode: (body) => FavTopicData.fromJson(body['data']),
       queryParameters: {
         'page_size': 24,
@@ -218,29 +236,43 @@ abstract final class FavHttp {
     );
   }
 
-  static Future<LoadingState<void>> addFavTopic(Object topicId) async {
+  static Future<LoadingState<void>> addFavTopic(
+    Object topicId, {
+    Account? account,
+  }) async {
+    account ??= Accounts.main;
     return await Request().requestApi<void>(
       Api.addFavTopic,
       kind: ApiCallKind.mutation,
       decode: (_) {},
       data: {
         'topic_id': topicId,
-        'csrf': Accounts.main.csrf,
+        'csrf': account.csrf,
       },
-      options: Options(contentType: Headers.formUrlEncodedContentType),
+      options: Options(
+        contentType: Headers.formUrlEncodedContentType,
+        extra: {'account': account},
+      ),
     );
   }
 
-  static Future<LoadingState<void>> delFavTopic(Object topicId) async {
+  static Future<LoadingState<void>> delFavTopic(
+    Object topicId, {
+    Account? account,
+  }) async {
+    account ??= Accounts.main;
     return await Request().requestApi<void>(
       Api.delFavTopic,
       kind: ApiCallKind.mutation,
       decode: (_) {},
       data: {
         'topic_id': topicId,
-        'csrf': Accounts.main.csrf,
+        'csrf': account.csrf,
       },
-      options: Options(contentType: Headers.formUrlEncodedContentType),
+      options: Options(
+        contentType: Headers.formUrlEncodedContentType,
+        extra: {'account': account},
+      ),
     );
   }
 
@@ -555,9 +587,11 @@ abstract final class FavHttp {
   }
 
   static Future<LoadingState<void>> seasonFav({
+    Account? account,
     required bool isFav,
-    required dynamic seasonId,
+    required int seasonId,
   }) async {
+    account ??= Accounts.main;
     return await Request().requestApi<void>(
       isFav ? Api.unfavSeason : Api.favSeason,
       kind: ApiCallKind.mutation,
@@ -565,15 +599,17 @@ abstract final class FavHttp {
       data: {
         'platform': 'web',
         'season_id': seasonId,
-        'csrf': Accounts.main.csrf,
+        'csrf': account.csrf,
       },
       options: Options(
         contentType: Headers.formUrlEncodedContentType,
+        extra: {'account': account},
       ),
     );
   }
 
   static Future<LoadingState<List<SpaceFavData>?>> spaceFav({
+    Account? account,
     required int mid,
   }) async {
     final params = {
@@ -595,6 +631,7 @@ abstract final class FavHttp {
           .toList(),
       queryParameters: params,
       options: Options(
+        extra: {'account': account ?? Accounts.main},
         headers: {
           'bili-http-engine': 'cronet',
           'user-agent': Constants.userAgentApp,

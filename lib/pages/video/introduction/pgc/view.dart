@@ -492,12 +492,15 @@ class _PgcIntroPageState extends State<PgcIntroPage> {
             right: 6,
             bottom: 6,
             child: Obx(() {
-              final isFav = introController.isFav.value;
+              final state = introController.pugvFavState.value;
+              final isFav = state.dataOrNull == true;
+              final busy =
+                  introController.pugvFavBusy.value || state is Loading;
               return iconButton(
                 size: 28,
                 iconSize: 26,
-                tooltip: '${isFav ? '取消' : ''}收藏',
-                onPressed: () => introController.onFavPugv(isFav),
+                tooltip: state is Error ? '重试收藏状态' : '${isFav ? '取消' : ''}收藏',
+                onPressed: busy ? null : introController.onFavPugv,
                 icon: isFav
                     ? const Icon(Icons.star_rounded)
                     : const Icon(Icons.star_border_rounded),

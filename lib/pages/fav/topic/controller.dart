@@ -2,18 +2,13 @@ import 'package:pili_aurora/http/fav.dart';
 import 'package:pili_aurora/http/loading_state.dart';
 import 'package:pili_aurora/models/remote/fav/fav_topic/data.dart';
 import 'package:pili_aurora/models/remote/fav/fav_topic/topic_item.dart';
-import 'package:pili_aurora/pages/common/common_list_controller.dart';
-import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
+import 'package:pili_aurora/pages/fav/account_favorite_controller.dart';
+import 'package:pili_aurora/utils/accounts/account.dart';
+import 'package:pili_aurora/utils/accounts.dart';
 
 class FavTopicController
-    extends CommonListController<FavTopicData, FavTopicItem> {
+    extends AccountFavoriteController<FavTopicData, FavTopicItem> {
   int? total;
-
-  @override
-  void onInit() {
-    super.onInit();
-    queryData();
-  }
 
   @override
   void checkIsEnd(int length) {
@@ -36,16 +31,12 @@ class FavTopicController
 
   @override
   Future<LoadingState<FavTopicData>> customGetData() =>
-      FavHttp.favTopic(page: page);
+      FavHttp.favTopic(account: Accounts.main, page: page);
 
-  Future<void> onRemove(int id) async {
-    final res = await FavHttp.delFavTopic(id);
-    if (res.isSuccess) {
-      loadingState.value.data!.removeWhere((item) => item.id == id);
-      loadingState.refresh();
-      SmartDialog.showToast('已取消收藏');
-    } else {
-      res.toast();
-    }
-  }
+  @override
+  int? itemId(FavTopicItem item) => item.id;
+
+  @override
+  Future<LoadingState<void>> removeFavorite(int id, Account account) =>
+      FavHttp.delFavTopic(id, account: account);
 }

@@ -62,13 +62,16 @@ class _FavCheesePageState extends State<FavCheesePage>
                     _controller.onLoadMore();
                   }
                   final item = response[index];
+                  final remove = _controller.removalAction(item.seasonId);
                   return MemberCheeseItem(
                     item: item,
-                    onRemove: () => showConfirmDialog(
-                      context: context,
-                      title: const Text('确定取消收藏该课堂？'),
-                      onConfirm: () => _controller.onRemove(item.seasonId!),
-                    ),
+                    onRemove: remove == null
+                        ? null
+                        : () => showConfirmDialog(
+                            context: context,
+                            title: const Text('确定取消收藏该课堂？'),
+                            onConfirm: remove,
+                          ),
                   );
                 },
                 itemCount: response.length,

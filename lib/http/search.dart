@@ -165,12 +165,14 @@ abstract final class SearchHttp {
   }
 
   static Future<LoadingState<PgcInfoModel>> pugvInfo({
+    Account? account,
     dynamic seasonId,
     dynamic epId,
   }) {
     return Request().requestApi(
       Api.pugvInfo,
       kind: ApiCallKind.query,
+      options: Options(extra: {'account': account ?? Accounts.main}),
       decode: (body) => PgcInfoModel.fromJson(body['data']),
       queryParameters: {
         'season_id': ?seasonId,

@@ -16,8 +16,10 @@ import 'package:pili_aurora/http/loading_state.dart';
 import 'package:pili_aurora/http/video.dart';
 import 'package:pili_aurora/models/common/episode_panel_type.dart';
 import 'package:pili_aurora/models/common/stat_type.dart';
-import 'package:pili_aurora/models/remote/pgc/pgc_info_model/episode.dart' as pgc;
-import 'package:pili_aurora/models/remote/video/video_detail/episode.dart' as ugc;
+import 'package:pili_aurora/models/remote/pgc/pgc_info_model/episode.dart'
+    as pgc;
+import 'package:pili_aurora/models/remote/video/video_detail/episode.dart'
+    as ugc;
 import 'package:pili_aurora/models/remote/video/video_detail/page.dart';
 import 'package:pili_aurora/pages/common/slide/common_slide_page.dart';
 import 'package:pili_aurora/pages/video/controller.dart';
@@ -110,6 +112,8 @@ class _EpisodePanelState extends State<EpisodePanel>
 
   // fav
   Rx<LoadingState<bool>>? _favState;
+  final _favBusy = false.obs;
+  int _favVersion = 0;
 
   void listener() {
     _currentTabIndex.value = _tabController.index;
@@ -118,6 +122,11 @@ class _EpisodePanelState extends State<EpisodePanel>
   @override
   void didUpdateWidget(EpisodePanel oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (oldWidget.seasonId != widget.seasonId ||
+        oldWidget.bvid != widget.bvid ||
+        oldWidget.type != widget.type) {
+      _queryFav();
+    }
     if (showTitle) {
       return;
     }
@@ -172,30 +181,84 @@ class _EpisodePanelState extends State<EpisodePanel>
     );
     _isReversed = List.filled(widget.list.length, false);
 
-    if (widget.type == EpisodeType.season && Accounts.main.isLogin) {
-      final favState =
-          widget.ugcIntroController?.seasonFavState[widget.seasonId];
-      if (favState != null) {
-        _favState = Success(favState).obs;
-      } else {
-        _favState = LoadingState<bool>.loading().obs;
-        VideoHttp.videoRelation(bvid: widget.bvid).then(
-          (result) {
-            if (!mounted) return;
-            if (result case Success(:final response)) {
-              final seasonFav = response.seasonFav ?? false;
-              _favState!.value = Success(seasonFav);
-              widget.ugcIntroController?.seasonFavState[widget.seasonId] =
-                  seasonFav;
-            }
-          },
-        );
+    Accounts.mainChanges.addListener(_queryFav);
+    _queryFav();
+  }
+
+  Future<void> _queryFav() async {
+    final version = ++_favVersion;
+    _favBusy.value = false;
+    final account = Accounts.main;
+    final seasonId = widget.seasonId;
+    final bvid = widget.bvid;
+    if (widget.type != EpisodeType.season ||
+        !account.isLogin ||
+        seasonId == null) {
+      _favState?.value = LoadingState.loading();
+      return;
+    }
+    _favState ??= LoadingState<bool>.loading().obs;
+    _favState!.value = LoadingState.loading();
+    setState(() {});
+    final result = await VideoHttp.videoRelation(bvid: bvid, account: account);
+    if (!mounted ||
+        version != _favVersion ||
+        !identical(account, Accounts.main) ||
+        seasonId != widget.seasonId ||
+        bvid != widget.bvid) {
+      return;
+    }
+    _favState!.value = switch (result) {
+      Success(:final response) when response.seasonFav != null => Success(
+        response.seasonFav!,
+      ),
+      Error error => error,
+      _ => const Error('订阅状态未加载，请重试'),
+    };
+    if (_favState!.value case Success(:final response)) {
+      widget.ugcIntroController?.seasonFavState[seasonId] = response;
+    }
+    setState(() {});
+  }
+
+  Future<void> _toggleFav(bool wasFav) async {
+    final account = Accounts.main;
+    final target = widget.seasonId;
+    if (_favBusy.value || !account.isLogin || target == null || target <= 0) {
+      return;
+    }
+    final version = ++_favVersion;
+    _favBusy.value = true;
+    try {
+      final result = await FavHttp.seasonFav(
+        account: account,
+        isFav: wasFav,
+        seasonId: target,
+      );
+      if (!mounted ||
+          version != _favVersion ||
+          !identical(account, Accounts.main) ||
+          target != widget.seasonId) {
+        return;
       }
+      if (result.isSuccess) {
+        _favState!.value = Success(!wasFav);
+        widget.ugcIntroController?.seasonFavState[target] = !wasFav;
+        SmartDialog.showToast('${wasFav ? '取消' : ''}订阅成功');
+      } else {
+        if (result is UnknownResult) _favState!.value = result;
+        result.toast();
+      }
+    } finally {
+      if (mounted && version == _favVersion) _favBusy.value = false;
     }
   }
 
   @override
   void dispose() {
+    Accounts.mainChanges.removeListener(_queryFav);
+    _favVersion++;
+    _favBusy.close();
     _tabController
       ..removeListener(listener)
       ..dispose();
@@ -606,20 +669,13 @@ class _EpisodePanelState extends State<EpisodePanel>
         icon: response
             ? const Icon(Icons.notifications_off_outlined)
             : const Icon(Icons.notifications_active_outlined),
-        onPressed: () async {
-          final res = await FavHttp.seasonFav(
-            isFav: response,
-            seasonId: widget.seasonId,
-          );
-          if (res.isSuccess) {
-            SmartDialog.showToast('${response ? '取消' : ''}订阅成功');
-            _favState!.value = Success(!response);
-            widget.ugcIntroController?.seasonFavState[widget.seasonId] =
-                !response;
-          } else {
-            res.toast();
-          }
-        },
+        onPressed: _favBusy.value ? null : () => _toggleFav(response),
+      ),
+      Error() => iconButton(
+        iconSize: 22,
+        tooltip: '重试订阅状态',
+        icon: const Icon(Icons.refresh),
+        onPressed: _queryFav,
       ),
       _ => const SizedBox.shrink(),
     };

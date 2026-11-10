@@ -62,7 +62,13 @@ class PgcIntroController extends CommonIntroController {
   int _followOperation = 0;
   var _followAccount = Accounts.main;
   int? get followSeasonId => pgcItem.seasonId ?? seasonId;
-  late final RxBool isFav = (pgcItem.userStatus?.favored == 1).obs;
+  late final pugvFavState = Rx<LoadingState<bool>>(
+    pgcItem.userStatus?.favored == null
+        ? const Error('收藏状态未加载，请重试')
+        : Success(pgcItem.userStatus!.favored == 1),
+  );
+  final pugvFavBusy = false.obs;
+  int _pugvVersion = 0;
 
   @override
   void onInit() {
@@ -480,7 +486,13 @@ class PgcIntroController extends CommonIntroController {
     _followQueryVersion++;
     followBusy.value = false;
     followState.value = LoadingState.loading();
-    if (isPgc) queryIsFollowed();
+    if (isPgc) {
+      queryIsFollowed();
+    } else {
+      _pugvVersion++;
+      pugvFavBusy.value = false;
+      queryPugvFav();
+    }
   }
 
   @override
@@ -488,6 +500,7 @@ class PgcIntroController extends CommonIntroController {
     Accounts.mainChanges.removeListener(_onFollowAccountChanged);
     _followQueryVersion++;
     _followOperation++;
+    _pugvVersion++;
     super.onClose();
   }
 
@@ -526,15 +539,70 @@ class PgcIntroController extends CommonIntroController {
     );
   }
 
-  Future<void> onFavPugv(bool isFav) async {
-    final res = isFav
-        ? await FavHttp.delFavPugv(seasonId!)
-        : await FavHttp.addFavPugv(seasonId!);
-    if (res.isSuccess) {
-      this.isFav.toggle();
-      SmartDialog.showToast('${isFav ? '取消' : ''}收藏成功');
-    } else {
-      res.toast();
+  Future<void> queryPugvFav() async {
+    if (isClosed || pugvFavBusy.value) return;
+    final account = Accounts.main;
+    final target = seasonId;
+    final version = ++_pugvVersion;
+    pugvFavState.value = LoadingState.loading();
+    if (!account.isLogin) {
+      pugvFavState.value = const Success(false);
+      return;
+    }
+    final result = await SearchHttp.pugvInfo(
+      account: account,
+      seasonId: target,
+      epId: epId,
+    );
+    if (isClosed ||
+        version != _pugvVersion ||
+        !identical(account, Accounts.main) ||
+        target != seasonId) {
+      return;
+    }
+    pugvFavState.value = switch (result) {
+      Success(:final response) when response.userStatus?.favored != null =>
+        Success(response.userStatus!.favored == 1),
+      Error error => error,
+      _ => const Error('收藏状态未加载，请重试'),
+    };
+  }
+
+  Future<void> onFavPugv() async {
+    final account = Accounts.main;
+    final target = seasonId;
+    if (isClosed || pugvFavBusy.value || target == null || target <= 0) return;
+    if (!account.isLogin) {
+      SmartDialog.showToast('账号未登录');
+      return;
+    }
+    final state = pugvFavState.value;
+    if (state is! Success<bool>) {
+      await queryPugvFav();
+      return;
+    }
+    final wasFav = state.response;
+    final version = ++_pugvVersion;
+    pugvFavBusy.value = true;
+    try {
+      final result = wasFav
+          ? await FavHttp.delFavPugv(target, account: account)
+          : await FavHttp.addFavPugv(target, account: account);
+      if (isClosed ||
+          version != _pugvVersion ||
+          !identical(account, Accounts.main) ||
+          target != seasonId) {
+        return;
+      }
+      if (result.isSuccess) {
+        pugvFavState.value = Success(!wasFav);
+        SmartDialog.showToast('${wasFav ? '取消' : ''}收藏成功');
+      } else {
+        if (result is UnknownResult) pugvFavState.value = result;
+        result.toast();
+      }
+    } finally {
+      if (version == _pugvVersion) pugvFavBusy.value = false;
     }
   }
 }
