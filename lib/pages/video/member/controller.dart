@@ -6,6 +6,7 @@ import 'package:pili_aurora/models/remote/space/space_archive/data.dart';
 import 'package:pili_aurora/models/remote/space/space_archive/item.dart';
 import 'package:pili_aurora/pages/common/common_list_controller.dart';
 import 'package:pili_aurora/utils/accounts.dart';
+import 'package:pili_aurora/utils/accounts/account.dart';
 import 'package:pili_aurora/utils/extension/scroll_controller_ext.dart';
 import 'package:get/get.dart';
 
@@ -18,6 +19,11 @@ class HorizontalMemberPageController
   final Rx<LoadingState<MemberInfoModel>> userState =
       LoadingState<MemberInfoModel>.loading().obs;
   final RxMap userStat = {}.obs;
+  int _userQuery = 0;
+  bool _memberClosed = false;
+
+  @override
+  Object get queryContext => Accounts.main;
 
   @override
   void onInit() {
@@ -27,29 +33,52 @@ class HorizontalMemberPageController
   }
 
   Future<void> getUserInfo() async {
-    final res = await MemberHttp.memberInfo(mid: mid);
+    if (_memberClosed) return;
+    final generation = ++_userQuery;
+    final int target = mid;
+    final account = Accounts.main;
+    bool current() =>
+        !_memberClosed &&
+        generation == _userQuery &&
+        target == mid &&
+        identical(account, Accounts.main);
+    userStat.clear();
+    userState.value = LoadingState<MemberInfoModel>.loading();
+    final res = await MemberHttp.memberInfo(mid: target, account: account);
+    if (!current()) return;
     userState.value = res;
     if (res.isSuccess) {
-      getMemberStat();
-      getMemberView();
+      await _loadUserStats(account, target, current);
     }
   }
 
-  Future<void> getMemberStat() async {
-    final res = await MemberHttp.memberStat(mid: mid);
-    if (res case Success(:final response)) {
-      userStat.addAll(response);
+  Future<void> _loadUserStats(
+    Account account,
+    int target,
+    bool Function() current,
+  ) async {
+    Future<void> apply(
+      Future<LoadingState<Map<String, dynamic>>> request,
+    ) async {
+      final result = await request;
+      if (!current()) return;
+      if (result case Success(:final response)) {
+        userStat.addAll(response);
+      }
     }
+
+    await Future.wait([
+      apply(MemberHttp.memberStat(mid: target, account: account)),
+      if (account.isLogin)
+        apply(MemberHttp.memberView(mid: target, account: account)),
+    ]);
   }
 
-  Future<void> getMemberView() async {
-    if (!Accounts.main.isLogin) {
-      return;
-    }
-    final res = await MemberHttp.memberView(mid: mid);
-    if (res case Success(:final response)) {
-      userStat.addAll(response);
-    }
+  @override
+  void onClose() {
+    _memberClosed = true;
+    _userQuery++;
+    super.onClose();
   }
 
   @override

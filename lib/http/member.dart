@@ -116,8 +116,10 @@ abstract final class MemberHttp {
       'statistics': Constants.statisticsApp,
       'vmid': mid,
     };
-    final res = await Request().get(
+    return await Request().requestApi(
       Api.spaceArticle,
+      kind: ApiCallKind.query,
+      decode: (body) => SpaceArticleData.fromJson(body['data']),
       queryParameters: params,
       options: Options(
         extra: {'account': account},
@@ -127,11 +129,6 @@ abstract final class MemberHttp {
         },
       ),
     );
-    if (res.data['code'] == 0) {
-      return Success(SpaceArticleData.fromJson(res.data['data']));
-    } else {
-      return Error(res.data['message']);
-    }
   }
 
   static Future<LoadingState<SpaceSsData>> seasonSeriesList({
@@ -139,8 +136,11 @@ abstract final class MemberHttp {
     required int? mid,
     required int pn,
   }) async {
-    final res = await Request().get(
+    return await Request().requestApi(
       Api.seasonSeries,
+      kind: ApiCallKind.query,
+      decode: (body) =>
+          SpaceSsData.fromJson(body['data']?['items_lists'] ?? {}),
       options: Options(extra: {'account': account}),
       queryParameters: {
         'mid': mid,
@@ -148,13 +148,6 @@ abstract final class MemberHttp {
         'page_size': 10,
       },
     );
-    if (res.data['code'] == 0) {
-      return Success(
-        SpaceSsData.fromJson(res.data['data']?['items_lists'] ?? {}),
-      );
-    } else {
-      return Error(res.data['message']);
-    }
   }
 
   static Future<LoadingState<SpaceArchiveData>> spaceArchive({
@@ -192,8 +185,10 @@ abstract final class MemberHttp {
       'statistics': Constants.statisticsApp,
       'vmid': mid,
     };
-    final res = await Request().get(
+    return await Request().requestApi(
       type.api,
+      kind: ApiCallKind.query,
+      decode: (body) => SpaceArchiveData.fromJson(body['data']),
       queryParameters: params,
       options: Options(
         extra: {'account': account},
@@ -203,11 +198,6 @@ abstract final class MemberHttp {
         },
       ),
     );
-    if (res.data['code'] == 0) {
-      return Success(SpaceArchiveData.fromJson(res.data['data']));
-    } else {
-      return Error(res.data['message']);
-    }
   }
 
   static Future<LoadingState<SpaceAudioData>> spaceAudio({
@@ -215,8 +205,10 @@ abstract final class MemberHttp {
     required int page,
     required mid,
   }) async {
-    final res = await Request().get(
+    return await Request().requestApi(
       Api.spaceAudio,
+      kind: ApiCallKind.query,
+      decode: (body) => SpaceAudioData.fromJson(body['data']),
       options: Options(extra: {'account': account}),
       queryParameters: {
         'pn': page,
@@ -226,11 +218,6 @@ abstract final class MemberHttp {
         'web_location': 333.1387,
       },
     );
-    if (res.data['code'] == 0) {
-      return Success(SpaceAudioData.fromJson(res.data['data']));
-    } else {
-      return Error(res.data['message']);
-    }
   }
 
   static Future<LoadingState<SpaceCheeseData>> spaceCheese({
@@ -238,8 +225,10 @@ abstract final class MemberHttp {
     required int page,
     required mid,
   }) async {
-    final res = await Request().get(
+    return await Request().requestApi(
       Api.spaceCheese,
+      kind: ApiCallKind.query,
+      decode: (body) => SpaceCheeseData.fromJson(body['data']),
       options: Options(extra: {'account': account}),
       queryParameters: {
         'pn': page,
@@ -248,17 +237,14 @@ abstract final class MemberHttp {
         'web_location': 333.1387,
       },
     );
-    if (res.data['code'] == 0) {
-      return Success(SpaceCheeseData.fromJson(res.data['data']));
-    } else {
-      return Error(res.data['message']);
-    }
   }
 
   static Future<LoadingState<SpaceData>> space({
+    Account? account,
     int? mid,
     dynamic fromViewAid,
   }) async {
+    account ??= Accounts.main;
     final params = {
       'build': 8430300,
       'version': '8.43.0',
@@ -271,89 +257,91 @@ abstract final class MemberHttp {
       'statistics': Constants.statisticsApp,
       'vmid': mid,
     };
-    final res = await Request().get(
+    return await Request().requestApi(
       Api.space,
+      kind: ApiCallKind.query,
+      decode: (body) => SpaceData.fromJson(body['data']),
       queryParameters: params,
       options: Options(
+        extra: {'account': account},
         headers: {
           'bili-http-engine': 'cronet',
           'user-agent': Constants.userAgentApp,
         },
       ),
     );
-    if (res.data['code'] == 0) {
-      return Success(SpaceData.fromJson(res.data['data']));
-    } else {
-      return Error(res.data['message']);
-    }
   }
 
   static Future<LoadingState<MemberInfoModel>> memberInfo({
+    Account? account,
     required int mid,
     String token = '',
   }) async {
-    String dmImgStr = Utils.base64EncodeRandomString(16, 64);
-    String dmCoverImgStr = Utils.base64EncodeRandomString(32, 128);
-    final params = await WbiSign.makSign({
-      'mid': mid,
-      'token': token,
-      'platform': 'web',
-      'web_location': 1550101,
-      'dm_img_list': '[]',
-      'dm_img_str': dmImgStr,
-      'dm_cover_img_str': dmCoverImgStr,
-      'dm_img_inter': '{"ds":[],"wh":[0,0,0],"of":[0,0,0]}',
-    });
-    final res = await Request().get(
-      Api.memberInfo,
-      queryParameters: params,
-      options: Options(
-        headers: {
-          'origin': 'https://space.bilibili.com',
-          'referer': 'https://space.bilibili.com/$mid/dynamic',
-          'user-agent': BrowserUa.pc,
-        },
-      ),
-    );
-    if (res.data['code'] == 0) {
-      return Success(MemberInfoModel.fromJson(res.data['data']));
-    } else {
-      return Error(res.data['message']);
+    try {
+      account ??= Accounts.main;
+      String dmImgStr = Utils.base64EncodeRandomString(16, 64);
+      String dmCoverImgStr = Utils.base64EncodeRandomString(32, 128);
+      final params = await WbiSign.makSign({
+        'mid': mid,
+        'token': token,
+        'platform': 'web',
+        'web_location': 1550101,
+        'dm_img_list': '[]',
+        'dm_img_str': dmImgStr,
+        'dm_cover_img_str': dmCoverImgStr,
+        'dm_img_inter': '{"ds":[],"wh":[0,0,0],"of":[0,0,0]}',
+      });
+      return await Request().requestApi(
+        Api.memberInfo,
+        kind: ApiCallKind.query,
+        decode: (body) => MemberInfoModel.fromJson(body['data']),
+        queryParameters: params,
+        options: Options(
+          extra: {'account': account},
+          headers: {
+            'origin': 'https://space.bilibili.com',
+            'referer': 'https://space.bilibili.com/$mid/dynamic',
+            'user-agent': BrowserUa.pc,
+          },
+        ),
+      );
+    } catch (error, stackTrace) {
+      return Error.fromException(error, stackTrace);
     }
   }
 
-  static Future<LoadingState<Map>> memberStat({int? mid}) async {
-    final res = await Request().get(
+  static Future<LoadingState<Map<String, dynamic>>> memberStat({
+    Account? account,
+    int? mid,
+  }) async {
+    account ??= Accounts.main;
+    return await Request().requestApi(
       Api.userStat,
+      kind: ApiCallKind.query,
+      options: Options(extra: {'account': account}),
+      decode: (body) => body['data'] as Map<String, dynamic>,
       queryParameters: {'vmid': mid},
     );
-    if (res.data['code'] == 0) {
-      return Success(res.data['data']);
-    } else {
-      return Error(res.data['message']);
-    }
   }
 
   static Future<LoadingState<MemberCardInfoData>> memberCardInfo({
     int? mid,
     required Account account,
   }) async {
-    final res = await Request().get(
+    return await Request().requestApi(
       Api.memberCardInfo,
+      kind: ApiCallKind.query,
+      decode: (body) => MemberCardInfoData.fromJson(body['data']),
       options: Options(extra: {'account': account}),
       queryParameters: {
         'mid': mid,
         'photo': false,
       },
     );
-    if (res.data['code'] == 0) {
-      return Success(MemberCardInfoData.fromJson(res.data['data']));
-    } else {
-      return Error(res.data['message']);
-    }
   }
 
   static Future<LoadingState<SearchArchiveData>> searchArchive({
+    Account? account,
     required Object mid,
     int tid = 0, // e.g. pugv: 196
     int ps = 30,
@@ -362,43 +350,48 @@ abstract final class MemberHttp {
     String? specialType, // e.g. 'charging'
     ArchiveOrderTypeWeb order = .pubdate,
   }) async {
-    String dmImgStr = Utils.base64EncodeRandomString(16, 64);
-    String dmCoverImgStr = Utils.base64EncodeRandomString(32, 128);
-    final params = await WbiSign.makSign({
-      'mid': mid,
-      'ps': ps,
-      'tid': tid,
-      'pn': pn,
-      'keyword': ?keyword,
-      'special_type': ?specialType,
-      'order': order.name,
-      'platform': 'web',
-      'web_location': 333.1387,
-      'order_avoided': true,
-      'dm_img_list': '[]',
-      'dm_img_str': dmImgStr,
-      'dm_cover_img_str': dmCoverImgStr,
-      'dm_img_inter': '{"ds":[],"wh":[0,0,0],"of":[0,0,0]}',
-    });
-    final res = await Request().get(
-      Api.searchArchive,
-      queryParameters: params,
-      options: Options(
-        headers: {
-          HttpHeaders.userAgentHeader: BrowserUa.pc,
-          HttpHeaders.refererHeader: '${HttpString.spaceBaseUrl}/$mid',
-          'origin': HttpString.spaceBaseUrl,
-        },
-      ),
-    );
-    if (res.data['code'] == 0) {
-      return Success(SearchArchiveData.fromJson(res.data['data']));
-    } else {
-      return Error(errorMsg[res.data['code']] ?? res.data['message']);
+    try {
+      account ??= Accounts.main;
+      String dmImgStr = Utils.base64EncodeRandomString(16, 64);
+      String dmCoverImgStr = Utils.base64EncodeRandomString(32, 128);
+      final params = await WbiSign.makSign({
+        'mid': mid,
+        'ps': ps,
+        'tid': tid,
+        'pn': pn,
+        'keyword': ?keyword,
+        'special_type': ?specialType,
+        'order': order.name,
+        'platform': 'web',
+        'web_location': 333.1387,
+        'order_avoided': true,
+        'dm_img_list': '[]',
+        'dm_img_str': dmImgStr,
+        'dm_cover_img_str': dmCoverImgStr,
+        'dm_img_inter': '{"ds":[],"wh":[0,0,0],"of":[0,0,0]}',
+      });
+      return await Request().requestApi(
+        Api.searchArchive,
+        kind: ApiCallKind.query,
+        errorMessages: errorMsg,
+        decode: (body) => SearchArchiveData.fromJson(body['data']),
+        queryParameters: params,
+        options: Options(
+          extra: {'account': account},
+          headers: {
+            HttpHeaders.userAgentHeader: BrowserUa.pc,
+            HttpHeaders.refererHeader: '${HttpString.spaceBaseUrl}/$mid',
+            'origin': HttpString.spaceBaseUrl,
+          },
+        ),
+      );
+    } catch (error, stackTrace) {
+      return Error.fromException(error, stackTrace);
     }
   }
 
   static Future<LoadingState<SeasonWebData>> seasonSeriesWeb({
+    Account? account,
     required WebSsType type,
     required Object mid,
     required Object id,
@@ -406,8 +399,12 @@ abstract final class MemberHttp {
     required int pn,
     ArchiveSortTypeApp sort = .desc,
   }) async {
-    final res = await Request().get(
+    account ??= Accounts.main;
+    return await Request().requestApi(
       type.api,
+      kind: ApiCallKind.query,
+      errorMessages: errorMsg,
+      decode: (body) => SeasonWebData.fromJson(body['data']),
       queryParameters: switch (type) {
         .season => {
           'mid': mid,
@@ -427,6 +424,7 @@ abstract final class MemberHttp {
         },
       },
       options: Options(
+        extra: {'account': account},
         headers: {
           HttpHeaders.userAgentHeader: BrowserUa.pc,
           HttpHeaders.refererHeader: '${HttpString.spaceBaseUrl}/$mid',
@@ -434,11 +432,6 @@ abstract final class MemberHttp {
         },
       ),
     );
-    if (res.data['code'] == 0) {
-      return Success(SeasonWebData.fromJson(res.data['data']));
-    } else {
-      return Error(errorMsg[res.data['code']] ?? res.data['message']);
-    }
   }
 
   // 用户动态
@@ -501,8 +494,10 @@ abstract final class MemberHttp {
     required dynamic offset,
     required String keyword,
   }) async {
-    final res = await Request().get(
+    return await Request().requestApi(
       Api.dynSearch,
+      kind: ApiCallKind.query,
+      decode: (body) => DynamicsDataModel.fromJson(body['data']),
       options: Options(extra: {'account': account}),
       queryParameters: {
         'host_mid': mid,
@@ -513,30 +508,20 @@ abstract final class MemberHttp {
         'web_location': 333.1387,
       },
     );
-    if (res.data['code'] == 0) {
-      return Success(DynamicsDataModel.fromJson(res.data['data']));
-    } else {
-      return Error(res.data['message']);
-    }
   }
 
   // 查询分组
   static Future<LoadingState<List<MemberTagItemModel>>> followUpTags({
     required Account account,
   }) async {
-    final res = await Request().get(
+    return await Request().requestApi(
       Api.followUpTag,
+      kind: ApiCallKind.query,
+      decode: (body) => (body['data'] as List)
+          .map((e) => MemberTagItemModel.fromJson(e))
+          .toList(),
       options: Options(extra: {'account': account}),
     );
-    if (res.data['code'] == 0) {
-      return Success(
-        (res.data['data'] as List)
-            .map((e) => MemberTagItemModel.fromJson(e))
-            .toList(),
-      );
-    } else {
-      return Error(res.data['message']);
-    }
   }
 
   static Future<LoadingState<void>> specialAction({
@@ -595,8 +580,17 @@ abstract final class MemberHttp {
     int ps = 20,
     String orderType = '', // ''=>最近关注，'attention'=>最常访问
   }) async {
-    final res = await Request().get(
+    return await Request().requestApi(
       Api.followUpGroup,
+      kind: ApiCallKind.query,
+      errorMessages: errorMsg,
+      decode: (body) => FollowData(
+        list:
+            (body['data'] as List?)
+                ?.map<FollowItemModel>((e) => FollowItemModel.fromJson(e))
+                .toList() ??
+            <FollowItemModel>[],
+      ),
       options: Options(extra: {'account': account}),
       queryParameters: {
         'mid': mid,
@@ -606,19 +600,6 @@ abstract final class MemberHttp {
         'order_type': orderType,
       },
     );
-    if (res.data['code'] == 0) {
-      return Success(
-        FollowData(
-          list:
-              (res.data['data'] as List?)
-                  ?.map<FollowItemModel>((e) => FollowItemModel.fromJson(e))
-                  .toList() ??
-              <FollowItemModel>[],
-        ),
-      );
-    } else {
-      return Error(errorMsg[res.data['code']] ?? res.data['message']);
-    }
   }
 
   static Future<LoadingState<int>> createFollowTag(
@@ -700,16 +681,18 @@ abstract final class MemberHttp {
   }
 
   // 获取up播放数、点赞数
-  static Future<LoadingState<Map>> memberView({required int mid}) async {
-    final res = await Request().get(
+  static Future<LoadingState<Map<String, dynamic>>> memberView({
+    Account? account,
+    required int mid,
+  }) async {
+    account ??= Accounts.main;
+    return await Request().requestApi(
       Api.getMemberViewApi,
+      kind: ApiCallKind.query,
+      options: Options(extra: {'account': account}),
+      decode: (body) => body['data'] as Map<String, dynamic>,
       queryParameters: {'mid': mid},
     );
-    if (res.data['code'] == 0) {
-      return Success(res.data['data']);
-    } else {
-      return Error(res.data['message']);
-    }
   }
 
   // 搜索follow
@@ -720,53 +703,58 @@ abstract final class MemberHttp {
     required int pn,
     required String name,
   }) async {
-    final data = {
-      'vmid': mid,
-      'pn': pn,
-      'ps': ps,
-      'order': 'desc',
-      'order_type': 'attention',
-      'gaia_source': 'main_web',
-      'name': name,
-      'web_location': 333.999,
-    };
-    Map params = await WbiSign.makSign(data);
-    final res = await Request().get(
-      Api.followSearch,
-      options: Options(extra: {'account': account}),
-      queryParameters: {
-        ...data,
-        'w_rid': params['w_rid'],
-        'wts': params['wts'],
-      },
-    );
-    if (res.data['code'] == 0) {
-      return Success(FollowData.fromJson(res.data['data']));
-    } else {
-      return Error(res.data['message']);
+    try {
+      final data = {
+        'vmid': mid,
+        'pn': pn,
+        'ps': ps,
+        'order': 'desc',
+        'order_type': 'attention',
+        'gaia_source': 'main_web',
+        'name': name,
+        'web_location': 333.999,
+      };
+      Map params = await WbiSign.makSign(data);
+      return await Request().requestApi(
+        Api.followSearch,
+        kind: ApiCallKind.query,
+        decode: (body) => FollowData.fromJson(body['data']),
+        options: Options(extra: {'account': account}),
+        queryParameters: {
+          ...data,
+          'w_rid': params['w_rid'],
+          'wts': params['wts'],
+        },
+      );
+    } catch (error, stackTrace) {
+      return Error.fromException(error, stackTrace);
     }
   }
 
   static Future<LoadingState<SpaceOpusData>> spaceOpus({
+    Account? account,
     required int hostMid,
     required int page,
     String offset = '',
     String type = 'all',
   }) async {
-    final res = await Request().get(
-      Api.spaceOpus,
-      queryParameters: await WbiSign.makSign({
-        'host_mid': hostMid,
-        'page': page,
-        'offset': offset,
-        'type': type,
-        'web_location': 333.1387,
-      }),
-    );
-    if (res.data['code'] == 0) {
-      return Success(SpaceOpusData.fromJson(res.data['data']));
-    } else {
-      return Error(res.data['message']);
+    try {
+      account ??= Accounts.main;
+      return await Request().requestApi(
+        Api.spaceOpus,
+        kind: ApiCallKind.query,
+        options: Options(extra: {'account': account}),
+        decode: (body) => SpaceOpusData.fromJson(body['data']),
+        queryParameters: await WbiSign.makSign({
+          'host_mid': hostMid,
+          'page': page,
+          'offset': offset,
+          'type': type,
+          'web_location': 333.1387,
+        }),
+      );
+    } catch (error, stackTrace) {
+      return Error.fromException(error, stackTrace);
     }
   }
 
@@ -776,8 +764,10 @@ abstract final class MemberHttp {
     required int page,
     int? privilegeType,
   }) async {
-    final res = await Request().get(
+    return await Request().requestApi(
       Api.upowerRank,
+      kind: ApiCallKind.query,
+      decode: (body) => UpowerRankData.fromJson(body['data']),
       options: Options(extra: {'account': account}),
       queryParameters: {
         'up_mid': upMid,
@@ -789,11 +779,6 @@ abstract final class MemberHttp {
         if (account.isLogin) 'csrf': account.csrf,
       },
     );
-    if (res.data['code'] == 0) {
-      return Success(UpowerRankData.fromJson(res.data['data']));
-    } else {
-      return Error(res.data['message']);
-    }
   }
 
   static Future<LoadingState<CoinLikeArcData>> coinArc({
@@ -801,8 +786,10 @@ abstract final class MemberHttp {
     required int mid,
     required int page,
   }) async {
-    final res = await Request().get(
+    return await Request().requestApi(
       Api.coinArc,
+      kind: ApiCallKind.query,
+      decode: (body) => CoinLikeArcData.fromJson(body['data']),
       options: Options(extra: {'account': account}),
       queryParameters: {
         'pn': page,
@@ -810,11 +797,6 @@ abstract final class MemberHttp {
         'vmid': mid,
       },
     );
-    if (res.data['code'] == 0) {
-      return Success(CoinLikeArcData.fromJson(res.data['data']));
-    } else {
-      return Error(res.data['message']);
-    }
   }
 
   static Future<LoadingState<CoinLikeArcData>> likeArc({
@@ -822,8 +804,10 @@ abstract final class MemberHttp {
     required int mid,
     required int page,
   }) async {
-    final res = await Request().get(
+    return await Request().requestApi(
       Api.likeArc,
+      kind: ApiCallKind.query,
+      decode: (body) => CoinLikeArcData.fromJson(body['data']),
       options: Options(extra: {'account': account}),
       queryParameters: {
         'pn': page,
@@ -831,11 +815,6 @@ abstract final class MemberHttp {
         'vmid': mid,
       },
     );
-    if (res.data['code'] == 0) {
-      return Success(CoinLikeArcData.fromJson(res.data['data']));
-    } else {
-      return Error(res.data['message']);
-    }
   }
 
   static Future<LoadingState<SpaceShopData>> spaceShop({
@@ -851,9 +830,11 @@ abstract final class MemberHttp {
       'statistics': Constants.statisticsApp,
     };
     AppSign.appSign(params);
-    final res = await Request().post(
+    return await Request().requestApi(
       Api.spaceShop,
-      options: Options(extra: {'account': account}),
+      kind: ApiCallKind.query,
+      decode: (body) => SpaceShopData.fromJson(body['data']),
+      options: Options(method: 'POST', extra: {'account': account}),
       queryParameters: params,
       data: {
         "from": "cps_productTab_$mid",
@@ -863,11 +844,6 @@ abstract final class MemberHttp {
         "upMid": mid.toString(),
       },
     );
-    if (res.data['code'] == 0) {
-      return Success(SpaceShopData.fromJson(res.data['data']));
-    } else {
-      return Error(res.data['message']);
-    }
   }
 
   static Future<LoadingState<MemberGuardData>> memberGuard({
@@ -875,8 +851,10 @@ abstract final class MemberHttp {
     required Object ruid,
     required int page,
   }) async {
-    final res = await Request().get(
+    return await Request().requestApi(
       Api.memberGuard,
+      kind: ApiCallKind.query,
+      decode: (body) => MemberGuardData.fromJson(body['data']),
       options: Options(extra: {'account': account}),
       queryParameters: {
         'page': page,
@@ -884,10 +862,5 @@ abstract final class MemberHttp {
         'ruid': ruid,
       },
     );
-    if (res.data['code'] == 0) {
-      return Success(MemberGuardData.fromJson(res.data['data']));
-    } else {
-      return Error(res.data['message']);
-    }
   }
 }
