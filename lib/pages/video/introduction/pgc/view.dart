@@ -1,3 +1,6 @@
+import 'package:pili_aurora/http/loading_state.dart';
+import 'package:pili_aurora/utils/accounts.dart';
+
 import 'dart:math';
 
 import 'package:pili_aurora/common/style.dart';
@@ -519,8 +522,10 @@ class _PgcIntroPageState extends State<PgcIntroPage> {
     if (introController.isPgc) {
       Widget subBtn() => Obx(
         () {
-          final isFollowed = introController.isFollowed.value;
-          final followStatus = introController.followStatus.value;
+          final state = introController.followState.value;
+          final isFollowed = state.dataOrNull?.followed == true;
+          final followStatus = state.dataOrNull?.status ?? 0;
+          final busy = introController.followBusy.value;
           return FilledButton.tonal(
             style: FilledButton.styleFrom(
               tapTargetSize: MaterialTapTargetSize.shrinkWrap,
@@ -532,15 +537,25 @@ class _PgcIntroPageState extends State<PgcIntroPage> {
               foregroundColor: isFollowed ? colorScheme.outline : null,
               backgroundColor: isFollowed ? colorScheme.onInverseSurface : null,
             ),
-            onPressed: followStatus == -1
+            onPressed: busy || state is Loading
                 ? null
                 : () {
+                    if (state is Error) {
+                      introController.queryIsFollowed();
+                      return;
+                    }
+                    final account = Accounts.main;
+                    final target = introController.followSeasonId;
                     if (isFollowed) {
                       showPgcFollowDialog(
                         context: context,
                         type: introController.pgcType,
                         followStatus: followStatus,
                         onUpdateStatus: (followStatus) {
+                          if (!identical(account, Accounts.main) ||
+                              target != introController.followSeasonId) {
+                            return;
+                          }
                           if (followStatus == -1) {
                             introController.pgcDel();
                           } else {
@@ -555,7 +570,13 @@ class _PgcIntroPageState extends State<PgcIntroPage> {
                     }
                   },
             child: Text(
-              isFollowed
+              busy
+                  ? '提交中…'
+                  : state is Loading
+                  ? '加载中…'
+                  : state is Error
+                  ? '重试${introController.pgcType}状态'
+                  : isFollowed
                   ? '已${introController.pgcType}'
                   : introController.pgcType,
             ),

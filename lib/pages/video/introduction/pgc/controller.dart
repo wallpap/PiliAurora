@@ -13,6 +13,8 @@ import 'package:pili_aurora/models/common/video/source_type.dart';
 import 'package:pili_aurora/models/common/video/video_type.dart';
 import 'package:pili_aurora/models/remote/pgc/pgc_info_model/episode.dart';
 import 'package:pili_aurora/models/remote/pgc/pgc_info_model/result.dart';
+import 'package:pili_aurora/models/remote/pgc/season_follow_status.dart';
+import 'package:pili_aurora/utils/accounts.dart';
 import 'package:pili_aurora/models/remote/video/video_detail/episode.dart'
     hide EpisodeItem;
 import 'package:pili_aurora/models/remote/video/video_detail/stat_detail.dart';
@@ -34,6 +36,8 @@ import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:get/get.dart';
 import 'package:material_ui/material_ui.dart';
 
+enum _FollowAction { add, remove, update }
+
 class PgcIntroController extends CommonIntroController {
   int? seasonId;
   int? epId;
@@ -52,8 +56,12 @@ class PgcIntroController extends CommonIntroController {
   @override
   StatDetail? getStat() => pgcItem.stat;
 
-  late final RxBool isFollowed = false.obs;
-  late final RxInt followStatus = (-1).obs;
+  final followState = LoadingState<SeasonFollowStatus>.loading().obs;
+  final followBusy = false.obs;
+  int _followQueryVersion = 0;
+  int _followOperation = 0;
+  var _followAccount = Accounts.main;
+  int? get followSeasonId => pgcItem.seasonId ?? seasonId;
   late final RxBool isFav = (pgcItem.userStatus?.favored == 1).obs;
 
   @override
@@ -66,14 +74,11 @@ class PgcIntroController extends CommonIntroController {
     _playbackEpisodes = pgcItem.episodes ?? <EpisodeItem>[];
 
     super.onInit();
+    Accounts.mainChanges.addListener(_onFollowAccountChanged);
 
     if (isPgc) {
-      if (isLogin) {
-        queryIsFollowed();
-        if (epId != null) {
-          queryPgcLikeCoinFav();
-        }
-      }
+      queryIsFollowed();
+      if (isLogin && epId != null) queryPgcLikeCoinFav();
       queryVideoTags();
     }
   }
@@ -306,39 +311,58 @@ class PgcIntroController extends CommonIntroController {
     }
   }
 
-  // 追番
-  Future<void> pgcAdd() async {
-    final result = await VideoHttp.pgcAdd(seasonId: pgcItem.seasonId);
-    if (result case Success(:final response)) {
-      isFollowed.value = true;
-      followStatus.value = 2;
-      SmartDialog.showToast(response);
-    } else {
-      result.toast();
-    }
-  }
+  Future<void> pgcAdd() => _changeFollow(_FollowAction.add);
+  Future<void> pgcDel() => _changeFollow(_FollowAction.remove);
+  Future<void> pgcUpdate(int status) =>
+      _changeFollow(_FollowAction.update, status: status);
 
-  // 取消追番
-  Future<void> pgcDel() async {
-    final result = await VideoHttp.pgcDel(seasonId: pgcItem.seasonId);
-    if (result case Success(:final response)) {
-      isFollowed.value = false;
-      SmartDialog.showToast(response);
-    } else {
-      result.toast();
+  Future<void> _changeFollow(_FollowAction action, {int? status}) async {
+    if (isClosed || followBusy.value) return;
+    final account = Accounts.main;
+    if (!account.isLogin) {
+      SmartDialog.showToast('账号未登录');
+      return;
     }
-  }
-
-  Future<void> pgcUpdate(int status) async {
-    final result = await VideoHttp.pgcUpdate(
-      seasonId: pgcItem.seasonId.toString(),
-      status: status,
-    );
-    if (result case Success(:final response)) {
-      followStatus.value = status;
-      SmartDialog.showToast(response);
-    } else {
-      result.toast();
+    final target = followSeasonId;
+    final operation = ++_followOperation;
+    _followQueryVersion++;
+    followBusy.value = true;
+    try {
+      final result = await switch (action) {
+        _FollowAction.add => VideoHttp.pgcAdd(
+          seasonId: target,
+          account: account,
+        ),
+        _FollowAction.remove => VideoHttp.pgcDel(
+          seasonId: target,
+          account: account,
+        ),
+        _FollowAction.update => VideoHttp.pgcUpdate(
+          seasonId: '$target',
+          status: status!,
+          account: account,
+        ),
+      };
+      if (isClosed ||
+          operation != _followOperation ||
+          !identical(account, Accounts.main) ||
+          target != followSeasonId) {
+        return;
+      }
+      if (result case Success(:final response)) {
+        followState.value = Success(
+          SeasonFollowStatus(
+            followed: action != _FollowAction.remove,
+            status: action == _FollowAction.remove ? null : status ?? 2,
+          ),
+        );
+        SmartDialog.showToast(response);
+      } else {
+        if (followState.value is Loading) followState.value = result as Error;
+        result.toast();
+      }
+    } finally {
+      if (operation == _followOperation) followBusy.value = false;
     }
   }
 
@@ -429,12 +453,43 @@ class PgcIntroController extends CommonIntroController {
     }
   }
 
+  void _onFollowAccountChanged() {
+    if (identical(_followAccount, Accounts.main)) return;
+    _followAccount = Accounts.main;
+    _followOperation++;
+    _followQueryVersion++;
+    followBusy.value = false;
+    followState.value = LoadingState.loading();
+    if (isPgc) queryIsFollowed();
+  }
+
+  @override
+  void onClose() {
+    Accounts.mainChanges.removeListener(_onFollowAccountChanged);
+    _followQueryVersion++;
+    _followOperation++;
+    super.onClose();
+  }
+
   Future<void> queryIsFollowed() async {
-    final res = await PgcHttp.seasonStatus(seasonId!);
-    if (res case Success(:final response)) {
-      isFollowed.value = response.followed;
-      followStatus.value = response.status ?? -1;
+    if (isClosed || followBusy.value) return;
+    final version = ++_followQueryVersion;
+    final account = Accounts.main;
+    _followAccount = account;
+    final target = followSeasonId;
+    followState.value = LoadingState.loading();
+    if (!account.isLogin) {
+      followState.value = const Success(SeasonFollowStatus(followed: false));
+      return;
     }
+    final result = await PgcHttp.seasonStatus(target, account: account);
+    if (isClosed ||
+        version != _followQueryVersion ||
+        !identical(account, Accounts.main) ||
+        target != followSeasonId) {
+      return;
+    }
+    followState.value = result;
   }
 
   @override

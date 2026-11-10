@@ -789,53 +789,74 @@ abstract final class VideoHttp {
     );
   }
 
-  // 添加追番
-  static Future<LoadingState<String>> pgcAdd({int? seasonId}) async {
-    final res = await Request().post(
-      Api.pgcAdd,
-      data: {'season_id': seasonId, 'csrf': Accounts.main.csrf},
-      options: Options(contentType: Headers.formUrlEncodedContentType),
-    );
-    if (res.data['code'] == 0) {
-      return Success(res.data['result']['toast']);
-    } else {
-      return Error(res.data['message']);
+  static Future<LoadingState<String>> _pgcFollow(
+    String api, {
+    required String seasonIds,
+    required String successMessage,
+    int? status,
+    Account? account,
+  }) async {
+    if (seasonIds.split(',').any((id) => (int.tryParse(id) ?? 0) <= 0)) {
+      return const Error('番剧标识无效，请刷新后重试');
     }
+    if (status != null && (status < 1 || status > 3)) {
+      return const Error('追番分组无效，请重新选择');
+    }
+    account ??= Accounts.main;
+    return await Request().requestApi(
+      api,
+      kind: ApiCallKind.mutation,
+      decode: (body) {
+        // 提示文案是可选回显，不能覆盖服务端已确认的写入结果。
+        if (body['result'] case {'toast': String message}
+            when message.trim().isNotEmpty) {
+          return message;
+        }
+        return successMessage;
+      },
+      data: {
+        'season_id': seasonIds,
+        'status': ?status,
+        'csrf': account.csrf,
+      },
+      options: Options(
+        contentType: Headers.formUrlEncodedContentType,
+        extra: {'account': account},
+      ),
+    );
   }
 
-  // 取消追番
-  static Future<LoadingState<String>> pgcDel({int? seasonId}) async {
-    final res = await Request().post(
-      Api.pgcDel,
-      data: {'season_id': seasonId, 'csrf': Accounts.main.csrf},
-      options: Options(contentType: Headers.formUrlEncodedContentType),
-    );
-    if (res.data['code'] == 0) {
-      return Success(res.data['result']['toast']);
-    } else {
-      return Error(res.data['message']);
-    }
-  }
+  static Future<LoadingState<String>> pgcAdd({
+    int? seasonId,
+    Account? account,
+  }) => _pgcFollow(
+    Api.pgcAdd,
+    seasonIds: '$seasonId',
+    successMessage: '追番成功',
+    account: account,
+  );
+
+  static Future<LoadingState<String>> pgcDel({
+    int? seasonId,
+    Account? account,
+  }) => _pgcFollow(
+    Api.pgcDel,
+    seasonIds: '$seasonId',
+    successMessage: '取消追番成功',
+    account: account,
+  );
 
   static Future<LoadingState<String>> pgcUpdate({
     required String seasonId,
     required int status,
-  }) async {
-    final res = await Request().post(
-      Api.pgcUpdate,
-      data: {
-        'season_id': seasonId,
-        'status': status,
-        'csrf': Accounts.main.csrf,
-      },
-      options: Options(contentType: Headers.formUrlEncodedContentType),
-    );
-    if (res.data['code'] == 0) {
-      return Success(res.data['result']['toast']);
-    } else {
-      return Error(res.data['message']);
-    }
-  }
+    Account? account,
+  }) => _pgcFollow(
+    Api.pgcUpdate,
+    seasonIds: seasonId,
+    status: status,
+    successMessage: '追番分组已更新',
+    account: account,
+  );
 
   // 查看视频同时在看人数
   static Future<LoadingState<String>> onlineTotal({

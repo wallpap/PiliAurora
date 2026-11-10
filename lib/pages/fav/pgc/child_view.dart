@@ -10,6 +10,7 @@ import 'package:pili_aurora/pages/fav/pgc/controller.dart';
 import 'package:pili_aurora/pages/fav/pgc/pgc_layout.dart';
 import 'package:pili_aurora/pages/fav/pgc/widget/item.dart';
 import 'package:pili_aurora/utils/grid.dart';
+import 'package:pili_aurora/utils/accounts.dart';
 import 'package:get/get.dart';
 import 'package:material_ui/material_ui.dart';
 
@@ -18,10 +19,12 @@ class FavPgcChildPage extends StatefulWidget {
     super.key,
     required this.type,
     required this.followStatus,
+    this.scope,
   });
 
   final int type;
   final int followStatus;
+  final String? scope;
 
   @override
   State<FavPgcChildPage> createState() => _FavPgcChildPageState();
@@ -30,14 +33,24 @@ class FavPgcChildPage extends StatefulWidget {
 class _FavPgcChildPageState extends State<FavPgcChildPage>
     with AutomaticKeepAliveClientMixin, GridMixin {
   late final FavPgcController _favPgcController;
+  late final String _tag;
 
   @override
   void initState() {
     super.initState();
-    _favPgcController = Get.put(
-      FavPgcController(widget.type, widget.followStatus),
-      tag: '${widget.type}${widget.followStatus}',
+    final controller = FavPgcController(
+      widget.type,
+      widget.followStatus,
+      scope: widget.scope ?? 'favPgcChild#${identityHashCode(this)}',
     );
+    _tag = controller.tagForStatus(widget.followStatus);
+    _favPgcController = Get.put(controller, tag: _tag);
+  }
+
+  @override
+  void dispose() {
+    Get.delete<FavPgcController>(tag: _tag);
+    super.dispose();
   }
 
   @override
@@ -182,21 +195,34 @@ class _FavPgcChildPageState extends State<FavPgcChildPage>
                     item: item,
                     ctr: _favPgcController,
                     onSelect: () => _favPgcController.onSelect(item),
-                    onUpdateStatus: () => showPgcFollowDialog(
-                      context: context,
-                      type: widget.type == 0 ? '追番' : '追剧',
-                      followStatus: widget.followStatus,
-                      onUpdateStatus: (followStatus) {
-                        if (followStatus == -1) {
-                          _favPgcController.pgcDel(item.seasonId);
-                        } else {
-                          _favPgcController.onUpdate(
-                            followStatus,
-                            item.seasonId,
-                          );
-                        }
-                      },
-                    ),
+                    onUpdateStatus: () {
+                      final account = Accounts.main;
+                      final snapshot =
+                          _favPgcController.loadingState.value.dataOrNull;
+                      showPgcFollowDialog(
+                        context: context,
+                        type: widget.type == 0 ? '追番' : '追剧',
+                        followStatus: widget.followStatus,
+                        onUpdateStatus: (followStatus) {
+                          if (!identical(account, Accounts.main) ||
+                              !identical(
+                                snapshot,
+                                _favPgcController.loadingState.value.dataOrNull,
+                              ) ||
+                              !_favPgcController.owns(item)) {
+                            return;
+                          }
+                          if (followStatus == -1) {
+                            _favPgcController.pgcDel(item.seasonId);
+                          } else {
+                            _favPgcController.onUpdate(
+                              followStatus,
+                              item.seasonId,
+                            );
+                          }
+                        },
+                      );
+                    },
                   );
                 },
                 itemCount: response.length,

@@ -16,6 +16,7 @@ class FavPgcPage extends StatefulWidget {
 class _FavPgcPageState extends State<FavPgcPage>
     with AutomaticKeepAliveClientMixin, SingleTickerProviderStateMixin {
   late final TabController _tabController;
+  late final String _scope = 'favPgc#${identityHashCode(this)}';
 
   @override
   void initState() {
@@ -77,13 +78,12 @@ class _FavPgcPageState extends State<FavPgcPage>
                   Tab(text: '看过'),
                 ],
                 onTap: (index) {
-                  try {
-                    if (!_tabController.indexIsChanging) {
-                      Get.find<FavPgcController>(
-                        tag: '${widget.type}${index + 1}',
-                      ).scrollController.animToTop();
-                    }
-                  } catch (_) {}
+                  final tag = '$_scope:${widget.type}:${index + 1}';
+                  if (!_tabController.indexIsChanging &&
+                      Get.isRegistered<FavPgcController>(tag: tag)) {
+                    Get.find<FavPgcController>(tag: tag).scrollController
+                        .animToTop();
+                  }
                 },
               ),
             ),
@@ -97,6 +97,7 @@ class _FavPgcPageState extends State<FavPgcPage>
               3,
               (index) => FavPgcChildPage(
                 type: widget.type,
+                scope: _scope,
                 followStatus: index + 1,
               ),
             ),

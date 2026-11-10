@@ -103,7 +103,7 @@ class FavPgcItem extends StatelessWidget {
                       mainAxisSize: MainAxisSize.min,
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(item.title!),
+                        Text(item.title ?? '未命名番剧'),
                         if (item.newEp?.indexShow != null) ...[
                           const SizedBox(height: 6),
                           Text(
