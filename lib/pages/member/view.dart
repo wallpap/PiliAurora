@@ -20,6 +20,7 @@ import 'package:pili_aurora/pages/log_table/controller.dart';
 import 'package:pili_aurora/pages/log_table/view.dart';
 import 'package:pili_aurora/pages/login_devices/view.dart';
 import 'package:pili_aurora/pages/member/controller.dart';
+import 'package:pili_aurora/pages/member/shortcut_action.dart';
 import 'package:pili_aurora/pages/member/widget/medal_wall.dart';
 import 'package:pili_aurora/pages/member/widget/reserve_button.dart';
 import 'package:pili_aurora/pages/member/widget/user_info_card.dart';
@@ -33,11 +34,8 @@ import 'package:pili_aurora/pages/member_pgc/view.dart';
 import 'package:pili_aurora/pages/member_shop/view.dart';
 import 'package:pili_aurora/pages/member_video_web/archive/view.dart';
 import 'package:pili_aurora/pages/member_video_web/season_series/view.dart';
-import 'package:pili_aurora/utils/android/android_helper.dart';
-import 'package:pili_aurora/utils/cache_manager.dart';
 import 'package:pili_aurora/utils/date_utils.dart';
 import 'package:pili_aurora/utils/extension/context_ext.dart';
-import 'package:pili_aurora/utils/extension/string_ext.dart';
 import 'package:pili_aurora/utils/num_utils.dart';
 import 'package:pili_aurora/utils/page_utils.dart';
 import 'package:pili_aurora/utils/platform_utils.dart';
@@ -661,21 +659,28 @@ class _MemberPageState extends State<MemberPage> {
     }
   }
 
-  Future<void> _createShortcutAndroid() async {
-    try {
-      SmartDialog.showLoading();
-      final file = (await CacheManager.manager.getSingleFile(
-        '${_userController.userAvatar!}@200w_200h.webp'.http2https,
-      ));
-      SmartDialog.dismiss();
-      PiliAndroidHelper.createShortcut(
-        _userController.mid.toString(),
-        'bilibili://space/${_userController.mid}',
-        _userController.username!,
-        file.path,
-      );
-    } catch (e) {
-      SmartDialog.showToast(e.toString());
-    }
+  late final _shortcutAction = MemberShortcutAction();
+
+  Future<void> _createShortcutAndroid() {
+    final route = ModalRoute.of(context);
+    final source = _userController.loadingState.value;
+    final account = _userController.account;
+    final mid = _userController.mid;
+    final name = _userController.username;
+    final avatar = _userController.userAvatar;
+    return _shortcutAction.run(
+      mid: mid,
+      username: name,
+      avatar: avatar,
+      isCurrent: () =>
+          mounted &&
+          (route?.isCurrent ?? true) &&
+          !_userController.isClosed &&
+          identical(source, _userController.loadingState.value) &&
+          identical(account, _userController.account) &&
+          _userController.mid == mid &&
+          _userController.username == name &&
+          _userController.userAvatar == avatar,
+    );
   }
 }

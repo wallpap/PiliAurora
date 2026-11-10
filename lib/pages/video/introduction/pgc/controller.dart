@@ -155,11 +155,29 @@ class PgcIntroController extends CommonIntroController {
   // 分享视频
   @override
   void actionShareVideo(BuildContext context) {
+    final epId = this.epId;
+    if (epId == null) {
+      SmartDialog.showToast('分集信息尚未加载，请重试');
+      return;
+    }
+    final account = Accounts.main;
+    final pgcTitle = pgcItem.title;
+    final pgcCover = pgcItem.cover;
+    final pgcType = pgcItem.type;
     final episodes = <EpisodeItem>[
       ...?pgcItem.episodes,
       for (final section in pgcItem.section ?? const []) ...?section.episodes,
     ];
-    bool isCurrentEpisode(EpisodeItem item) => (item.epId ?? item.id) == epId;
+    final item = episodes.firstWhereOrNull(
+      (item) => (item.epId ?? item.id) == epId,
+    );
+    final showTitle = item?.showTitle;
+    final messageTitle =
+        item?.shareCopy ?? '$pgcTitle ${showTitle ?? item?.longTitle}';
+    final shareUrl = item?.shareUrl;
+    final shareCover = item?.cover;
+    bool ownsAccount() =>
+        context.mounted && !isClosed && identical(account, Accounts.main);
 
     String videoUrl =
         '${HttpString.baseUrl}/bangumi/play/ep$epId${videoDetailCtr.playedTimePos(false)}';
@@ -187,10 +205,9 @@ class PgcIntroController extends CommonIntroController {
             DialogOption(
               child: const Text('分享视频', style: TextStyle(fontSize: 14)),
               onPressed: () {
-                final item = episodes.firstWhereOrNull(isCurrentEpisode);
                 Get.back();
                 ShareUtils.shareText(
-                  '${pgcItem.title}${item != null ? ' ${item.showTitle}' : ''}'
+                  '$pgcTitle${item != null ? ' $showTitle' : ''}'
                   ' - $videoUrl',
                 );
               },
@@ -200,7 +217,7 @@ class PgcIntroController extends CommonIntroController {
               child: const Text('分享至动态', style: TextStyle(fontSize: 14)),
               onPressed: () {
                 Get.back();
-                final item = episodes.firstWhereOrNull(isCurrentEpisode);
+                if (!ownsAccount()) return;
                 showModalBottomSheet(
                   context: context,
                   isScrollControlled: true,
@@ -216,7 +233,7 @@ class PgcIntroController extends CommonIntroController {
                     6：漫画
                     7：综艺 // 4099
                   */
-                    dynType: switch (pgcItem.type) {
+                    dynType: switch (pgcType) {
                       1 => 4097,
                       2 => 4098,
                       3 => 4101,
@@ -224,9 +241,8 @@ class PgcIntroController extends CommonIntroController {
                       5 || 7 => 4099,
                       _ => -1,
                     },
-                    pic: pgcItem.cover,
-                    title:
-                        '${pgcItem.title}${item != null ? '\n${item.showTitle}' : ''}',
+                    pic: pgcCover,
+                    title: '$pgcTitle${item != null ? '\n$showTitle' : ''}',
                     uname: '',
                   ),
                 );
@@ -238,23 +254,24 @@ class PgcIntroController extends CommonIntroController {
                 '分享至消息',
                 style: TextStyle(fontSize: 14),
               ),
-              onPressed: () {
+              onPressed: () async {
                 Get.back();
+                if (!ownsAccount()) return;
+                if (item == null) {
+                  SmartDialog.showToast('分集信息不完整，请刷新后重试');
+                  return;
+                }
                 try {
-                  final item = episodes.firstWhere(isCurrentEpisode);
-                  final title =
-                      item.shareCopy ??
-                      '${pgcItem.title} ${item.showTitle ?? item.longTitle}';
-                  PageUtils.pmShare(
+                  await PageUtils.pmShare(
                     context,
                     content: {
-                      "id": epId!.toString(),
-                      "title": title,
-                      "url": item.shareUrl,
-                      "headline": title,
+                      "id": epId.toString(),
+                      "title": messageTitle,
+                      "url": shareUrl,
+                      "headline": messageTitle,
                       "source": 16,
-                      "thumb": item.cover,
-                      "source_desc": switch (pgcItem.type) {
+                      "thumb": shareCover,
+                      "source_desc": switch (pgcType) {
                         1 => '番剧',
                         2 => '电影',
                         3 => '纪录片',
@@ -266,8 +283,13 @@ class PgcIntroController extends CommonIntroController {
                       },
                     },
                   );
-                } catch (e) {
-                  SmartDialog.showToast(e.toString());
+                } catch (error, stack) {
+                  logger.w(
+                    '打开分集分享失败',
+                    error: error.runtimeType,
+                    stackTrace: stack,
+                  );
+                  if (ownsAccount()) SmartDialog.showToast('无法打开分享面板，请重试');
                 }
               },
             ),

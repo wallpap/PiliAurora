@@ -6,6 +6,7 @@ import 'package:pili_aurora/utils/android/bindings.g.dart';
 import 'package:pili_aurora/utils/device_utils.dart';
 import 'package:pili_aurora/utils/page_utils.dart';
 import 'package:pili_aurora/utils/utils.dart';
+import 'package:pili_aurora/services/logger.dart';
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:jni/jni.dart';
 
@@ -59,9 +60,14 @@ abstract final class PiliAndroidHelper {
     }
   }
 
-  @pragma('vm:prefer-inline')
-  static void openLinkVerifySettings() =>
+  static void openLinkVerifySettings() {
+    try {
       AndroidHelper.openLinkVerifySettings();
+    } catch (error, stack) {
+      logger.w('打开链接设置失败', error: error.runtimeType, stackTrace: stack);
+      SmartDialog.showToast('无法打开链接设置，请从系统设置进入');
+    }
+  }
 
   static bool openMusic(String title, String? artist, String? album) {
     final jTitle = title.toJString();
@@ -123,25 +129,34 @@ abstract final class PiliAndroidHelper {
     }
   }
 
-  static void openUrl(String url, {String domain = '*.bilibili.com'}) {
-    if (!Platform.isAndroid || DeviceUtils.sdkInt < 31) {
-      PageUtils.launchURL(url);
-      return;
-    }
-    final jDomain = domain.toJString();
+  static Future<void> openUrl(
+    String url, {
+    String domain = '*.bilibili.com',
+  }) async {
+    JString? jDomain;
     JString? jUrl;
     try {
+      if (!Platform.isAndroid || DeviceUtils.sdkInt < 31) {
+        await PageUtils.launchURL(url);
+        return;
+      }
+      jDomain = domain.toJString();
       if (AndroidHelper.isDomainVerified(jDomain)) {
         jUrl = url.toJString();
         final jStr = AndroidHelper.openUrl(jUrl);
         if (jStr != null) {
-          SmartDialog.showToast(jStr.toDartString(releaseOriginal: true));
+          // 原生返回值可能包含 Intent 与地址，不向用户交付异常正文。
+          jStr.release();
+          SmartDialog.showToast('无法打开链接，请检查可用的浏览器或应用');
         }
       } else {
-        PageUtils.launchURL(url);
+        await PageUtils.launchURL(url);
       }
+    } catch (error, stack) {
+      logger.w('启动外部链接失败', error: error.runtimeType, stackTrace: stack);
+      SmartDialog.showToast('无法打开链接，请检查可用的浏览器或应用');
     } finally {
-      jDomain.release();
+      jDomain?.release();
       jUrl?.release();
     }
   }

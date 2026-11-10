@@ -9,6 +9,8 @@ import 'package:pili_aurora/models/remote/pgc/pgc_info_model/result.dart';
 import 'package:pili_aurora/pages/share/view.dart';
 import 'package:pili_aurora/pages/video/controller.dart';
 import 'package:pili_aurora/pages/video/introduction/pgc/controller.dart';
+import 'package:pili_aurora/pages/video/introduction/ugc/controller.dart';
+import 'package:pili_aurora/pages/common/common_intro_controller.dart';
 import 'package:pili_aurora/services/messaging/conversation.dart';
 import 'package:pili_aurora/services/messaging/session.dart';
 import 'package:pili_aurora/services/messaging/sharing.dart';
@@ -31,6 +33,12 @@ class _VideoController extends GetxController implements VideoDetailController {
 class _ShareController extends PgcIntroController {
   final _video = _VideoController();
 
+  @override
+  VideoDetailController get videoDetailCtr => _video;
+}
+
+class _UgcShareController extends UgcIntroController {
+  final _video = _VideoController();
   @override
   VideoDetailController get videoDetailCtr => _video;
 }
@@ -78,6 +86,46 @@ void main() {
     Messaging.onAccountChanged();
     Get.reset();
   });
+
+  for (final ugc in [false, true]) {
+    testWidgets('${ugc ? 'UGC' : 'PGC'} 分享菜单切号后不打开消息面板', (tester) async {
+      final CommonIntroController controller = ugc
+          ? (_UgcShareController()
+              ..bvid = 'BV17x411w7KC'
+              ..cid = 1.obs)
+          : (_ShareController()
+              ..pgcItem = PgcInfoModel.fromJson({
+                'title': '测试',
+                'type': 1,
+                'episodes': [
+                  {'ep_id': 123},
+                ],
+              })
+              ..epId = 123);
+      await tester.pumpWidget(
+        GetMaterialApp(
+          navigatorObservers: [FlutterSmartDialog.observer],
+          builder: FlutterSmartDialog.init(),
+          home: Scaffold(
+            body: Builder(
+              builder: (context) => TextButton(
+                onPressed: () => controller.actionShareVideo(context),
+                child: const Text('打开分享'),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.tap(find.text('打开分享'));
+      await tester.pumpAndSettle();
+      Accounts.accountMode[AccountType.main.index] = const NoAccount();
+      await tester.tap(find.text('分享至消息'));
+      await tester.pumpAndSettle();
+      expect(find.byType(SharePanel), findsNothing);
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox());
+    });
+  }
 
   testWidgets('复制番剧链接包含播放进度', (tester) async {
     String? copied;
@@ -165,6 +213,9 @@ void main() {
 
         await tester.tap(find.text('打开分享'));
         await tester.pumpAndSettle();
+        // 菜单打开后切换分集，分享内容仍属于菜单所展示的分集快照。
+        controller.epId = 999;
+        controller.pgcItem.title = '后来的标题';
         await tester.tap(find.text('分享至消息'));
         await tester.pumpAndSettle();
 

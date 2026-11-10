@@ -305,6 +305,9 @@ class UgcIntroController extends CommonIntroController with ReloadMixin {
   // 分享视频
   @override
   void actionShareVideo(BuildContext context) {
+    final account = Accounts.main;
+    bool ownsAccount() =>
+        context.mounted && !isClosed && identical(account, Accounts.main);
     final videoDetail = this.videoDetail.value;
     final cid = this.cid.value;
     final partIndex = videoDetail.pages?.indexWhere((e) => e.cid == cid);
@@ -375,6 +378,7 @@ class UgcIntroController extends CommonIntroController with ReloadMixin {
               ),
               onTap: () {
                 Get.back();
+                if (!ownsAccount()) return;
                 showModalBottomSheet(
                   context: context,
                   isScrollControlled: true,
@@ -396,10 +400,11 @@ class UgcIntroController extends CommonIntroController with ReloadMixin {
                 '分享至消息',
                 style: TextStyle(fontSize: 14),
               ),
-              onTap: () {
+              onTap: () async {
                 Get.back();
+                if (!ownsAccount()) return;
                 try {
-                  PageUtils.pmShare(
+                  await PageUtils.pmShare(
                     context,
                     content: {
                       "id": videoDetail.aid!.toString(),
@@ -411,8 +416,13 @@ class UgcIntroController extends CommonIntroController with ReloadMixin {
                       "author_id": videoDetail.owner!.mid!.toString(),
                     },
                   );
-                } catch (e) {
-                  SmartDialog.showToast(e.toString());
+                } catch (error, stack) {
+                  logger.w(
+                    '打开视频分享失败',
+                    error: error.runtimeType,
+                    stackTrace: stack,
+                  );
+                  if (ownsAccount()) SmartDialog.showToast('无法打开分享面板，请重试');
                 }
               },
             ),
