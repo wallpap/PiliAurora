@@ -86,6 +86,10 @@ fvm flutter test test/services/diagnostics/ test/pages/about/diagnostics_page_te
 
 `pages/fav/account_favorite_results_test.dart` 检查课程／话题收藏取消的账号与来源快照、重复提交、失败保留、迟到确认及删除后的分页重读；`pages/pgc/pugv_favorite_results_test.dart` 与 `pages/episode_panel/favorite_results_test.dart` 检查播放器收藏／订阅的在途锁、账号隔离、待确认后的状态重查及离页回执。`pages/subscription/detail_filter_test.dart` 检查隐藏页补读上限、失败停止与切号后的迟到查询隔离。
 
+`pages/member/operation_results_test.dart` 检查成员主页面的账号／目标／刷新归属、关系写入和经验领取互斥；`pages/member/child_list_results_test.dart` 与 `pages/member_pgc/controller_results_test.dart` 检查成员视频／图文／Web／番剧子列表的账号订阅、查询失效和页面释放，以及继续播放的迟到结果。番剧页独立查询，不消费无账号归属的父缓存。
+
+`utils/platform_action_results_test.dart` 检查剪贴板确认前不提示成功、平台失败由操作持有者消费，以及桌面分享不泄露异常正文。系统分享面板、文件选择与目录打开仍需目标设备验证。
+
 `pages/member_favorite/pagination_lifecycle_test.dart` 检查成员收藏双分页的失败重试、完整响应、账号订阅与凭据替换、迟到删除回调及订阅释放。
 
 `pages/fav/note_results_test.dart` 检查笔记删除互斥、失败／待确认保留选择、补页等待、凭据替换与刷新后的旧回执隔离，以及公共删除助手按对象删除。`pages/subscription/operation_results_test.dart` 检查取消订阅弹窗和清理流程的账号绑定、失败保留弹窗、在途互斥、确认成功后的本地清理失败、待确认汇总及完成后实际刷新；清理算法另见 `pages/subscription/cleanup_test.dart`。
