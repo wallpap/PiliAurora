@@ -3,6 +3,7 @@ import 'dart:io' show File;
 
 import 'package:pili_aurora/grpc/dm.dart';
 import 'package:pili_aurora/http/download.dart';
+import 'package:pili_aurora/http/loading_state.dart';
 import 'package:pili_aurora/models/common/video/audio_quality.dart';
 import 'package:pili_aurora/models/common/video/video_quality.dart';
 import 'package:pili_aurora/models/remote/download/bili_download_entry_info.dart';
@@ -601,54 +602,104 @@ class DownloadService extends GetxService {
 
   void nextDownload() {
     if (waitDownloadQueue.isNotEmpty) {
-      startDownload(waitDownloadQueue.first);
+      unawaited(
+        startDownload(waitDownloadQueue.first).catchError((
+          Object error,
+          StackTrace stack,
+        ) {
+          logger.e('下一下载任务启动失败', error: error.runtimeType, stackTrace: stack);
+          SmartDialog.showToast('下载任务启动失败，请检查目录后重试');
+        }),
+      );
     }
   }
 
-  Future<void> deleteDownload({
+  Future<LoadingState<void>> deleteDownload({
     required BiliDownloadEntryInfo entry,
     bool removeList = false,
     bool removeQueue = false,
     bool refresh = true,
     bool downloadNext = true,
-  }) async {
+  }) => _lock.synchronized(() async {
+    final current = curDownload.value;
+    final isCurrent = current?.entryDirPath == entry.entryDirPath;
+    try {
+      if (isCurrent) {
+        await _cancelCurrent(isDelete: true, downloadNext: false);
+        current!.status = DownloadStatus.pause;
+      }
+      await _repository.remove(entry);
+    } catch (error, stack) {
+      return _deleteFailure(error, stack);
+    }
     if (removeList) {
-      downloadList.remove(entry);
-    }
-    if (removeQueue) {
-      waitDownloadQueue.remove(entry);
-    }
-    if (curDownload.value?.cid == entry.cid) {
-      await cancelDownload(
-        isDelete: true,
-        downloadNext: downloadNext,
+      downloadList.removeWhere(
+        (item) =>
+            item.cid == entry.cid && item.entryDirPath == entry.entryDirPath,
       );
     }
-    await _repository.remove(entry);
-    if (refresh) {
-      flagNotifier.refresh();
+    if (removeQueue) {
+      waitDownloadQueue.removeWhere(
+        (item) =>
+            item.cid == entry.cid && item.entryDirPath == entry.entryDirPath,
+      );
     }
-  }
+    _publishDeletion(refresh);
+    if (isCurrent && downloadNext) nextDownload();
+    return const Success(null);
+  });
 
-  Future<void> deletePage({
+  Future<LoadingState<void>> deletePage({
     required String pageDirPath,
     bool refresh = true,
-  }) async {
-    waitDownloadQueue.removeWhere((entry) => entry.pageDirPath == pageDirPath);
-    if (curDownload.value?.pageDirPath == pageDirPath) {
-      await cancelDownload(isDelete: true);
+  }) => _lock.synchronized(() async {
+    final current = curDownload.value;
+    final isCurrent = current?.pageDirPath == pageDirPath;
+    try {
+      if (isCurrent) {
+        await _cancelCurrent(isDelete: true, downloadNext: false);
+        current!.status = DownloadStatus.pause;
+      }
+      await _repository.removePage(pageDirPath);
+    } catch (error, stack) {
+      return _deleteFailure(error, stack);
     }
-    await _repository.removePage(pageDirPath);
+    waitDownloadQueue.removeWhere((entry) => entry.pageDirPath == pageDirPath);
     downloadList.removeWhere((e) => e.pageDirPath == pageDirPath);
-    if (refresh) {
-      flagNotifier.refresh();
+    _publishDeletion(refresh);
+    if (isCurrent) nextDownload();
+    return const Success(null);
+  });
+
+  Error _deleteFailure(Object error, StackTrace stack) {
+    const message = '删除未完成，请检查文件占用或目录权限后重试';
+    logger.e(message, error: error.runtimeType, stackTrace: stack);
+    return Error(message, cause: error, stackTrace: stack);
+  }
+
+  void _publishDeletion(bool refresh) {
+    if (!refresh) return;
+    // 文件删除已确认，订阅方错误不能把成功结果改成可重试的删除失败。
+    for (final listener in flagNotifier.toList()) {
+      try {
+        listener();
+      } catch (error, stack) {
+        logger.e('下载列表刷新失败', error: error.runtimeType, stackTrace: stack);
+      }
     }
   }
 
   Future<void> cancelDownload({
     required bool isDelete,
     bool downloadNext = true,
-  }) => _lock.synchronized(() async {
+  }) => _lock.synchronized(
+    () => _cancelCurrent(isDelete: isDelete, downloadNext: downloadNext),
+  );
+
+  Future<void> _cancelCurrent({
+    required bool isDelete,
+    required bool downloadNext,
+  }) async {
     _operation = null;
     await _downloadManager?.cancel(isDelete: isDelete);
     await _audioDownloadManager?.cancel(isDelete: isDelete);
@@ -670,7 +721,7 @@ class DownloadService extends GetxService {
     if (downloadNext) {
       nextDownload();
     }
-  });
+  }
 }
 
 typedef SetNotifier = Set<VoidCallback>;

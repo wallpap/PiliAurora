@@ -3,7 +3,6 @@ import 'dart:io';
 
 import 'package:pili_aurora/models/remote/download/bili_download_entry_info.dart';
 import 'package:pili_aurora/models/remote/download/bili_download_media_file_info.dart';
-import 'package:pili_aurora/utils/extension/file_ext.dart';
 import 'package:path/path.dart' as path;
 import 'package:synchronized/synchronized.dart';
 
@@ -167,19 +166,29 @@ class DownloadRepository {
 
   Future<void> remove(BiliDownloadEntryInfo entry) =>
       _lock.synchronized(() async {
+        final entryDir = Directory(entry.entryDirPath);
+        // 删除任务必须确认落盘结果，失败交回调用方保留列表以便重试。
+        await _deleteDirectory(entryDir);
         final pageDir = Directory(entry.pageDirPath);
-        if (!pageDir.existsSync()) return;
-        if (!await pageDir.lengthGte(2)) {
-          await pageDir.tryDel(recursive: true);
-        } else {
-          final entryDir = Directory(entry.entryDirPath);
-          if (entryDir.existsSync()) {
-            await entryDir.tryDel(recursive: true);
+        // 任务已删除，空父目录只是附带清理；绝不因目标缺失而删掉其余分 P。
+        try {
+          if (pageDir.existsSync() && await pageDir.list().isEmpty) {
+            await pageDir.delete();
           }
-        }
+        } on FileSystemException catch (_) {}
       });
 
-  Future<void> removePage(String pageDirPath) => _lock.synchronized(
-    () => Directory(pageDirPath).tryDel(recursive: true),
-  );
+  Future<void> removePage(String pageDirPath) => _lock.synchronized(() async {
+    await _deleteDirectory(Directory(pageDirPath));
+  });
+
+  Future<void> _deleteDirectory(Directory directory) async {
+    final type = FileSystemEntity.typeSync(directory.path, followLinks: false);
+    if (type == FileSystemEntityType.notFound) return;
+    if (type != FileSystemEntityType.directory &&
+        type != FileSystemEntityType.link) {
+      throw FileSystemException('下载目录类型无效', directory.path);
+    }
+    await directory.delete(recursive: true);
+  }
 }

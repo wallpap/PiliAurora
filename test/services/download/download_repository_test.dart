@@ -181,6 +181,32 @@ void main() {
     expect((await repository.load()).map((entry) => entry.cid), [22]);
   });
 
+  test('重复删除不存在的分 P 不会删除唯一剩余分 P', () async {
+    final first = downloadEntry();
+    final sibling = downloadEntry(cid: 22);
+    await repository.create(first);
+    await repository.create(sibling);
+    await repository.remove(first);
+    await repository.remove(first);
+    expect((await repository.load()).map((entry) => entry.cid), [22]);
+  });
+
+  test('删除路径被普通文件占用时返回文件系统错误', () async {
+    final entry = downloadEntry();
+    await repository.create(entry);
+    await Directory(entry.entryDirPath).delete(recursive: true);
+    await File(entry.entryDirPath).writeAsString('unexpected file');
+    await expectLater(
+      repository.remove(entry),
+      throwsA(isA<FileSystemException>()),
+    );
+    await expectLater(
+      repository.removePage(entry.entryDirPath),
+      throwsA(isA<FileSystemException>()),
+    );
+    expect(await File(entry.entryDirPath).readAsString(), 'unexpected file');
+  });
+
   test(
     'a record without a page or episode fails before creating files',
     () async {

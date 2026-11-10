@@ -9,6 +9,7 @@ import 'dart:typed_data';
 
 import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:pili_aurora/http/loading_state.dart';
 import 'package:pili_aurora/models/remote/download/bili_download_entry_info.dart';
 import 'package:pili_aurora/models/remote/download/bili_download_media_file_info.dart';
 import 'package:pili_aurora/services/download/download_repository.dart';
@@ -81,6 +82,32 @@ class _BarrierRepository extends DownloadRepository {
   }
 }
 
+class _DeletionRepository extends DownloadRepository {
+  _DeletionRepository({required super.rootPath});
+
+  final started = Completer<void>();
+  final release = Completer<void>();
+  Object? failure;
+
+  Future<void> _wait() async {
+    if (!started.isCompleted) started.complete();
+    await release.future;
+    if (failure case final error?) throw error;
+  }
+
+  @override
+  Future<void> remove(BiliDownloadEntryInfo entry) async {
+    await _wait();
+    await super.remove(entry);
+  }
+
+  @override
+  Future<void> removePage(String pageDirPath) async {
+    await _wait();
+    await super.removePage(pageDirPath);
+  }
+}
+
 void main() {
   late Directory directory;
   late DownloadRepository repository;
@@ -103,6 +130,82 @@ void main() {
     service.initDownloadList();
     await service.waitForInitialization;
   }
+
+  for (final wholePage in [false, true]) {
+    test('${wholePage ? '整组' : '单条'}删除失败保留队列及完成列表，允许重试', () async {
+      const failure = FileSystemException('private path');
+      final repo = _DeletionRepository(rootPath: () => directory.path)
+        ..failure = failure;
+      final pending = _SchedulingDownloadService(
+        repository: repo,
+        downloadClient: client,
+      );
+      final entry = downloadEntry();
+      final completed = downloadEntry(cid: 22, completed: true);
+      final next = downloadEntry(aid: 2, cid: 33);
+      await repo.create(entry);
+      await repo.create(completed);
+      await repo.create(next);
+      pending.waitDownloadQueue.addAll([entry, next]);
+      pending.downloadList.add(completed);
+      pending.curDownload.value = entry;
+      entry.status = DownloadStatus.downloading;
+      Future<LoadingState<void>> remove() => wholePage
+          ? pending.deletePage(pageDirPath: entry.pageDirPath)
+          : pending.deleteDownload(entry: entry, removeQueue: true);
+      final deletion = remove();
+      await repo.started.future;
+      expect(pending.waitDownloadQueue, [entry, next]);
+      expect(pending.downloadList, [completed]);
+      repo.release.complete();
+      final result = await deletion;
+      expect(result, isA<Error>());
+      expect((result as Error).cause, same(failure));
+      expect(result.stackTrace, isNotNull);
+      expect(result.toString(), isNot(contains('private path')));
+      expect(pending.waitDownloadQueue, [entry, next]);
+      expect(pending.downloadList, [completed]);
+      expect(entry.status, DownloadStatus.pause);
+      expect(pending.started, isEmpty);
+      repo.failure = null;
+      expect((await remove()).isSuccess, isTrue);
+      expect(pending.waitDownloadQueue, [next]);
+      expect(pending.downloadList, wholePage ? isEmpty : [completed]);
+    });
+  }
+
+  test('删除成功不会因列表订阅回调失败而变成删除失败', () async {
+    final entry = downloadEntry(completed: true);
+    await repository.create(entry);
+    service.downloadList.add(entry);
+    var notified = false;
+    service.flagNotifier.addAll([
+      () => throw StateError('observer failure'),
+      () => notified = true,
+    ]);
+    expect(
+      (await service.deleteDownload(entry: entry, removeList: true)).isSuccess,
+      isTrue,
+    );
+    expect(service.downloadList, isEmpty);
+    expect(notified, isTrue);
+  });
+
+  test('删除期间的重新启动等待删除确认，不会重建已删除任务', () async {
+    final repo = _DeletionRepository(rootPath: () => directory.path);
+    final entry = downloadEntry();
+    await repo.create(entry);
+    final pending = DownloadService(repository: repo, downloadClient: client);
+    pending.waitDownloadQueue.add(entry);
+    final deletion = pending.deleteDownload(entry: entry, removeQueue: true);
+    await repo.started.future;
+    final start = pending.startDownload(entry);
+    repo.release.complete();
+    expect((await deletion).isSuccess, isTrue);
+    await start;
+    expect(pending.curDownload.value, isNull);
+    expect(Directory(entry.entryDirPath).existsSync(), isFalse);
+  });
 
   test('持久化期间同一 CID 仅创建一次', () async {
     final repo = _BarrierRepository(rootPath: () => directory.path);
