@@ -88,7 +88,13 @@ fvm flutter test test/services/diagnostics/ test/pages/about/diagnostics_page_te
 
 `pages/member/operation_results_test.dart` 检查成员主页面的账号／目标／刷新归属、关系写入和经验领取互斥；`pages/member/child_list_results_test.dart` 与 `pages/member_pgc/controller_results_test.dart` 检查成员视频／图文／Web／番剧子列表的账号订阅、查询失效和页面释放，以及继续播放的迟到结果。番剧页独立查询，不消费无账号归属的父缓存。
 
-`utils/platform_action_results_test.dart` 检查剪贴板确认前不提示成功、平台失败由操作持有者消费，以及桌面分享不泄露异常正文。系统分享面板、文件选择与目录打开仍需目标设备验证。
+`utils/app_scheme_test.dart` 与 `utils/url_navigation_results_test.dart` 检查链接入口同步／异步错误消费、静默探测、相对重定向、分 P 查询空结果及安全失败提示；加载 finally 收尾仅经源码检查。系统外链启动、深层路由跨页面生命周期及并发加载提示的所有权仍需专项验收。
+
+`utils/connectivity_results_test.dart` 检查 Wi-Fi／移动网络判定、探测错误保留与初始化保守降级；按网络保存音视频默认档位的入口在未知时跳过写入。`utils/font_results_test.dart` 检查导入取消／失败、旧字体兼容、启动降级、文件／偏好失败保留确认值、保存互斥和页面草稿。`utils/cache_results_test.dart` 与 `utils/asset_preparation_test.dart` 检查实际缓存大小、清理错误与重试、资源复制失败及完整重试。`plugin/pl_player/playback/controller_recovery_test.dart` 的资源准备失败用例检查超分档位与偏好保留、同档位重试。原生文件选择器、系统字体枚举、着色器及真实网络切换需设备验收。
+
+`pages/dynamics/management_results_test.dart` 的成员动态用例另检查刷新后的旧确认回调、分页失败显式重试、重复游标／连续无增长限界和删除后重复页不会复活条目。
+
+`utils/platform_action_results_test.dart` 检查剪贴板确认前不提示成功、平台失败由操作持有者消费，以及桌面分享不泄露异常正文。桌面分享用例仅在 Windows 执行；系统分享面板、文件选择与目录打开仍需目标设备验证。
 
 `pages/member_favorite/pagination_lifecycle_test.dart` 检查成员收藏双分页的失败重试、完整响应、账号订阅与凭据替换、迟到删除回调及订阅释放。
 
@@ -115,6 +121,10 @@ fvm flutter test test/services/diagnostics/ test/pages/about/diagnostics_page_te
 `http/sponsor_block_response_test.dart` 覆盖空降助手 8 个接口的 HTTP 状态、损坏响应、写入待确认、账号隔离与本地参数校验；`pages/sponsor_block/operation_results_test.dart` 挂真实提交／设置页面，检查草稿、防重入、关闭／切换视频后的迟到结果、投票和查询代次，另检查查询等待消费者完成。既有 `block_mixin_test.dart` 与 `utils/sponsor_block_settings_test.dart` 检查跳过／静音行为和配置兼容。真实服务写入、播放器动作和 UGC 搬运绑定确认流需另外验收。
 
 `utils/image_save_results_test.dart` 检查取消保存不误报成功、选择器收到真实字节、保存结果和共享缓存文件保留。Windows 文件选择使用模拟 adapter；Android 图库写入与权限需目标设备验收。
+
+`utils/image_permission_results_test.dart` 检查图片分享取消／无法确认、重复分享互斥、迟到分享不关闭其他加载提示，以及权限受限、查询失败和打开设置失败。`utils/theme_utils_test.dart`、`utils/theme_palette_results_test.dart` 和 `utils/window_position_results_test.dart` 检查损坏平台颜色输入、取色失败保留偏好、并发探测与重试、有限窗口尺寸／坐标和多屏原点恢复。真实系统分享、动态色、多屏 DPI／热插拔仍需设备验收。
+
+`services/download/download_repository_test.dart` 与 `services/download/download_service_test.dart` 检查删除失败保留队列／完成列表、原始原因、删除与启动串行，以及重复删除缺失分 P 不影响兄弟目录。`pages/download/deletion_results_test.dart` 检查确认删除后清理播放记录、部分失败保留选择、刷新／离页后的迟到结果和清理失败不覆盖成功。真实文件占用／权限及完整页面交互仍需设备验收。
 
 `pages/video/danmaku_pool_test.dart` 检查弹幕列表刷新、个人点赞状态恢复与取消点赞。挂起接口响应时检查首帧及慢响应期间的加载占位，另覆盖响应缺失、网络异常、查询重试不提交点赞，以及切换弹幕后迟到结果的隔离。
 
