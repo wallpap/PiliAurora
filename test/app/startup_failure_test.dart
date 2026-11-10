@@ -14,6 +14,17 @@ final _failure = StartupFailure(
 );
 
 void main() {
+  setUp(() {
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(
+          const MethodChannel('window_manager'),
+          (call) async => call.method == 'isMaximized' ? false : null,
+        );
+  });
+  tearDown(() {
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(const MethodChannel('window_manager'), null);
+  });
   testWidgets('未初始化存储也能显示可读失败；只有点击时才写入剪贴板', (tester) async {
     final copied = <String>[];
     tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(

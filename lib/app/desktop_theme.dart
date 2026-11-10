@@ -5,8 +5,8 @@ import 'package:flutter/scheduler.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:pili_aurora/common/assets.dart';
 import 'package:pili_aurora/services/logger.dart';
-import 'package:pili_aurora/utils/desktop_window_visibility.dart';
 import 'package:pili_aurora/utils/desktop_window_background.dart';
+import 'package:pili_aurora/utils/desktop_window_visibility.dart';
 import 'package:window_manager/window_manager.dart';
 
 /// 根节点同步窗口外观，主窗口和独立播放窗口共用。
@@ -88,7 +88,10 @@ class _DesktopWindowThemeState extends State<DesktopWindowTheme>
     final brightness = Theme.of(context).brightness;
     if (_brightness == brightness) return;
     _brightness = brightness;
-    unawaited(windowManager.setBrightness(brightness));
+    // Windows 使用 Flutter 自绘标题栏，无需再同步系统标题栏亮暗。
+    if (!Platform.isWindows) {
+      unawaited(windowManager.setBrightness(brightness));
+    }
     _syncIcon();
   }
 

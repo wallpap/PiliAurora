@@ -96,6 +96,7 @@ Future<void> initializePlatformWindow() async {
         const WindowOptions(
           minimumSize: Size(320, 180),
           titleBarStyle: TitleBarStyle.hidden,
+          windowButtonVisibility: false,
           title: 'PiliAurora Player',
           backgroundColor: Color(0xFF000000),
         ),
@@ -105,12 +106,11 @@ Future<void> initializePlatformWindow() async {
       return;
     }
 
-    final windowOptions = WindowOptions(
-      minimumSize: const Size(400, 720),
+    const windowOptions = WindowOptions(
+      minimumSize: Size(400, 720),
       skipTaskbar: false,
-      titleBarStyle: Pref.showWindowTitleBar
-          ? TitleBarStyle.normal
-          : TitleBarStyle.hidden,
+      titleBarStyle: TitleBarStyle.hidden,
+      windowButtonVisibility: false,
       title: Constants.appName,
     );
     await windowManager.waitUntilReadyToShow(windowOptions);

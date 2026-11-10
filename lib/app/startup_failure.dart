@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/services.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:pili_aurora/app/back_navigation.dart';
+import 'package:pili_aurora/app/desktop_title_bar.dart';
 import 'package:pili_aurora/app/startup.dart';
 import 'package:pili_aurora/common/constants.dart';
 import 'package:pili_aurora/services/logger.dart';
@@ -24,7 +25,8 @@ Future<void> showStartupFailure(StartupFailure failure) async {
         size: Size(540, 400),
         minimumSize: Size(320, 280),
         skipTaskbar: false,
-        titleBarStyle: TitleBarStyle.normal,
+        titleBarStyle: TitleBarStyle.hidden,
+        windowButtonVisibility: false,
         title: Constants.appName,
       ),
     );
@@ -96,6 +98,8 @@ class _StartupFailureAppState extends State<StartupFailureApp>
   Widget build(BuildContext context) => MaterialApp(
     title: Constants.appName,
     debugShowCheckedModeBanner: false,
+    builder: (context, child) =>
+        PlatformUtils.isDesktop ? DesktopWindowFrame(child: child!) : child!,
     home: PopScope<void>(
       canPop: false,
       onPopInvokedWithResult: (didPop, _) {

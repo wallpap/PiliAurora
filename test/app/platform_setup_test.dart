@@ -35,6 +35,7 @@ void main() {
     for (final fails in [false, true]) {
       final showing = Completer<Object?>();
       final methods = <String>[];
+      Object? titleBarArguments;
       tester.binding.defaultBinaryMessenger
         ..setMockMethodCallHandler(background, (_) async => null)
         ..setMockMethodCallHandler(
@@ -50,6 +51,9 @@ void main() {
         )
         ..setMockMethodCallHandler(window, (call) async {
           methods.add(call.method);
+          if (call.method == 'setTitleBarStyle') {
+            titleBarArguments = call.arguments;
+          }
           return switch (call.method) {
             'isMinimized' || 'isMaximized' || 'isFullScreen' => false,
             'show' => showing.future,
@@ -67,6 +71,11 @@ void main() {
         },
       );
       await tester.pump();
+      expect(failure, isNull);
+      expect(titleBarArguments, {
+        'titleBarStyle': 'hidden',
+        'windowButtonVisibility': false,
+      });
       expect(methods, contains('show'));
       expect(completed, isFalse);
       expect(methods, isNot(contains('focus')));

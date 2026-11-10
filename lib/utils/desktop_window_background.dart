@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:pili_aurora/services/logger.dart';
 import 'package:window_manager/window_manager.dart';
@@ -9,6 +10,8 @@ abstract final class DesktopWindowBackground {
   static const channel = MethodChannel('piliaurora/window_background');
   static Color _themeColor = const Color(0xFF000000);
   static bool _fullscreen = false;
+  static final _fullscreenState = ValueNotifier(false);
+  static ValueListenable<bool> get fullscreen => _fullscreenState;
   static Future<void> _pending = Future.value();
 
   static Future<void> setThemeColor(Color color) {
@@ -18,6 +21,7 @@ abstract final class DesktopWindowBackground {
 
   static Future<void> setFullscreen(bool fullscreen) {
     _fullscreen = fullscreen;
+    _fullscreenState.value = fullscreen;
     return _apply();
   }
 
