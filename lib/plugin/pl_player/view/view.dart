@@ -3,6 +3,8 @@ import 'dart:io';
 import 'dart:math' as math;
 import 'dart:ui' as ui;
 
+import 'package:pili_aurora/http/loading_state.dart';
+import 'package:pili_aurora/services/logger.dart';
 import 'package:pili_aurora/utils/volume_utils.dart';
 import 'package:pili_aurora/common/constants.dart';
 import 'package:pili_aurora/common/style.dart';
@@ -927,14 +929,35 @@ class _PLVideoPlayerState extends State<PLVideoPlayer>
 
                       SmartDialog.showToast("画质已变为：${newQa.desc}");
 
-                      // update
                       if (!plPlayerController.tempPlayerConf) {
-                        GStorage.setting.put(
-                          await ConnectivityUtils.isWiFi
-                              ? SettingBoxKey.defaultVideoQa
-                              : SettingBoxKey.defaultVideoQaCellular,
-                          quality,
-                        );
+                        final network = await ConnectivityUtils.queryWiFi();
+                        if (!mounted ||
+                            videoDetailController.isClosed ||
+                            plPlayerController.tempPlayerConf ||
+                            plPlayerController.cacheVideoQa != quality) {
+                          return;
+                        }
+                        if (network is! Success<bool>) {
+                          SmartDialog.showToast('画质已应用，网络类型未知，未保存默认值');
+                          return;
+                        }
+                        try {
+                          await GStorage.setting.put(
+                            network.response
+                                ? SettingBoxKey.defaultVideoQa
+                                : SettingBoxKey.defaultVideoQaCellular,
+                            quality,
+                          );
+                        } catch (error, stackTrace) {
+                          logger.w(
+                            '保存默认画质失败',
+                            error: error.runtimeType,
+                            stackTrace: stackTrace,
+                          );
+                          if (mounted && !videoDetailController.isClosed) {
+                            SmartDialog.showToast('画质已应用，默认值保存失败，请重试');
+                          }
+                        }
                       }
                     },
                     child: Text(

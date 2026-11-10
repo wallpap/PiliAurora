@@ -2,6 +2,8 @@ import 'dart:async' show unawaited;
 import 'dart:io' show Platform;
 import 'dart:math' show min, max;
 
+import 'package:pili_aurora/http/loading_state.dart';
+import 'package:pili_aurora/services/logger.dart';
 import 'package:collection/collection.dart';
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:get/get.dart';
@@ -382,12 +384,34 @@ class _VideoMoreSettingsSheetState extends State<VideoMoreSettingsSheet> {
               ..updatePlayer();
             setState(() {});
             if (!player.tempPlayerConf) {
-              await GStorage.setting.put(
-                await ConnectivityUtils.isWiFi
-                    ? SettingBoxKey.defaultAudioQa
-                    : SettingBoxKey.defaultAudioQaCellular,
-                value.code,
-              );
+              final network = await ConnectivityUtils.queryWiFi();
+              if (!mounted ||
+                  controller.isClosed ||
+                  player.tempPlayerConf ||
+                  controller.currentAudioQa != value) {
+                return;
+              }
+              if (network is! Success<bool>) {
+                SmartDialog.showToast('音质已应用，网络类型未知，未保存默认值');
+                return;
+              }
+              try {
+                await GStorage.setting.put(
+                  network.response
+                      ? SettingBoxKey.defaultAudioQa
+                      : SettingBoxKey.defaultAudioQaCellular,
+                  value.code,
+                );
+              } catch (error, stackTrace) {
+                logger.w(
+                  '保存默认音质失败',
+                  error: error.runtimeType,
+                  stackTrace: stackTrace,
+                );
+                if (mounted && !controller.isClosed) {
+                  SmartDialog.showToast('音质已应用，默认值保存失败，请重试');
+                }
+              }
             }
           },
         ),

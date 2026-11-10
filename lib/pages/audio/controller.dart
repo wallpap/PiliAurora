@@ -194,6 +194,7 @@ class AudioController extends GetxController
       );
     }
     ConnectivityUtils.isWiFi.then((isWiFi) {
+      if (isClosed) return;
       cacheAudioQa = isWiFi ? Pref.defaultAudioQa : Pref.defaultAudioQaCellular;
       if (!hasAudioUrl) {
         _queryPlayUrl();
