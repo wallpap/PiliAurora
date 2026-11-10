@@ -653,14 +653,20 @@ class _MusicDetailPageState extends CommonDynPageState<MusicDetailPage> {
     );
   }
 
-  void _searchMusic(MusicDetail item) {
-    if (!Platform.isAndroid ||
-        !PiliAndroidHelper.openMusic(
+  Future<void> _searchMusic(MusicDetail item) async {
+    if (Platform.isAndroid) {
+      try {
+        if (PiliAndroidHelper.openMusic(
           item.musicTitle,
           item.originArtist ?? item.originArtistList,
           item.album,
         )) {
-      Utils.copyText(item.musicTitle);
+          return;
+        }
+      } catch (error, stackTrace) {
+        Utils.reportError(error, stackTrace);
+      }
     }
+    await Utils.copyText(item.musicTitle);
   }
 }
