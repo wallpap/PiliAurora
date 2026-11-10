@@ -6,6 +6,7 @@ import 'package:pili_aurora/models/common/enum_with_label.dart';
 import 'package:pili_aurora/pages/video/introduction/ugc/widgets/menu_row.dart';
 import 'package:pili_aurora/plugin/pl_player/controller.dart';
 import 'package:pili_aurora/services/app_exit.dart';
+import 'package:pili_aurora/services/logger.dart';
 import 'package:pili_aurora/utils/device_utils.dart';
 import 'package:pili_aurora/utils/duration_utils.dart';
 import 'package:pili_aurora/utils/page_utils.dart';
@@ -35,12 +36,13 @@ final shutdownTimerService = ShutdownTimerService._internal();
 class ShutdownTimerService {
   ShutdownTimerService._internal();
 
-  VoidCallback? onPause;
+  Future<void>? Function()? onPause;
   ValueGetter<bool>? isPlaying;
 
   DateTime? _deadline;
   DateTime? get deadline => _deadline;
   Timer? _shutdownTimer;
+  int _timerGeneration = 0;
   bool get isActive => _shutdownTimer?.isActive ?? false;
   int _durationInMinutes = 0;
   int get durationInMinutes => _durationInMinutes;
@@ -77,6 +79,7 @@ class ShutdownTimerService {
   }
 
   void reset([int durationInMinutes = 0]) {
+    _timerGeneration++;
     _stopTimer();
     _isWaiting = false;
     _durationInMinutes = durationInMinutes;
@@ -96,7 +99,7 @@ class ShutdownTimerService {
     );
   }
 
-  void _handleShutdown() {
+  Future<void> _handleShutdown() async {
     switch (_shutdownType) {
       case .pause:
         late final player = PlPlayerController.instance;
@@ -107,8 +110,29 @@ class ShutdownTimerService {
             _isWaiting = true;
           } else {
             _durationInMinutes = 0;
-            (onPause ?? player?.pause)?.call();
-            SmartDialog.showToast('定时时间已到，已暂停');
+            final generation = _timerGeneration;
+            final callback = onPause;
+            try {
+              if (callback != null) {
+                await callback();
+              } else {
+                await player?.pause();
+              }
+              if (generation == _timerGeneration) {
+                SmartDialog.showToast('定时时间已到，已暂停');
+              }
+            } catch (error, stackTrace) {
+              logger
+                  .scoped('playback')
+                  .w(
+                    '定时暂停失败',
+                    error: error.runtimeType,
+                    stackTrace: stackTrace,
+                  );
+              if (generation == _timerGeneration) {
+                SmartDialog.showToast('定时暂停失败，请手动暂停');
+              }
+            }
           }
         }
       case .exit:
