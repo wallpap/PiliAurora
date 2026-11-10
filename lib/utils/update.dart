@@ -45,102 +45,137 @@ abstract final class Update {
       }
       if (isAuto && Pref.updateIgnoredVersion == release.tag) return;
 
-      final actions = <Widget>[
-        TextButton(
-          onPressed: () => SmartDialog.dismiss(tag: _dialogTag),
-          child: const Text('稍后'),
-        ),
-        if (isAuto)
-          TextButton(
-            onPressed: () {
-              SmartDialog.dismiss(tag: _dialogTag);
-              GStorage.setting.put(
-                SettingBoxKey.updateIgnoredVersion,
-                release.tag,
-              );
-            },
-            child: const Text('此版本不再提醒'),
-          ),
-      ];
-      if (Platform.isWindows) {
-        actions.addAll([
-          TextButton(
-            onPressed:
-                release.downloadUrl(
-                      platform: 'windows',
-                      extension: 'zip',
-                    ) ==
-                    null
-                ? null
-                : () => onDownload(release, extension: 'zip'),
-            child: const Text('便携版 ZIP'),
-          ),
-          TextButton(
-            onPressed:
-                release.downloadUrl(
-                      platform: 'windows',
-                      extension: 'exe',
-                    ) ==
-                    null
-                ? null
-                : () => onDownload(release, extension: 'exe'),
-            child: const Text('安装版 EXE'),
-          ),
-        ]);
-      } else {
-        actions.add(
-          TextButton(
-            onPressed: () => onDownload(release),
-            child: const Text('下载更新'),
-          ),
-        );
-      }
-
-      SmartDialog.show(
-        tag: _dialogTag,
-        keepSingle: true,
-        animationType: SmartAnimationType.centerFade_otherSlide,
-        builder: (context) => AlertDialog(
-          title: Text('发现新版本 ${release.tag}'),
-          content: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 640, maxHeight: 420),
-            child: SingleChildScrollView(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    '当前版本：${BuildConfig.versionName}+${BuildConfig.versionCode}',
-                  ),
-                  const SizedBox(height: 12),
-                  Text(release.notes.isEmpty ? '本次发布未提供更新说明。' : release.notes),
-                ],
-              ),
-            ),
-          ),
-          actionsPadding: const EdgeInsets.fromLTRB(24, 0, 24, 16),
-          actions: [
-            SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  for (final action in actions)
-                    Padding(
-                      padding: const EdgeInsets.only(left: 8),
-                      child: action,
-                    ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      );
+      showUpdate(release, isAuto: isAuto);
     } catch (e, stackTrace) {
       logger.w('检查更新失败', error: e, stackTrace: stackTrace);
       if (!isAuto) SmartDialog.showToast('检查更新失败，请检查网络或前往发布页面');
     } finally {
       _checking = false;
     }
+  }
+
+  /// 展示已确认的新版本，弹窗持有忽略偏好的保存与重试。
+  static void showUpdate(AppRelease release, {required bool isAuto}) {
+    var active = true;
+    var saving = false;
+    SmartDialog.show(
+      tag: _dialogTag,
+      keepSingle: true,
+      animationType: SmartAnimationType.centerFade_otherSlide,
+      onDismiss: () => active = false,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) {
+          final actions = <Widget>[
+            TextButton(
+              onPressed: () => SmartDialog.dismiss(tag: _dialogTag),
+              child: const Text('稍后'),
+            ),
+            if (isAuto)
+              TextButton(
+                onPressed: saving
+                    ? null
+                    : () async {
+                        if (saving || !active) return;
+                        setDialogState(() => saving = true);
+                        try {
+                          await GStorage.setting.put(
+                            SettingBoxKey.updateIgnoredVersion,
+                            release.tag,
+                          );
+                          if (active && context.mounted) {
+                            await SmartDialog.dismiss(tag: _dialogTag);
+                          }
+                        } catch (error, stackTrace) {
+                          logger.w(
+                            '保存忽略版本失败',
+                            error: error.runtimeType,
+                            stackTrace: stackTrace,
+                          );
+                          if (active && context.mounted) {
+                            SmartDialog.showToast('设置未保存，请重试');
+                          }
+                        } finally {
+                          if (active && context.mounted) {
+                            setDialogState(() => saving = false);
+                          }
+                        }
+                      },
+                child: const Text('此版本不再提醒'),
+              ),
+          ];
+          if (Platform.isWindows) {
+            actions.addAll([
+              TextButton(
+                onPressed:
+                    release.downloadUrl(
+                          platform: 'windows',
+                          extension: 'zip',
+                        ) ==
+                        null
+                    ? null
+                    : () => onDownload(release, extension: 'zip'),
+                child: const Text('便携版 ZIP'),
+              ),
+              TextButton(
+                onPressed:
+                    release.downloadUrl(
+                          platform: 'windows',
+                          extension: 'exe',
+                        ) ==
+                        null
+                    ? null
+                    : () => onDownload(release, extension: 'exe'),
+                child: const Text('安装版 EXE'),
+              ),
+            ]);
+          } else {
+            actions.add(
+              TextButton(
+                onPressed: () => onDownload(release),
+                child: const Text('下载更新'),
+              ),
+            );
+          }
+
+          return AlertDialog(
+            title: Text('发现新版本 ${release.tag}'),
+            content: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 640, maxHeight: 420),
+              child: SingleChildScrollView(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      '当前版本：${BuildConfig.versionName}+${BuildConfig.versionCode}',
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      release.notes.isEmpty ? '本次发布未提供更新说明。' : release.notes,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            actionsPadding: const EdgeInsets.fromLTRB(24, 0, 24, 16),
+            actions: [
+              SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    for (final action in actions)
+                      Padding(
+                        padding: const EdgeInsets.only(left: 8),
+                        child: action,
+                      ),
+                  ],
+                ),
+              ),
+            ],
+          );
+        },
+      ),
+    );
   }
 
   static String _releasePage(AppRelease release) =>
