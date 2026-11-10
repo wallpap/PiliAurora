@@ -1,21 +1,25 @@
 import 'dart:async';
 
+import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:pili_aurora/http/browser_ua.dart';
 import 'package:pili_aurora/http/constants.dart';
+import 'package:pili_aurora/http/init.dart';
 import 'package:pili_aurora/pages/setting/widgets/decoder_test_dialog.dart';
 import 'package:pili_aurora/pages/setting/decoder_test.dart';
 import 'package:media_kit_video/media_kit_video.dart';
 import 'package:pili_aurora/models/common/video/video_quality.dart';
 import 'package:pili_aurora/models/video/play/url.dart';
 import 'package:pili_aurora/utils/storage.dart';
+import 'package:pili_aurora/utils/storage_key.dart';
 
+import '../../support/controlled_http_adapter.dart';
 import '../../support/memory_box.dart';
 
 Future<void> _open(
   WidgetTester tester,
-  Future<List<VideoItem>> Function() loader, {
+  Future<List<VideoItem>> Function()? loader, {
   DecoderTestSessionFactory? sessionFactory,
 }) async {
   await tester.pumpWidget(
@@ -52,8 +56,110 @@ List<VideoItem> _samples() => [
     ),
 ];
 
+Future<void> _waitForRequests(
+  WidgetTester tester,
+  ControlledHttpAdapter adapter,
+  int count,
+) async {
+  final deadline = tester.binding.clock.now().add(const Duration(seconds: 3));
+  while (adapter.requests.length < count &&
+      tester.binding.clock.now().isBefore(deadline)) {
+    await tester.pump(const Duration(milliseconds: 1));
+  }
+  expect(adapter.requests, hasLength(count));
+}
+
 void main() {
-  setUpAll(() => GStorage.setting = MemoryBox<dynamic>());
+  setUpAll(() {
+    GStorage.setting = MemoryBox<dynamic>();
+    GStorage.video = MemoryBox<dynamic>();
+    GStorage.localCache = MemoryBox<dynamic>({
+      LocalCacheKey.mixinKey: 'fixture',
+      LocalCacheKey.timeStamp: DateTime.now().millisecondsSinceEpoch,
+    });
+  });
+
+  for (final transportFailure in [false, true]) {
+    testWidgets(
+      '样片${transportFailure ? "网络失败" : "业务拒绝"}显示加载失败，重试成功后恢复格式选择',
+      (tester) async {
+        Request();
+        Request.dio.interceptors.clear();
+        final adapter = ControlledHttpAdapter();
+        Request.dio.httpClientAdapter = adapter;
+        addTearDown(adapter.close);
+        await _open(tester, null);
+        await _waitForRequests(tester, adapter, 1);
+        if (transportFailure) {
+          adapter.pending.single.completeError(
+            DioException(
+              requestOptions: adapter.requests.single,
+              type: DioExceptionType.connectionError,
+              error: 'https://private.test?token=secret',
+            ),
+          );
+        } else {
+          adapter.json(0, {'code': -404, 'message': 'private token=secret'});
+        }
+        await tester.pumpAndSettle();
+        expect(find.text('无法获取测试视频，请检查网络后重试'), findsOneWidget);
+        expect(find.text('公开视频未提供可测试的 AVC、HEVC 或 AV1 格式'), findsNothing);
+        expect(find.textContaining('secret'), findsNothing);
+        await tester.tap(find.text('重新获取'));
+        await tester.pump();
+        await _waitForRequests(tester, adapter, 2);
+        adapter.json(1, {
+          'code': 0,
+          'data': {
+            'dash': {
+              'video': [
+                {
+                  'id': 80,
+                  'codecid': 7,
+                  'base_url': 'https://example.test/sample.mp4',
+                },
+              ],
+            },
+          },
+        });
+        await tester.pumpAndSettle();
+        expect(find.text('AVC'), findsOneWidget);
+        expect(
+          tester
+              .widget<FilledButton>(
+                find.widgetWithText(FilledButton, '开始测试选中项'),
+              )
+              .onPressed,
+          isNotNull,
+        );
+        await tester.tap(find.text('关闭'));
+        await tester.pumpAndSettle();
+        expect(tester.takeException(), isNull);
+      },
+    );
+  }
+
+  testWidgets('样片查询成功但格式为空时明确显示无可测试格式', (tester) async {
+    Request();
+    Request.dio.interceptors.clear();
+    final adapter = ControlledHttpAdapter();
+    Request.dio.httpClientAdapter = adapter;
+    addTearDown(adapter.close);
+    await _open(tester, null);
+    await _waitForRequests(tester, adapter, 1);
+    adapter.json(0, {
+      'code': 0,
+      'data': {
+        'dash': {'video': []},
+      },
+    });
+    await tester.pumpAndSettle();
+    expect(find.text('公开视频未提供可测试的 AVC、HEVC 或 AV1 格式'), findsOneWidget);
+    expect(find.text('无法获取测试视频，请检查网络后重试'), findsNothing);
+    await tester.tap(find.text('关闭'));
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+  });
 
   test('decoder media requests use the same headers as normal playback', () {
     String? capturedUserAgent;

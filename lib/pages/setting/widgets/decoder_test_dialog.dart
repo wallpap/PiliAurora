@@ -167,6 +167,7 @@ class _DecoderTestDialogState extends State<DecoderTestDialog> {
       tryLook: false,
       videoType: VideoType.ugc,
     );
+    if (!result.isSuccess) throw result;
     return result.dataOrNull?.dash?.video ?? const <VideoItem>[];
   }
 
