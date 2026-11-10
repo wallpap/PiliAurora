@@ -1,5 +1,6 @@
 import 'dart:io' show Platform, Process;
 
+import 'package:pili_aurora/services/logger.dart';
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:path/path.dart' as path;
 
@@ -39,8 +40,9 @@ abstract final class PathUtils {
         throw UnimplementedError();
       }
       await Process.run(executable, [dirPath]);
-    } catch (e) {
-      SmartDialog.showToast(e.toString());
+    } catch (error, stackTrace) {
+      logger.w('打开目录失败', error: error.runtimeType, stackTrace: stackTrace);
+      SmartDialog.showToast('无法打开目录，请检查目录是否存在');
     }
   }
 }

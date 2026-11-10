@@ -2,6 +2,7 @@ import 'dart:convert' show JsonEncoder, base64;
 import 'dart:math' show Random;
 
 import 'package:catcher_2/catcher_2.dart';
+import 'package:pili_aurora/services/logger.dart';
 import 'package:flutter/services.dart' show Clipboard, ClipboardData;
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 
@@ -30,11 +31,15 @@ abstract final class Utils {
     String text, {
     bool needToast = true,
     String? toastText,
-  }) {
-    if (needToast) {
-      SmartDialog.showToast(toastText ?? '已复制');
+  }) async {
+    try {
+      await Clipboard.setData(ClipboardData(text: text));
+    } catch (error, stackTrace) {
+      logger.w('复制失败', error: error.runtimeType, stackTrace: stackTrace);
+      SmartDialog.showToast('复制失败，请重试');
+      return;
     }
-    return Clipboard.setData(ClipboardData(text: text));
+    if (needToast) SmartDialog.showToast(toastText ?? '已复制');
   }
 
   static Future<void> copyJson(Object? json, {String? toastText}) {

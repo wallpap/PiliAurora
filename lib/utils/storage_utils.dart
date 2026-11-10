@@ -1,6 +1,7 @@
 import 'dart:io' show File;
 import 'dart:typed_data' show Uint8List;
 
+import 'package:pili_aurora/services/logger.dart';
 import 'package:pili_aurora/utils/platform_utils.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
@@ -27,8 +28,9 @@ abstract final class StorageUtils {
         await File(path.toFilePath()).writeAsBytes(bytes);
       }
       SmartDialog.showToast("已保存");
-    } catch (e) {
-      SmartDialog.showToast("保存失败: $e");
+    } catch (error, stackTrace) {
+      logger.w('保存失败', error: error.runtimeType, stackTrace: stackTrace);
+      SmartDialog.showToast('保存失败，请检查保存位置后重试');
     }
   }
 }
