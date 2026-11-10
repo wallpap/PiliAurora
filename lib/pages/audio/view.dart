@@ -20,7 +20,7 @@ import 'package:pili_aurora/models/common/image_type.dart';
 import 'package:pili_aurora/pages/audio/controller.dart';
 import 'package:pili_aurora/pages/audio/volume_button.dart';
 import 'package:pili_aurora/pages/setting/models/play_settings.dart'
-    show showPlayerVolumeDialog;
+    show showVolumeDialog;
 import 'package:pili_aurora/pages/video/introduction/ugc/widgets/action_item.dart';
 import 'package:pili_aurora/pages/video/widgets/header_control.dart'
     show HeaderControlState;
@@ -492,6 +492,7 @@ class _AudioPageState extends State<AudioPage> {
   }
 
   void _showPlaySettings() {
+    var draftSpeed = _controller.speed;
     showModalBottomSheet(
       context: context,
       useSafeArea: true,
@@ -540,19 +541,26 @@ class _AudioPageState extends State<AudioPage> {
                       spacing: 12,
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('播放倍速(${_controller.speed})'),
+                        Text('播放倍速($draftSpeed)'),
                         Slider(
                           padding: EdgeInsets.zero,
                           min: 0.5,
                           max: 2.0,
                           divisions: 15,
-                          value: _controller.speed,
+                          value: draftSpeed,
                           onChanged: (value) {
-                            _controller.speed = value.toPrecision(1);
+                            draftSpeed = value.toPrecision(1);
                             (context as Element).markNeedsBuild();
                           },
-                          onChangeEnd: (_) =>
-                              _controller.setSpeed(_controller.speed),
+                          onChangeEnd: (_) async {
+                            final requested = draftSpeed;
+                            if (!await _controller.setSpeed(requested) &&
+                                context.mounted &&
+                                draftSpeed == requested) {
+                              draftSpeed = _controller.speed;
+                              (context as Element).markNeedsBuild();
+                            }
+                          },
                         ),
                       ],
                     ),
@@ -683,15 +691,16 @@ class _AudioPageState extends State<AudioPage> {
                     dense: true,
                     leading: const Icon(Icons.volume_up, size: 20),
                     title: Text(
-                      '播放器音量: ${player.getProperty('volume').subLength(3)}%',
+                      '播放器音量: ${player.state.volume.round()}%',
                       style: const TextStyle(fontSize: 14),
                     ),
                     onTap: () {
                       Get.back();
-                      showPlayerVolumeDialog(
+                      showVolumeDialog(
                         context,
-                        () {},
-                        onChanged: player.setVolume,
+                        title: const Text('播放器音量'),
+                        value: player.state.volume,
+                        onChanged: _controller.setPlayerVolumePercent,
                       );
                     },
                   ),
@@ -807,7 +816,7 @@ class _AudioPageState extends State<AudioPage> {
   void _onSeek(int milliseconds) {
     _controller
       ..isDragging = false
-      ..onSeek(Duration(milliseconds: milliseconds));
+      ..seekFromUi(Duration(milliseconds: milliseconds));
   }
 
   Widget _buildProgressBar(ColorScheme colorScheme) {
@@ -986,7 +995,7 @@ class _AudioPageState extends State<AudioPage> {
                       GestureDetector(
                         behavior: HitTestBehavior.opaque,
                         onTap: () {
-                          _controller.player?.pause();
+                          _controller.pauseFromUi();
                           Get.toNamed('/member?mid=${audioItem.owner.mid}');
                         },
                         child: Row(

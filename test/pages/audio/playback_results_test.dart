@@ -14,6 +14,9 @@ import 'package:pili_aurora/utils/storage.dart';
 import 'package:pili_aurora/utils/accounts.dart';
 import 'package:pili_aurora/utils/accounts/account.dart';
 import 'package:pili_aurora/models/common/account_type.dart';
+import 'package:pili_aurora/models/remote/video/video_detail/page.dart';
+import 'package:pili_aurora/services/audio_handler.dart';
+import 'package:pili_aurora/services/service_locator.dart';
 import 'package:pili_aurora/utils/storage_key.dart';
 
 import '../../support/controlled_http_adapter.dart';
@@ -28,6 +31,9 @@ class _Player implements Player {
   final opened = <String>[];
   Completer<void>? opening;
   Object? openError;
+  Completer<void>? seeking;
+  @override
+  final state = PlayerState();
   @override
   PlayerStream get stream => _Stream();
   @override
@@ -50,6 +56,15 @@ class _Player implements Player {
 
   @override
   Future<void> dispose({bool synchronized = true}) async {}
+  @override
+  Future<void> seek(
+    Duration position, {
+    bool synchronized = true,
+    int? observationId,
+  }) async {
+    await seeking?.future;
+  }
+
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
@@ -324,4 +339,47 @@ void main() {
       expect(player.opened.length, 2);
     },
   );
+
+  _check('late seek does not publish the position into a newer song', (
+    tester,
+  ) async {
+    await host(tester);
+    final first = controller.playIndex(0);
+    await _until(tester, () => adapter.requests.length == 1);
+    adapter.reply(0, _source());
+    await _complete(tester, first);
+    player.seeking = Completer<void>();
+    final seek = controller.onSeek(const Duration(seconds: 30));
+    final second = controller.playIndex(1);
+    await _until(tester, () => adapter.requests.length == 2);
+    adapter.reply(1, _source('https://media.example/new'));
+    await _complete(tester, second);
+    controller.position.value = 2;
+    player.seeking!.complete();
+    await seek;
+    expect(controller.position.value, 2);
+    expect(controller.audioItem.value!.item.oid, Int64(2));
+  });
+
+  _check('old playback metadata cannot replace a newer system owner', (
+    tester,
+  ) async {
+    await host(tester);
+    final handler = VideoPlayerServiceHandler()..enableBackgroundPlay = true;
+    videoPlayerServiceHandler = handler;
+    handler
+      ..onPlay = (() async {})
+      ..onVideoDetailChange(Part(part: 'new owner'), 2, 'new owner');
+    try {
+      final operation = controller.playIndex(0);
+      await _until(tester, () => adapter.requests.length == 1);
+      adapter.reply(0, _source());
+      await _complete(tester, operation);
+      expect(controller.audioItem.value!.item.oid, Int64.ONE);
+      expect(handler.mediaItem.value?.title, 'new owner');
+    } finally {
+      videoPlayerServiceHandler = null;
+      handler.clear();
+    }
+  });
 }

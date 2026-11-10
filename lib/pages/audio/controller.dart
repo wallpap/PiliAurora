@@ -34,6 +34,8 @@ import 'package:pili_aurora/pages/video/introduction/ugc/widgets/triple_mixin.da
 import 'package:pili_aurora/plugin/pl_player/controller.dart';
 import 'package:pili_aurora/plugin/pl_player/models/play_repeat.dart';
 import 'package:pili_aurora/plugin/pl_player/models/play_status.dart';
+import 'package:pili_aurora/plugin/pl_player/playback/playback_contracts.dart'
+    show CommandOutcome;
 import 'package:pili_aurora/services/service_locator.dart';
 import 'package:pili_aurora/services/logger.dart';
 import 'package:pili_aurora/services/shutdown_timer_service.dart';
@@ -101,6 +103,10 @@ class AudioController extends GetxController
   int? _pendingPlayGeneration;
   Future<void>? _playerInitialization;
   Future<bool>? _mediaOpening;
+  bool _audioClosed = false;
+  int _speedRevision = 0;
+  int _volumeRevision = 0;
+  int _seekRevision = 0;
   @override
   Player? player;
   late int cacheAudioQa;
@@ -118,11 +124,42 @@ class AudioController extends GetxController
 
   late double speed = 1.0;
 
-  void setSpeed(double value) {
-    if (player case final player?) {
+  bool _ownsControl(Player? target, int generation, Account account) =>
+      !_audioClosed &&
+      !isClosed &&
+      identical(player, target) &&
+      generation == _playGeneration &&
+      identical(account, Accounts.main);
+
+  Player get _readyPlayer => player ?? (throw StateError('音频播放器尚未就绪'));
+
+  void _reportControlFailure(String message, Object error, StackTrace stack) {
+    logger
+        .scoped('audio')
+        .w(message, error: error.runtimeType, stackTrace: stack);
+    SmartDialog.showToast(message);
+  }
+
+  Future<bool> setSpeed(double value) async {
+    final target = player;
+    final generation = _playGeneration;
+    final account = Accounts.main;
+    final revision = ++_speedRevision;
+    try {
+      await _readyPlayer.setRate(value);
+      if (!_ownsControl(target, generation, account) ||
+          revision != _speedRevision) {
+        return false;
+      }
       speed = value;
-      player.setRate(value);
       _updatePlaybackState();
+      return true;
+    } catch (error, stack) {
+      if (_ownsControl(target, generation, account) &&
+          revision == _speedRevision) {
+        _reportControlFailure('播放速度调整失败，请重试', error, stack);
+      }
+      return false;
     }
   }
 
@@ -159,30 +196,102 @@ class AudioController extends GetxController
     _statusTimer = null;
   }
 
-  void toggleVolume() {
-    if (_lastVolume == null) {
-      _lastVolume = desktopVolume.value;
-      setVolume(0, clearLastVolme: false);
-    } else {
-      setVolume(_lastVolume!);
+  late final volumeDraft = RxDouble(desktopVolume.value);
+
+  Future<void> toggleVolume() async {
+    final before = desktopVolume.value;
+    final restoring = _lastVolume != null;
+    if (await setVolume(_lastVolume ?? 0, clearLastVolme: false)) {
+      _lastVolume = restoring ? null : before;
     }
   }
 
-  void setVolume(double volume, {bool clearLastVolme = true}) {
-    if (clearLastVolme) {
-      _lastVolume = null;
-    }
+  void previewVolume(double value) {
+    volumeDraft.value = roundVolumeRatio(value.clamp(0.0, Pref.maxVolume));
+    setVolume(volumeDraft.value);
+  }
+
+  Future<bool> setVolume(double volume, {bool clearLastVolme = true}) async {
     volume = roundVolumeRatio(volume.clamp(0.0, Pref.maxVolume));
-    desktopVolume.value = volume;
-    player?.setVolume(volumePercent(volume));
+    final target = player;
+    final generation = _playGeneration;
+    final account = Accounts.main;
+    final revision = ++_volumeRevision;
+    try {
+      await _readyPlayer.setVolume(volumePercent(volume));
+      if (!_ownsControl(target, generation, account) ||
+          revision != _volumeRevision) {
+        return false;
+      }
+      desktopVolume.value = volume;
+      volumeDraft.value = volume;
+      if (clearLastVolme) _lastVolume = null;
+      return true;
+    } catch (error, stack) {
+      if (_ownsControl(target, generation, account) &&
+          revision == _volumeRevision) {
+        volumeDraft.value = desktopVolume.value;
+        _reportControlFailure('音量调整失败，请重试', error, stack);
+      }
+      return false;
+    }
   }
 
-  void syncVolume([_]) {
-    final volume = desktopVolume.value;
-    PlPlayerController.instance?.setPlayerVolumePercent(
-      volumePercent(volume),
+  Future<void> commitVolumeChange(double value) async {
+    if (await setVolume(value)) await syncVolume();
+  }
+
+  Future<void> setPlayerVolumePercent(double value) async {
+    if (!await setVolume(value / 100)) return;
+    await _saveVolume(
+      SettingBoxKey.playerVolume,
+      volumePercent(desktopVolume.value),
     );
-    GStorage.setting.put(SettingBoxKey.desktopVolume, roundVolumeRatio(volume));
+  }
+
+  Future<void> _saveVolume(String key, double value) async {
+    final target = player;
+    final generation = _playGeneration;
+    final account = Accounts.main;
+    final revision = _volumeRevision;
+    try {
+      await GStorage.setting.put(key, value);
+    } catch (error, stack) {
+      if (_ownsControl(target, generation, account) &&
+          revision == _volumeRevision) {
+        _reportControlFailure('音量已调整，设置保存失败，请重试', error, stack);
+      }
+    }
+  }
+
+  Future<void> syncVolume([_]) async {
+    final volume = desktopVolume.value;
+    final target = player;
+    final generation = _playGeneration;
+    final account = Accounts.main;
+    final revision = _volumeRevision;
+    await _saveVolume(SettingBoxKey.desktopVolume, roundVolumeRatio(volume));
+    if (!_ownsControl(target, generation, account) ||
+        revision != _volumeRevision) {
+      return;
+    }
+    try {
+      final result = await PlPlayerController.instance?.setPlayerVolumePercent(
+        volumePercent(volume),
+      );
+      if (!_ownsControl(target, generation, account) ||
+          revision != _volumeRevision) {
+        return;
+      }
+      if (result?.outcome == CommandOutcome.failed) {
+        throw result!.failure ?? StateError('视频音量同步失败');
+      }
+    } catch (error, stack) {
+      if (_ownsControl(target, generation, account) &&
+          revision == _volumeRevision) {
+        _reportControlFailure('音频音量已调整，视频音量同步失败', error, stack);
+      }
+    }
   }
 
   @override
@@ -248,17 +357,57 @@ class AudioController extends GetxController
     return player?.state.playing ?? false;
   }
 
-  Future<void>? onPlay() {
-    return player?.play();
-  }
+  Future<void> onPlay() => Future<void>.sync(() => _readyPlayer.play());
 
-  Future<void>? onPause() {
-    return player?.pause();
-  }
+  Future<void> onPause() => Future<void>.sync(() => _readyPlayer.pause());
 
-  Future<void>? onSeek(Duration duration) {
+  Future<void> onSeek(Duration duration) async {
+    final target = _readyPlayer;
+    final generation = _playGeneration;
+    final account = Accounts.main;
+    final revision = ++_seekRevision;
+    await target.seek(duration);
+    if (!_ownsControl(target, generation, account) ||
+        revision != _seekRevision) {
+      return;
+    }
+    position.value = duration.inSeconds;
     _updatePlaybackState(position: duration);
-    return player?.seek(duration);
+  }
+
+  Future<void> _consumePlaybackControl(
+    Future<void> Function() operation,
+  ) async {
+    final target = player;
+    final generation = _playGeneration;
+    final account = Accounts.main;
+    try {
+      await operation();
+    } catch (error, stack) {
+      if (_ownsControl(target, generation, account)) {
+        _reportControlFailure('播放操作失败，请重试', error, stack);
+      }
+    }
+  }
+
+  Future<void> playFromUi() => _consumePlaybackControl(onPlay);
+  Future<void> pauseFromUi() => _consumePlaybackControl(onPause);
+
+  Future<void> seekFromUi(Duration duration) async {
+    final target = player;
+    final generation = _playGeneration;
+    final account = Accounts.main;
+    final operation = onSeek(duration);
+    final revision = _seekRevision;
+    try {
+      await operation;
+    } catch (error, stack) {
+      if (_ownsControl(target, generation, account) &&
+          revision == _seekRevision) {
+        position.value = target?.state.position.inSeconds ?? 0;
+        _reportControlFailure('进度调整失败，请重试', error, stack);
+      }
+    }
   }
 
   void _updateCurrItem(DetailItem item) {
@@ -266,14 +415,23 @@ class AudioController extends GetxController
     hasLike.value = item.stat.hasLike_7;
     coinNum.value = item.stat.hasCoin_8 ? 2 : 0;
     hasFav.value = item.stat.hasFav;
-    videoPlayerServiceHandler?.onVideoDetailChange(
-      item,
-      (subId.firstOrNull ?? oid).toInt(),
-      hashCode.toString(),
-    );
+    final handler = videoPlayerServiceHandler;
+    if (handler == null || handler.onPlay != onPlay) return;
+    try {
+      handler.onVideoDetailChange(
+        item,
+        (subId.firstOrNull ?? oid).toInt(),
+        hashCode.toString(),
+      );
+    } catch (error, stack) {
+      logger
+          .scoped('audio')
+          .w('系统音频信息同步失败', error: error.runtimeType, stackTrace: stack);
+    }
   }
 
   bool _ownsPlaylist(int generation, Account account) =>
+      !_audioClosed &&
       !isClosed &&
       generation == _playlistGeneration &&
       identical(account, Accounts.main);
@@ -283,7 +441,7 @@ class AudioController extends GetxController
   }
 
   Future<bool> reloadPlaylist() async {
-    if (isClosed) return false;
+    if (_audioClosed || isClosed) return false;
     if (!_listeningToPlaylistAccount) {
       Accounts.mainChanges.addListener(_onPlaylistAccountChanged);
       _listeningToPlaylistAccount = true;
@@ -462,6 +620,7 @@ class AudioController extends GetxController
   }
 
   bool _ownsPlayback(int generation) =>
+      !_audioClosed &&
       !isClosed &&
       generation == _playGeneration &&
       identical(_playAccount, Accounts.main);
@@ -591,14 +750,29 @@ class AudioController extends GetxController
 
   PlayerStatus _playerStatus = .paused;
   void _updatePlaybackState({Duration? position, String? debugLabel}) {
-    videoPlayerServiceHandler?.onUpdateState(
-      _playerStatus,
-      false,
-      false,
-      position: position ?? player!.state.position,
-      speed: speed,
-      debugLabel: debugLabel,
-    );
+    final target = player;
+    final handler = videoPlayerServiceHandler;
+    if (_audioClosed ||
+        isClosed ||
+        target == null ||
+        handler == null ||
+        handler.onPlay != onPlay) {
+      return;
+    }
+    try {
+      handler.onUpdateState(
+        _playerStatus,
+        false,
+        false,
+        position: position ?? target.state.position,
+        speed: speed,
+        debugLabel: debugLabel,
+      );
+    } catch (error, stack) {
+      logger
+          .scoped('audio')
+          .w('系统播放状态同步失败', error: error.runtimeType, stackTrace: stack);
+    }
   }
 
   Future<void> _initPlayerIfNeeded() async {
@@ -625,14 +799,17 @@ class AudioController extends GetxController
         },
       ),
     );
-    if (isClosed) {
-      await initializedPlayer.dispose();
+    if (_audioClosed || isClosed) {
+      _releaseAudioResource(initializedPlayer.dispose);
       return;
     }
     player = initializedPlayer;
     final stream = initializedPlayer.stream;
     _subscriptions = [
       stream.position.listen((position) {
+        if (_audioClosed || isClosed || !identical(player, initializedPlayer)) {
+          return;
+        }
         if (isDragging) return;
         final seconds = position.inSeconds;
         if (seconds != this.position.value) {
@@ -644,9 +821,15 @@ class AudioController extends GetxController
         }
       }),
       stream.duration.listen((duration) {
+        if (_audioClosed || isClosed || !identical(player, initializedPlayer)) {
+          return;
+        }
         this.duration.value = duration.inSeconds;
       }),
       stream.playing.listen((playing) {
+        if (_audioClosed || isClosed || !identical(player, initializedPlayer)) {
+          return;
+        }
         if (playing) {
           animController.forward();
           _playerStatus = .playing;
@@ -659,12 +842,18 @@ class AudioController extends GetxController
         }
       }),
       stream.buffering.listen((bool buffering) {
+        if (_audioClosed || isClosed || !identical(player, initializedPlayer)) {
+          return;
+        }
         if (!_playerStatus.isCompleted) {
           _stopStatusTimer();
           _updatePlaybackState();
         }
       }),
       stream.completed.listen((completed) {
+        if (_audioClosed || isClosed || !identical(player, initializedPlayer)) {
+          return;
+        }
         _videoDetailController?.playedTime = player!.state.duration;
         if (completed) {
           _playerStatus = .completed;
@@ -679,14 +868,14 @@ class AudioController extends GetxController
                 playNext(nextPart: true);
                 break;
               case PlayRepeat.singleCycle:
-                onPlay();
+                playFromUi();
                 break;
               case PlayRepeat.listCycle:
                 if (!playNext(nextPart: true)) {
                   if (index != null && index != 0 && playlist != null) {
                     playIndex(0);
                   } else {
-                    onPlay();
+                    playFromUi();
                   }
                 }
                 break;
@@ -919,9 +1108,8 @@ class AudioController extends GetxController
     );
   }
 
-  Future<void>? playOrPause() {
-    return player?.playOrPause();
-  }
+  Future<void> playOrPause() =>
+      _consumePlaybackControl(() => _readyPlayer.playOrPause());
 
   bool playPrev() {
     if (index != null && playlist != null && player != null) {
@@ -1059,8 +1247,19 @@ class AudioController extends GetxController
   @override
   bool get preInitPlayer => true;
 
+  void _releaseAudioResource(FutureOr<void> Function() release) {
+    unawaited(
+      Future<void>.sync(release).catchError((Object error, StackTrace stack) {
+        logger
+            .scoped('audio')
+            .w('音频资源释放失败', error: error.runtimeType, stackTrace: stack);
+      }),
+    );
+  }
+
   @override
   void onClose() {
+    _audioClosed = true;
     _playlistGeneration++;
     if (_listeningToPlaylistAccount) {
       Accounts.mainChanges.removeListener(_onPlaylistAccountChanged);
@@ -1068,21 +1267,35 @@ class AudioController extends GetxController
     }
     _playGeneration++;
     _stopStatusTimer();
-    shutdownTimerService
-      ..onPause = null
-      ..isPlaying = null
-      ..reset();
-    videoPlayerServiceHandler
-      ?..onPlay = null
-      ..onPause = null
-      ..onSeek = null
-      ..onVideoDetailDispose(hashCode.toString())
-      ..clearIfNeeded();
-    _subscriptions?.forEach((e) => e.cancel());
-    _subscriptions?.clear();
+    final ownsTimerPause = shutdownTimerService.onPause == onPause;
+    final ownsTimerPlaying = shutdownTimerService.isPlaying == isPlaying;
+    if (ownsTimerPause) shutdownTimerService.onPause = null;
+    if (ownsTimerPlaying) shutdownTimerService.isPlaying = null;
+    if ((ownsTimerPause || ownsTimerPlaying) &&
+        shutdownTimerService.onPause == null &&
+        shutdownTimerService.isPlaying == null) {
+      shutdownTimerService.reset();
+    }
+    final handler = videoPlayerServiceHandler;
+    if (handler != null) {
+      final ownsPlay = handler.onPlay == onPlay;
+      final ownsPause = handler.onPause == onPause;
+      final ownsSeek = handler.onSeek == onSeek;
+      if (ownsPlay) handler.onPlay = null;
+      if (ownsPause) handler.onPause = null;
+      if (ownsSeek) handler.onSeek = null;
+      _releaseAudioResource(() {
+        handler.onVideoDetailDispose(hashCode.toString());
+        if (ownsPlay || ownsPause || ownsSeek) handler.clearIfNeeded();
+      });
+    }
+    for (final subscription in _subscriptions ?? <StreamSubscription>[]) {
+      _releaseAudioResource(subscription.cancel);
+    }
     _subscriptions = null;
-    player?.dispose();
+    final target = player;
     player = null;
+    if (target != null) _releaseAudioResource(target.dispose);
     animController.dispose();
     super.onClose();
   }

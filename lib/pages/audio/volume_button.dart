@@ -129,7 +129,7 @@ class _VolumeButtonState extends State<VolumeButton> {
             ),
             child: Obx(
               () {
-                final volume = widget.controller.desktopVolume.value;
+                final volume = widget.controller.volumeDraft.value;
                 return Column(
                   spacing: 2,
                   mainAxisSize: .min,
@@ -146,8 +146,8 @@ class _VolumeButtonState extends State<VolumeButton> {
                         divisions: volumePercent(Pref.maxVolume).toInt(),
                         value: volume,
                         showValueIndicator: .never,
-                        onChanged: widget.controller.setVolume,
-                        onChangeEnd: widget.controller.syncVolume,
+                        onChanged: widget.controller.previewVolume,
+                        onChangeEnd: widget.controller.commitVolumeChange,
                       ),
                     ),
                   ],
