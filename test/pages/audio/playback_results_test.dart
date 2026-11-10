@@ -16,6 +16,7 @@ import 'package:pili_aurora/utils/accounts/account.dart';
 import 'package:pili_aurora/models/common/account_type.dart';
 import 'package:pili_aurora/models/remote/video/video_detail/page.dart';
 import 'package:pili_aurora/services/audio_handler.dart';
+import 'package:pili_aurora/services/audio_session.dart';
 import 'package:pili_aurora/services/service_locator.dart';
 import 'package:pili_aurora/utils/storage_key.dart';
 
@@ -31,6 +32,9 @@ class _Player implements Player {
   final opened = <String>[];
   Completer<void>? opening;
   Object? openError;
+  Object? disposeError;
+  Completer<void>? disposing;
+  var disposals = 0;
   Completer<void>? seeking;
   @override
   final state = PlayerState();
@@ -54,8 +58,19 @@ class _Player implements Player {
     if (openError case final error?) throw error;
   }
 
+  final playing = <bool>[];
   @override
-  Future<void> dispose({bool synchronized = true}) async {}
+  Future<void> play({bool synchronized = true}) async => playing.add(true);
+  @override
+  Future<void> pause({bool synchronized = true}) async => playing.add(false);
+
+  @override
+  Future<void> dispose({bool synchronized = true}) async {
+    disposals++;
+    await disposing?.future;
+    if (disposeError case final error?) throw error;
+  }
+
   @override
   Future<void> seek(
     Duration position, {
@@ -67,6 +82,11 @@ class _Player implements Player {
 
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
+class _Focus extends AudioSessionHandler {
+  @override
+  Future<bool> setActive(bool active) async => true;
 }
 
 class _Adapter extends ControlledHttpAdapter {
@@ -135,6 +155,8 @@ void main() {
   late AudioController controller;
   var creations = 0;
   var failCreation = false;
+  Completer<Player>? pendingCreation;
+  var closed = false;
   setUpAll(() {
     GStorage.setting = MemoryBox<dynamic>({
       SettingBoxKey.enableSponsorBlock: false,
@@ -150,6 +172,8 @@ void main() {
     player = _Player();
     creations = 0;
     failCreation = false;
+    pendingCreation = null;
+    closed = false;
     controller =
         AudioController(
             createPlayer: (_) async {
@@ -157,7 +181,7 @@ void main() {
               if (failCreation) {
                 throw StateError('https://private?token=secret');
               }
-              return player;
+              return pendingCreation?.future ?? player;
             },
           )
           ..cacheAudioQa = 30280
@@ -173,7 +197,7 @@ void main() {
     );
   });
   tearDown(() {
-    controller.onClose();
+    if (!closed) controller.onClose();
     adapter.close();
   });
   tearDownAll(() => Request.dio.close(force: true));
@@ -359,6 +383,104 @@ void main() {
     await seek;
     expect(controller.position.value, 2);
     expect(controller.audioItem.value!.item.oid, Int64(2));
+  });
+
+  _check('pause during media opening preserves the paused intent', (
+    tester,
+  ) async {
+    await host(tester);
+    final previous = audioSessionHandler;
+    audioSessionHandler = _Focus();
+    addTearDown(() => audioSessionHandler = previous);
+    player.opening = Completer<void>();
+    final operation = controller.playIndex(0);
+    await _until(tester, () => adapter.requests.length == 1);
+    adapter.reply(0, _source());
+    await _until(tester, () => player.opened.isNotEmpty);
+    await controller.onPause();
+    player.opening!.complete();
+    await _complete(tester, operation);
+    expect(player.playing, isNotEmpty);
+    expect(player.playing, everyElement(isFalse));
+    expect(controller.audioItem.value!.item.oid, Int64.ONE);
+  });
+
+  _check('new audio page waits for closing media open and actual destruction', (
+    tester,
+  ) async {
+    await host(tester);
+    final previous = audioSessionHandler;
+    audioSessionHandler = _Focus();
+    addTearDown(() => audioSessionHandler = previous);
+    player
+      ..opening = Completer<void>()
+      ..disposing = Completer<void>();
+    final first = controller.playIndex(0);
+    await _until(tester, () => adapter.requests.length == 1);
+    adapter.reply(0, _source());
+    await _until(tester, () => player.opened.isNotEmpty);
+    controller.onClose();
+    closed = true;
+    final secondPlayer = _Player();
+    final second = AudioController(createPlayer: (_) async => secondPlayer)
+      ..cacheAudioQa = 30280
+      ..playlist = controller.playlist;
+    second.animController = AnimationController(
+      vsync: second,
+      duration: const Duration(milliseconds: 200),
+    );
+    try {
+      final playing = second.playIndex(0);
+      await _until(tester, () => adapter.requests.length == 2);
+      adapter.reply(1, _source('https://media.example/second'));
+      await tester.pump();
+      expect(secondPlayer.opened, isEmpty);
+      expect(secondPlayer.playing, isEmpty);
+      player.opening!.complete();
+      await _until(tester, () => player.disposals == 1);
+      expect(secondPlayer.opened, isEmpty);
+      expect(secondPlayer.playing, isEmpty);
+      player.disposing!.complete();
+      await _complete(tester, first);
+      await _complete(tester, playing);
+      expect(secondPlayer.opened, ['https://media.example/second']);
+      expect(secondPlayer.playing, [true]);
+    } finally {
+      if (!player.opening!.isCompleted) player.opening!.complete();
+      if (!player.disposing!.isCompleted) player.disposing!.complete();
+      second.onClose();
+    }
+  });
+
+  _check('late player destruction failure keeps the handover barrier', (
+    tester,
+  ) async {
+    await host(tester);
+    final previous = audioSessionHandler;
+    final focus = _Focus();
+    audioSessionHandler = focus;
+    addTearDown(() => audioSessionHandler = previous);
+    pendingCreation = Completer<Player>();
+    final operation = controller.playIndex(0);
+    await _until(tester, () => adapter.requests.length == 1);
+    adapter.reply(0, _source());
+    await _until(tester, () => creations == 1);
+    controller.onClose();
+    closed = true;
+    final cause = StateError('synthetic late disposal failure');
+    player.disposeError = cause;
+    pendingCreation!.complete(player);
+    await _complete(tester, operation);
+    await _until(tester, () => player.disposals == 1);
+    final next = focus.acquireIndependentPlayer(
+      setPlaying: (_) async {},
+      volume: () => 80,
+      volumeRevision: () => 0,
+      setVolume: (_) async {},
+    );
+    await expectLater(next.prepare(), throwsA(same(cause)));
+    await next.close(() async {});
+    expect(player.opened, isEmpty);
   });
 
   _check('old playback metadata cannot replace a newer system owner', (

@@ -235,6 +235,61 @@ class PlaybackSession implements PlaybackMediaClock {
     return token;
   }
 
+  /// 等待当前有效播放意图落到原生端，不改变用户意图或抑制令牌。
+  Future<CommandResult> synchronizePlaybackIntent() async {
+    final started = _now();
+    Duration remaining() {
+      final budget = commandBudget - (_now() - started);
+      if (budget <= Duration.zero) {
+        throw TimeoutException('playback handover deadline');
+      }
+      return budget;
+    }
+
+    try {
+      while (true) {
+        if (_disposed) return const CommandResult.closed();
+        if (_closingRequested) {
+          final result = await shutdown().timeout(remaining());
+          if (result.outcome == PlaybackShutdownOutcome.cleanupIncomplete) {
+            return CommandResult.failed(result.failure!);
+          }
+          return const CommandResult.closed();
+        }
+        if (_writerPermitted) {
+          final result = await _ensureWriter().timeout(remaining());
+          if (result.outcome == CommandOutcome.superseded ||
+              result.outcome == CommandOutcome.closed) {
+            continue;
+          }
+          return result;
+        }
+        // load 开始前会等待旧 writer；加载中的原生 stop/open 也需跨过回执。
+        // 未加载的 runtime 没有可暂停媒体，首次 open 始终以 play:false 提交。
+        final writer = _writerDrain;
+        if (writer != null) {
+          await writer.future.timeout(remaining());
+          continue;
+        }
+        if (_operations.isRunning) {
+          await _operations.drained.timeout(remaining());
+          continue;
+        }
+        return const CommandResult.applied();
+      }
+    } on TimeoutException {
+      return CommandResult.failed(
+        PlaybackFailure(
+          category: PlaybackFailureCategory.timeout,
+          operation: 'synchronize-playback-intent',
+          stage: _stage,
+          recoverable: true,
+          cause: '播放交接仍在等待原生暂停、加载或释放回执。',
+        ),
+      );
+    }
+  }
+
   Future<CommandResult> releaseSessionInhibitor(
     PlaybackInhibitorToken token,
   ) {
@@ -900,15 +955,7 @@ class PlaybackSession implements PlaybackMediaClock {
     final revision = _intentRevision;
     final existing = _playingWaiters[revision];
     if (existing != null) return existing.future;
-    if ((_phase == PlaybackPhase.loading ||
-            _phase == PlaybackPhase.recovering) &&
-        _writerLoadRequestId == _requestId) {
-      // Load settlement has its own caller; use a temporary completion waiter.
-      final completer = Completer<CommandResult>();
-      _playingWaiters[revision] = completer;
-      return completer.future;
-    }
-    if (_phase != PlaybackPhase.ready) {
+    if (!_writerPermitted) {
       return Future.value(const CommandResult.accepted());
     }
     final completer = Completer<CommandResult>();
@@ -1004,7 +1051,8 @@ class PlaybackSession implements PlaybackMediaClock {
   bool get _writerPermitted =>
       _phase == PlaybackPhase.ready ||
       (_runtimePositionAvailable &&
-          (_phase == PlaybackPhase.loading ||
+          (_phase == PlaybackPhase.idle ||
+              _phase == PlaybackPhase.loading ||
               _phase == PlaybackPhase.recovering ||
               _phase == PlaybackPhase.failed)) ||
       ((_phase == PlaybackPhase.loading ||

@@ -3,6 +3,7 @@ import 'dart:io' show Platform, Directory, File;
 import 'dart:ui' as ui;
 
 import 'package:flutter/services.dart';
+import 'package:audio_session/audio_session.dart' as system_audio;
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
@@ -175,6 +176,79 @@ void main() {
     await dismissScreenshotToasts(f);
   });
 
+  _recoveryTest('截图：保存异常保留预览，重试成功后释放', (f) async {
+    final previousPicker = FilePickerPlatform.instance;
+    final picker = _ScreenshotPicker()
+      ..error = StateError('private-path-secret');
+    FilePickerPlatform.instance = picker;
+    addTearDown(() => FilePickerPlatform.instance = previousPicker);
+    await mountScreenshot(f);
+    await f.load();
+    final image = await screenshotImage(f);
+    f.runtime.player.capture = () async => image;
+    final capture = f.controller.takeScreenshot();
+    await f.tester.pumpAndSettle();
+    final preview = f.tester.widget<GestureDetector>(
+      find
+          .ancestor(
+            of: find.byType(RawImage),
+            matching: find.byType(GestureDetector),
+          )
+          .first,
+    );
+    preview.onTap!();
+    await f.tester.runAsync(() => image.toByteData(format: .png));
+    await f.tester.pumpAndSettle();
+    expect(find.byType(RawImage), findsOneWidget);
+    expect(image.debugDisposed, isFalse);
+    expect(find.textContaining('private-path-secret'), findsNothing);
+    picker
+      ..error = null
+      ..requested = Completer<void>()
+      ..target = Uri.file('E:/screenshot.png');
+    preview.onTap!();
+    await f.tester.runAsync(() => image.toByteData(format: .png));
+    await f.tester.pumpAndSettle();
+    await capture;
+    expect(image.debugDisposed, isTrue);
+    await dismissScreenshotToasts(f);
+  });
+
+  _recoveryTest('截图：关闭预览后等待在途保存完成才释放图片', (f) async {
+    final previousPicker = FilePickerPlatform.instance;
+    final saving = Completer<Uri?>();
+    final picker = _ScreenshotPicker()..saving = saving;
+    FilePickerPlatform.instance = picker;
+    addTearDown(() => FilePickerPlatform.instance = previousPicker);
+    await mountScreenshot(f);
+    await f.load();
+    final image = await screenshotImage(f);
+    f.runtime.player.capture = () async => image;
+    final capture = f.controller.takeScreenshot();
+    await f.tester.pumpAndSettle();
+    final preview = f.tester.widget<GestureDetector>(
+      find
+          .ancestor(
+            of: find.byType(RawImage),
+            matching: find.byType(GestureDetector),
+          )
+          .first,
+    );
+    preview.onTap!();
+    preview.onTap!();
+    await f.tester.runAsync(() => image.toByteData(format: .png));
+    await f.tester.pump();
+    expect(picker.calls, 1);
+    Navigator.of(Get.context!).pop();
+    await f.tester.pumpAndSettle();
+    expect(image.debugDisposed, isFalse);
+    saving.complete(null);
+    await capture;
+    expect(image.debugDisposed, isTrue);
+    expect(f.tester.takeException(), isNull);
+    await dismissScreenshotToasts(f);
+  });
+
   _recoveryTest('超分资源准备失败保留档位，同档位选择可以重试', (f) async {
     await f.tester.pumpWidget(
       MaterialApp(builder: FlutterSmartDialog.init(), home: const Scaffold()),
@@ -275,6 +349,177 @@ void main() {
       }
     });
   }
+
+  _recoveryTest('独立音频焦点：暂停视频确认后接管，销毁回执后才交还', (f) async {
+    final previous = audioSessionHandler;
+    final handler = _AudioSession();
+    audioSessionHandler = handler;
+    addTearDown(() => audioSessionHandler = previous);
+    await f.load();
+    handler.attachPlaybackController(f.controller);
+    final audioPlaying = <bool>[];
+    final lease = handler.acquireIndependentPlayer(
+      setPlaying: (value) async => audioPlaying.add(value),
+      volume: () => 80,
+      volumeRevision: () => 0,
+      setVolume: (_) async {},
+    );
+    final play = lease.setPlaying(true);
+    await f.tester.pump();
+    await play;
+    expect(f.runtime.player.state.playing, isFalse);
+    expect(f.controller.wantsToPlay, isTrue);
+    expect(audioPlaying, [true]);
+    final released = Completer<void>();
+    final close = lease.close(() => released.future);
+    await f.tester.pump();
+    await f.controller.play();
+    expect(f.runtime.player.state.playing, isFalse);
+    expect(handler.activations, [true]);
+    released.complete();
+    await f.tester.pump();
+    await close;
+    expect(f.runtime.player.state.playing, isTrue);
+    expect(handler.activations, [true, false, true]);
+  });
+
+  _recoveryTest('独立音频焦点：申请期间新增 facade 先等暂停回执', (f) async {
+    final second = _Fixture(f.tester);
+    await second.load(key: 'second-facade');
+    await f.load();
+    final previous = audioSessionHandler;
+    final activated = Completer<void>();
+    final handler = _AudioSession()
+      ..change = (active) async {
+        if (active) await activated.future;
+        return true;
+      };
+    audioSessionHandler = handler;
+    addTearDown(() => audioSessionHandler = previous);
+    handler.attachPlaybackController(f.controller);
+    final playing = <bool>[];
+    final lease = handler.acquireIndependentPlayer(
+      setPlaying: (value) async => playing.add(value),
+      volume: () => 80,
+      volumeRevision: () => 0,
+      setVolume: (_) async {},
+    );
+    final play = lease.setPlaying(true);
+    await f.tester.pump();
+    expect(handler.activations, [true]);
+    final paused = Completer<void>();
+    second.runtime.beforePlaying = (value) async {
+      if (!value) await paused.future;
+    };
+    handler.attachPlaybackController(second.controller);
+    activated.complete();
+    await f.tester.pump();
+    expect(playing, isEmpty);
+    paused.complete();
+    await f.tester.pump();
+    await play;
+    expect(second.runtime.player.state.playing, isFalse);
+    expect(playing, [true]);
+    await lease.close(() async {});
+    await second.dispose();
+  });
+
+  _recoveryTest('独立音频焦点：接管期间 duck 结束恢复原视频音量', (f) async {
+    await f.load();
+    final native = _SystemAudioSession();
+    final handler = AudioSessionHandler(loadSession: () async => native);
+    await handler.initSession();
+    handler.attachPlaybackController(f.controller);
+    final previous = audioSessionHandler;
+    audioSessionHandler = handler;
+    addTearDown(() async {
+      audioSessionHandler = previous;
+      await native.interruptions.close();
+    });
+    final volume =
+        f.controller.currentPlaybackSnapshot.configuration.desired.volume;
+    native.interruptions.add(
+      system_audio.AudioInterruptionEvent(
+        true,
+        system_audio.AudioInterruptionType.duck,
+      ),
+    );
+    await f.tester.pump();
+    expect(f.runtime.volumes.last, volume / 2);
+    final lease = handler.acquireIndependentPlayer(
+      setPlaying: (_) async {},
+      volume: () => 80,
+      volumeRevision: () => 0,
+      setVolume: (_) async {},
+    );
+    final play = lease.setPlaying(true);
+    await f.tester.pump();
+    await play;
+    native.interruptions.add(
+      system_audio.AudioInterruptionEvent(
+        false,
+        system_audio.AudioInterruptionType.duck,
+      ),
+    );
+    await f.tester.pump();
+    expect(f.runtime.volumes.last, volume);
+    await lease.close(() async {});
+  });
+
+  _recoveryTest('独立音频焦点：closing 不再发令牌时仍等原生释放', (f) async {
+    await f.load();
+    final previous = audioSessionHandler;
+    final handler = _AudioSession();
+    audioSessionHandler = handler;
+    addTearDown(() => audioSessionHandler = previous);
+    handler.attachPlaybackController(f.controller);
+    final released = Completer<void>();
+    f.runtime.beforeShutdown = () => released.future;
+    final shutdown = f.controller.shutdownPlaybackFacade();
+    final playing = <bool>[];
+    final lease = handler.acquireIndependentPlayer(
+      setPlaying: (value) async => playing.add(value),
+      volume: () => 80,
+      volumeRevision: () => 0,
+      setVolume: (_) async {},
+    );
+    final play = lease.setPlaying(true);
+    await f.tester.pump();
+    expect(playing, isEmpty);
+    released.complete();
+    await f.tester.pump();
+    await shutdown;
+    await play;
+    expect(playing, [true]);
+    await lease.close(() async {});
+    expect(handler.activations, [true, false]);
+  });
+
+  _recoveryTest('独立音频焦点：销毁失败保留视频抑制', (f) async {
+    final previous = audioSessionHandler;
+    final handler = _AudioSession();
+    audioSessionHandler = handler;
+    addTearDown(() => audioSessionHandler = previous);
+    await f.load();
+    handler.attachPlaybackController(f.controller);
+    final lease = handler.acquireIndependentPlayer(
+      setPlaying: (_) async {},
+      volume: () => 80,
+      volumeRevision: () => 0,
+      setVolume: (_) async {},
+    );
+    final play = lease.setPlaying(true);
+    await f.tester.pump();
+    await play;
+    final cause = StateError('synthetic release failure');
+    await expectLater(
+      lease.close(() async => throw cause),
+      throwsA(same(cause)),
+    );
+    await f.tester.pump();
+    expect(f.runtime.player.state.playing, isFalse);
+    expect(handler.activations, [true]);
+  });
 
   _recoveryTest('音频焦点：旧暂停已被后续播放取代时不释放新焦点', (f) async {
     final previous = audioSessionHandler;
@@ -1240,6 +1485,9 @@ class _ScreenshotPicker extends FilePickerPlatform {
   Completer<void> requested = Completer<void>();
   Uint8List? bytes;
   Uri? target;
+  Object? error;
+  Completer<Uri?>? saving;
+  int calls = 0;
 
   @override
   Future<Uri?> saveFile({
@@ -1254,9 +1502,40 @@ class _ScreenshotPicker extends FilePickerPlatform {
     WebOptions webOptions = const WebOptions(),
   }) async {
     this.bytes = bytes;
+    calls++;
     requested.complete();
+    if (error case final error?) throw error;
+    if (saving != null) return saving!.future;
     return target;
   }
+}
+
+class _SystemAudioSession implements system_audio.AudioSession {
+  final interruptions =
+      StreamController<system_audio.AudioInterruptionEvent>.broadcast(
+        sync: true,
+      );
+  @override
+  Future<void> configure(
+    system_audio.AudioSessionConfiguration configuration,
+  ) async {}
+  @override
+  Stream<system_audio.AudioInterruptionEvent> get interruptionEventStream =>
+      interruptions.stream;
+  @override
+  Stream<void> get becomingNoisyEventStream => const Stream.empty();
+  @override
+  Future<bool> setActive(
+    bool active, {
+    system_audio.AVAudioSessionSetActiveOptions? avAudioSessionSetActiveOptions,
+    system_audio.AndroidAudioFocusGainType? androidAudioFocusGainType,
+    system_audio.AndroidAudioAttributes? androidAudioAttributes,
+    bool? androidWillPauseWhenDucked,
+    system_audio.AudioSessionConfiguration fallbackConfiguration =
+        const system_audio.AudioSessionConfiguration.music(),
+  }) async => true;
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
 class _AudioSession extends AudioSessionHandler {
@@ -1436,6 +1715,7 @@ class _Runtime extends NativePlaybackRuntime {
   final volumes = <double>[];
   Future<PlaybackRuntimeCommandResult> Function(double)? onVolume;
   Future<void> Function(bool)? beforePlaying;
+  Future<void> Function()? beforeShutdown;
 
   void emitActual() {
     final progressing =
@@ -1574,6 +1854,7 @@ class _Runtime extends NativePlaybackRuntime {
 
   @override
   Future<PlaybackShutdownResult> shutdown() async {
+    await beforeShutdown?.call();
     if (!_released.isCompleted) _released.complete();
     return const PlaybackShutdownResult.released();
   }

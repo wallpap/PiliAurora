@@ -37,6 +37,7 @@ import 'package:pili_aurora/plugin/pl_player/models/play_status.dart';
 import 'package:pili_aurora/plugin/pl_player/playback/playback_contracts.dart'
     show CommandOutcome;
 import 'package:pili_aurora/services/service_locator.dart';
+import 'package:pili_aurora/services/audio_session.dart';
 import 'package:pili_aurora/services/logger.dart';
 import 'package:pili_aurora/services/shutdown_timer_service.dart';
 import 'package:pili_aurora/utils/accounts.dart';
@@ -110,6 +111,29 @@ class AudioController extends GetxController
   int _seekRevision = 0;
   @override
   Player? player;
+  Player? _closingPlayer;
+  IndependentAudioLease? _audioLease;
+
+  void _ensureAudioLease() {
+    _audioLease ??= audioSessionHandler?.acquireIndependentPlayer(
+      setPlaying: (playing) async {
+        final target = player;
+        if (target == null) return;
+        if (playing) {
+          await target.play();
+        } else {
+          await target.pause();
+        }
+      },
+      volume: () => player?.state.volume ?? 0,
+      volumeRevision: () => _volumeRevision,
+      setVolume: (value) async {
+        _volumeRevision++;
+        await player?.setVolume(value);
+      },
+    );
+  }
+
   late int cacheAudioQa;
 
   late bool isDragging = false;
@@ -298,6 +322,7 @@ class AudioController extends GetxController
   @override
   void onInit() {
     super.onInit();
+    _ensureAudioLease();
     final args = Get.arguments;
     oid = Int64(args['oid']);
     final id = args['id'];
@@ -358,9 +383,15 @@ class AudioController extends GetxController
     return player?.state.playing ?? false;
   }
 
-  Future<void> onPlay() => Future<void>.sync(() => _readyPlayer.play());
+  Future<void> onPlay() => Future<void>.sync(() {
+    final target = _readyPlayer;
+    return _audioLease?.setPlaying(true) ?? target.play();
+  });
 
-  Future<void> onPause() => Future<void>.sync(() => _readyPlayer.pause());
+  Future<void> onPause() => Future<void>.sync(() {
+    final target = _readyPlayer;
+    return _audioLease?.setPlaying(false) ?? target.pause();
+  });
 
   Future<void> onSeek(Duration duration) async {
     final target = _readyPlayer;
@@ -715,6 +746,9 @@ class AudioController extends GetxController
     http_model.Volume? volume,
   }) {
     _pendingPlayGeneration = generation;
+    _ensureAudioLease();
+    final lease = _audioLease;
+    final intentRevision = lease?.intentRevision;
     final previous = _mediaOpening;
     // 原生 open 不能撤销，串行打开才能保证最后一次选曲最终拥有播放器。
     final operation = () async {
@@ -724,6 +758,8 @@ class AudioController extends GetxController
         if (url.trim().isEmpty) throw const FormatException('音频来源为空');
         await _initPlayerIfNeeded();
         if (!_ownsPlayback(generation)) return false;
+        await _audioLease?.prepare();
+        if (!_ownsPlayback(generation)) return false;
         final currentPlayer = player!
           ..setMediaHeader(
             userAgent: ua,
@@ -732,6 +768,12 @@ class AudioController extends GetxController
           );
         await currentPlayer.open(
           Media(url, start: _start, extras: audioFilterExtras(volume)),
+          play: _audioLease == null,
+        );
+        if (!_ownsPlayback(generation)) return false;
+        // 打开期间的显式暂停和拔耳机意图优先于本次自动起播。
+        await lease?.setPlaying(
+          lease.intentRevision == intentRevision ? true : lease.playingIntent,
         );
         if (!_ownsPlayback(generation)) return false;
         position.value = 0;
@@ -790,6 +832,7 @@ class AudioController extends GetxController
   }
 
   Future<void> _initializePlayer() async {
+    _ensureAudioLease();
     final initializedPlayer = await _createPlayer(
       PlayerConfiguration(
         options: {
@@ -802,7 +845,8 @@ class AudioController extends GetxController
       ),
     );
     if (_audioClosed || isClosed) {
-      _releaseAudioResource(initializedPlayer.dispose);
+      // 交由关闭流程统一销毁，失败必须继续持有音频租约和视频抑制。
+      _closingPlayer = initializedPlayer;
       return;
     }
     player = initializedPlayer;
@@ -1238,8 +1282,12 @@ class AudioController extends GetxController
     );
   }
 
-  Future<void> playOrPause() =>
-      _consumePlaybackControl(() => _readyPlayer.playOrPause());
+  Future<void> playOrPause() => _consumePlaybackControl(() {
+    if (_audioLease case final lease?) {
+      return lease.playingIntent ? onPause() : onPlay();
+    }
+    return _readyPlayer.playOrPause();
+  });
 
   bool playPrev() {
     if (index != null && playlist != null && player != null) {
@@ -1427,7 +1475,25 @@ class AudioController extends GetxController
     _subscriptions = null;
     final target = player;
     player = null;
-    if (target != null) _releaseAudioResource(target.dispose);
+    final lease = _audioLease;
+    _audioLease = null;
+    _releaseAudioResource(() {
+      Future<void> release() async {
+        // 等初始化和不可撤销的 open 真正退出后再销毁，最后交还视频抑制。
+        try {
+          await _playerInitialization;
+        } catch (_) {
+          // 创建失败已由播放入口交付，没有可继续销毁的资源。
+        }
+        await _mediaOpening;
+        final releasing = target ?? _closingPlayer;
+        if (releasing != null) await releasing.dispose();
+        _closingPlayer = null;
+      }
+
+      // 立即登记关闭，后续音频接管必须等待上述真实释放屏障。
+      return lease?.close(release) ?? release();
+    });
     animController.dispose();
     super.onClose();
   }

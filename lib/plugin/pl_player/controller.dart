@@ -925,6 +925,9 @@ class PlPlayerController
     PlaybackInhibitorToken token,
   ) => _session.releaseSessionInhibitor(token);
 
+  Future<CommandResult> synchronizePlaybackIntent() =>
+      _session.synchronizePlaybackIntent();
+
   Future<PlaybackShutdownResult> shutdownPlaybackFacade() {
     _watchRuntimeRelease();
     return _session.shutdown();
@@ -2244,7 +2247,15 @@ class PlPlayerController
             return;
           }
           try {
-            if (!await handler.setActive(active)) {
+            if (!await handler.changeVideoActive(
+              this,
+              active,
+              isCurrent: () =>
+                  version == _audioSessionVersion &&
+                  owner.isActive &&
+                  identical(owner, _activeOwner) &&
+                  _session.currentSnapshot.intent.playing == active,
+            )) {
               logger.w('音频会话未接受${active ? '激活' : '释放'}请求');
             }
           } catch (error, stackTrace) {

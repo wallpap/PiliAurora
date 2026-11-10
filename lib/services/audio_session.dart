@@ -13,6 +13,73 @@ class AudioSessionHandler {
   final Future<AudioSession> Function() _loadSession;
   Future<void>? _initialization;
   late AudioSession session;
+  final _independent = <IndependentAudioLease>[];
+  Future<void> _focusChanges = Future<void>.value();
+  bool _interrupted = false;
+  bool _ducked = false;
+  PlPlayerController? _playbackController;
+
+  IndependentAudioLease acquireIndependentPlayer({
+    required Future<void> Function(bool) setPlaying,
+    required double Function() volume,
+    required int Function() volumeRevision,
+    required Future<void> Function(double) setVolume,
+  }) {
+    final previous = _independent.lastOrNull;
+    final lease = IndependentAudioLease._(
+      this,
+      setPlaying,
+      volume,
+      volumeRevision,
+      setVolume,
+    );
+    _independent.add(lease);
+    lease._interrupted = _interrupted;
+    final controller = _playbackController ?? PlPlayerController.instance;
+    if (controller != null) lease._holdVideo(controller);
+    lease._handover = previous?._suspend() ?? Future<void>.value();
+    lease._consume(lease._handover);
+    return lease;
+  }
+
+  Future<T> _serializeFocus<T>(Future<T> Function() operation) {
+    final result = _focusChanges.then((_) => operation());
+    _focusChanges = result.then<void>(
+      (_) {},
+      onError: (Object _, StackTrace _) {},
+    );
+    return result;
+  }
+
+  Future<bool> changeVideoActive(
+    PlPlayerController controller,
+    bool active, {
+    bool Function()? isCurrent,
+  }) {
+    _playbackController ??= controller;
+    return _serializeFocus(() async {
+      if (_independent.isNotEmpty ||
+          !identical(controller, _playbackController) ||
+          isCurrent?.call() == false) {
+        return true;
+      }
+      return setActive(active);
+    });
+  }
+
+  Future<bool> _changeIndependentActive(
+    IndependentAudioLease lease,
+    bool active,
+  ) => _serializeFocus(() async {
+    if (!identical(_independent.lastOrNull, lease)) return false;
+    if (active && (lease._closing || !lease._playing || lease._interrupted)) {
+      return true;
+    }
+    if (!active && !lease._closing && lease._playing && !lease._interrupted) {
+      return true;
+    }
+    return setActive(active);
+  });
   final PlaybackFocusInhibitor _focusInhibitor = PlaybackFocusInhibitor(
     onError: Utils.reportError,
   );
@@ -42,7 +109,19 @@ class AudioSessionHandler {
     await session.configure(const AudioSessionConfiguration.music());
 
     session.interruptionEventStream.listen((event) {
-      final controller = PlPlayerController.instance;
+      if (event.type == AudioInterruptionType.duck) _ducked = event.begin;
+      if (event.type != AudioInterruptionType.duck) _interrupted = event.begin;
+      final independent = _independent.lastOrNull;
+      if (independent != null) {
+        independent._handleInterruption(event);
+        // 视频即使被独立播放器遮挡，也需保留系统中断状态以供交还。
+        if (event.type == AudioInterruptionType.duck) {
+          // 接管前的视频 duck 快照仍需在系统事件结束时恢复。
+          if (!event.begin) unawaited(_ducker.end());
+          return;
+        }
+      }
+      final controller = _playbackController ?? PlPlayerController.instance;
       if (event.begin) {
         switch (event.type) {
           case AudioInterruptionType.duck:
@@ -75,7 +154,13 @@ class AudioSessionHandler {
 
     // 拔出耳机是显式用户暂停，需更新播放意图。
     session.becomingNoisyEventStream.listen((_) async {
-      final owner = PlPlayerController.instance?.activePlaybackOwner;
+      final independent = _independent.lastOrNull;
+      if (independent != null) {
+        independent._consume(independent.setPlaying(false));
+        return;
+      }
+      final owner = (_playbackController ?? PlPlayerController.instance)
+          ?.activePlaybackOwner;
       if (owner == null) return;
       try {
         await owner.setPlaying(false);
@@ -87,6 +172,10 @@ class AudioSessionHandler {
 
   /// 新 facade 在焦点中断期间创建时，立即把系统抑制迁移到新 session。
   void attachPlaybackController(PlPlayerController controller) {
+    _playbackController = controller;
+    for (final lease in _independent) {
+      lease._holdVideo(controller);
+    }
     _focusInhibitor.attach(
       controller,
       acquire: () => controller.acquireSessionInhibitor(
@@ -115,6 +204,199 @@ class AudioSessionHandler {
           owner.isActive && identical(controller.activePlaybackOwner, owner),
       setVolume: owner.setVolume,
     );
+  }
+}
+
+/// 独立音频持有视频抑制直到真实释放；中断只改变有效播放，不改用户意图。
+class IndependentAudioLease {
+  IndependentAudioLease._(
+    this._handler,
+    this._setPlaying,
+    this._volume,
+    this._volumeRevision,
+    this._setVolume,
+  );
+
+  final AudioSessionHandler _handler;
+  final Future<void> Function(bool) _setPlaying;
+  final double Function() _volume;
+  final int Function() _volumeRevision;
+  final Future<void> Function(double) _setVolume;
+  final _videoHolds = <PlPlayerController, PlaybackInhibitorToken?>{};
+  final _ducker = PlaybackVolumeDucker(onError: Utils.reportError);
+  Future<void> _commands = Future<void>.value();
+  Future<void> _handover = Future<void>.value();
+  Future<void>? _closingOperation;
+  Future<void>? _duckChange;
+  bool _playing = false;
+  bool _interrupted = false;
+  bool _closing = false;
+  int _videoHoldRevision = 0;
+  int _intentRevision = 0;
+  int get intentRevision => _intentRevision;
+  bool get playingIntent => _playing;
+  bool get _current => identical(_handler._independent.lastOrNull, this);
+
+  void _holdVideo(PlPlayerController controller) {
+    if (_videoHolds.containsKey(controller)) return;
+    final token = controller.acquireSessionInhibitor(
+      PlaybackInhibitorSource.audioFocus,
+    );
+    // closing session 不再发放令牌，但原生释放屏障仍属于此次接管。
+    _videoHolds[controller] = token;
+    _videoHoldRevision++;
+  }
+
+  Future<void> _enqueue(Future<void> Function() command) {
+    final result = _commands.then((_) => command());
+    _commands = result.then<void>(
+      (_) {},
+      onError: (Object _, StackTrace _) {},
+    );
+    return result;
+  }
+
+  Future<void> prepare() async {
+    await _handover;
+    int revision;
+    do {
+      revision = _videoHoldRevision;
+      for (final controller in _videoHolds.keys.toList()) {
+        final result = await controller.synchronizePlaybackIntent();
+        if (result.outcome == CommandOutcome.failed) {
+          throw result.failure ?? StateError('视频暂停未确认');
+        }
+      }
+    } while (revision != _videoHoldRevision);
+  }
+
+  Future<void> setPlaying(bool playing) {
+    if (_closing) return Future.error(StateError('音频播放器已关闭'));
+    _playing = playing;
+    _intentRevision++;
+    return _enqueue(_reconcile);
+  }
+
+  Future<void> _reconcile() async {
+    if (_closing || !_current) return;
+    await prepare();
+    if (_closing || !_current) return;
+    final effective = _playing && !_interrupted;
+    if (effective) {
+      if (!await _handler._changeIndependentActive(this, true)) {
+        throw StateError('系统未授予音频焦点');
+      }
+      if (_closing || !_current) return;
+      await prepare();
+      if (_closing || !_current) return;
+      // 焦点申请的 await 期间也可能收到暂停或中断。
+      await _setPlaying(_playing && !_interrupted);
+      if (_handler._ducked) _applyDuck();
+    } else {
+      await _setPlaying(false);
+      if (!_interrupted && _current) {
+        await _handler._changeIndependentActive(this, false);
+      }
+    }
+  }
+
+  Future<void> _suspend() =>
+      _closingOperation ??
+      _enqueue(() async {
+        await _handover;
+        await _duckChange;
+        await _ducker.end();
+        await _setPlaying(false);
+      });
+
+  void _consume(Future<void> operation) {
+    unawaited(
+      operation.catchError((Object error, StackTrace stack) {
+        Utils.reportError(error, stack);
+      }),
+    );
+  }
+
+  void _handleInterruption(AudioInterruptionEvent event) {
+    if (_closing) return;
+    if (event.type != AudioInterruptionType.duck) {
+      _interrupted = event.begin;
+      _consume(_enqueue(_reconcile));
+      return;
+    }
+    if (!event.begin) {
+      _consume(_ducker.end());
+    } else if (_playing && _current) {
+      _applyDuck();
+    }
+  }
+
+  void _applyDuck() {
+    final operation = _ducker.begin(
+      owner: this,
+      volume: _volume(),
+      currentVolume: _volume,
+      currentRevision: _volumeRevision,
+      isCurrent: () => !_closing,
+      setVolume: (value) async {
+        await _setVolume(value);
+        return const CommandResult.applied();
+      },
+    );
+    _duckChange = operation;
+    _consume(operation);
+  }
+
+  /// release 失败时保留抑制，防止仍可能发声的 Player 与视频同时输出。
+  Future<void> close(Future<void> Function() release) =>
+      _closingOperation ??= _close(release);
+
+  Future<void> _close(Future<void> Function() release) async {
+    _closing = true;
+    await _commands;
+    for (final operation in [_handover, _duckChange]) {
+      try {
+        await operation;
+      } catch (error, stack) {
+        // 辅助命令失败仍需销毁 Player，真实销毁结果才决定能否交还声音。
+        Utils.reportError(error, stack);
+      }
+    }
+    await release();
+    final wasCurrent = _current;
+    if (wasCurrent) {
+      try {
+        await _handler._changeIndependentActive(this, false);
+      } catch (error, stack) {
+        // Player 已确认销毁，焦点释放失败不能阻止后续播放器重新申请。
+        Utils.reportError(error, stack);
+      }
+    }
+    _handler._independent.remove(this);
+    // 最后一个独立播放器交还前先恢复视频的系统焦点，避免旧释放晚于新申请。
+    if (_handler._independent.isEmpty) {
+      final controller =
+          _handler._playbackController ?? PlPlayerController.instance;
+      if (controller != null &&
+          controller.activePlaybackOwner?.isActive == true &&
+          controller.currentPlaybackSnapshot.intent.playing) {
+        try {
+          await _handler.changeVideoActive(controller, true);
+        } catch (error, stack) {
+          Utils.reportError(error, stack);
+        }
+      }
+    }
+    for (final entry in _videoHolds.entries.toList()) {
+      final token = entry.value;
+      if (token != null) await entry.key.releaseSessionInhibitor(token);
+    }
+    _videoHolds.clear();
+    final previous = _handler._independent.lastOrNull;
+    if (wasCurrent && previous != null) {
+      previous._interrupted = _handler._interrupted;
+      await previous._enqueue(previous._reconcile);
+    }
   }
 }
 

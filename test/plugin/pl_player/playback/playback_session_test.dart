@@ -2456,6 +2456,179 @@ void main() {
     await session.shutdown();
   });
 
+  test('交接屏障等待 loading 中旧媒体的实际暂停', () async {
+    final runtime = _FakeRuntime();
+    final session = PlaybackSession(runtime: runtime);
+    final owner = session.attach();
+    await owner.load(_plan('before'), start: PlaybackStartPolicy.play);
+    final paused = Completer<PlaybackRuntimeCommandResult>();
+    runtime.onSetPlaying = (playing, _, _) => playing
+        ? Future.value(const PlaybackRuntimeCommandResult())
+        : paused.future;
+    final resolved = Completer<PlaybackPlan?>();
+    final loading = owner.query(
+      (_) => resolved.future,
+      start: PlaybackStartPolicy.play,
+    );
+    final hold = session.acquireSessionInhibitor(
+      PlaybackInhibitorSource.audioFocus,
+    )!;
+    var synchronized = false;
+    final sync = session.synchronizePlaybackIntent()
+      ..then((_) => synchronized = true);
+    await Future<void>.delayed(Duration.zero);
+    expect(synchronized, isFalse);
+    paused.complete(const PlaybackRuntimeCommandResult());
+    expect((await sync).outcome, CommandOutcome.applied);
+    resolved.complete(_plan('after'));
+    await loading;
+    await session.releaseSessionInhibitor(hold);
+    owner.close();
+    await session.shutdown();
+  });
+
+  test('交接屏障等待仅解析来源进入 idle 后的旧媒体暂停', () async {
+    final runtime = _FakeRuntime();
+    final session = PlaybackSession(runtime: runtime);
+    final owner = session.attach();
+    await owner.load(_plan('before'), start: PlaybackStartPolicy.play);
+    final paused = Completer<PlaybackRuntimeCommandResult>();
+    runtime.onSetPlaying = (playing, _, _) => playing
+        ? Future.value(const PlaybackRuntimeCommandResult())
+        : paused.future;
+    final query = await owner.query(
+      (_) async => _plan('metadata-only'),
+      shouldLoad: () => false,
+    );
+    expect(query.outcome, LoadOutcome.noMedia);
+    expect(session.currentSnapshot.phase, PlaybackPhase.idle);
+    session.acquireSessionInhibitor(PlaybackInhibitorSource.audioFocus);
+    var synchronized = false;
+    final sync = session.synchronizePlaybackIntent()
+      ..then((_) => synchronized = true);
+    await Future<void>.delayed(Duration.zero);
+    expect(synchronized, isFalse);
+    paused.complete(const PlaybackRuntimeCommandResult());
+    expect((await sync).outcome, CommandOutcome.applied);
+    owner.close();
+    await session.shutdown();
+  });
+
+  test('交接屏障等待在途原生加载结束', () async {
+    final runtime = _FakeRuntime();
+    final session = PlaybackSession(runtime: runtime);
+    final owner = session.attach();
+    final opened = Completer<PlaybackRuntimeLoadResult>();
+    runtime.onLoad = (_, _, _) => opened.future;
+    final loading = owner.load(
+      _plan('opening'),
+      start: PlaybackStartPolicy.play,
+    );
+    await _until(() => runtime.loadedKeys.isNotEmpty);
+    session.acquireSessionInhibitor(PlaybackInhibitorSource.audioFocus);
+    var synchronized = false;
+    final sync = session.synchronizePlaybackIntent()
+      ..then((_) => synchronized = true);
+    await Future<void>.delayed(Duration.zero);
+    expect(synchronized, isFalse);
+    opened.complete(
+      const PlaybackRuntimeLoadResult(
+        loaded: true,
+        output: PlaybackOutputPreparation(
+          strategy: PlaybackOutputStrategy.prepared,
+          evidence: 'synthetic paused open',
+          outputEpoch: 1,
+        ),
+      ),
+    );
+    await loading;
+    expect((await sync).outcome, CommandOutcome.applied);
+    expect(runtime.playCalls, everyElement(isFalse));
+    owner.close();
+    await session.shutdown();
+  });
+
+  for (final closing in [false, true]) {
+    testWidgets('交接屏障跨加载与${closing ? '关闭' : '暂停'}共用命令总时限', (tester) async {
+      final runtime = _FakeRuntime();
+      final opened = Completer<PlaybackRuntimeLoadResult>();
+      final paused = Completer<PlaybackRuntimeCommandResult>();
+      final closed = Completer<PlaybackShutdownResult>();
+      runtime
+        ..onLoad = ((_, _, _) => opened.future)
+        ..onSetPlaying = ((_, _, _) => paused.future)
+        ..onShutdown = (() => closed.future);
+      final session = PlaybackSession(
+        runtime: runtime,
+        commandBudget: const Duration(seconds: 5),
+        monotonicNow: () => Duration(
+          microseconds: tester.binding.clock.now().microsecondsSinceEpoch,
+        ),
+      );
+      final owner = session.attach();
+      final loading = owner.load(_plan('opening'));
+      await tester.pump();
+      session.acquireSessionInhibitor(PlaybackInhibitorSource.audioFocus);
+      CommandResult? synchronized;
+      final sync = session.synchronizePlaybackIntent()
+        ..then((value) => synchronized = value);
+      await tester.pump(const Duration(seconds: 3));
+      expect(synchronized, isNull);
+      opened.complete(
+        const PlaybackRuntimeLoadResult(
+          loaded: true,
+          output: PlaybackOutputPreparation(
+            strategy: PlaybackOutputStrategy.prepared,
+            evidence: 'synthetic paused open',
+            outputEpoch: 1,
+          ),
+        ),
+      );
+      await tester.pump();
+      if (closing) {
+        session.shutdown();
+        await tester.pump();
+      }
+      await tester.pump(const Duration(seconds: 2));
+      expect(synchronized?.outcome, CommandOutcome.failed);
+      expect(synchronized?.failure?.category, PlaybackFailureCategory.timeout);
+      paused.complete(const PlaybackRuntimeCommandResult());
+      runtime.completeRelease();
+      closed.complete(const PlaybackShutdownResult.released());
+      await tester.pump();
+      await sync;
+      await loading;
+      owner.close();
+      await session.shutdown();
+      await tester.pump();
+    });
+  }
+
+  test('交接屏障等待关闭释放并保留清理失败结果', () async {
+    final closed = Completer<PlaybackShutdownResult>();
+    final runtime = _FakeRuntime()..onShutdown = () => closed.future;
+    final session = PlaybackSession(runtime: runtime);
+    session.attach().close();
+    var synchronized = false;
+    final sync = session.synchronizePlaybackIntent()
+      ..then((_) => synchronized = true);
+    await Future<void>.delayed(Duration.zero);
+    expect(synchronized, isFalse);
+    const failure = PlaybackFailure(
+      category: PlaybackFailureCategory.disposal,
+      operation: 'shutdown',
+      stage: PlaybackStage.closing,
+      recoverable: false,
+      cause: 'synthetic release failure',
+    );
+    closed.complete(const PlaybackShutdownResult.cleanupIncomplete(failure));
+    final result = await sync;
+    expect(result.outcome, CommandOutcome.failed);
+    expect(result.failure, same(failure));
+    runtime.completeRelease();
+    await _until(() => session.currentSnapshot.phase == PlaybackPhase.disposed);
+  });
+
   test('shutdown deadline可先结算cleanupIncomplete，released迟到后仍完成资源释放', () async {
     final runtime = _FakeRuntime()
       ..onShutdown = () async => const PlaybackShutdownResult.cleanupIncomplete(
