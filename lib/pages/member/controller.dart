@@ -14,6 +14,7 @@ import 'package:pili_aurora/models/remote/space/space/setting.dart';
 import 'package:pili_aurora/models/remote/space/space/tab2.dart';
 import 'package:pili_aurora/pages/common/common_data_controller.dart';
 import 'package:pili_aurora/utils/accounts.dart';
+import 'package:pili_aurora/utils/accounts/account.dart';
 import 'package:pili_aurora/utils/extension/nested_scroll_ext.dart';
 import 'package:pili_aurora/utils/request_utils.dart';
 import 'package:pili_aurora/utils/share_utils.dart';
@@ -31,7 +32,81 @@ class MemberController extends CommonDataController<SpaceData, SpaceData?>
   String? username;
   String? userAvatar;
 
-  late final account = Accounts.main;
+  Account get account => Accounts.main;
+  Object? _relationOperation;
+  Object? _vipOperation;
+  int _generation = 0;
+  bool _closed = false;
+
+  @override
+  Object get queryContext => Accounts.main;
+
+  @override
+  Future<void> queryData([bool isRefresh = true]) {
+    if (isRefresh) _generation++;
+    return super.queryData(isRefresh);
+  }
+
+  void _onAccountChanged() {
+    _relationOperation = _vipOperation = null;
+    _resetAccountData();
+    onReload();
+  }
+
+  void _resetAccountData() {
+    relation.value = 0;
+    isFollowed = null;
+    spaceSetting = null;
+    hasSeasonOrSeries = false;
+    charges = null;
+    chargeCount = null;
+    guards = null;
+    guardCount = null;
+    reserves = null;
+    live = null;
+    silence = null;
+  }
+
+  bool _owns(Account owner, int target, int generation) =>
+      !_closed &&
+      !isClosed &&
+      !isLoading &&
+      identical(owner, account) &&
+      target == mid &&
+      generation == _generation;
+
+  Future<void> Function() scopedAction(Future<void> Function() action) {
+    final owner = account;
+    final target = mid;
+    final generation = _generation;
+    return () async {
+      if (_owns(owner, target, generation)) await action();
+    };
+  }
+
+  Future<void> _runRelation(
+    Future<void> Function(Account owner, int target, bool Function() current)
+    action,
+  ) async {
+    if (_closed || isClosed || isLoading || _relationOperation != null) return;
+    final owner = account;
+    if (!owner.isLogin) {
+      SmartDialog.showToast('账号未登录');
+      return;
+    }
+    if (loadingState.value.dataOrNull == null) {
+      SmartDialog.showToast('请先刷新空间信息');
+      return;
+    }
+    final operation = _relationOperation = Object();
+    final target = mid;
+    final generation = _generation;
+    try {
+      await action(owner, target, () => _owns(owner, target, generation));
+    } finally {
+      if (identical(_relationOperation, operation)) _relationOperation = null;
+    }
+  }
 
   Live? live;
   int? silence;
@@ -68,6 +143,7 @@ class MemberController extends CommonDataController<SpaceData, SpaceData?>
   @override
   void onInit() {
     super.onInit();
+    Accounts.mainChanges.addListener(_onAccountChanged);
     queryData();
   }
 
@@ -108,11 +184,12 @@ class MemberController extends CommonDataController<SpaceData, SpaceData?>
     tab2 = data.tab2;
     live = data.live;
     silence = card?.silence;
-    if ((data.ugcSeason?.count != null && data.ugcSeason?.count != 0) ||
-        data.series?.item?.isNotEmpty == true) {
-      hasSeasonOrSeries = true;
-    }
-    tab2?.retainWhere((item) => MemberTabType.contains(item.param!));
+    hasSeasonOrSeries =
+        (data.ugcSeason?.count ?? 0) > 0 ||
+        data.series?.item?.isNotEmpty == true;
+    tab2?.retainWhere(
+      (item) => item.param != null && MemberTabType.contains(item.param!),
+    );
     if (tab2?.isNotEmpty == true) {
       if (data.hasItem != true && tab2!.first.param == 'home') {
         // remove empty home tab
@@ -153,15 +230,14 @@ class MemberController extends CommonDataController<SpaceData, SpaceData?>
         );
       }
     }
-    if (mid == account.mid) {
-      spaceSetting = data.setting;
-    }
+    spaceSetting = mid == account.mid ? data.setting : null;
     loadingState.value = response;
     return true;
   }
 
   @override
   bool handleError(String? errMsg) {
+    _resetAccountData();
     tab2 = const [
       SpaceTab2(title: '动态', param: 'dynamic'),
       SpaceTab2(
@@ -185,93 +261,111 @@ class MemberController extends CommonDataController<SpaceData, SpaceData?>
 
   @override
   Future<LoadingState<SpaceData>> customGetData() => MemberHttp.space(
+    account: account,
     mid: mid,
     fromViewAid: fromViewAid,
   );
 
-  void blockUser(BuildContext context) {
-    if (!account.isLogin) {
-      SmartDialog.showToast('账号未登录');
-      return;
-    }
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('提示'),
-        content: Text(relation.value != 128 ? '确定拉黑UP主?' : '从黑名单移除UP主'),
-        actions: [
-          TextButton(
-            onPressed: Get.back,
-            child: Text(
-              '点错了',
-              style: TextStyle(color: Theme.of(context).colorScheme.outline),
-            ),
+  Future<void> blockUser(BuildContext context) =>
+      _runRelation((owner, target, current) async {
+        if (target == owner.mid || !context.mounted) return;
+        final wasBlocked = relation.value == 128;
+        final confirmed = await showDialog<bool>(
+          context: context,
+          builder: (dialogContext) => AlertDialog(
+            title: const Text('提示'),
+            content: Text(wasBlocked ? '从黑名单移除UP主' : '确定拉黑UP主?'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(false),
+                child: const Text('点错了'),
+              ),
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(true),
+                child: const Text('确认'),
+              ),
+            ],
           ),
-          TextButton(
-            onPressed: () {
-              Get.back();
-              _onBlock();
-            },
-            child: const Text('确认'),
-          ),
-        ],
-      ),
-    );
-  }
+        );
+        if (confirmed == true && current()) {
+          await _onBlock(owner, target, wasBlocked, current);
+        }
+      });
 
   void shareUser() {
     ShareUtils.shareText('https://space.bilibili.com/$mid');
   }
 
-  Future<void> _onBlock() async {
-    final isBlocked = relation.value == 128;
-    final res = await VideoHttp.relationMod(
-      mid: mid,
-      act: isBlocked ? 6 : 5,
+  Future<void> _onBlock(
+    Account owner,
+    int target,
+    bool wasBlocked,
+    bool Function() current,
+  ) async {
+    final result = await VideoHttp.relationMod(
+      account: owner,
+      mid: target,
+      act: wasBlocked ? 6 : 5,
       reSrc: 11,
     );
-    if (res.isSuccess) {
-      relation.value = isBlocked ? 0 : 128;
+    if (!current()) return;
+    if (result.isSuccess) {
+      relation.value = wasBlocked ? 0 : 128;
+    } else {
+      result.toast();
+      if (result is UnknownResult) await onReload();
     }
   }
 
-  void onFollow(BuildContext context) {
-    if (mid == account.mid) {
-      Get.toNamed('/editProfile');
-    } else if (relation.value == 128) {
-      _onBlock();
-    } else {
-      if (!account.isLogin) {
-        SmartDialog.showToast('账号未登录');
-        return;
-      }
-      RequestUtils.actionRelationMod(
-        context: context,
-        mid: mid,
-        isFollow: isFollow,
-        afterMod: (attribute) => relation.value = attribute,
-      );
-    }
-  }
+  Future<void> onFollow(BuildContext context) =>
+      _runRelation((owner, target, current) async {
+        if (!context.mounted) return;
+        if (target == owner.mid) {
+          Get.toNamed('/editProfile');
+        } else if (relation.value == 128) {
+          await _onBlock(owner, target, true, current);
+        } else {
+          await RequestUtils.actionRelationMod(
+            context: context,
+            account: owner,
+            mid: target,
+            isFollow: isFollow,
+            isCurrent: current,
+            afterMod: (attribute) {
+              if (current()) relation.value = attribute;
+            },
+          );
+        }
+      });
 
   @override
   void onClose() {
+    _closed = true;
+    _generation++;
+    Accounts.mainChanges.removeListener(_onAccountChanged);
     tabController?.dispose();
     super.onClose();
   }
 
-  Future<void> onRemoveFan() async {
-    final res = await VideoHttp.relationMod(mid: mid, act: 7, reSrc: 11);
-    if (res.isSuccess) {
+  Future<void> onRemoveFan() => _runRelation((owner, target, current) async {
+    if (owner.mid == target || isFollowed != 1) return;
+    final result = await VideoHttp.relationMod(
+      account: owner,
+      mid: target,
+      act: 7,
+      reSrc: 11,
+    );
+    if (!current()) return;
+    if (result.isSuccess) {
       isFollowed = null;
-      if (relation.value == 4) {
-        relation.value = 2;
-      }
+      if (relation.value == 4) relation.value = 2;
+      loadingState.refresh();
       SmartDialog.showToast('移除成功');
     } else {
-      res.toast();
+      result.toast();
+      if (result is UnknownResult) await onReload();
     }
-  }
+  });
 
   void onTapTab(int value) {
     if (tabController?.indexIsChanging == false) {
@@ -280,11 +374,29 @@ class MemberController extends CommonDataController<SpaceData, SpaceData?>
   }
 
   Future<void> vipExpAdd() async {
-    final res = await UserHttp.vipExpAdd();
-    if (res.isSuccess) {
-      SmartDialog.showToast('领取成功');
-    } else {
-      res.toast();
+    final owner = account;
+    if (_closed ||
+        isClosed ||
+        isLoading ||
+        _vipOperation != null ||
+        !owner.isLogin ||
+        owner.mid != mid ||
+        loadingState.value.dataOrNull == null) {
+      return;
+    }
+    final operation = _vipOperation = Object();
+    final target = mid;
+    final generation = _generation;
+    try {
+      final result = await UserHttp.vipExpAdd(account: owner);
+      if (!_owns(owner, target, generation)) return;
+      if (result.isSuccess) {
+        SmartDialog.showToast('领取成功');
+      } else {
+        result.toast();
+      }
+    } finally {
+      if (identical(_vipOperation, operation)) _vipOperation = null;
     }
   }
 }

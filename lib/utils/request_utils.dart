@@ -83,13 +83,28 @@ abstract final class RequestUtils {
     required bool isFollow,
     required ValueChanged<int>? afterMod,
     RelationData? followStatus,
+    bool Function()? isCurrent,
   }) async {
     final requestAccount = account ?? Accounts.main;
     bool current() =>
-        context.mounted && identical(requestAccount, Accounts.main);
+        context.mounted &&
+        identical(requestAccount, Accounts.main) &&
+        (isCurrent?.call() ?? true);
     if (mid == null || !current()) {
       return;
     }
+    void notify(int attribute) {
+      try {
+        afterMod?.call(attribute);
+      } catch (error, stackTrace) {
+        logger.w(
+          '关系已更新，本地回调失败',
+          error: error.runtimeType,
+          stackTrace: stackTrace,
+        );
+      }
+    }
+
     feedBack();
     if (!isFollow) {
       final res = await VideoHttp.relationMod(
@@ -101,7 +116,7 @@ abstract final class RequestUtils {
       if (!current()) return;
       if (res.isSuccess) {
         SmartDialog.showToast('关注成功');
-        afterMod?.call(2);
+        notify(2);
       } else {
         res.toast();
       }
@@ -120,14 +135,19 @@ abstract final class RequestUtils {
       if (context.mounted && current()) {
         bool isSpecialFollowed = followStatus!.special == 1;
         String text = isSpecialFollowed ? '移除特别关注' : '加入特别关注';
-        showDialog(
+        Future<void>? pendingAction;
+        void runAction(Future<void> Function() action) {
+          pendingAction ??= action();
+        }
+
+        await showDialog<void>(
           context: context,
-          builder: (context) => SimpleDialog(
+          builder: (dialogContext) => SimpleDialog(
             clipBehavior: Clip.hardEdge,
             contentPadding: const EdgeInsets.symmetric(vertical: 12),
             children: [
               DialogOption(
-                onPressed: () async {
+                onPressed: () => runAction(() async {
                   Get.back();
                   if (!current()) return;
                   final res = await MemberHttp.specialAction(
@@ -138,15 +158,15 @@ abstract final class RequestUtils {
                   if (!current()) return;
                   if (res.isSuccess) {
                     SmartDialog.showToast('$text成功');
-                    afterMod?.call(isSpecialFollowed ? 2 : -10);
+                    notify(isSpecialFollowed ? 2 : -10);
                   } else {
                     res.toast();
                   }
-                },
+                }),
                 child: Text(text, style: const TextStyle(fontSize: 14)),
               ),
               DialogOption(
-                onPressed: () async {
+                onPressed: () => runAction(() async {
                   Get.back();
                   if (!current()) return;
                   final result = await showModalBottomSheet<Set<int>>(
@@ -182,13 +202,13 @@ abstract final class RequestUtils {
                   );
                   if (current() && result != null) {
                     followStatus!.tag = result.toList();
-                    afterMod?.call(result.contains(-10) ? -10 : 2);
+                    notify(result.contains(-10) ? -10 : 2);
                   }
-                },
+                }),
                 child: const Text('设置分组', style: TextStyle(fontSize: 14)),
               ),
               DialogOption(
-                onPressed: () async {
+                onPressed: () => runAction(() async {
                   Get.back();
                   if (!current()) return;
                   final res = await VideoHttp.relationMod(
@@ -200,16 +220,17 @@ abstract final class RequestUtils {
                   if (!current()) return;
                   if (res.isSuccess) {
                     SmartDialog.showToast('取消关注成功');
-                    afterMod?.call(0);
+                    notify(0);
                   } else {
                     res.toast();
                   }
-                },
+                }),
                 child: const Text('取消关注', style: TextStyle(fontSize: 14)),
               ),
             ],
           ),
         );
+        await pendingAction;
       }
     }
   }

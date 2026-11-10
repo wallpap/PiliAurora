@@ -348,7 +348,9 @@ class _MemberPageState extends State<MemberPage> {
         if (_userController.account.isLogin &&
             _userController.account.mid != _mid) ...[
           AppPopupMenuItem(
-            onTap: () => _userController.blockUser(context),
+            onTap: _userController.scopedAction(
+              () => _userController.blockUser(context),
+            ),
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
@@ -362,7 +364,7 @@ class _MemberPageState extends State<MemberPage> {
           ),
           if (_userController.isFollowed == 1)
             AppPopupMenuItem(
-              onTap: _userController.onRemoveFan,
+              onTap: _userController.scopedAction(_userController.onRemoveFan),
               child: const Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
@@ -422,7 +424,7 @@ class _MemberPageState extends State<MemberPage> {
                     0) >
                 0)
               AppPopupMenuItem(
-                onTap: _userController.vipExpAdd,
+                onTap: _userController.scopedAction(_userController.vipExpAdd),
                 child: const Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
