@@ -214,6 +214,8 @@ Windows 保活页面内存回归：先执行 `pwsh -File lib/scripts/patch.ps1 w
 
 `image_lifecycle_test.dart` 用同一批 12 张图片检查 codec 创建上限、并发取帧和全部交付。`inactive_sliver_cache_test.dart` 直接使用生产 `InactiveFeedSliver`，保留滚动范围、资源收缩和恢复像素回归。`retained_layer_release_test.dart` 保留生产清理与实际 TabActivity、Texture、EngineLayer、viewport clip 的回归及共用场景中的策略对照。
 
+`image_cache_lifecycle_test.dart` 使用生产 `CachedImageCache` 检查离页后才完成加载的动图回收、共享监听、静态 LRU、缩放键、显式保活、在途取帧和同键替换隔离。真实 WebP 用例检查原生解码器离页销毁及重新打开，失败用例检查缩放图片的文件／取帧错误清理。
+
 ## 服务与诊断
 
 `grpc/request_test.dart` 覆盖查询／写入声明、账号绑定前后一致的网络失败结果、音频写入不重试、前台／后台解码错误、业务拒绝码与状态消息、消息 unknown、弹幕消费取消及额度归还。
@@ -244,6 +246,11 @@ Windows 保活页面内存回归：先执行 `pwsh -File lib/scripts/patch.ps1 w
 
 `plugin/pl_player/playback/native_shutdown_test.dart` 使用真实原生运行时与模拟 Player/输出，检查 stop 成功及回执超时后继续等待完整卸载证据、输出释放回执和 Player 销毁的顺序，并覆盖 open 提交前失败和提交后的迟到文件身份。
 
+该文件另在 Windows 检查降画质等待旧文件卸载与渲染器回收回执、同尺寸复用、未知尺寸
+的新源与同一源恢复、迟到原生几何、画质与超分合并重建，以及失败后的重试。实际占用
+使用[离线资源探针](../tool/probes/README.md#windows-播放器资源回收探针)按目标设备对照：
+首次 4K 加载通过累计纹理创建上限检查多余扩容，全屏往返另行采样窗口呈现开销。
+
 `plugin/pl_player/playback/controller_recovery_test.dart` 将真实播放器控制器、会话与网络/音轨恢复器接到模拟原生输入，检查合流、分轨、只听音频、纯视频和本地媒体在断流、缓存耗尽、静音、暂停、跳转、切源、完成及关闭时的恢复协调；恢复预算矩阵见 `playback_session_test.dart`。
 
 EOF 回归覆盖 keep-open 播放结束通知的文件归属、重复合并与 seek 后再次结束，以及网络点播提前 EOF 的续播位置、暂停意图和三次恢复预算。正常片尾容许两秒的时间戳尾差；未知时长与直播沿用完成事件。设备探针 `tool/probes/playback/session_device_acceptance.dart` 另检查真实片尾通知。
@@ -259,6 +266,8 @@ EOF 回归覆盖 keep-open 播放结束通知的文件归属、重复合并与 s
 `pages/video/playback_lifecycle_test.dart` 覆盖查询与媒体绑定、旧响应取消、重载意图和字幕归属，以及重选来源成功后确认、连续选择合并、失败重试和离页恢复；`playback_source_test.dart` 检查候选优先级及缺失来源／编码的安全异常。`pages/live_room/source_results_test.dart` 检查切流／画质的加载回执、偏好保存部分成功、迟到结果隔离和确认来源恢复；`controller_test.dart` 继续覆盖消息连接 single-flight、token/history 代次、暂停／恢复及关闭后的迟到回调。
 
 `services/audio_session_test.dart` 覆盖 duck 重复开始、结束先于音量命令完成及用户新音量保护；`audio_handler_lifecycle_test.dart` 覆盖多页面媒体归属、最后一项释放 keepalive、音频未就绪不触发底层视频，以及停止回执不清新媒体。以上使用受控请求与播放器替身，真实音视频、耳机和系统媒体控制需设备验证。
+
+`pages/audio/playback_results_test.dart` 还核对独立音频的初始化、open、关闭与实际销毁回执顺序，以及创建／打开／释放失败事件。销毁尚未完成或失败时不得记录 `audio.shutdown.released`，事件不包含媒体 URL 和异常正文。原生创建失败的用例检查清理前本页禁止再次创建、关闭保留租约、后续页面等待交接后才分配 Player，以及清理成功后的显式重试。
 
 播放器会话、候选恢复和命令序列回归集中在 `plugin/pl_player/playback/`；其中 `playback_session_test.dart` 检查加载完成后仍允许当前媒体的业务回写，并在新加载或 owner 失效后拒绝旧结果。`tool/run-ci-tests.ps1` 显式选择关键回归，完整目录测试按需运行。deadline 验收使用虚拟时钟；播放／暂停预算同时检查原生调用未返回和排队等待，超时后仍串行落实最新意图。
 

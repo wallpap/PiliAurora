@@ -29,7 +29,7 @@
 - `lib/services/blocked_authors.dart` 按主账号同步完整黑名单。同步与首页下载并行，发布前完成过滤；管理页的局部名单不覆盖完整缓存，同步失败沿用该账号缓存，应用内拉黑或解除即时更新。
 - `lib/services/cooperative_authors.dart` 处理合作作者；`rights.is_cooperation`、`is_union_video` 等明确标志触发补查，已知名单直接复用，否则查询详情的 `staff`。请求合并，共用两个并发名额，成功缓存一小时、最多 256 条，失败缓存一分钟；黑名单同步缓存五分钟。
 - 首页普通卡片先显示，合作卡片按检查结果局部更新；增删时才更新列表，卡片对象身份保留图片子树。过滤入口在 `common/discovery_list_controller.dart`，作者判定在 `lib/utils/media_author_filter.dart`，用户范围见[黑名单屏蔽](../guides/content.md#黑名单屏蔽)。
-- `TabActivity`／`TickerMode` 标记活动标签，隐藏页卸载 `CachedImage` 并保留数据和滚动位置。`NetworkImgLayer` 为 B 站质量型缩略图补充卡片尺寸，已有裁剪参数及原图查看／下载沿用原构图或地址。缓存字节不等于全部原生纹理占用，内存与耗时需实测。
+- `TabActivity`／`TickerMode` 标记活动标签，隐藏页卸载 `CachedImage` 并保留数据和滚动位置。`CachedImageCache` 在动图最后一个监听退出后释放缓存句柄；静态帧沿用 LRU，显式保活句柄可以保留暂停动画。离页后才完成的文件加载，会在首帧完成后回收无人监听的动图。`NetworkImgLayer` 为 B 站质量型缩略图补充卡片尺寸，已有裁剪参数及原图查看／下载沿用原构图或地址。缓存字节不等于全部原生纹理占用，内存与耗时需实测。
 
 ## 消息、私信与分享
 

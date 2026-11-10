@@ -6,7 +6,7 @@
 | --- | --- |
 | `android/` | 暂停旋转测试入口、画面检查脚本和 Java 帧栅栏检查。 |
 | `windows/` | 窗口回调、尺寸通道、纹理首帧和输出确认探针。 |
-| `playback/` | 媒体加载烟测、跳转命令、会话验收与 Windows 超分切换。 |
+| `playback/` | 媒体加载烟测、跳转命令、会话验收与 Windows 画质／超分资源回收。 |
 | `event_loop/` | 事件循环生命周期、ABI 检查与配套 C++ mock。 |
 
 运行前查看脚本参数和源码，确认目标平台、输入文件及输出目录。工具结果只覆盖它实际检查的内容；应用行为还要按[构建与测试说明](../../doc/development/build-and-test.md)在目标平台验证。
@@ -542,6 +542,63 @@ python tool/probes/windows/windows_renderer_release_probe.py
 ```
 
 需要支持 C++17 的 `g++`，可用 `--compiler` 指定路径；`--source-ref` 可选择用于对照的 Git 提交。生成文件位于系统临时目录，运行后清理。
+
+## Windows 播放器资源回收探针
+
+`playback/windows_resource_lifecycle.dart` 使用生产 Session、Runtime、libmpv 与 ANGLE，
+离线执行指定的画质和超分序列。音频输出为空，不读取账号或清理缓存。每阶段静置后
+采集三个样本，分别记录进程内存、DXGI 预算、输出纹理名义字节和原生创建／释放
+计数。关闭后要求 `released` 成功、全部原生资源计数归零。
+
+配置写入本地 JSON，媒体必须是本地文件并有持续运动、音轨及足够时长；以下路径仅示例：
+
+```json
+{
+  "output": "E:/probe/results.json",
+  "cases": [
+    {"name": "low.initial", "source": "E:/probe/720.mp4", "width": 1280, "height": 720},
+    {"name": "high", "source": "E:/probe/2160.mp4", "width": 3840, "height": 2160},
+    {"name": "low.afterHigh", "source": "E:/probe/720.mp4", "width": 1280, "height": 720, "seconds": 12},
+    {"name": "sr.on", "source": "E:/probe/720.mp4", "mode": "quality"},
+    {"name": "sr.off", "source": "E:/probe/720.mp4", "seconds": 12}
+  ],
+  "memoryChecks": [
+    {"baseline": "low.initial", "after": "low.afterHigh", "maxGrowthMiB": 64}
+  ]
+}
+```
+
+`mode` 支持 `disable`（默认）、`efficiency` 和 `quality`；`seconds` 默认 5。
+`width/height` 模拟应用的源尺寸提示，缺省则测试未知尺寸策略。`resetBeforeLoad: true`
+仅用于单独重建的干预对照。`memoryChecks` 为可选的设备门限，按阶段三个 Private 样本
+的中位数计算增量；示例中的 64 MiB 仅供本机对照。
+
+可选 `traceIntervalMs` 启用加载与播放阶段的数值采样，默认关闭；`checkFrames: false`
+用于排除截图读回影响的单变量对照。阶段的 `maxCreatedTextures` 检查累计 D3D 纹理
+创建数，例如单次首次加载未知尺寸的 4K 时设为 4，可检出先分配完整 4K、再限幅
+的多余纹理对。该计数不包含 libmpv 内部纹理或硬解表面。
+
+阶段可添加 `windowTransitions`，在媒体连续播放期间测试全屏和恢复：
+
+```json
+"windowTransitions": [
+  {"name": "fullscreen1", "fullscreen": true, "seconds": 5},
+  {"name": "back1", "fullscreen": false, "seconds": 5}
+]
+```
+
+相应样本名为 `<阶段>.fullscreen1.0` 等，`memoryChecks` 可比较重复恢复阶段。
+该配置操作探针自己的窗口，期间不重载媒体；窗口呈现开销与固定视频输出开销分别核对。
+
+```powershell
+pwsh -NoProfile -File tool/build.ps1 -Platform windows -Mode release -Target tool/probes/playback/windows_resource_lifecycle.dart -SkipPubGet
+$env:PILIAURORA_PLAYER_PROBE_CONFIG = 'E:/probe/config.json'
+& build/windows/x64/runner/Release/PiliAurora.exe
+```
+
+同时检查退出码、`passed`、`memoryChecks` 和每阶段实际源／输出尺寸、解码器。不同内存
+口径不能相加；进程内存未回到冷启动值不等于输出泄漏。完成后以常规构建入口恢复
+`lib/main.dart`。此入口不覆盖线上选画质 UI、多窗口、Android、其他驱动或实际扬声器。
 
 ## Windows Profile VM 堆归因
 

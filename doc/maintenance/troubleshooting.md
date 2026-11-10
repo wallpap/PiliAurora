@@ -208,6 +208,12 @@ Windows runner 清单启用 SegmentHeap，支持版本从 Windows 10 2004 起；
 
 `nativeMemory` 每 5 秒读取 media_kit_video 的进程级生命周期计数，包含输出、render context、自有 D3D device、EGL context/Surface、两张 BGRA 纹理、软件缓冲及待 Flutter 注销回执。created/released 为累计数量，count 为当前持有数；播放器页面卸载后仍可读取。estimatedBytes 仅为插件自有纹理/缓冲的名义大小，不涵盖驱动、解码器、Flutter 导入侧和引擎资源，不能与 RSS、Private 或 GPU usage 相加。驱动可在资源释放后保留高水位内存，不能只用 count=0 判断进程已经回落。
 
+独立音频 Player 的生命周期事件位于播放器日志的 `audio` 类别，按 `audioOwnerId`、`playerId` 和 `generation` 关联 `audio.initialize.*`、`audio.open.*` 与 `audio.shutdown.*`。`requested` 表示页面关闭，`disposing` 表示创建和 open 已排空、开始销毁，`released` 才确认资源释放。释放失败记录 `failed`，并保留原有屏障。
+
+原生创建失败后若 `creationCleanupPending=true`，本页拒绝再次分配 Player，关闭时通过 `waitingForCreation` 等待该句柄清理；`audio.initialize.cleanupReleased` 确认后可显式重试。后续页面先完成租约交接，再分配 Player。迟到的 open 完成仍记录原代次，不代表页面接受了该结果。事件不记录媒体地址或原始异常正文，视频 runtime 的释放计数不能替代音频回执。
+
+图片的像素缓存预算不包含动图 codec 的全部原生成本。`CachedImageCache` 在最后一个监听退出后释放该动图的缓存句柄；离页后才完成的文件加载，也会在首帧识别后执行回收。共享监听和显式 keepAlive 继续保留各自持有的资源，静态帧沿用 LRU。在途取帧完成后才销毁原生 codec，调用 evict 的时刻与实际释放时刻须分别核对。定向回归见[图片与页面保活](../../test/README.md#图片与页面保活)。
+
 `graphicsHandles` 统计观测启用后创建的 Dart Image/Picture 句柄，按来源分组写入
 `memory.graphics.handles`。Image 的名义字节为宽×高×4，clone 分别计数，不能当作底层
 像素的唯一活量。GC finalizer 仅提供尽力观测，不证明原生或 GPU 已释放；启用前创建的

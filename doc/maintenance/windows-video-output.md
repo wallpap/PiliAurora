@@ -41,6 +41,21 @@ GL 纹理状态。真实直播的首次播放、刷新与纹理像素验证见
 
 输出尺寸策略和截图交接位于 [`view.dart`](../../lib/plugin/pl_player/view/view.dart) 与 [`video_output_resizer.dart`](../../lib/plugin/pl_player/utils/video_output_resizer.dart)。Windows 首次检测 Flutter 窗口所在显示器的物理尺寸并缓存上限，窗口布局变化由 Flutter 缩放。输出限幅降低渲染目标的开销，媒体解码仍使用源分辨率。
 
+Windows 尚无源几何时使用 1×1 占位输出，收到当前文件的原生几何后直接设置最终
+限幅尺寸，并等待该尺寸的首帧回执才完成加载。这可避免尺寸观察事件先创建完整 4K
+输出、随后又缩小的多余扩容；媒体仍按源分辨率解码。
+
+Windows 降画质时，仅缩小输出纹理仍可能保留渲染器此前使用的高分辨率中间资源。
+运行时保存当前文件的原生源几何；下一次加载的尺寸提示变小时，在旧媒体完整卸载后、
+新媒体 open 前重建 render context 与 ANGLE。尺寸提示只决定是否回收，最终输出仍由
+新文件的原生几何确认。转为纯音频或新源尺寸未知时同样回收；同尺寸切源及尺寸未知的
+同源恢复复用渲染器。与超分变更重合时只重建一次，成功后记录 `media.renderer.reset`。
+回收失败按加载失败处理，显式重试仍须重新取得回收回执。
+
+判断内存尖峰时同时核对全屏切换。解码器、输出尺寸及原生计数不变时，Flutter 窗口
+呈现和合成仍可能增加工作集。进程 Private、VirtualQuery 页分类、DXGI 预算和输出纹理
+名义字节分别观测，不能相加，也不能将写合并页直接命名为某个纹理或驱动对象。
+
 Windows 进入原生全屏前，先切换播放器全屏状态并等待 Flutter 提交该帧布局，再调整窗口尺寸，避免新窗口尺寸先展示普通详情布局。此等待确认 UI 提交，不代表 GPU 已完成呈现；播放器元素与纹理继续复用。回归见 `test/plugin/pl_player/fullscreen_transition_test.dart`，实际过渡闪屏仍需目标设备验证。
 
 截图交接在收到对应 Flutter 帧的 raster 回执后才提交原生 resize。等待回执超过 3 秒时取消本次调整、撤掉截图并继续显示原生纹理；原生 resize 已提交后的截图仍保留到新输出确认，或恢复旧几何完成。
@@ -66,8 +81,30 @@ Flutter 窗口的最终呈现由引擎负责。[Windows 帧节奏引擎](../../t
 相关验证入口：
 
 - `test/plugin/pl_player/playback/shader_updates_test.dart`：shader 更新顺序与失败后恢复 `vo`。
+- `test/plugin/pl_player/playback/native_shutdown_test.dart`：降画质回收、卸载屏障、同尺寸复用、与超分合并及失败重试。
 - `test/plugin/pl_player/video_output/`：尺寸策略、调度、截图交接与帧确认。
 - `tool/probes/windows/windows_texture_frame_probe.py`：模拟纹理首帧和重建后的帧发布条件。
 - `tool/probes/playback/windows_shader_switch.dart`：实际 Flutter、ANGLE、libmpv 的超分切换；运行参数见[平台探针](../../tool/probes/README.md#windows-超分切换探针)。
+- `tool/probes/playback/windows_resource_lifecycle.dart`：离线切画质、超分与释放的分阶段内存对照；见[资源回收探针](../../tool/probes/README.md#windows-播放器资源回收探针)。
 
 历史本机测量中，暂停重建出现过约 0.33 秒时间线回退。2026-11-05 的生产会话探针使用长 GOP AV1，通过 8 个阶段、6 次实际重载，覆盖 D3D11 硬解、有效纹理、暂停恢复、音频时间线和超分资源回收。探针使用空音频输出，实际扬声器、长时间播放和其他 GPU 驱动仍需单独验证。
+
+### 2026-11-11 本机资源回收结果
+
+本次使用 AMD Radeon(TM) Graphics、本地 H.264/AAC 运动视频和空音频输出，实际解码器
+为 `d3d11va`，输出物理上限为 2560×1440。生产会话探针得到以下结果：
+
+| 场景 | 结果 |
+| --- | --- |
+| 720p → 4K → 720p | 相对各自首次 720p 基线的 Private 中位增量，修复前为 138.96 MiB，修复后为 23.25 MiB；同尺寸重载没有增加 render context。 |
+| 首次加载未知尺寸的 4K | 累计插件 D3D 纹理创建数由 6 降为 4，最终输出为 2560×1440，画面非空。 |
+| 质量／效率超分关闭 | 两档关闭后均回到本机相对门限内；降画质、同尺寸重载及两档超分关闭共四项门限通过。 |
+| 两次全屏往返 | 两个恢复阶段的 Private 中位差为 4.59 MiB；全程累计输出纹理为 4、render context 为 1。 |
+
+上述探针关闭后，插件原生资源计数全部归零。内存相对门限为 64 MiB，仅用于本机对照；
+不同进程运行间的绝对 Private 仍有明显波动。相关 420 项主机测试、8 个 Dart 文件静态
+分析和正常应用 Release 构建均通过。
+
+4K 解码／渲染工作集、全屏呈现峰和多个独立进程的总占用仍会出现。短时 RW 峰及历史
+匿名存续块还缺少分配调用栈，因此本次结果只确认上述两处输出资源问题的修复。完整线上
+选画质 UI、多窗口全量回放、Android 真机、其他驱动和实际扬声器仍需分别验收。
