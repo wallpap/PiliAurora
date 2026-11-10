@@ -135,11 +135,13 @@ abstract final class ReplyHttp {
   }
 
   static Future<LoadingState<List<Package>?>> getEmoteList({
+    Account? account,
     String? business,
   }) {
     return Request().requestApi(
       Api.myEmote,
       kind: ApiCallKind.query,
+      options: Options(extra: {'account': account ?? Accounts.main}),
       decode: (body) => EmoteModelData.fromJson(body['data']).packages,
       queryParameters: {
         'business': business ?? 'reply',
