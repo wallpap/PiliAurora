@@ -90,7 +90,9 @@ fvm flutter test test/services/diagnostics/ test/pages/about/diagnostics_page_te
 
 `pages/member/operation_results_test.dart` 检查成员主页面的账号／目标／刷新归属、关系写入和经验领取互斥；`pages/member/child_list_results_test.dart` 与 `pages/member_pgc/controller_results_test.dart` 检查成员视频／图文／Web／番剧子列表的账号订阅、查询失效和页面释放，以及继续播放的迟到结果。番剧页独立查询，不消费无账号归属的父缓存。
 
-`utils/app_scheme_test.dart` 与 `utils/url_navigation_results_test.dart` 检查链接入口同步／异步错误消费、静默探测、相对重定向、分 P 查询空结果及安全失败提示；`utils/navigation_lifecycle_results_test.dart` 通过生产 Get 路由验证最后一次导航生效、离页后返回仍丢弃旧查询、动态／番剧／课程／短链／播放列表迟到结果，以及空结果收尾和其他加载提示的隔离；实名查询还覆盖账号替换和结果弹窗关闭。UGC 绑定完整确认流、系统外链启动与真实 WebView 仍需专项验收。
+`utils/app_scheme_test.dart` 与 `utils/url_navigation_results_test.dart` 检查链接入口同步／异步错误消费、静默探测、相对重定向、分 P 查询空结果及安全失败提示；`utils/navigation_lifecycle_results_test.dart` 通过生产 Get 路由和普通 MaterialPageRoute 验证最后一次导航生效、离页后返回及路由移除后的旧查询失效、确认弹窗关闭后继续交付，以及空结果收尾和其他加载提示的隔离；实名查询还覆盖账号替换和结果弹窗关闭。UGC 绑定完整确认流、系统外链启动与真实 WebView 仍需专项验收。
+
+`pages/member/shortcut_action_test.dart` 检查空间快捷方式的资料校验、下载失败重试、原生失败消费、在途互斥、来源失效和独立提示清理。系统仅接收创建请求，启动器最终添加与 Android 外链启动仍需设备验收。
 
 `pages/webview/action_results_test.dart` 使用插件通道替身检查菜单与脚本 Future 失败消费、新加载解除旧菜单锁、旧 controller／离页后的回调，以及复制、缓存清理和返回的安全提示。原生网页、脚本执行与缓存实际效果需设备验收。
 
@@ -99,6 +101,8 @@ fvm flutter test test/services/diagnostics/ test/pages/about/diagnostics_page_te
 `pages/audio/playback_results_test.dart` 检查空播放响应／地址、乱序查询、账号替换、播放器创建失败重试，以及旧原生打开排空后才打开并确认新曲目；`playlist_order_test.dart` 检查列表初始化／排序重试、切号隔离、分页互斥去重、游标限界及旧行快照。`pages/setting/cdn_probe_results_test.dart` 检查采样为空、短响应完成和测速异常的安全终态。音频和 HTTP 使用受控替身，真实媒体服务、原生播放及 CDN 速度需设备验证。
 
 `pages/audio/control_results_test.dart` 检查速度／音量／进度等待原生回执、失败重试与设置保存部分成功、账号替换、系统命令错误交付及旧页面关闭不清新回调；`playback_results_test.dart` 另检查迟到 seek 不污染新歌、旧曲目不抢占新通知。音频页独立 Player 的系统焦点接入仍待补齐，测试不代表真实来电或耳机行为已验收。
+
+`pages/audio/interaction_results_test.dart` 检查互动账号与目标快照、共用写入锁、三连部分成功、投币／收藏面板来源失效、待确认结果，以及空分 P 的协议目标。分享固定打开面板时的曲目快照；`pages/video/pgc_sharing_test.dart` 另检查切换分集后仍分享原分集。
 
 `pages/video/cast_results_test.dart` 检查投屏地址查询互斥、失败后的重试与独立加载提示、换分 P 不打开旧设备页，以及离页返回仍丢弃旧错误。投屏服务交互和设备发现另见 DLNA 对应回归；真实局域网和电视设备仍需验收。
 
@@ -127,6 +131,8 @@ fvm flutter test test/services/diagnostics/ test/pages/about/diagnostics_page_te
 `http/pgc_response_test.dart` 覆盖番剧 11 个接口的业务码、解析原因、写入待确认、账号／CSRF、可空内容和追番状态类型。`pages/pgc/operation_results_test.dart` 覆盖时间表部分失败与日期合并、乱序／关闭、点评分页游标与去重、赞踩／删除互斥和未知计数，以及提交草稿与迟到面板。真实评分写入与番剧播放仍需另行验收。
 
 `http/metadata_response_test.dart` 与 `pages/metadata/` 覆盖音乐／赛事响应、可选封面和评论、空赛事、重复加载、乱序与账号隔离；音乐页面检查加载、错误重试和无评论降级，点赞检查在途禁用、未知计数与写入待确认，旧详情的评论不覆盖刷新后的空状态。
+
+`pages/metadata/music_video_card_test.dart` 检查音乐推荐卡片缺失文案／标识、空分 P、无效 CID、服务失败重试，以及切号和离页返回后的迟到查询。Android 音乐应用打开失败回退复制标题，实际启动需设备验收。
 
 `http/video_reporting_results_test.dart` 检查四个后台上报的成功、拒绝、损坏响应／传输待确认、写入禁重试及账号／CSRF 快照；播放器历史暂停与退出登录检查见 `plugin/pl_player/playback/controller_recovery_test.dart` 的“历史上报”用例。
 
