@@ -488,27 +488,53 @@ class UgcIntroController extends CommonIntroController with ReloadMixin {
   }
 
   // 修改分P或番剧分集
+  int _episodeChange = 0;
+
   Future<bool> onChangeEpisode(
     BaseEpisodeItem episode, {
     bool isStein = false,
   }) async {
+    if (isClosed) return false;
+    final version = ++_episodeChange;
+    final account = Accounts.heartbeat;
+    final mainAccount = Accounts.main;
+    final source = (bvid, cid.value);
+    final videoSource = (videoDetailCtr.bvid, videoDetailCtr.cid.value);
+    final ownsPlayback = videoDetailCtr.playbackOwner.guard();
+    bool current() =>
+        !isClosed &&
+        version == _episodeChange &&
+        identical(account, Accounts.heartbeat) &&
+        identical(mainAccount, Accounts.main) &&
+        source == (bvid, cid.value) &&
+        videoSource == (videoDetailCtr.bvid, videoDetailCtr.cid.value) &&
+        ownsPlayback();
     try {
+      if (!current()) return false;
       final String bvid = episode.bvid ?? this.bvid;
       final int aid = episode.aid ?? IdUtils.bv2av(bvid);
       int? cid = episode.cid;
+      final String? cover = episode.cover;
       Dimension? dimension;
-      if (cid == null) {
-        if (await SearchHttp.ab2cWithDimension(aid: aid, bvid: bvid)
-            case final res?) {
-          cid = res.cid;
-          dimension = res.dimension;
+      if (cid == null || cid <= 0) {
+        final result = await SearchHttp.pageWithDimension(
+          account: account,
+          aid: aid,
+          bvid: bvid,
+        );
+        if (!current()) return false;
+        if (result is Error) {
+          result.toast();
+          return false;
         }
+        cid = result.dataOrNull?.cid;
+        dimension = result.dataOrNull?.dimension;
       }
-      if (cid == null) {
+      if (!current()) return false;
+      if (cid == null || cid <= 0) {
+        SmartDialog.showToast('该视频暂无可播放分 P');
         return false;
       }
-
-      final String? cover = episode.cover;
 
       // 重新获取视频资源
       if (videoDetailCtr.isPlayAll) {
@@ -590,7 +616,8 @@ class UgcIntroController extends CommonIntroController with ReloadMixin {
       queryOnlineTotal();
       return true;
     } catch (e, stackTrace) {
-      logger.w('ugc onChangeEpisode: $e', error: e, stackTrace: stackTrace);
+      logger.w('切换视频分 P 失败', error: e.runtimeType, stackTrace: stackTrace);
+      if (current()) SmartDialog.showToast('切换分 P 失败，请重试');
       return false;
     }
   }

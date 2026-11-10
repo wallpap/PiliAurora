@@ -299,17 +299,49 @@ class PgcIntroController extends CommonIntroController {
   }
 
   // 修改分P或番剧分集
+  int _episodeChange = 0;
+
   Future<bool> onChangeEpisode(BaseEpisodeItem episode) async {
+    if (isClosed) return false;
+    final version = ++_episodeChange;
+    final account = Accounts.heartbeat;
+    final mainAccount = Accounts.main;
+    final source = (bvid, cid.value, epId);
+    final videoSource = (videoDetailCtr.bvid, videoDetailCtr.cid.value);
+    final ownsPlayback = videoDetailCtr.playbackOwner.guard();
+    bool current() =>
+        !isClosed &&
+        version == _episodeChange &&
+        identical(account, Accounts.heartbeat) &&
+        identical(mainAccount, Accounts.main) &&
+        source == (bvid, cid.value, epId) &&
+        videoSource == (videoDetailCtr.bvid, videoDetailCtr.cid.value) &&
+        ownsPlayback();
     try {
+      if (!current()) return false;
       final int epId = episode.epId ?? episode.id!;
       final String bvid = episode.bvid ?? this.bvid;
       final int aid = episode.aid ?? IdUtils.bv2av(bvid);
-      final int? cid =
-          episode.cid ?? await SearchHttp.ab2c(aid: aid, bvid: bvid);
-      if (cid == null) {
+      final String? cover = episode.cover;
+      int? cid = episode.cid;
+      if (cid == null || cid <= 0) {
+        final result = await SearchHttp.pageWithDimension(
+          account: account,
+          aid: aid,
+          bvid: bvid,
+        );
+        if (!current()) return false;
+        if (result is Error) {
+          result.toast();
+          return false;
+        }
+        cid = result.dataOrNull?.cid;
+      }
+      if (!current()) return false;
+      if (cid == null || cid <= 0) {
+        SmartDialog.showToast('该分集暂无可播放内容');
         return false;
       }
-      final String? cover = episode.cover;
 
       // 重新获取视频资源
       this.epId = epId;
@@ -349,7 +381,8 @@ class PgcIntroController extends CommonIntroController {
       queryVideoIntro(episode as EpisodeItem);
       return true;
     } catch (e, stackTrace) {
-      logger.w('pgc onChangeEpisode: $e', error: e, stackTrace: stackTrace);
+      logger.w('切换分集失败', error: e.runtimeType, stackTrace: stackTrace);
+      if (current()) SmartDialog.showToast('切换分集失败，请重试');
       return false;
     }
   }
