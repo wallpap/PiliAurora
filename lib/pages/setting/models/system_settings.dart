@@ -8,6 +8,7 @@ import 'package:material_ui/material_ui.dart' hide RefreshIndicator;
 import 'package:pili_aurora/common/widgets/dialog/simple_dialog_option.dart';
 import 'package:pili_aurora/pages/main/controller.dart';
 import 'package:pili_aurora/pages/setting/models/model.dart';
+import 'package:pili_aurora/pages/setting/widgets/setting_save.dart';
 import 'package:pili_aurora/pages/setting/widgets/clear_cache_item.dart';
 import 'package:pili_aurora/pages/setting/widgets/doc_provider_item.dart';
 import 'package:pili_aurora/pages/setting/widgets/slider_dialog.dart';
@@ -239,9 +240,14 @@ Future<void> _showReplyCountDialog(
     ),
   );
   if (res != null) {
-    await GStorage.setting.put(SettingBoxKey.retryCount, res.toInt());
-    setState();
-    SmartDialog.showToast('重启生效');
+    if (!context.mounted) return;
+    await saveSetting(
+      key: SettingBoxKey.retryCount,
+      write: () => GStorage.setting.put(SettingBoxKey.retryCount, res.toInt()),
+      apply: setState,
+      canPresent: () => context.mounted,
+      successMessage: '重启生效',
+    );
   }
 }
 
@@ -262,9 +268,14 @@ Future<void> _showReplyDelayDialog(
     ),
   );
   if (res != null) {
-    await GStorage.setting.put(SettingBoxKey.retryDelay, res.toInt());
-    setState();
-    SmartDialog.showToast('重启生效');
+    if (!context.mounted) return;
+    await saveSetting(
+      key: SettingBoxKey.retryDelay,
+      write: () => GStorage.setting.put(SettingBoxKey.retryDelay, res.toInt()),
+      apply: setState,
+      canPresent: () => context.mounted,
+      successMessage: '重启生效',
+    );
   }
 }
 
@@ -314,16 +325,28 @@ void _showProxyDialog(BuildContext context) {
           ),
         ),
         TextButton(
-          onPressed: () {
-            Get.back();
-            GStorage.setting.put(
-              SettingBoxKey.systemProxyHost,
-              systemProxyHost,
+          onPressed: () async {
+            final port = int.tryParse(systemProxyPort);
+            if (systemProxyHost.trim().isEmpty ||
+                port == null ||
+                port < 1 ||
+                port > 65535) {
+              SmartDialog.showToast('请输入有效的 Host 和 1–65535 范围内的 Port');
+              return;
+            }
+            final saved = await saveSetting(
+              key: SettingBoxKey.systemProxyHost,
+              write: () => GStorage.setting.putAll({
+                SettingBoxKey.systemProxyHost: systemProxyHost.trim(),
+                SettingBoxKey.systemProxyPort: systemProxyPort,
+              }),
+              canPresent: () => context.mounted,
             );
-            GStorage.setting.put(
-              SettingBoxKey.systemProxyPort,
-              systemProxyPort,
-            );
+            if (saved &&
+                context.mounted &&
+                (ModalRoute.of(context)?.isCurrent ?? false)) {
+              Navigator.pop(context);
+            }
           },
           child: const Text('确认'),
         ),
@@ -358,14 +381,23 @@ void _showCacheDialog(BuildContext context, VoidCallback setState) {
           onPressed: () async {
             try {
               final val = num.parse(valueStr);
-              Get.back();
-              await GStorage.setting.put(
-                SettingBoxKey.maxCacheSize,
-                val * 1024 * 1024,
+              if (!val.isFinite || val < 0) throw const FormatException();
+              final saved = await saveSetting(
+                key: SettingBoxKey.maxCacheSize,
+                write: () => GStorage.setting.put(
+                  SettingBoxKey.maxCacheSize,
+                  val * 1024 * 1024,
+                ),
+                apply: setState,
+                canPresent: () => context.mounted,
               );
-              setState();
-            } catch (e) {
-              SmartDialog.showToast(e.toString());
+              if (saved &&
+                  context.mounted &&
+                  (ModalRoute.of(context)?.isCurrent ?? false)) {
+                Navigator.pop(context);
+              }
+            } on FormatException {
+              SmartDialog.showToast('请输入有效的非负缓存大小');
             }
           },
           child: const Text('确定'),

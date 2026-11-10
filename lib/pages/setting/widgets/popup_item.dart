@@ -1,8 +1,14 @@
+import 'dart:async';
+
+import 'package:pili_aurora/pages/setting/widgets/setting_save.dart';
+
+import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
+import 'package:pili_aurora/services/logger.dart';
 import 'package:pili_aurora/common/widgets/app_select_field.dart';
 import 'package:pili_aurora/common/widgets/flutter/list_tile.dart';
 import 'package:material_ui/material_ui.dart' hide ListTile;
 
-typedef PopupMenuItemSelected<T> = void Function(
+typedef PopupMenuItemSelected<T> = FutureOr<void> Function(
   T value,
   VoidCallback setState,
 );
@@ -40,6 +46,34 @@ class PopupListTile<T> extends StatefulWidget {
 
 class _PopupListTileState<T> extends State<PopupListTile<T>> {
   final _menuController = MenuController();
+  bool _busy = false;
+
+  Future<void> _select(T value) async {
+    if (_busy) return;
+    final source = widget;
+    setState(() => _busy = true);
+    try {
+      bool isCurrent() =>
+          mounted &&
+          identical(widget, source) &&
+          (ModalRoute.of(context)?.isCurrent ?? true);
+      await withSettingPresentation(
+        isCurrent,
+        () => source.onSelected(value, () {
+          if (mounted && identical(widget, source)) _refresh();
+        }),
+      );
+    } catch (error, stack) {
+      logger.w('设置选择失败', error: error.runtimeType, stackTrace: stack);
+      if (mounted &&
+          identical(widget, source) &&
+          (ModalRoute.of(context)?.isCurrent ?? true)) {
+        SmartDialog.showToast('设置保存失败，请重试');
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
 
   void _refresh() {
     if (mounted) {
@@ -51,7 +85,7 @@ class _PopupListTileState<T> extends State<PopupListTile<T>> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final (value, descStr) = widget.value();
-    final enabled = widget.enabled && widget.options.isNotEmpty;
+    final enabled = widget.enabled && !_busy && widget.options.isNotEmpty;
     return ListTile(
       dense: widget.dense,
       safeArea: widget.safeArea,
@@ -78,7 +112,7 @@ class _PopupListTileState<T> extends State<PopupListTile<T>> {
         options: widget.options,
         enabled: enabled,
         onSelected: (newValue) {
-          if (newValue != value) widget.onSelected(newValue, _refresh);
+          if (newValue != value) _select(newValue);
         },
       ),
     );

@@ -38,6 +38,7 @@ import 'package:pili_aurora/pages/common/slide/common_slide_page.dart';
 import 'package:pili_aurora/pages/main/controller.dart';
 import 'package:pili_aurora/pages/mine/controller.dart';
 import 'package:pili_aurora/pages/setting/models/model.dart';
+import 'package:pili_aurora/pages/setting/widgets/setting_save.dart';
 import 'package:pili_aurora/pages/setting/slide_color_picker.dart';
 import 'package:pili_aurora/pages/setting/widgets/dual_slider_dialog.dart';
 import 'package:pili_aurora/pages/setting/widgets/multi_select_dialog.dart';
@@ -230,10 +231,9 @@ List<SettingsModel> get styleSettings => [
         leading: const Icon(MdiIcons.arrowExpandVertical),
         value: () => Pref.barHideType,
         items: BarHideType.values,
-        onSelected: (value, setState) {
-          GStorage.setting
-              .put(SettingBoxKey.barHideType, value.index)
-              .whenComplete(setState);
+        onSelected: (value, setState) async {
+          await GStorage.setting.put(SettingBoxKey.barHideType, value.index);
+          setState();
           SmartDialog.showToast('重启生效');
         },
       ),
@@ -258,10 +258,12 @@ List<SettingsModel> get styleSettings => [
         title: '默认启动页',
         value: () => Pref.defaultHomePage,
         items: NavigationBarType.values,
-        onSelected: (value, setState) {
-          GStorage.setting
-              .put(SettingBoxKey.defaultHomePage, value.index)
-              .whenComplete(setState);
+        onSelected: (value, setState) async {
+          await GStorage.setting.put(
+            SettingBoxKey.defaultHomePage,
+            value.index,
+          );
+          setState();
           SmartDialog.showToast('重启生效');
         },
       ),
@@ -320,10 +322,12 @@ List<SettingsModel> get styleSettings => [
         leading: const Icon(Icons.person_outlined),
         value: () => Pref.upPanelPosition,
         items: UpPanelPosition.values,
-        onSelected: (value, setState) {
-          GStorage.setting
-              .put(SettingBoxKey.upPanelPosition, value.index)
-              .whenComplete(setState);
+        onSelected: (value, setState) async {
+          await GStorage.setting.put(
+            SettingBoxKey.upPanelPosition,
+            value.index,
+          );
+          setState();
           SmartDialog.showToast('重启生效');
         },
       ),
@@ -381,9 +385,10 @@ List<SettingsModel> get styleSettings => [
           context: context,
           title: const Text('图片质量'),
           initValue: Pref.picQuality,
-          onChanged: (picQuality) async {
+          write: (picQuality) =>
+              GStorage.setting.put(SettingBoxKey.defaultPicQa, picQuality),
+          apply: (picQuality) {
             GlobalData().imgQuality = picQuality;
-            await GStorage.setting.put(SettingBoxKey.defaultPicQa, picQuality);
             setState();
           },
         ),
@@ -400,13 +405,9 @@ List<SettingsModel> get styleSettings => [
           context: context,
           title: const Text('查看大图质量'),
           initValue: Pref.previewQ,
-          onChanged: (picQuality) async {
-            await GStorage.setting.put(
-              SettingBoxKey.previewQuality,
-              picQuality,
-            );
-            setState();
-          },
+          write: (picQuality) =>
+              GStorage.setting.put(SettingBoxKey.previewQuality, picQuality),
+          apply: (_) => setState(),
         ),
         title: '查看大图质量',
         subtitle: '选择合适的图片清晰度，上限100%',
@@ -477,22 +478,27 @@ Future<void> _showAppIconDialog(
       ],
     ),
   );
-  if (selected == null || selected == Assets.iconStyle.value) return;
+  if (!context.mounted ||
+      selected == null ||
+      selected == Assets.iconStyle.value) {
+    return;
+  }
   try {
     await AppIcon.select(selected);
     if (context.mounted) refresh();
   } catch (_) {
-    SmartDialog.showToast('图标切换失败，请重试');
+    if (context.mounted) SmartDialog.showToast('图标切换失败，请重试');
   }
 }
 
-void _showQualityDialog({
+Future<void> _showQualityDialog({
   required BuildContext context,
   required Widget title,
   required int initValue,
-  required ValueChanged<int> onChanged,
-}) {
-  showDialog<double>(
+  required Future<void> Function(int) write,
+  required ValueChanged<int> apply,
+}) async {
+  final result = await showDialog<double>(
     context: context,
     builder: (context) => SliderDialog(
       value: initValue.toDouble(),
@@ -503,12 +509,16 @@ void _showQualityDialog({
       suffix: '%',
       precise: 0,
     ),
-  ).then((result) {
-    if (result != null) {
-      SmartDialog.showToast('设置成功');
-      onChanged(result.toInt());
-    }
-  });
+  );
+  if (result != null && context.mounted) {
+    await saveSetting(
+      key: 'image-quality',
+      write: () => write(result.toInt()),
+      apply: () => apply(result.toInt()),
+      canPresent: () => context.mounted,
+      successMessage: '设置成功',
+    );
+  }
 }
 
 void _showUiScaleDialog(
@@ -575,13 +585,22 @@ void _showUiScaleDialog(
       ),
       actions: [
         TextButton(
-          onPressed: () {
-            Navigator.pop(context);
-            GStorage.setting.delete(SettingBoxKey.uiScale).whenComplete(() {
-              setState();
-              Get.appUpdate();
-              ScaledWidgetsFlutterBinding.instance.scaleFactor = 1.0;
-            });
+          onPressed: () async {
+            final saved = await saveSetting(
+              key: SettingBoxKey.uiScale,
+              write: () => GStorage.setting.delete(SettingBoxKey.uiScale),
+              apply: () {
+                ScaledWidgetsFlutterBinding.instance.scaleFactor = 1.0;
+                setState();
+                Get.appUpdate();
+              },
+              canPresent: () => context.mounted,
+            );
+            if (saved &&
+                context.mounted &&
+                (ModalRoute.of(context)?.isCurrent ?? false)) {
+              Navigator.pop(context);
+            }
           },
           child: const Text('重置'),
         ),
@@ -593,15 +612,30 @@ void _showUiScaleDialog(
           ),
         ),
         TextButton(
-          onPressed: () {
-            Navigator.pop(context);
-            GStorage.setting.put(SettingBoxKey.uiScale, uiScale).whenComplete(
-              () {
+          onPressed: () async {
+            final parsed = double.tryParse(textController.text);
+            if (parsed == null ||
+                !parsed.isFinite ||
+                parsed < minUiScale ||
+                parsed > maxUiScale) {
+              SmartDialog.showToast('请输入 0.50 至 2.00 范围内的缩放比例');
+              return;
+            }
+            final saved = await saveSetting(
+              key: SettingBoxKey.uiScale,
+              write: () => GStorage.setting.put(SettingBoxKey.uiScale, parsed),
+              apply: () {
+                ScaledWidgetsFlutterBinding.instance.scaleFactor = parsed;
                 setState();
                 Get.appUpdate();
-                ScaledWidgetsFlutterBinding.instance.scaleFactor = uiScale;
               },
+              canPresent: () => context.mounted,
             );
+            if (saved &&
+                context.mounted &&
+                (ModalRoute.of(context)?.isCurrent ?? false)) {
+              Navigator.pop(context);
+            }
           },
           child: const Text('确定'),
         ),
@@ -703,10 +737,19 @@ void _showSpringDialog(BuildContext context, _) {
       ),
       actions: [
         TextButton(
-          onPressed: () {
-            Get.back();
-            GStorage.setting.delete(SettingBoxKey.springDescription);
-            SmartDialog.showToast('重置成功，重启生效');
+          onPressed: () async {
+            final saved = await saveSetting(
+              key: SettingBoxKey.springDescription,
+              write: () =>
+                  GStorage.setting.delete(SettingBoxKey.springDescription),
+              canPresent: () => context.mounted,
+              successMessage: '重置成功，重启生效',
+            );
+            if (saved &&
+                context.mounted &&
+                (ModalRoute.of(context)?.isCurrent ?? false)) {
+              Navigator.pop(context);
+            }
           },
           child: const Text('重置'),
         ),
@@ -718,22 +761,46 @@ void _showSpringDialog(BuildContext context, _) {
           ),
         ),
         TextButton(
-          onPressed: () {
+          onPressed: () async {
+            final List<double> res;
             try {
               if (!physicalMode) {
-                duration2Physical();
+                final draft = List<String>.of(springDescription);
+                try {
+                  duration2Physical();
+                  res = springDescription.map(double.parse).toList();
+                } finally {
+                  springDescription.setAll(0, draft);
+                }
+              } else {
+                res = springDescription.map(double.parse).toList();
               }
-              final res = springDescription.map(double.parse).toList();
-              Get.back();
-              GStorage.setting.put(SettingBoxKey.springDescription, res);
-              kSpringDescription = SpringDescription(
+              if (res.any((value) => !value.isFinite) ||
+                  res[0] <= 0 ||
+                  res[1] <= 0 ||
+                  res[2] < 0) {
+                throw const FormatException();
+              }
+            } on FormatException {
+              SmartDialog.showToast('请输入有效的弹簧参数，质量和刚度须大于零');
+              return;
+            }
+            final saved = await saveSetting(
+              key: SettingBoxKey.springDescription,
+              write: () =>
+                  GStorage.setting.put(SettingBoxKey.springDescription, res),
+              apply: () => kSpringDescription = SpringDescription(
                 mass: res[0],
                 stiffness: res[1],
                 damping: res[2],
-              );
-              SmartDialog.showToast('设置成功');
-            } catch (e) {
-              SmartDialog.showToast(e.toString());
+              ),
+              canPresent: () => context.mounted,
+              successMessage: '设置成功',
+            );
+            if (saved &&
+                context.mounted &&
+                (ModalRoute.of(context)?.isCurrent ?? false)) {
+              Navigator.pop(context);
             }
           },
           child: const Text('确定'),
@@ -755,10 +822,17 @@ Future<void> _showTransitionDialog(
       values: Transition.values.map((e) => (e, e.name)).toList(),
     ),
   );
-  if (res != null) {
-    Get.rootController.defaultTransition = res;
-    await GStorage.setting.put(SettingBoxKey.pageTransition, res.index);
-    setState();
+  if (res != null && context.mounted) {
+    await saveSetting(
+      key: SettingBoxKey.pageTransition,
+      write: () =>
+          GStorage.setting.put(SettingBoxKey.pageTransition, res.index),
+      apply: () {
+        Get.rootController.defaultTransition = res;
+        setState();
+      },
+      canPresent: () => context.mounted,
+    );
   }
 }
 
@@ -780,34 +854,50 @@ Future<void> _showCardWidthDialog(
       suffix: 'dp',
     ),
   );
-  if (res != null) {
-    await GStorage.setting.putAll({
-      SettingBoxKey.recommendCardWidth: res.$1,
-      SettingBoxKey.smallCardWidth: res.$2,
-    });
-    SmartDialog.showToast('重启生效');
-    setState();
+  if (res != null && context.mounted) {
+    await saveSetting(
+      key: SettingBoxKey.recommendCardWidth,
+      write: () => GStorage.setting.putAll({
+        SettingBoxKey.recommendCardWidth: res.$1,
+        SettingBoxKey.smallCardWidth: res.$2,
+      }),
+      apply: setState,
+      canPresent: () => context.mounted,
+      successMessage: '重启生效',
+    );
   }
 }
 
-void _setDynBadge(DynamicBadgeMode value, VoidCallback setState) {
-  final mainController = Get.find<MainController>()..dynamicBadgeMode = value;
-  if (value != DynamicBadgeMode.hidden) mainController.getUnreadDynamic();
-  GStorage.setting
-      .put(SettingBoxKey.dynamicBadgeMode, value.index)
-      .whenComplete(setState);
+Future<void> _setDynBadge(DynamicBadgeMode value, VoidCallback setState) async {
+  await saveSetting(
+    key: SettingBoxKey.dynamicBadgeMode,
+    write: () =>
+        GStorage.setting.put(SettingBoxKey.dynamicBadgeMode, value.index),
+    apply: () {
+      final mainController = Get.find<MainController>()
+        ..dynamicBadgeMode = value;
+      if (value != DynamicBadgeMode.hidden) mainController.getUnreadDynamic();
+      setState();
+    },
+    canPresent: () => true,
+  );
 }
 
 Future<void> _setMsgBadge(DynamicBadgeMode value, VoidCallback setState) async {
-  final mainController = Get.find<MainController>()..msgBadgeMode = value;
-  if (value != DynamicBadgeMode.hidden) {
-    mainController.queryUnreadMsg(true);
-  } else {
-    mainController.updateMessageBadge();
-  }
-  GStorage.setting
-      .put(SettingBoxKey.msgBadgeMode, value.index)
-      .whenComplete(setState);
+  await saveSetting(
+    key: SettingBoxKey.msgBadgeMode,
+    write: () => GStorage.setting.put(SettingBoxKey.msgBadgeMode, value.index),
+    apply: () {
+      final mainController = Get.find<MainController>()..msgBadgeMode = value;
+      if (value != DynamicBadgeMode.hidden) {
+        mainController.queryUnreadMsg(true);
+      } else {
+        mainController.updateMessageBadge();
+      }
+      setState();
+    },
+    canPresent: () => true,
+  );
 }
 
 Future<void> _showMsgUnReadDialog(
@@ -822,17 +912,23 @@ Future<void> _showMsgUnReadDialog(
       values: {for (final i in MsgUnReadType.values) i: i.title},
     ),
   );
-  if (res != null) {
-    final mainController = Get.find<MainController>()..msgUnReadTypes = res;
-    if (mainController.msgBadgeMode != DynamicBadgeMode.hidden) {
-      mainController.queryUnreadMsg();
-    }
-    await GStorage.setting.put(
-      SettingBoxKey.msgUnReadTypeV2,
-      res.map((item) => item.index).toList()..sort(),
+  if (res != null && context.mounted) {
+    await saveSetting(
+      key: SettingBoxKey.msgUnReadTypeV2,
+      write: () => GStorage.setting.put(
+        SettingBoxKey.msgUnReadTypeV2,
+        res.map((item) => item.index).toList()..sort(),
+      ),
+      apply: () {
+        final mainController = Get.find<MainController>()..msgUnReadTypes = res;
+        if (mainController.msgBadgeMode != DynamicBadgeMode.hidden) {
+          mainController.queryUnreadMsg();
+        }
+        setState();
+      },
+      canPresent: () => context.mounted,
+      successMessage: '设置成功',
     );
-    SmartDialog.showToast('设置成功');
-    setState();
   }
 }
 
@@ -849,38 +945,35 @@ void _showReduceColorDialog(
       title: const Text('Color Picker'),
       content: SlideColorPicker(
         color: reduceLuxColor ?? Colors.white,
-        onChanged: (Color? color) {
-          if (color != null && color != reduceLuxColor) {
-            if (color == Colors.white) {
-              NetworkImgLayer.reduceLuxColor = null;
-              GStorage.setting.delete(SettingBoxKey.reduceLuxColor);
-              SmartDialog.showToast('设置成功');
-              setState();
-            } else {
-              void onConfirm() {
-                NetworkImgLayer.reduceLuxColor = color;
-                GStorage.setting.put(
-                  SettingBoxKey.reduceLuxColor,
-                  color.toARGB32(),
-                );
-                SmartDialog.showToast('设置成功');
-                setState();
-              }
-
-              if (color.computeLuminance() < 0.2) {
-                showConfirmDialog(
-                  context: context,
-                  title: Text(
-                    '确认使用#${(color.toARGB32() & 0xFFFFFF).toRadixString(16).toUpperCase().padLeft(6)}？',
-                  ),
-                  content: const Text('所选颜色过于昏暗，可能会影响图片观看'),
-                  onConfirm: onConfirm,
-                );
-              } else {
-                onConfirm();
-              }
-            }
+        onChanged: (Color? color) async {
+          if (color == null || color == Pref.reduceLuxColor) return;
+          if (color != Colors.white && color.computeLuminance() < 0.2) {
+            final confirmed = await showConfirmDialog(
+              context: context,
+              title: Text(
+                '确认使用#${(color.toARGB32() & 0xFFFFFF).toRadixString(16).toUpperCase().padLeft(6)}？',
+              ),
+              content: const Text('所选颜色过于昏暗，可能会影响图片观看'),
+            );
+            if (!confirmed || !context.mounted) return;
           }
+          await saveSetting(
+            key: SettingBoxKey.reduceLuxColor,
+            write: () => color == Colors.white
+                ? GStorage.setting.delete(SettingBoxKey.reduceLuxColor)
+                : GStorage.setting.put(
+                    SettingBoxKey.reduceLuxColor,
+                    color.toARGB32(),
+                  ),
+            apply: () {
+              NetworkImgLayer.reduceLuxColor = color == Colors.white
+                  ? null
+                  : color;
+              setState();
+            },
+            canPresent: () => context.mounted,
+            successMessage: '设置成功',
+          );
         },
       ),
     ),
@@ -901,21 +994,33 @@ Future<void> _showToastDialog(
       divisions: 10,
     ),
   );
-  if (res != null) {
-    CustomToast.toastOpacity = res;
-    await GStorage.setting.put(SettingBoxKey.defaultToastOp, res);
-    SmartDialog.showToast('设置成功');
-    setState();
+  if (res != null && context.mounted) {
+    await saveSetting(
+      key: SettingBoxKey.defaultToastOp,
+      write: () => GStorage.setting.put(SettingBoxKey.defaultToastOp, res),
+      apply: () {
+        CustomToast.toastOpacity = res;
+        setState();
+      },
+      canPresent: () => context.mounted,
+      successMessage: '设置成功',
+    );
   }
 }
 
-void _setThemeType(ThemeType value, VoidCallback setState) {
-  try {
-    Get.find<MineController>().themeType.value = value;
-  } catch (_) {}
-  GStorage.setting.put(SettingBoxKey.themeMode, value.index);
-  Get.changeThemeMode(ThemeUtils.themeMode = value.toThemeMode);
-  setState();
+Future<void> _setThemeType(ThemeType value, VoidCallback setState) async {
+  await saveSetting(
+    key: SettingBoxKey.themeMode,
+    write: () => GStorage.setting.put(SettingBoxKey.themeMode, value.index),
+    apply: () {
+      try {
+        Get.find<MineController>().themeType.value = value;
+      } catch (_) {}
+      Get.changeThemeMode(ThemeUtils.themeMode = value.toThemeMode);
+      setState();
+    },
+    canPresent: () => true,
+  );
 }
 
 List<SettingsModel> get appearanceExtraSettings => [
@@ -1040,12 +1145,24 @@ void _showTouchSlopDialog(BuildContext context, VoidCallback setState) {
           onPressed: () async {
             try {
               final val = double.parse(initialValue);
-              Get.back();
-              touchSlopH = val;
-              await GStorage.setting.put(SettingBoxKey.touchSlopH, val);
-              setState();
-            } catch (e) {
-              SmartDialog.showToast(e.toString());
+              if (!val.isFinite || val < 0) throw const FormatException();
+              final saved = await saveSetting(
+                key: SettingBoxKey.touchSlopH,
+                write: () =>
+                    GStorage.setting.put(SettingBoxKey.touchSlopH, val),
+                apply: () {
+                  touchSlopH = val;
+                  setState();
+                },
+                canPresent: () => context.mounted,
+              );
+              if (saved &&
+                  context.mounted &&
+                  (ModalRoute.of(context)?.isCurrent ?? false)) {
+                Navigator.pop(context);
+              }
+            } on FormatException {
+              SmartDialog.showToast('请输入有效的非负阈值');
             }
           },
           child: const Text('确定'),
@@ -1069,13 +1186,19 @@ Future<void> _showRefreshDialog(
       value: Pref.refreshDisplacement,
     ),
   );
-  if (res != null) {
-    displacement = res;
-    await GStorage.setting.put(SettingBoxKey.refreshDisplacement, res);
-    if (WidgetsBinding.instance.rootElement case final context?) {
-      context.visitChildElements(_visitor);
-    }
-    setState();
+  if (res != null && context.mounted) {
+    await saveSetting(
+      key: SettingBoxKey.refreshDisplacement,
+      write: () => GStorage.setting.put(SettingBoxKey.refreshDisplacement, res),
+      apply: () {
+        displacement = res;
+        if (WidgetsBinding.instance.rootElement case final root?) {
+          root.visitChildElements(_visitor);
+        }
+        setState();
+      },
+      canPresent: () => context.mounted,
+    );
   }
 }
 
