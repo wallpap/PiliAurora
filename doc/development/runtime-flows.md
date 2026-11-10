@@ -42,7 +42,7 @@ sequenceDiagram
 
 `GStorage` 初始化失败时，应用记录错误后退出。下载路径、临时目录、缓存和字体并行准备，`AccountService` 与 `DownloadService` 通过 `lazyPut` 延迟创建。实现见 [`bootstrap.dart`](../../lib/app/bootstrap.dart)、[`platform_setup.dart`](../../lib/app/platform_setup.dart) 和 [`app.dart`](../../lib/app/app.dart)。
 
-Windows 独立播放窗口使用同一可执行文件的子进程入口，先连接主窗口获取播放请求和存储快照，再以 `GStorage.init(memorySnapshot: ...)` 初始化。它跳过主窗口的平台服务、WebView Cookie 同步和历史同步，使用独立缓存目录。生命周期见 [`desktop_playback_windows.dart`](../../lib/services/desktop_playback_windows.dart) 与[播放窗口说明](../guides/windows-playback-windows.md)。
+Windows 独立播放窗口使用同一可执行文件的子进程入口，先连接主窗口获取播放请求和存储快照，再以 `GStorage.init(memorySnapshot: ...)` 初始化。它跳过主窗口的平台服务、WebView Cookie 同步和历史同步，使用独立缓存目录。生命周期见 [`desktop_playback_windows.dart`](../../lib/services/desktop_playback_windows.dart) 与[播放窗口说明](../guides/playback.md#windows-播放窗口)。
 
 ## HTTP 请求
 

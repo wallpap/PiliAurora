@@ -3,114 +3,189 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>播放器与弹幕交互时序 | PiliAurora</title>
+  <title>交互时序：加载就绪、独立时钟与帧内更新 | PiliAurora</title>
   <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500;600&family=Noto+Serif+SC:wght@400&family=Noto+Sans+SC:wght@400;500;600&display=swap" rel="stylesheet">
   <style>
     :root { color-scheme:light; --paper:#f5f5f5; --ink:#2d3142; --muted:#4f5d75; --soft:#5a6580; --accent:#bf4520; --accent-tint:rgba(191,69,32,.08); --link:#2e5aa8; }
-    * { box-sizing:border-box; } body { margin:0; background:var(--paper); color:var(--ink); font-family:'Geist','Noto Sans SC',system-ui,sans-serif; }
-    main { max-width:1360px; margin:0 auto; padding:32px 0 24px; } h1 { margin:0 28px 8px; font:400 28px/1.2 'Instrument Serif','Noto Serif SC',serif; }
-    .kicker { margin:0 28px 18px; color:var(--muted); font:500 11px/1.5 'Geist Mono',monospace; letter-spacing:.08em; }
-    figure { margin:0; }
-    .diagram-scroll { width:100%; overflow-x:auto; } svg { display:block; width:100%; min-width:1280px; height:auto; }
-    figcaption { max-width:1050px; margin:12px 28px 0; color:var(--muted); font-size:13px; line-height:1.7; }
-    .actor { fill:#fff; stroke:var(--ink); stroke-width:1; rx:6; }
-    .actor-focal { fill:rgba(191,69,32,.08); stroke:var(--accent); stroke-width:1.2; rx:6; }
-    .actor-name { fill:var(--ink); font:600 14px 'Geist','Noto Sans SC',sans-serif; }
-    .actor-sub { fill:var(--muted); font:400 9px 'Geist Mono',monospace; }
-    .lifeline { stroke:rgba(45,49,66,.28); stroke-width:1; stroke-dasharray:4 4; }
-    .activation { fill:rgba(45,49,66,.06); stroke:var(--muted); stroke-width:.8; }
-    .call { stroke:var(--muted); stroke-width:1.2; marker-end:url(#seq-arrow); }
-    .return { stroke:var(--muted); stroke-width:1; stroke-dasharray:5 4; marker-end:url(#seq-arrow); }
-    .async { stroke:var(--muted); stroke-width:1; stroke-dasharray:5 4; marker-end:url(#seq-open); }
-    .headline { stroke:var(--accent); stroke-width:1.4; marker-end:url(#seq-accent); }
-    .message-mask { fill:var(--paper); }
-    .message-label { fill:var(--soft); font:400 8px 'Geist Mono',monospace; letter-spacing:.04em; }
-    .frame { fill:rgba(45,49,66,.02); stroke:rgba(45,49,66,.22); stroke-width:1; }
-    .frame-tab { fill:var(--paper); stroke:rgba(45,49,66,.22); stroke-width:1; rx:2; }
-    .frame-tag { fill:var(--muted); font:500 8px 'Geist Mono',monospace; letter-spacing:.12em; }
-    .guard { fill:var(--muted); font:400 8px 'Geist Mono',monospace; }
-    .divider { stroke:rgba(45,49,66,.20); stroke-width:1; stroke-dasharray:4 3; }
-    .legend-text { fill:var(--muted); font:500 12px 'Geist','Noto Sans SC',sans-serif; }
+    * { box-sizing:border-box; }
+    body { margin:0; background:var(--paper); color:var(--ink); font-family:'Geist','Noto Sans SC',system-ui,sans-serif; }
+    main { min-width:1920px; max-width:1984px; margin:0 auto; padding:36px 0; }
+    header, .explanation, footer { max-width:1200px; margin:0 32px; }
+    h1 { margin:16px 0 12px; font:400 36px/1.3 'Instrument Serif','Noto Serif SC',serif; }
+    h2 { margin:28px 0 12px; font-size:22px; font-weight:600; }
+    p, td, th, li { font-size:16px; line-height:1.8; }
+    p { margin:8px 0; }
+    nav { display:flex; flex-wrap:wrap; gap:8px 24px; font-size:14px; line-height:1.8; }
+    a { color:var(--link); text-underline-offset:3px; }
+    [aria-current="page"] { color:var(--ink); text-decoration:none; font-weight:600; }
+    .kicker { color:var(--muted); font:500 12px/1.6 'Geist Mono',monospace; letter-spacing:.08em; }
+    figcaption, footer { color:var(--muted); font-size:14px; line-height:1.8; }
+    figure { margin:24px 0 0; }
+    .diagram { width:100%; }
+    svg { display:block; width:100%; height:auto; }
+    figcaption { max-width:1200px; margin:16px 32px; }
+    table { width:100%; border-collapse:collapse; table-layout:fixed; }
+    th, td { padding:12px 16px; text-align:left; vertical-align:top; border-bottom:1px solid rgba(45,49,66,.16); overflow-wrap:anywhere; }
+    th { font-weight:600; }
+    th:first-child { width:20%; } th:nth-child(2) { width:36%; }
+    footer { margin-top:28px; border-top:1px solid rgba(45,49,66,.16); padding-top:16px; }
+    .zone { fill:rgba(45,49,66,.02); stroke:rgba(45,49,66,.14); stroke-width:1; }
+    .zone-label { fill:var(--soft); font:500 17px 'Geist','Noto Sans SC',sans-serif; }
+    .edge { fill:none; stroke:var(--muted); stroke-width:1.6; marker-end:url(#arrow); }
+    .edge-return { fill:none; stroke:var(--muted); stroke-width:1.4; stroke-dasharray:6 5; marker-end:url(#arrow); }
+    .edge-async { fill:none; stroke:var(--muted); stroke-width:1.4; stroke-dasharray:6 5; marker-end:url(#arrow-open); }
+    .edge-accent { fill:none; stroke:var(--accent); stroke-width:1.8; marker-end:url(#arrow-accent); }
+    .label-mask { fill:var(--paper); }
+    .edge-label { fill:var(--soft); font:500 12px 'Geist Mono','Noto Sans SC',monospace; }
+    .node .bounds { stroke-width:1.2; rx:6; }
+    .backend .bounds { fill:#fff; stroke:var(--ink); }
+    .focal .bounds { fill:var(--accent-tint); stroke:var(--accent); stroke-width:1.6; }
+    .store .bounds { fill:rgba(45,49,66,.05); stroke:var(--muted); }
+    .input .bounds { fill:rgba(79,93,117,.09); stroke:var(--soft); }
+    .tag { fill:var(--paper); stroke:rgba(45,49,66,.24); stroke-width:.8; rx:2; }
+    .tag-text { fill:var(--muted); font:500 11px 'Geist Mono',monospace; letter-spacing:.08em; }
+    .name { fill:var(--ink); font:600 22px 'Geist','Noto Sans SC',sans-serif; }
+    .body { fill:var(--muted); font:400 16px 'Geist','Noto Sans SC',sans-serif; }
+    .note-title { fill:var(--ink); font:600 18px 'Geist','Noto Sans SC',sans-serif; }
+    .legend-text { fill:var(--muted); font:500 16px 'Geist','Noto Sans SC',sans-serif; }
+    .lifeline { stroke:rgba(45,49,66,.30); stroke-width:1; stroke-dasharray:5 5; }
+    .activation { fill:rgba(45,49,66,.06); stroke:var(--muted); stroke-width:1; }
+    .frame { fill:rgba(45,49,66,.02); stroke:rgba(45,49,66,.24); stroke-width:1; }
+    .frame-tab { fill:var(--paper); stroke:rgba(45,49,66,.24); stroke-width:1; rx:2; }
+    .frame-tag { fill:var(--muted); font:500 11px 'Geist Mono',monospace; }
+    .guard { fill:var(--muted); font:400 14px 'Geist','Noto Sans SC',sans-serif; }
   </style>
 </head>
 <body>
 <main>
-  <h1>播放器 × 弹幕：一次加载与帧更新</h1>
-  <p class="kicker">PILIAURORA / PLAYBACK · DANMAKU · PRESENTATION</p>
+  <header>
+    <nav aria-label="架构图导航"><a href="player-architecture.html">播放职责</a>
+      <a href="danmaku-architecture.html">弹幕数据与时间</a>
+      <a href="presentation-scheduler-architecture.html">刷新与证据</a>
+      <a href="playback-danmaku-sequence.html" aria-current="page">加载与帧更新</a></nav>
+    <h1>交互时序：加载就绪、独立时钟与帧内更新</h1>
+    <p class="kicker">PILIAURORA / LOAD READINESS & FRAME UPDATE</p>
+    <p>按加载、时钟发布、帧内更新和采样失效四个阶段阅读。媒体时钟与视频采样异步发布，弹幕在框架帧回调中读取当前数据并求值。</p>
+  </header>
   <figure>
-    <div class="diagram-scroll">
-      <svg viewBox="0 0 1280 720" role="img" aria-labelledby="sequence-title sequence-desc">
-        <title id="sequence-title">播放器与弹幕交互时序</title>
-        <desc id="sequence-desc">展示页面通过播放会话和原生运行时加载媒体，Android 视频请求采样参与弹幕相位调度，并在暂停、跳转或输出变化时关闭旧代次准入。</desc>
+    <div class="diagram">
+      <svg viewBox="0 0 1920 1280" role="img" aria-labelledby="playback-danmaku-sequence-title playback-danmaku-sequence-desc">
+        <title id="playback-danmaku-sequence-title">交互时序：加载就绪、独立时钟与帧内更新</title>
+        <desc id="playback-danmaku-sequence-desc">五个抽象参与者和十二条消息展示计划加载、输出就绪、独立媒体锚点、异步视频采样、框架目标时间、帧内绘制及旧样本准入撤销。</desc>
         <defs>
-          <marker id="seq-arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0,8 3,0 6" fill="#4f5d75"/></marker>
-          <marker id="seq-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0,8 3,0 6" fill="#bf4520"/></marker>
-          <marker id="seq-open" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polyline points="0 0,8 3,0 6" fill="none" stroke="#4f5d75" stroke-width="1.2"/></marker>
+          <marker id="arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0,8 3,0 6" fill="#4f5d75"/></marker>
+          <marker id="arrow-open" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polyline points="0 0,8 3,0 6" fill="none" stroke="#4f5d75" stroke-width="1.2"/></marker>
+          <marker id="arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0,8 3,0 6" fill="#bf4520"/></marker>
         </defs>
-        <rect width="1280" height="720" fill="#f5f5f5"/>
-
-        <line class="lifeline" x1="128" y1="176" x2="128" y2="636"/>
-        <line class="lifeline" x1="376" y1="176" x2="376" y2="636"/>
-        <line class="lifeline" x1="624" y1="176" x2="624" y2="636"/>
-        <line class="lifeline" x1="872" y1="176" x2="872" y2="636"/>
-        <line class="lifeline" x1="1120" y1="176" x2="1120" y2="636"/>
-
-        <rect class="activation" x="372" y="236" width="8" height="136"/>
-        <rect class="activation" x="620" y="272" width="8" height="84"/>
-        <rect class="activation" x="868" y="308" width="8" height="48"/>
-        <rect class="activation" x="1116" y="440" width="8" height="92"/>
-
-        <line class="call" x1="128" y1="220" x2="376" y2="220"/>
-        <rect class="message-mask" x="208" y="200" width="88" height="12"/><text class="message-label" x="252" y="209" text-anchor="middle">QUERY / PLAN</text>
-        <line class="call" x1="376" y1="256" x2="624" y2="256"/>
-        <rect class="message-mask" x="454" y="236" width="92" height="12"/><text class="message-label" x="500" y="245" text-anchor="middle">LOAD / LOADID</text>
-        <line class="call" x1="624" y1="292" x2="872" y2="292"/>
-        <rect class="message-mask" x="700" y="272" width="96" height="12"/><text class="message-label" x="748" y="281" text-anchor="middle">ATTACH OUTPUT</text>
-        <line class="return" x1="872" y1="328" x2="624" y2="328"/>
-        <rect class="message-mask" x="700" y="308" width="96" height="12"/><text class="message-label" x="748" y="317" text-anchor="middle">RECEIPT / FRAME</text>
-        <line class="return" x1="624" y1="364" x2="376" y2="364"/>
-        <rect class="message-mask" x="442" y="344" width="116" height="12"/><text class="message-label" x="500" y="353" text-anchor="middle">LOAD RESULT</text>
-        <line class="call" x1="128" y1="400" x2="1120" y2="400"/>
-        <rect class="message-mask" x="536" y="380" width="176" height="12"/><text class="message-label" x="624" y="389" text-anchor="middle">CONFIGURE VIEW / CLOCK / SOURCE</text>
-
-        <rect class="frame" x="88" y="424" width="1152" height="212" rx="4"/>
-        <rect class="frame-tab" x="88" y="424" width="44" height="16"/>
-        <text class="frame-tag" x="110" y="436" text-anchor="middle">ALT</text>
-        <text class="guard" x="148" y="448">[active output; matching generation]</text>
-        <line class="async" x1="872" y1="472" x2="1120" y2="472"/>
-        <rect class="message-mask" x="924" y="452" width="144" height="12"/><text class="message-label" x="996" y="461" text-anchor="middle">FRAME TARGET / CALLBACK</text>
-        <line class="async" x1="624" y1="496" x2="1120" y2="496"/>
-        <rect class="message-mask" x="800" y="476" width="144" height="12"/><text class="message-label" x="872" y="485" text-anchor="middle">ANDROID REQUEST BATCH</text>
-        <path class="headline" d="M1120 520 H1144 V532 H1120" fill="none"/>
-        <rect class="message-mask" x="1148" y="500" width="84" height="12"/><text class="message-label" x="1190" y="509" text-anchor="middle">ALIGN / DRAW</text>
-        <line class="divider" x1="100" y1="548" x2="1228" y2="548"/>
-        <text class="guard" x="148" y="568">[pause / seek / output reconfigure]</text>
-        <line class="call" x1="376" y1="592" x2="624" y2="592"/>
-        <rect class="message-mask" x="450" y="572" width="100" height="12"/><text class="message-label" x="500" y="581" text-anchor="middle">ACCEPTED OP</text>
-        <line class="async" x1="624" y1="616" x2="1120" y2="616"/>
-        <rect class="message-mask" x="800" y="596" width="144" height="12"/><text class="message-label" x="872" y="605" text-anchor="middle">WITHDRAW / NEW EPOCH</text>
-
-        <rect class="actor" x="40" y="104" width="176" height="72"/>
-        <text class="actor-name" x="128" y="136" text-anchor="middle">页面 / Owner</text><text class="actor-sub" x="128" y="156" text-anchor="middle">query · load · controls</text>
-        <rect class="actor" x="288" y="104" width="176" height="72"/>
-        <text class="actor-name" x="376" y="136" text-anchor="middle">PlaybackSession</text><text class="actor-sub" x="376" y="156" text-anchor="middle">intent · snapshot · anchor</text>
-        <rect class="actor" x="536" y="104" width="176" height="72"/>
-        <text class="actor-name" x="624" y="136" text-anchor="middle">Native Runtime</text><text class="actor-sub" x="624" y="156" text-anchor="middle">Player · output · frame source</text>
-        <rect class="actor" x="784" y="104" width="176" height="72"/>
-        <text class="actor-name" x="872" y="136" text-anchor="middle">Flutter 呈现引擎</text><text class="actor-sub" x="872" y="156" text-anchor="middle">frame plan · raster · surface</text>
-        <rect class="actor-focal" x="1032" y="104" width="176" height="72"/>
-        <text class="actor-name" x="1120" y="136" text-anchor="middle">弹幕调度 / 显示</text><text class="actor-sub" x="1120" y="156" text-anchor="middle">ticker · renderer · painter</text>
-
-        <line x1="32" y1="648" x2="1248" y2="648" stroke="rgba(45,49,66,.12)" stroke-width=".8"/>
-        <text class="legend-text" x="40" y="680">图例</text>
-        <line x1="100" y1="676" x2="148" y2="676" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#seq-arrow)"/><text class="legend-text" x="160" y="680">同步调用</text>
-        <line x1="296" y1="676" x2="344" y2="676" stroke="#4f5d75" stroke-width="1" stroke-dasharray="5 4" marker-end="url(#seq-arrow)"/><text class="legend-text" x="356" y="680">返回</text>
-        <line x1="448" y1="676" x2="496" y2="676" stroke="#4f5d75" stroke-width="1" stroke-dasharray="5 4" marker-end="url(#seq-open)"/><text class="legend-text" x="508" y="680">异步事件</text>
-        <line x1="648" y1="676" x2="696" y2="676" stroke="#bf4520" stroke-width="1.4" marker-end="url(#seq-accent)"/><text class="legend-text" x="708" y="680">有效帧对齐 / 呈现</text>
+        <rect width="1920" height="1280" fill="#f5f5f5"/>
+        <rect class="frame" x="912" y="680" width="976" height="324" rx="4"/>
+<rect class="frame-tab" x="912" y="680" width="64" height="24"/>
+<text class="frame-tag" x="944" y="697" text-anchor="middle">LOOP</text>
+<text class="guard" x="992" y="714">播放与显示持续期间：采样异步到达，绘制由框架帧触发</text>
+<line class="lifeline" x1="192" y1="232" x2="192" y2="1160"/>
+<line class="lifeline" x1="576" y1="232" x2="576" y2="1160"/>
+<line class="lifeline" x1="960" y1="232" x2="960" y2="1160"/>
+<line class="lifeline" x1="1344" y1="232" x2="1344" y2="1160"/>
+<line class="lifeline" x1="1728" y1="232" x2="1728" y2="1160"/>
+<rect class="activation" x="570" y="292" width="12" height="228"/>
+<rect class="activation" x="954" y="360" width="12" height="160"/>
+<rect class="activation" x="1722" y="888" width="12" height="92"/>
+<path class="edge" d="M192 292 H570"/>
+        <rect class="label-mask" x="310" y="266" width="142" height="18"/>
+        <text class="edge-label" x="381.0" y="280" text-anchor="middle">提交查询与播放意图</text>
+<path class="edge" d="M582 360 H954"/>
+        <rect class="label-mask" x="697" y="334" width="142" height="18"/>
+        <text class="edge-label" x="768.0" y="348" text-anchor="middle">接受计划并启动加载</text>
+<path class="edge" d="M966 416 H1096 Q1104 416 1104 424 V448 Q1104 456 1096 456 H966"/>
+<rect class="label-mask" x="975" y="390" width="114" height="18"/>
+        <text class="edge-label" x="1032" y="404" text-anchor="middle">加载与准备输出</text>
+<path class="edge-return" d="M954 512 H582"/>
+        <rect class="label-mask" x="697" y="486" width="142" height="18"/>
+        <text class="edge-label" x="768.0" y="500" text-anchor="middle">文件与输出均已就绪</text>
+<path class="edge-async" d="M960 576 H576"/>
+        <rect class="label-mask" x="704" y="550" width="128" height="18"/>
+        <text class="edge-label" x="768.0" y="564" text-anchor="middle">实际媒体时钟锚点</text>
+<path class="edge-async" d="M576 640 H1728"/>
+        <rect class="label-mask" x="1088" y="614" width="128" height="18"/>
+        <text class="edge-label" x="1152" y="628" text-anchor="middle">独立发布只读锚点</text>
+<path class="edge-async" d="M960 750 H1728"/>
+        <rect class="label-mask" x="1081" y="724" width="142" height="18"/>
+        <text class="edge-label" x="1152" y="738" text-anchor="middle">当前代次的视频采样</text>
+<path class="edge" d="M1728 820 H1344"/>
+        <rect class="label-mask" x="1493" y="794" width="86" height="18"/>
+        <text class="edge-label" x="1536.0" y="808" text-anchor="middle">请求框架帧</text>
+<path class="edge-async" d="M1344 888 H1722"/>
+        <rect class="label-mask" x="1469" y="862" width="128" height="18"/>
+        <text class="edge-label" x="1533.0" y="876" text-anchor="middle">回调与帧目标时间</text>
+<path class="edge-accent" d="M1734 940 H1840 Q1848 940 1848 948 V972 Q1848 980 1840 980 H1734"/>
+<rect class="label-mask" x="1728" y="914" width="128" height="18"/>
+        <text class="edge-label" x="1792" y="928" text-anchor="middle">求值、布局与绘制</text>
+<path class="edge" d="M576 1068 H960"/>
+        <rect class="label-mask" x="704" y="1042" width="128" height="18"/>
+        <text class="edge-label" x="768.0" y="1056" text-anchor="middle">暂停／跳转／重配</text>
+<path class="edge-async" d="M960 1136 H1728"/>
+        <rect class="label-mask" x="1095" y="1110" width="114" height="18"/>
+        <text class="edge-label" x="1152" y="1124" text-anchor="middle">撤销旧样本准入</text>
+<g class="node backend" data-node-id="page-control">
+        <rect class="bounds" x="48" y="96" width="288" height="136"/>
+        <rect class="tag" x="72" y="112" width="72" height="20"/>
+        <text class="tag-text" x="108" y="126" text-anchor="middle">INTENT</text>
+        <text class="name" x="72" y="160">业务页面与控制入口</text>
+        <text class="body" x="72" y="196">内容身份与最新意图</text>
+        </g>
+<g class="node backend" data-node-id="session-state">
+        <rect class="bounds" x="432" y="96" width="288" height="136"/>
+        <rect class="tag" x="456" y="112" width="80" height="20"/>
+        <text class="tag-text" x="496" y="126" text-anchor="middle">SESSION</text>
+        <text class="name" x="456" y="160">播放会话</text>
+        <text class="body" x="456" y="196">规范状态与独立时钟</text>
+        </g>
+<g class="node backend" data-node-id="runtime-output">
+        <rect class="bounds" x="800" y="96" width="320" height="136"/>
+        <rect class="tag" x="824" y="112" width="80" height="20"/>
+        <text class="tag-text" x="864" y="126" text-anchor="middle">RUNTIME</text>
+        <text class="name" x="824" y="160">媒体运行时与平台输出</text>
+        <text class="body" x="824" y="196">资源、原生观测和输出回执</text>
+        </g>
+<g class="node backend" data-node-id="frame-system">
+        <rect class="bounds" x="1200" y="96" width="288" height="136"/>
+        <rect class="tag" x="1224" y="112" width="96" height="20"/>
+        <text class="tag-text" x="1272" y="126" text-anchor="middle">FRAMEWORK</text>
+        <text class="name" x="1224" y="160">框架帧系统</text>
+        <text class="body" x="1224" y="196">显示时序与帧目标时间</text>
+        </g>
+<g class="node focal" data-node-id="danmaku-display">
+        <rect class="bounds" x="1568" y="96" width="320" height="136"/>
+        <rect class="tag" x="1592" y="112" width="80" height="20"/>
+        <text class="tag-text" x="1632" y="126" text-anchor="middle">DISPLAY</text>
+        <text class="name" x="1592" y="160">弹幕调度与显示</text>
+        <text class="body" x="1592" y="196">位置求值、布局和绘制</text>
+        </g>
+        <line x1="48" y1="1200" x2="1872" y2="1200" stroke="rgba(45,49,66,.16)"/>
+        <text class="legend-text" x="64" y="1244">图例</text>
+        <path class="edge" d="M160 1238 H224"/>
+        <text class="legend-text" x="244" y="1244">调用／资源协调</text>
+        <path class="edge-return" d="M544 1238 H608"/>
+        <text class="legend-text" x="628" y="1244">返回／状态投影</text>
+        <path class="edge-async" d="M928 1238 H992"/>
+        <text class="legend-text" x="1012" y="1244">异步发布</text>
+        <path class="edge-accent" d="M1312 1238 H1376"/>
+        <text class="legend-text" x="1396" y="1244">本次帧内求值与绘制</text>
       </svg>
     </div>
-    <figcaption>点播从 PlaybackMediaClock 独立读取锚点并按帧目标时间外推；直播按消息接收时间与显示运行时段计算位置。Android 的视频请求采样参与相位调度，Windows 跟随屏幕刷新。暂停、跳转和输出重配会撤销旧采样代次。</figcaption>
+    <figcaption>媒体加载与输出准备在运行时边界内完成。视频采样异步到达；每次框架回调使用当前有效样本和时钟锚点，按帧目标时间求值。</figcaption>
   </figure>
+  <section class="explanation" aria-label="协议与边界说明">
+    <h2>协议与边界</h2>
+    <table>
+      <thead><tr><th scope="col">边界</th><th scope="col">交换的信息</th><th scope="col">处理规则</th></tr></thead>
+      <tbody><tr><td>接受与加载</td><td>当前请求的内容计划、起播策略、最新意图和配置。</td><td>加载与控制操作核对当前归属。返回加载结果前确认文件与输出就绪；播放是否继续仍受最新意图和有效抑制令牌约束。</td></tr>
+<tr><td>就绪与首帧</td><td>文件加载结果、输出准备回执和独立纹理消费事实。</td><td>媒体就绪允许会话继续协调。界面加载过渡另等出画证据；音频或明确无视频的媒体使用无纹理路径。</td></tr>
+<tr><td>时钟与帧更新</td><td>只读媒体锚点、当前有效视频样本、框架帧目标和当前单调时间。</td><td>媒体位置按目标时间外推；候选年龄和资源期限按当前单调时间检查。同一框架帧合并一次更新，异步采样供后续框架帧读取。</td></tr>
+<tr><td>失效与恢复</td><td>暂停、缓冲、跳转或输出变化引发的锚点及采样失效。</td><td>不同事件分别冻结或撤销时钟并关闭相位准入。跳转等待匹配完成回执后重建锚点，采样等待新代次确认。</td></tr></tbody>
+    </table>
+  </section>
+  <footer>实现映射与验证入口：<a href="../development/runtime-flows.md#请求切源与页面归属">请求与加载流程</a> · <a href="../development/runtime-flows.md#原生加载首帧与释放">就绪与释放</a> · <a href="presentation-scheduler-architecture.html">平台调度与证据</a>。</footer>
 </main>
 </body>
 </html>

@@ -3,137 +3,233 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>播放器架构 | PiliAurora</title>
+  <title>播放架构：控制权、状态与资源生命周期 | PiliAurora</title>
   <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500;600&family=Noto+Serif+SC:wght@400&family=Noto+Sans+SC:wght@400;500;600&display=swap" rel="stylesheet">
   <style>
-    :root { color-scheme: light; --paper:#f5f5f5; --ink:#2d3142; --muted:#4f5d75; --soft:#5a6580; --rule:rgba(45,49,66,.12); --accent:#bf4520; --accent-tint:rgba(191,69,32,.08); --link:#2e5aa8; }
-    * { box-sizing: border-box; }
+    :root { color-scheme:light; --paper:#f5f5f5; --ink:#2d3142; --muted:#4f5d75; --soft:#5a6580; --accent:#bf4520; --accent-tint:rgba(191,69,32,.08); --link:#2e5aa8; }
+    * { box-sizing:border-box; }
     body { margin:0; background:var(--paper); color:var(--ink); font-family:'Geist','Noto Sans SC',system-ui,sans-serif; }
-    main { max-width:1360px; margin:0 auto; padding:32px 0 24px; }
-    h1 { margin:0 28px 8px; font:400 28px/1.2 'Instrument Serif','Noto Serif SC',serif; }
-    .kicker { margin:0 28px 18px; color:var(--muted); font:500 11px/1.5 'Geist Mono',monospace; letter-spacing:.08em; }
-    figure { margin:0; }
-    .diagram-scroll { width:100%; overflow-x:auto; }
-    svg { display:block; width:100%; min-width:1280px; height:auto; }
-    figcaption { max-width:1050px; margin:12px 28px 0; color:var(--muted); font-size:13px; line-height:1.7; }
-    .zone { fill:rgba(45,49,66,.02); stroke:rgba(45,49,66,.10); stroke-width:1; }
-    .zone-label-mask { fill:var(--paper); }
-    .zone-label { fill:var(--soft); font:500 12px 'Geist','Noto Sans SC',sans-serif; }
-    .edge { fill:none; stroke:var(--muted); stroke-width:1.2; marker-end:url(#player-arrow); }
-    .edge-return { fill:none; stroke:var(--muted); stroke-width:1; stroke-dasharray:5 4; marker-end:url(#player-arrow); }
-    .edge-api { fill:none; stroke:var(--link); stroke-width:1.2; marker-end:url(#player-arrow-link); }
-    .node rect.bounds { stroke-width:1; rx:6; }
-    .backend rect.bounds { fill:#fff; stroke:var(--ink); }
-    .focal rect.bounds { fill:var(--accent-tint); stroke:var(--accent); stroke-width:1.2; }
-    .store rect.bounds { fill:rgba(45,49,66,.05); stroke:var(--muted); }
-    .external rect.bounds { fill:rgba(45,49,66,.03); stroke:rgba(45,49,66,.30); }
+    main { min-width:1920px; max-width:1984px; margin:0 auto; padding:36px 0; }
+    header, .explanation, footer { max-width:1200px; margin:0 32px; }
+    h1 { margin:16px 0 12px; font:400 36px/1.3 'Instrument Serif','Noto Serif SC',serif; }
+    h2 { margin:28px 0 12px; font-size:22px; font-weight:600; }
+    p, td, th, li { font-size:16px; line-height:1.8; }
+    p { margin:8px 0; }
+    nav { display:flex; flex-wrap:wrap; gap:8px 24px; font-size:14px; line-height:1.8; }
+    a { color:var(--link); text-underline-offset:3px; }
+    [aria-current="page"] { color:var(--ink); text-decoration:none; font-weight:600; }
+    .kicker { color:var(--muted); font:500 12px/1.6 'Geist Mono',monospace; letter-spacing:.08em; }
+    figcaption, footer { color:var(--muted); font-size:14px; line-height:1.8; }
+    figure { margin:24px 0 0; }
+    .diagram { width:100%; }
+    svg { display:block; width:100%; height:auto; }
+    figcaption { max-width:1200px; margin:16px 32px; }
+    table { width:100%; border-collapse:collapse; table-layout:fixed; }
+    th, td { padding:12px 16px; text-align:left; vertical-align:top; border-bottom:1px solid rgba(45,49,66,.16); overflow-wrap:anywhere; }
+    th { font-weight:600; }
+    th:first-child { width:20%; } th:nth-child(2) { width:36%; }
+    footer { margin-top:28px; border-top:1px solid rgba(45,49,66,.16); padding-top:16px; }
+    .zone { fill:rgba(45,49,66,.02); stroke:rgba(45,49,66,.14); stroke-width:1; }
+    .zone-label { fill:var(--soft); font:500 17px 'Geist','Noto Sans SC',sans-serif; }
+    .edge { fill:none; stroke:var(--muted); stroke-width:1.6; marker-end:url(#arrow); }
+    .edge-return { fill:none; stroke:var(--muted); stroke-width:1.4; stroke-dasharray:6 5; marker-end:url(#arrow); }
+    .edge-async { fill:none; stroke:var(--muted); stroke-width:1.4; stroke-dasharray:6 5; marker-end:url(#arrow-open); }
+    .edge-accent { fill:none; stroke:var(--accent); stroke-width:1.8; marker-end:url(#arrow-accent); }
+    .label-mask { fill:var(--paper); }
+    .edge-label { fill:var(--soft); font:500 12px 'Geist Mono','Noto Sans SC',monospace; }
+    .node .bounds { stroke-width:1.2; rx:6; }
+    .backend .bounds { fill:#fff; stroke:var(--ink); }
+    .focal .bounds { fill:var(--accent-tint); stroke:var(--accent); stroke-width:1.6; }
+    .store .bounds { fill:rgba(45,49,66,.05); stroke:var(--muted); }
+    .input .bounds { fill:rgba(79,93,117,.09); stroke:var(--soft); }
     .tag { fill:var(--paper); stroke:rgba(45,49,66,.24); stroke-width:.8; rx:2; }
-    .tag-text { fill:var(--muted); font:500 8px 'Geist Mono',monospace; letter-spacing:.08em; }
-    .name { fill:var(--ink); font:600 14px 'Geist','Noto Sans SC',sans-serif; }
-    .sub { fill:var(--muted); font:400 9px 'Geist Mono',monospace; }
-    .legend-text { fill:var(--muted); font:500 12px 'Geist','Noto Sans SC',sans-serif; }
+    .tag-text { fill:var(--muted); font:500 11px 'Geist Mono',monospace; letter-spacing:.08em; }
+    .name { fill:var(--ink); font:600 22px 'Geist','Noto Sans SC',sans-serif; }
+    .body { fill:var(--muted); font:400 16px 'Geist','Noto Sans SC',sans-serif; }
+    .note-title { fill:var(--ink); font:600 18px 'Geist','Noto Sans SC',sans-serif; }
+    .legend-text { fill:var(--muted); font:500 16px 'Geist','Noto Sans SC',sans-serif; }
+    .lifeline { stroke:rgba(45,49,66,.30); stroke-width:1; stroke-dasharray:5 5; }
+    .activation { fill:rgba(45,49,66,.06); stroke:var(--muted); stroke-width:1; }
+    .frame { fill:rgba(45,49,66,.02); stroke:rgba(45,49,66,.24); stroke-width:1; }
+    .frame-tab { fill:var(--paper); stroke:rgba(45,49,66,.24); stroke-width:1; rx:2; }
+    .frame-tag { fill:var(--muted); font:500 11px 'Geist Mono',monospace; }
+    .guard { fill:var(--muted); font:400 14px 'Geist','Noto Sans SC',sans-serif; }
   </style>
 </head>
 <body>
 <main>
-  <h1>播放器：计划、会话与原生输出</h1>
-  <p class="kicker">PILIAURORA / PLAYER ARCHITECTURE</p>
+  <header>
+    <nav aria-label="架构图导航"><a href="player-architecture.html" aria-current="page">播放职责</a>
+      <a href="danmaku-architecture.html">弹幕数据与时间</a>
+      <a href="presentation-scheduler-architecture.html">刷新与证据</a>
+      <a href="playback-danmaku-sequence.html">加载与帧更新</a></nav>
+    <h1>播放架构：控制权、状态与资源生命周期</h1>
+    <p class="kicker">PILIAURORA / PLAYBACK OWNERSHIP & LIFETIME</p>
+    <p>从左到右追踪一份业务计划如何获得控制权、成为规范播放状态，并驱动原生资源。下方分别展示界面快照与媒体时钟两种读模型。</p>
+  </header>
   <figure>
-    <div class="diagram-scroll">
-      <svg viewBox="0 0 1280 720" role="img" aria-labelledby="player-title player-desc">
-        <title id="player-title">播放器架构</title>
-        <desc id="player-desc">展示页面播放计划经所有者和会话提交到原生运行时，并由媒体实例与平台输出承载，播放快照回到界面门面的结构。</desc>
+    <div class="diagram">
+      <svg viewBox="0 0 1920 1280" role="img" aria-labelledby="player-architecture-title player-architecture-desc">
+        <title id="player-architecture-title">播放架构：控制权、状态与资源生命周期</title>
+        <desc id="player-architecture-desc">九个职责节点展示业务计划、控制所有权、会话状态、原生操作、媒体实例、界面投影、媒体时钟、输出交接与平台输出。规范状态、异步时钟与资源释放各有独立边界。</desc>
         <defs>
-          <marker id="player-arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0,8 3,0 6" fill="#4f5d75"/></marker>
-          <marker id="player-arrow-link" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0,8 3,0 6" fill="#2e5aa8"/></marker>
+          <marker id="arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0,8 3,0 6" fill="#4f5d75"/></marker>
+          <marker id="arrow-open" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polyline points="0 0,8 3,0 6" fill="none" stroke="#4f5d75" stroke-width="1.2"/></marker>
+          <marker id="arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0,8 3,0 6" fill="#bf4520"/></marker>
         </defs>
-        <rect width="1280" height="720" fill="#f5f5f5"/>
-        <rect class="zone" x="32" y="84" width="224" height="468" rx="8"/>
-        <rect class="zone" x="276" y="84" width="448" height="468" rx="8"/>
-        <rect class="zone" x="744" y="84" width="504" height="524" rx="8"/>
-        <rect class="zone-label-mask" x="52" y="88" width="120" height="18"/>
-        <text class="zone-label" x="60" y="102">页面与控件</text>
-        <rect class="zone-label-mask" x="296" y="88" width="132" height="18"/>
-        <text class="zone-label" x="304" y="102">DART 会话核心</text>
-        <rect class="zone-label-mask" x="764" y="88" width="150" height="18"/>
-        <text class="zone-label" x="772" y="102">原生媒体与平台输出</text>
-
-        <path class="edge-api" d="M240 224 H296"/>
-        <path class="edge" d="M488 224 H520"/>
-        <path class="edge" d="M712 224 H768"/>
-        <path class="edge" d="M960 224 H1000"/>
-        <path class="edge" d="M1108 276 V356"/>
-        <path class="edge" d="M1108 452 V496"/>
-        <path class="edge-return" d="M616 276 V328 H144 V396"/>
-
-        <g class="node backend">
-          <rect class="bounds" x="48" y="172" width="192" height="104"/>
-          <rect class="tag" x="60" y="180" width="54" height="16"/><text class="tag-text" x="87" y="191" text-anchor="middle">PAGE</text>
-          <text class="name" x="144" y="224" text-anchor="middle">点播 / 直播页面</text>
-          <text class="sub" x="144" y="246" text-anchor="middle">query · source candidates</text>
-          <text class="sub" x="144" y="261" text-anchor="middle">PlaybackPlan assembly</text>
+        <rect width="1920" height="1280" fill="#f5f5f5"/>
+        <rect class="zone" x="40" y="96" width="328" height="752" rx="8"/>
+        <text class="zone-label" x="64" y="128">页面与交互</text>
+<rect class="zone" x="392" y="96" width="720" height="752" rx="8"/>
+        <text class="zone-label" x="416" y="128">控制权与规范状态</text>
+<rect class="zone" x="1136" y="96" width="744" height="1032" rx="8"/>
+        <text class="zone-label" x="1160" y="128">原生资源与平台输出</text>
+<path class="edge" d="M344 280 H416"/>
+<path class="edge" d="M696 280 H768"/>
+<path class="edge" d="M1088 280 H1160"/>
+<path class="edge" d="M1480 280 H1552"/>
+<path class="edge" d="M1704 380 V560"/>
+<path class="edge" d="M1704 760 V880"/>
+<path class="edge-return" d="M864 380 V440 Q864 448 856 448 H212 Q204 448 204 456 V560"/>
+<path class="edge-async" d="M976 380 V560"/>
+<path class="edge-async" d="M1320 380 V488 Q1320 496 1312 496 H1048 Q1040 496 1040 504 V560"/>
+<rect class="label-mask" x="348" y="254" width="64" height="18"/>
+        <text class="edge-label" x="380" y="268" text-anchor="middle">计划</text>
+<rect class="label-mask" x="700" y="254" width="64" height="18"/>
+        <text class="edge-label" x="732" y="268" text-anchor="middle">意图</text>
+<rect class="label-mask" x="1092" y="254" width="64" height="18"/>
+        <text class="edge-label" x="1124" y="268" text-anchor="middle">操作</text>
+<rect class="label-mask" x="1484" y="254" width="64" height="18"/>
+        <text class="edge-label" x="1516" y="268" text-anchor="middle">媒体</text>
+<rect class="label-mask" x="508" y="422" width="72" height="18"/>
+        <text class="edge-label" x="544" y="436" text-anchor="middle">规范快照</text>
+<rect class="label-mask" x="1130" y="470" width="100" height="18"/>
+        <text class="edge-label" x="1180" y="484" text-anchor="middle">实际状态采样</text>
+<rect class="label-mask" x="896" y="516" width="72" height="20"/><text class="edge-label" x="956" y="530" text-anchor="end">独立发布</text>
+<rect class="label-mask" x="1712" y="460" width="72" height="20"/>
+        <text class="edge-label" x="1720" y="474">输出准备</text>
+<rect class="label-mask" x="1712" y="812" width="72" height="20"/>
+        <text class="edge-label" x="1720" y="826">交接回执</text>
+<g class="node backend" data-node-id="business-intent">
+        <rect class="bounds" x="64" y="180" width="280" height="200"/>
+        <rect class="tag" x="88" y="196" width="72" height="20"/>
+        <text class="tag-text" x="124" y="210" text-anchor="middle">INTENT</text>
+        <text class="name" x="88" y="244">业务计划与页面副作用</text>
+        <text class="body" x="88" y="280">装配内容、来源与起播位置</text>
+        <text class="body" x="88" y="306">提交查询和播放意图</text>
+        <text class="body" x="88" y="332">字幕与历史等副作用留在页面</text>
         </g>
-        <g class="node backend">
-          <rect class="bounds" x="296" y="172" width="192" height="104"/>
-          <rect class="tag" x="308" y="180" width="58" height="16"/><text class="tag-text" x="337" y="191" text-anchor="middle">OWNER</text>
-          <text class="name" x="392" y="224" text-anchor="middle">PlaybackOwner</text>
-          <text class="sub" x="392" y="246" text-anchor="middle">request generation · inhibitors</text>
-          <text class="sub" x="392" y="261" text-anchor="middle">keep-alive lease</text>
+<g class="node backend" data-node-id="control-owner">
+        <rect class="bounds" x="416" y="180" width="280" height="200"/>
+        <rect class="tag" x="440" y="196" width="64" height="20"/>
+        <text class="tag-text" x="472" y="210" text-anchor="middle">OWNER</text>
+        <text class="name" x="440" y="244">当前页面控制权</text>
+        <text class="body" x="440" y="280">持有抑制令牌与保活租约</text>
+        <text class="body" x="440" y="306">由当前所有者提交控制</text>
+        <text class="body" x="440" y="332">失去控制权使旧请求失效</text>
         </g>
-        <g class="node focal">
-          <rect class="bounds" x="520" y="172" width="192" height="104"/>
-          <rect class="tag" x="532" y="180" width="68" height="16"/><text class="tag-text" x="566" y="191" text-anchor="middle">SESSION</text>
-          <text class="name" x="616" y="224" text-anchor="middle">PlaybackSession</text>
-          <text class="sub" x="616" y="246" text-anchor="middle">plan · intent · config snapshot</text>
-          <text class="sub" x="616" y="261" text-anchor="middle">requestId / loadId · op order</text>
+<g class="node focal" data-node-id="playback-state">
+        <rect class="bounds" x="768" y="180" width="320" height="200"/>
+        <rect class="tag" x="792" y="196" width="64" height="20"/>
+        <text class="tag-text" x="824" y="210" text-anchor="middle">STATE</text>
+        <text class="name" x="792" y="244">播放会话与规范状态</text>
+        <text class="body" x="792" y="280">拥有播放意图与完整快照</text>
+        <text class="body" x="792" y="306">串行协调来源、操作与配置</text>
+        <text class="body" x="792" y="332">核对请求代次和加载代次</text>
+        <text class="body" x="792" y="358">发布快照与只读媒体锚点</text>
         </g>
-        <g class="node backend">
-          <rect class="bounds" x="768" y="172" width="192" height="104"/>
-          <rect class="tag" x="780" y="180" width="66" height="16"/><text class="tag-text" x="813" y="191" text-anchor="middle">RUNTIME</text>
-          <text class="name" x="864" y="224" text-anchor="middle">原生播放运行时</text>
-          <text class="sub" x="864" y="246" text-anchor="middle">NativePlaybackRuntime</text>
-          <text class="sub" x="864" y="261" text-anchor="middle">event gate · output epoch · anchor</text>
+<g class="node backend" data-node-id="native-lifetime">
+        <rect class="bounds" x="1160" y="180" width="320" height="200"/>
+        <rect class="tag" x="1184" y="196" width="80" height="20"/>
+        <text class="tag-text" x="1224" y="210" text-anchor="middle">RUNTIME</text>
+        <text class="name" x="1184" y="244">原生操作与资源所有权</text>
+        <text class="body" x="1184" y="280">持有媒体实例和输出资源</text>
+        <text class="body" x="1184" y="306">串行执行已接受的原生操作</text>
+        <text class="body" x="1184" y="332">核对原生事件的加载与输出身份</text>
+        <text class="body" x="1184" y="358">后台采样实际播放状态</text>
         </g>
-        <g class="node backend">
-          <rect class="bounds" x="1000" y="172" width="216" height="104"/>
-          <rect class="tag" x="1012" y="180" width="58" height="16"/><text class="tag-text" x="1041" y="191" text-anchor="middle">MEDIA</text>
-          <text class="name" x="1108" y="224" text-anchor="middle">媒体实例</text>
-          <text class="sub" x="1108" y="246" text-anchor="middle">Player · VideoController</text>
-          <text class="sub" x="1108" y="261" text-anchor="middle">media_kit · mpv · decoded frames</text>
+<g class="node backend" data-node-id="media-instance">
+        <rect class="bounds" x="1552" y="180" width="304" height="200"/>
+        <rect class="tag" x="1576" y="196" width="64" height="20"/>
+        <text class="tag-text" x="1608" y="210" text-anchor="middle">MEDIA</text>
+        <text class="name" x="1576" y="244">媒体解码与输出准备</text>
+        <text class="body" x="1576" y="280">打开媒体、选轨与解码</text>
+        <text class="body" x="1576" y="306">确认文件加载和输出就绪</text>
+        <text class="body" x="1576" y="332">快速切源可复用媒体实例</text>
         </g>
-        <g class="node backend">
-          <rect class="bounds" x="1000" y="356" width="216" height="96"/>
-          <rect class="tag" x="1012" y="364" width="58" height="16"/><text class="tag-text" x="1041" y="375" text-anchor="middle">OUTPUT</text>
-          <text class="name" x="1108" y="408" text-anchor="middle">输出交接协调</text>
-          <text class="sub" x="1108" y="430" text-anchor="middle">token · paint barrier · release</text>
+<g class="node backend" data-node-id="ui-projection">
+        <rect class="bounds" x="64" y="560" width="280" height="200"/>
+        <rect class="tag" x="88" y="576" width="64" height="20"/>
+        <text class="tag-text" x="120" y="590" text-anchor="middle">VIEW</text>
+        <text class="name" x="88" y="624">界面状态投影</text>
+        <text class="body" x="88" y="660">将播放快照投影到控件</text>
+        <text class="body" x="88" y="686">交互经控制入口提交</text>
+        <text class="body" x="88" y="712">播放规范状态由会话持有</text>
         </g>
-        <g class="node store">
-          <rect class="bounds" x="1000" y="496" width="216" height="96"/>
-          <rect class="tag" x="1012" y="504" width="58" height="16"/><text class="tag-text" x="1041" y="515" text-anchor="middle">PLATFORM</text>
-          <text class="name" x="1108" y="548" text-anchor="middle">Surface / Texture 输出</text>
-          <text class="sub" x="1108" y="570" text-anchor="middle">Android Surface · Windows texture</text>
+<g class="node store" data-node-id="media-clock">
+        <rect class="bounds" x="768" y="560" width="320" height="248"/>
+        <rect class="tag" x="792" y="576" width="64" height="20"/>
+        <text class="tag-text" x="824" y="590" text-anchor="middle">CLOCK</text>
+        <text class="name" x="792" y="624">只读媒体时钟</text>
+        <text class="body" x="792" y="660">位置／单调时刻／实际速率</text>
+        <text class="body" x="792" y="686">推进状态／连续性／有效期</text>
+        <text class="body" x="792" y="712">独立于界面快照发布</text>
+        <text class="body" x="792" y="738">显示端按帧目标时间外推</text>
+        <text class="body" x="792" y="764">有效期到达后停止外推</text>
         </g>
-        <g class="node backend">
-          <rect class="bounds" x="48" y="396" width="192" height="96"/>
-          <rect class="tag" x="60" y="404" width="58" height="16"/><text class="tag-text" x="89" y="415" text-anchor="middle">FACADE</text>
-          <text class="name" x="144" y="448" text-anchor="middle">PlPlayerController</text>
-          <text class="sub" x="144" y="470" text-anchor="middle">snapshot projection · UI</text>
+<g class="node backend" data-node-id="output-handoff">
+        <rect class="bounds" x="1552" y="560" width="304" height="200"/>
+        <rect class="tag" x="1576" y="576" width="80" height="20"/>
+        <text class="tag-text" x="1616" y="590" text-anchor="middle">HANDOFF</text>
+        <text class="name" x="1576" y="624">输出交接与释放屏障</text>
+        <text class="body" x="1576" y="660">绑定输出身份、尺寸和挂载</text>
+        <text class="body" x="1576" y="686">核对画面交接与几何回执</text>
+        <text class="body" x="1576" y="712">旧输出释放完成后才能复用</text>
         </g>
-
-        <line x1="32" y1="648" x2="1248" y2="648" stroke="rgba(45,49,66,.12)" stroke-width=".8"/>
-        <text class="legend-text" x="40" y="680">图例</text>
-        <line x1="100" y1="676" x2="148" y2="676" stroke="#2e5aa8" stroke-width="1.2" marker-end="url(#player-arrow-link)"/>
-        <text class="legend-text" x="160" y="680">页面提交</text>
-        <line x1="300" y1="676" x2="348" y2="676" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#player-arrow)"/>
-        <text class="legend-text" x="360" y="680">控制 / 资源流</text>
-        <line x1="520" y1="676" x2="568" y2="676" stroke="#4f5d75" stroke-width="1" stroke-dasharray="5 4" marker-end="url(#player-arrow)"/>
-        <text class="legend-text" x="580" y="680">状态投影</text>
-        <rect x="720" y="666" width="20" height="18" rx="4" fill="rgba(191,69,32,.08)" stroke="#bf4520"/>
-        <text class="legend-text" x="752" y="680">会话规范状态</text>
+<g class="node store" data-node-id="platform-output">
+        <rect class="bounds" x="1552" y="880" width="304" height="200"/>
+        <rect class="tag" x="1576" y="896" width="88" height="20"/>
+        <text class="tag-text" x="1620" y="910" text-anchor="middle">PLATFORM</text>
+        <text class="name" x="1576" y="944">平台视频输出</text>
+        <text class="body" x="1576" y="980">Android：解码器与 Surface</text>
+        <text class="body" x="1576" y="1006">Windows：纹理与窗口输出</text>
+        <text class="body" x="1576" y="1032">管理输出挂载、消费与释放</text>
+        </g>
+<g class="annotation"><text class="note-title" x="416" y="600">代次决定结果是否生效</text>
+        <text class="body" x="416" y="636">每次异步等待后重新核对归属。</text>
+        <text class="body" x="416" y="664">已发出的原生操作继续排空，</text>
+        <text class="body" x="416" y="692">当前代次结果合入规范状态。</text>
+        </g>
+<g class="annotation"><text class="note-title" x="64" y="936">资源关闭与复用</text>
+        <text class="body" x="64" y="972">先停止接收新操作，再排空已接受操作、卸载媒体并释放输出。</text>
+        <text class="body" x="64" y="1000">取消或超时结束调用方等待；原生释放回执到达后归还资源槽。</text>
+        <text class="body" x="64" y="1028">用户暂停、外部抑制和原生实际状态分别记录，抑制解除后保留用户意图。</text>
+        </g>
+        <line x1="48" y1="1200" x2="1872" y2="1200" stroke="rgba(45,49,66,.16)"/>
+        <text class="legend-text" x="64" y="1244">图例</text>
+        <path class="edge" d="M160 1238 H224"/>
+        <text class="legend-text" x="244" y="1244">调用／资源协调</text>
+        <path class="edge-return" d="M544 1238 H608"/>
+        <text class="legend-text" x="628" y="1244">返回／状态投影</text>
+        <path class="edge-async" d="M928 1238 H992"/>
+        <text class="legend-text" x="1012" y="1244">异步发布</text>
+        <rect x="1312" y="1224" width="24" height="24" rx="4" fill="rgba(191,69,32,.08)" stroke="#bf4520"/>
+        <text class="legend-text" x="1352" y="1244">主要状态或决策边界</text>
       </svg>
     </div>
-    <figcaption>页面装配播放计划，Owner 管理页面控制权，Session 串行协调命令并发布快照，Runtime 管理原生播放器和输出。资源槽等待 Player.released 后才可供下一实例使用；媒体时钟与视频采样使用独立通道。</figcaption>
+    <figcaption>箭头表示职责之间的协议关系。界面读取快照，弹幕读取独立媒体时钟；原生回执只在当前请求、加载和输出身份仍匹配时生效。</figcaption>
   </figure>
+  <section class="explanation" aria-label="协议与边界说明">
+    <h2>协议与边界</h2>
+    <table>
+      <thead><tr><th scope="col">边界</th><th scope="col">交换的信息</th><th scope="col">处理规则</th></tr></thead>
+      <tbody><tr><td>业务计划与控制</td><td>内容身份、来源候选、起播位置、最新播放意图及配置。</td><td>新请求先占有代次，再在命令队列外解析来源；提交结果时核对控制权与请求代次。</td></tr>
+<tr><td>状态与实际观测</td><td>会话拥有用户意图、抑制令牌和完整快照；运行时报告实际观测。</td><td>命令回执结算原生写入，观测事件更新实际播放、暂停和缓冲状态。</td></tr>
+<tr><td>只读媒体时钟</td><td>媒体位置与同一进程单调时钟的锚点，以及实际速率、连续性和有效期。</td><td>可推进时按目标时间外推；暂停或缓冲时冻结。跳转先撤销旧锚点，匹配完成回执后重建连续性。</td></tr>
+<tr><td>资源释放</td><td>已接受操作的排空、媒体卸载、输出释放和媒体实例销毁回执。</td><td>取消或超时结束调用方等待；运行时继续排空操作，真实释放完成后归还资源槽。</td></tr></tbody>
+    </table>
+  </section>
+  <footer>实现映射与验证入口：<a href="../development/architecture.md#播放统一架构">播放分层</a> · <a href="../development/playback-model.md">状态约束</a> · <a href="../development/runtime-flows.md#媒体时钟与跳转确认">时钟与跳转流程</a>。</footer>
 </main>
 </body>
 </html>

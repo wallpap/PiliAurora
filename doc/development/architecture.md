@@ -76,18 +76,19 @@ flowchart LR
     Owner --> Session[PlaybackSession]
     Session --> Runtime[NativePlaybackRuntime]
     Runtime --> Output[media_kit_video<br/>Android Surface / Windows 纹理]
-    Session --> Snapshot[PlaybackSnapshot]
-    Snapshot --> Controller[PlPlayerController]
+    Session -. PlaybackSnapshot .-> Controller[PlPlayerController]
     Controller --> UI[播放器控件]
     Page --> Controller
+    Session -. 独立锚点 .-> Clock[PlaybackMediaClock]
+    Clock --> Danmaku[点播弹幕按帧求值]
 ```
 
 | 层 | 主要入口 | 职责 | 不应承担 |
 | --- | --- | --- | --- |
 | 页面 | `pages/video/`、`pages/live_room/` | 生成业务内容键，解析地址和媒体候选，装配 `PlaybackPlan`，处理字幕、历史和弹幕等页面副作用 | 直接调度原生加载、把 URL 当作内容身份 |
 | 页面所有者 | `PlaybackOwner` | 表达页面控制权，提交查询、加载和控制命令，持有页面 inhibitor 与 keepalive 租约 | 跨页面保存原生资源 |
-| 播放会话 | `PlaybackSession` | 接受请求代次，提交不可变计划，合并播放意图与配置，执行来源故障切换、命令串行化和状态快照发布 | 构建控件、发起业务 HTTP 请求 |
-| 原生运行时 | `NativePlaybackRuntime` | 创建和释放 Player/VideoController，校验原生事件身份，准备输出、首帧和几何，串行执行已接受的原生操作 | 判断页面业务归属 |
+| 播放会话 | `PlaybackSession` | 接受请求代次，提交不可变计划，合并播放意图与配置，执行来源故障切换和命令串行化，发布状态快照与独立媒体锚点 | 构建控件、发起业务 HTTP 请求 |
+| 原生运行时 | `NativePlaybackRuntime` | 创建和释放 Player/VideoController，校验原生事件身份，准备输出、首帧和几何，采样媒体时钟，串行执行已接受的原生操作 | 判断页面业务归属 |
 | UI 门面 | `PlPlayerController` | 把快照投影到现有控件状态，转发页面命令，保留播放器外观与业务适配 | 成为播放状态或原生输出的第二所有者 |
 | 平台输出 | `media_kit_video` 及 `third_party/` 适配 | 管理 Surface/纹理、输出代次、尺寸提交、帧交接和释放回执 | 推断视频业务身份 |
 
@@ -110,14 +111,10 @@ flowchart LR
 - `services/messaging/` 按主账号的 `MessagingSession` 管理消息业务。GetX 保留路由，Riverpod 订阅业务快照；聊天和分享共用会话缓存及发送锁。分类消息句柄由页面 Notifier 创建和释放，未读概览、会话列表及聊天缓存由 Session 持有。入口和异步约定见[消息模块](../../lib/services/messaging/README.md)。
 - `DownloadRepository` 负责下载目录布局和记录读写；`DownloadService` 负责队列、状态和任务调度；`DownloadManager` 负责单路媒体传输。详情见[下载流程](runtime-flows.md#下载)。
 - `DownloadRepository` 写入前编码快照，同目录临时文件 flush/close 后重命名替换，并保留上次可读 JSON 的 `.bak`。启动按正式文件、备份、临时文件顺序恢复记录与媒体索引，读取或恢复失败通过回调报告；Windows 文件占用时不删除正式文件重试。它不提供跨文件事务，也不承诺断电时目录项持久性；进程中断后的续传进度以实际媒体文件长度为准。
-- `pl_player/` 是项目与 `media_kit`、mpv 及平台输出之间的协调层。`PlPlayerController` 负责 UI 投影、业务事件和平台适配；页面通过 `PlaybackOwner` 提交查询、加载与控制命令，`PlaybackSession` 管理页面归属、播放意图、配置快照和原生操作顺序。
-- 每个 `PlaybackPlan` 冻结业务内容键、来源候选及索引、时间线、位置和加载配置。查询在队列外解析，但 owner 在开始时同步接受请求代次与播放策略，再由会话提交解析出的计划；来源地址不承担内容身份。偏好只在装配计划或创建运行时配置时读取。
-- `PlaybackSnapshot` 是播放状态和配置的规范投影。页面控制器将其投影到现有 UI 状态；进度和视频帧仍走专用通道。页面保留字幕请求、直播消息和弹幕等业务副作用，并在异步提交时核对媒体与页面归属。
-- `NativePlaybackRuntime` 集中处理 Player/VideoController 初始化、原生配置和释放。跨控制器的运行时槽在旧 Player 的 `released` 完成前不允许创建新 Player；显式后台媒体租约可让页面 owner 关闭后继续播放。最后一个 owner 和租约释放后才开始会话关闭。
-- 播放状态区分用户意图、原生实际状态和会话 inhibitor。切画质、音轨、倍速、音量、shader 与网络恢复通过 owner 命令协调；页面路由、后台和音频焦点只释放自己持有的 inhibitor，不重写用户暂停意图。
-- 快速切源共享一套 Player、VideoController、事件订阅和纹理输出。过期请求在进入原生操作前被跳过；原生已发出的操作保留在运行时串行链中，并在返回后核对请求代次。
-- Windows 独立播放窗口由 `DesktopPlaybackWindows` 启动子进程，通过本地连接接收播放请求、账号与设置快照。每个窗口有自己的 Flutter、播放器和缓存目录；窗口内的设置保存在内存中，主窗口负责排列、位置保存与离线进度回写。
-- Windows 超分更新通过会话 shader 配置槽串行化。需要重建渲染器时，先卸载媒体，再重建输出并重新加载；点播恢复位置，会话保留最新播放意图。播放器释放等待已接受的原生操作结束。原生资源释放顺序见[Windows 视频输出](../maintenance/windows-video-output.md)。
+- 播放各层职责与代次见上方[播放统一架构](#播放统一架构)。偏好在装配计划或运行时配置时读取；字幕、历史和弹幕等页面副作用提交时核对媒体及页面归属。
+- 显式后台媒体租约可让页面 owner 关闭后继续播放；最后一个 owner 和租约释放后才关闭会话。路由、后台与音频焦点分别释放自己的 inhibitor，保留用户暂停意图。
+- 快速切源复用 Player、控制器、订阅和纹理。过期操作在进入原生前跳过，已发出的操作仍沿运行时串行链完成并核对代次。
+- Windows 子窗口通过本地连接接收播放、账号及设置快照，设置仅在内存生效；超分重建先卸载媒体，再重建输出并重载，恢复点播位置与最新意图。资源释放顺序见[Windows 视频输出](../maintenance/windows-video-output.md)。
 - protobuf 与 Android JNI 属于生成产物。修改源定义或生成脚本，再运行项目生成流程；不要直接维护生成文件。
 - 定制依赖通过 `dependency_overrides` 指向 `third_party/` 中的本地包。来源、版本和许可证以 `pubspec.yaml`、`pubspec.lock` 与 [`third_party/README.md`](../../third_party/README.md) 为准。
 
@@ -172,3 +169,19 @@ flowchart LR
 `CredentialCipher` 复用现有 `encrypt` 依赖，以 AES-GCM 和随机 nonce 加密账号 Cookie、Token 与 WebDAV 密码。本机 Hive 和 JSON 备份共用版本化密文格式，普通设置保持原格式。
 
 启动时读取并迁移旧明文凭证，重写后压缩 Hive 文件。备份导入兼容旧明文；损坏或未知版本的密文会报错。新密文需要支持该格式的应用版本读取，维护密钥或格式时须保留旧版本解密路径。
+
+## 领域术语
+
+| 术语 | 项目含义 |
+| --- | --- |
+| 上游 | PiliPlus 2.1.5 及其历史来源，更新不会自动同步 |
+| 移动端／桌面端 | 当前发布目标为 Android／Windows x64；`PlatformUtils.isMobile` 可能代表平台集合 |
+| mid | Bilibili 用户标识 |
+| aid／bvid | 视频标识，接口所需字段可能不同 |
+| CID | 分 P 或媒体内容标识，播放地址及视频弹幕常用 |
+| UGC／PGC | 用户生成内容／专业或版权内容，分集与播放流程有差异 |
+| 内容键 | `PlaybackPlan.contentKey`，标识视频、分集或直播间，区别于来源 URL |
+| 输出代次 | `outputEpoch`，关联输出准备、挂载、几何与释放回执 |
+| inhibitor | 阻止自动恢复或继续播放的外部令牌，例如音频焦点、后台策略与输出不可用 |
+
+排障时区分地址、网络、解码和渲染阶段；图片、HTTP、播放器和下载缓存分别计量。本地账号记录、当前账号、凭据有效性与服务端会话也须分别核对。

@@ -18,6 +18,28 @@ PiliAurora 是面向 Android 和 Windows x64 的 Bilibili 第三方客户端，�
 
 [下载](https://github.com/wallpap/PiliAurora/releases/latest) · [v1.6.9 更新说明](doc/releases/v1.6.9.md) · [问题反馈](https://github.com/wallpap/PiliAurora/issues) · [许可证](LICENSE)
 
+## 适配平台与下载
+
+| 平台 | 发布包 |
+| --- | --- |
+| Android | `arm64-v8a`、`armeabi-v7a`、`x86_64` 分 ABI APK |
+| Windows x64 | 便携包、安装程序 |
+
+从 [GitHub Releases](https://github.com/wallpap/PiliAurora/releases/latest) 下载对应平台的安装包。
+
+应用的“检查更新”会比较正式发布的版本号，并通过浏览器下载对应平台的安装包。预发布版本需要从 Releases 页面手动下载。
+Windows 安装版更新时，先退出主窗口与独立播放窗口，再将 EXE 安装到原目录；安装器会记住上次的安装位置。
+便携版更新时，将 ZIP 完整解压到新目录并启动其中的 `PiliAurora.exe`。账号和设置保存在 Windows 用户数据目录，更新程序文件时无需迁移。
+更新后可在“关于”核对版本；任务栏固定项若仍指向旧目录，可取消后从新版窗口重新固定。
+
+## 项目文档
+
+使用说明、开发指南和版本记录见[文档索引](doc/README.md)。
+
+- 使用：[播放与弹幕](doc/guides/playback.md)、[内容过滤与互动](doc/guides/content.md)、[账号与备份](doc/guides/data-security.md)。
+- 开发：[构建与测试](doc/development/build-and-test.md)、[功能地图](doc/development/features.md)、[架构](doc/development/architecture.md)。
+- 排障：[维护指南](doc/maintenance/troubleshooting.md)、[Windows 视频输出](doc/maintenance/windows-video-output.md)、[历史排障经验](doc/diagnostic-notes/README.md)。
+
 ## 界面预览
 
 ### Windows
@@ -52,25 +74,11 @@ PiliAurora 是面向 Android 和 Windows x64 的 Bilibili 第三方客户端，�
   <img src="assets/display/android-danmaku-filter-settings.jpg" alt="Android 弹幕屏蔽与合并设置" width="230">
 </p>
 
-## 适配平台与下载
-
-| 平台 | 发布包 |
-| --- | --- |
-| Android | `arm64-v8a`、`armeabi-v7a`、`x86_64` 分 ABI APK |
-| Windows x64 | 便携包、安装程序 |
-
-从 [GitHub Releases](https://github.com/wallpap/PiliAurora/releases/latest) 下载对应平台的安装包。
-
-应用的“检查更新”会比较正式发布的版本号，并通过浏览器下载对应平台的安装包。预发布版本需要从 Releases 页面手动下载。
-Windows 安装版更新时，先退出主窗口与独立播放窗口，再将 EXE 安装到原目录；安装器会记住上次的安装位置。
-便携版更新时，将 ZIP 完整解压到新目录并启动其中的 `PiliAurora.exe`。账号和设置保存在 Windows 用户数据目录，更新程序文件时无需迁移。
-更新后可在“关于”核对版本；任务栏固定项若仍指向旧目录，可取消后从新版窗口重新固定。
-
 ## 相较于 PiliPlus 2.1.5 的改进
 
 ### Windows 多窗口播放
 
-视频和直播可以弹出为多个独立窗口，一边看视频或直播，一边在主窗口继续浏览。播放窗口支持置顶、拖动、缩放、网格和层叠排列，记住上次的位置与大小；各窗口可分别调节音量，也可切换声音来源。使用方式见[Windows 独立播放窗口](doc/guides/windows-playback-windows.md)。
+视频和直播可以弹出为多个独立窗口，一边看视频或直播，一边在主窗口继续浏览。播放窗口支持置顶、拖动、缩放、网格和层叠排列，记住上次的位置与大小；各窗口可分别调节音量，也可切换声音来源。使用方式见[Windows 独立播放窗口](doc/guides/playback.md#windows-播放窗口)。
 
 ### 播放与弹幕资源管理
 
@@ -80,7 +88,7 @@ Android 和 Windows 的视频与直播弹幕共用显示实现，分别按媒体
 
 ### 弹幕合并与帧率调节
 
-视频弹幕可合并 20 秒内相同或相似的内容，并按重复数量放大字号。Windows 弹幕自动跟随屏幕刷新节奏；Android 可跟随屏幕，或选择 60、90、120 FPS，调整后即时生效。旧版保存的 30 FPS 设置按“跟随屏幕”生效。轨道间距按实际文字高度分配，高能进度条也可自定义颜色。设置说明见[弹幕合并与帧率设置](doc/guides/danmaku-merge.md)。
+视频弹幕可合并 20 秒内相同或相似的内容，并按重复数量放大字号。Windows 弹幕自动跟随屏幕刷新节奏；Android 可跟随屏幕，或选择 60、90、120 FPS，调整后即时生效。旧版保存的 30 FPS 设置按“跟随屏幕”生效。轨道间距按实际文字高度分配，高能进度条也可自定义颜色。设置说明见[弹幕合并与帧率设置](doc/guides/playback.md#弹幕合并与帧率)。
 
 ### 播放稳定性修复
 
@@ -98,11 +106,11 @@ Android 另有按屏幕分辨率缩放输出的实验选项，默认关闭。输
 
 ### 内容过滤
 
-“设置 → 账号与隐私”中的“增强黑名单屏蔽”默认开启，在推荐、热门、搜索、动态和直播等列表中过滤已拉黑作者。“检查合作视频作者”也默认开启，列表已标识的合作视频中，任一作者被拉黑即屏蔽整条视频。合作作者查询会增加请求量和加载时间，可单独关闭。适用范围见[信息流黑名单屏蔽](doc/guides/content-filtering.md)。
+“设置 → 账号与隐私”中的“增强黑名单屏蔽”默认开启，在推荐、热门、搜索、动态和直播等列表中过滤已拉黑作者。“检查合作视频作者”也默认开启，列表已标识的合作视频中，任一作者被拉黑即屏蔽整条视频。合作作者查询会增加请求量和加载时间，可单独关闭。适用范围见[信息流黑名单屏蔽](doc/guides/content.md#黑名单屏蔽)。
 
 首页推荐按视口容量补充内容，普通卡片先显示，合作视频卡片核验通过后逐张显示；分页失败时保留已有内容并提供重试。
 
-“设置 → 内容与互动 → 内容过滤”中的“最低评论用户等级”可按 Lv1～Lv6 过滤评论及回复，默认不屏蔽。修改后刷新评论区生效；缺少用户资料的评论保留。适用范围见[评论等级过滤](doc/guides/comments-and-emotes.md#评论等级过滤)。
+“设置 → 内容与互动 → 内容过滤”中的“最低评论用户等级”可按 Lv1～Lv6 过滤评论及回复，默认不屏蔽。修改后刷新评论区生效；缺少用户资料的评论保留。适用范围见[评论等级过滤](doc/guides/content.md#评论等级过滤)。
 
 ### 账号与备份
 
@@ -125,7 +133,7 @@ PiliAurora 从 PiliPlus 2.1.5 开始独立维护，当前发布 Android 和 Wind
 - 内容浏览：首页推荐、热门、排行榜、视频、番剧、文章、音频、直播和搜索。
 - 播放：清晰度和音质选择、播放速度、硬件解码设置、弹幕、字幕、分集切换和播放记录。分集间可继承字幕状态，高能进度条支持自定义颜色。
 - 互动：评论、动态、关注、粉丝、消息通知、私信和直播聊天，直播弹幕支持表情。
-- 评论支持按用户等级过滤，长按菜单可拉黑用户；表情包可按分类添加、移除和预览，详见[评论与表情包](doc/guides/comments-and-emotes.md)。
+- 评论支持按用户等级过滤，长按菜单可拉黑用户；表情包可按分类添加、移除和预览，详见[评论与表情包](doc/guides/content.md#弹幕点赞)。
 - 账号与内容管理：多账号、收藏夹、观看历史、稍后再看、番剧订阅和离线下载。支持清理失效番剧订阅、选择下载音质。
 - 扩展能力：DLNA 投屏、WebDAV 设置备份、SponsorBlock 和 WebView。
 
@@ -142,14 +150,6 @@ fvm install
 pwsh -File tool/build.ps1 -Platform windows -Mode debug
 pwsh -File tool/build.ps1 -Platform android -Mode debug
 ```
-
-## 项目文档
-
-使用说明、开发指南和版本记录见[文档索引](doc/README.md)。
-
-- 使用：[弹幕设置](doc/guides/danmaku-merge.md)、[Windows 独立播放窗口](doc/guides/windows-playback-windows.md)、[账号凭证与备份](doc/guides/data-security.md)。
-- 开发：[构建与测试](doc/development/build-and-test.md)、[功能领域地图](doc/development/features.md)、[架构](doc/development/architecture.md)。
-- 排障：[维护指南](doc/maintenance/troubleshooting.md)、[Windows 视频输出](doc/maintenance/windows-video-output.md)、[历史排障经验](doc/diagnostic-notes/README.md)。
 
 ## 参与贡献
 

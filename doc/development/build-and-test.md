@@ -1,5 +1,7 @@
 # 构建与测试
 
+从仓库根目录运行本页命令。首次开发按环境、依赖、构建的顺序准备；修改已有功能时直接查[静态检查与测试](#静态检查与测试)。任务导航见[文档索引](../README.md#开发)。
+
 ## 环境
 
 | 工具 | 当前配置 | 来源 |
@@ -53,6 +55,8 @@ pwsh -NoProfile -File tool/build.ps1 -Platform windows -Mode profile -WindowsEng
 
 ## 发布构建与附件
 
+### 本地构建与发布工作流
+
 本地发布验证分别执行：
 
 ```powershell
@@ -62,9 +66,13 @@ pwsh -File tool/build.ps1 -Platform windows -Mode release
 
 Android 通用 APK 位于 `build/app/outputs/flutter-apk/app-release.apk`，Windows 运行目录位于 `build/windows/x64/runner/Release/`。GitHub Release 由 `.github/workflows/build.yml` 手动触发并传入 `vX.Y.Z`，通过 `build_android` 和 `build_win_x64` 选择平台；预发布须启用 `prerelease`，需要先验证附件时可同时启用 `draft_release`。Android 使用对应架构的定制引擎生成三个分 ABI APK，Windows 使用定制引擎生成 x64 便携包和安装程序。引擎产物及身份文件随 Git 保存，CI 校验后直接装配，维护步骤见[预编译引擎](../../third_party/flutter_engine/README.md)。版本名与构建号取自 `pubspec.yaml`，工作流会用 tag 和提交数重写本次构建的版本和 `pili_release.json`。
 
+### Windows 打包与覆盖安装
+
 Windows 的 fastforge 打包前置入口为 `tool/packaging/prepare_windows_package.py`，先装配并校验定制引擎，再生成 `piliaurora-runtime.sha256`。安装版和便携版携带相同的程序文件清单；Inno 模板要求该清单存在。覆盖安装完成后，旧清单中已退役且摘要未改变的程序文件会被清理，用户修改的文件和未登记文件会保留。从尚无清单的旧安装升级时，开始记录本次包的文件归属。
 
 安装器通过 Windows Restart Manager 检测程序文件占用。应用收到已确认的更新退出请求后，通过原生消息通道进入退出流程，保存主窗口和播放小窗的本地进度并释放播放器，跳过关闭窗口时的托盘驻留设置；安装器保留强制关闭能力，用于拒绝退出的旧版本或无响应的进程。更新前应保存当前操作并结束播放。安装器沿用相同 AppId 的历史安装目录，并为快捷方式写入与运行进程一致的 `PiliAurora.Desktop` 标识。版本检查按 `tag_name` 的数字版本比较，跳过草稿与预发布；相同版本的构建时间或 build 后缀变化不触发更新提示。
+
+### 打包回归
 
 覆盖安装回归使用独占临时目录，编译并运行关闭系统集成的安装器夹具，验证程序更新、退役文件清理、用户文件保留和路径边界。进程关闭夹具覆盖正常退出、隐藏驻留、多个拒绝退出的独立进程与 DLL 占用，并检查其他目录的同名程序保持运行、更新无需重启 Windows；该夹具需要 .NET Framework C# 编译器。Windows 需要 PATH 中的 Inno Setup 6：
 
