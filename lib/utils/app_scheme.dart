@@ -21,6 +21,7 @@ import 'package:pili_aurora/pages/rank/view.dart';
 import 'package:pili_aurora/pages/subscription_detail/view.dart';
 import 'package:pili_aurora/pages/video/reply_reply/view.dart';
 import 'package:pili_aurora/utils/id_utils.dart';
+import 'package:pili_aurora/utils/navigation_request.dart';
 import 'package:pili_aurora/utils/page_utils.dart';
 import 'package:pili_aurora/utils/parse_string.dart';
 import 'package:pili_aurora/utils/platform_utils.dart';
@@ -503,6 +504,27 @@ abstract final class PiliScheme {
     bool off = false,
     Map? parameters,
   }) async {
+    final request = NavigationRequest();
+    try {
+      return await _fullPathPushOwned(
+        uri,
+        request: request,
+        selfHandle: selfHandle,
+        off: off,
+        parameters: parameters,
+      );
+    } finally {
+      await request.close();
+    }
+  }
+
+  static Future<bool> _fullPathPushOwned(
+    Uri uri, {
+    required NavigationRequest request,
+    bool selfHandle = false,
+    bool off = false,
+    Map? parameters,
+  }) async {
     // https://m.bilibili.com/bangumi/play/ss39708
     // https | m.bilibili.com | /bangumi/play/ss39708
 
@@ -522,6 +544,8 @@ abstract final class PiliScheme {
     // redirect
     if (host.contains(b23_tv)) {
       String? redirectUrl = await UrlUtils.parseRedirectUrl(uri.toString());
+      // 已消费的旧链接不可再触发浏览器回退或覆盖用户的新导航。
+      if (!request.isCurrent) return true;
       if (redirectUrl != null) {
         uri = Uri.parse(redirectUrl);
         host = uri.host;
@@ -683,7 +707,13 @@ abstract final class PiliScheme {
             IdUtils.bvRegex.firstMatch(path)?.group(0);
         if (bvid != null) {
           if (mediaId != null) {
-            final res = await SearchHttp.ab2cWithDimension(bvid: bvid);
+            final result = await SearchHttp.pageWithDimension(bvid: bvid);
+            if (!request.isCurrent) return true;
+            if (result is Error) {
+              result.toast();
+              return true;
+            }
+            final res = result.dataOrNull;
             final cid = res?.cid;
             if (cid != null) {
               PageUtils.toVideoPage(
@@ -940,19 +970,19 @@ abstract final class PiliScheme {
     int? progress, // milliseconds
     String? part,
   }) async {
-    var loadingShown = false;
+    final request = NavigationRequest();
     try {
       aid ??= IdUtils.bv2av(bvid!);
       bvid ??= IdUtils.av2bv(aid);
       if (showDialog) {
-        SmartDialog.showLoading<dynamic>(msg: '获取中...');
-        loadingShown = true;
+        request.showLoading();
       }
       final result = await SearchHttp.pageWithDimension(
         bvid: bvid,
         aid: aid,
         part: parseIntOrNull(part),
       );
+      if (!request.isCurrent) return;
       if (result is Error) {
         result.toast();
         return;
@@ -974,9 +1004,9 @@ abstract final class PiliScheme {
       );
     } catch (error, stackTrace) {
       logger.w('获取链接视频失败', error: error.runtimeType, stackTrace: stackTrace);
-      SmartDialog.showToast('视频获取失败，请重试');
+      if (request.isCurrent) SmartDialog.showToast('视频获取失败，请重试');
     } finally {
-      if (loadingShown) await SmartDialog.dismiss(status: SmartStatus.loading);
+      await request.close();
     }
   }
 }

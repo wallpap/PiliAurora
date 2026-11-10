@@ -29,6 +29,7 @@ import 'package:pili_aurora/utils/extension/string_ext.dart';
 import 'package:pili_aurora/utils/feed_back.dart';
 import 'package:pili_aurora/utils/global_data.dart';
 import 'package:pili_aurora/utils/id_utils.dart';
+import 'package:pili_aurora/utils/navigation_request.dart';
 import 'package:pili_aurora/utils/platform_utils.dart';
 import 'package:pili_aurora/utils/storage_pref.dart';
 import 'package:pili_aurora/utils/url_utils.dart';
@@ -68,6 +69,8 @@ abstract final class PageUtils {
     BuildContext context, {
     required Map content,
   }) async {
+    final route = ModalRoute.of(context);
+    bool currentPage() => route?.isCurrent ?? true;
     final session = Messaging.instance.session;
     final sharing = sharingFor(session);
     if (!session.isActive) {
@@ -77,7 +80,7 @@ abstract final class PageUtils {
     List<UserModel> userList = <UserModel>[];
 
     final res = await sharing.recentRecipients();
-    if (!context.mounted || !session.isActive) return;
+    if (!context.mounted || !currentPage() || !session.isActive) return;
     if (res case Success(:final response)) {
       if (response.isNotEmpty) {
         userList.addAll(
@@ -92,7 +95,7 @@ abstract final class PageUtils {
       }
     }
 
-    if (userList.isEmpty && context.mounted) {
+    if (userList.isEmpty && context.mounted && currentPage()) {
       final UserModel? userModel = await Navigator.of(context).push(
         GetPageRoute(page: () => const ContactPage()),
       );
@@ -101,7 +104,7 @@ abstract final class PageUtils {
       }
     }
 
-    if (context.mounted && session.isActive) {
+    if (context.mounted && currentPage() && session.isActive) {
       showModalBottomSheet(
         context: context,
         builder: (context) => SharePanel(
@@ -126,13 +129,15 @@ abstract final class PageUtils {
       SmartDialog.showToast('动态缺少有效标识');
       return;
     }
+    final request = NavigationRequest();
     try {
-      SmartDialog.showLoading();
+      request.showLoading();
       final res = await DynamicsHttp.dynamicDetail(
         id: id,
         rid: rid,
         type: rid != null ? 2 : null,
       );
+      if (!request.isCurrent) return;
       if (res case Success(:final response)) {
         if (response.basic?.commentType == 12) {
           toDupNamed(
@@ -151,9 +156,9 @@ abstract final class PageUtils {
       }
     } catch (error, stackTrace) {
       logger.w('打开动态失败', error: error.runtimeType, stackTrace: stackTrace);
-      SmartDialog.showToast('动态加载失败，请重试');
+      if (request.isCurrent) SmartDialog.showToast('动态加载失败，请重试');
     } finally {
-      await SmartDialog.dismiss(status: SmartStatus.loading);
+      await request.close();
     }
   }
 
@@ -238,6 +243,25 @@ abstract final class PageUtils {
     bool isPush = false,
     bool viewComment = false,
   }) async {
+    final request = NavigationRequest();
+    try {
+      await _pushDynDetailOwned(
+        item,
+        request: request,
+        isPush: isPush,
+        viewComment: viewComment,
+      );
+    } finally {
+      await request.close();
+    }
+  }
+
+  static Future<void> _pushDynDetailOwned(
+    DynamicItemModel item, {
+    required NavigationRequest request,
+    bool isPush = false,
+    bool viewComment = false,
+  }) async {
     feedBack();
 
     void push() {
@@ -285,14 +309,19 @@ abstract final class PageUtils {
           }
           // redirectUrl from intro
           final res = await VideoHttp.videoIntro(bvid: archive.bvid!);
+          if (!request.isCurrent) return;
           if (res.dataOrNull?.redirectUrl case final redirectUrl?) {
             if (viewPgcFromUri(redirectUrl)) {
               return;
             }
           }
           // redirectUrl from jumpUrl
-          if (await UrlUtils.parseRedirectUrl(archive.jumpUrl.http2https, false)
-              case final redirectUrl?) {
+          final redirectUrl = await UrlUtils.parseRedirectUrl(
+            archive.jumpUrl.http2https,
+            false,
+          );
+          if (!request.isCurrent) return;
+          if (redirectUrl != null) {
             if (viewPgcFromUri(redirectUrl)) {
               return;
             }
@@ -302,7 +331,13 @@ abstract final class PageUtils {
         try {
           String bvid = archive.bvid!;
           String cover = archive.cover!;
-          final res = await SearchHttp.ab2cWithDimension(bvid: bvid);
+          final result = await SearchHttp.pageWithDimension(bvid: bvid);
+          if (!request.isCurrent) return;
+          if (result is Error) {
+            result.toast();
+            return;
+          }
+          final res = result.dataOrNull;
           final cid = res?.cid;
           if (cid != null) {
             toVideoPage(
@@ -319,7 +354,7 @@ abstract final class PageUtils {
             error: error.runtimeType,
             stackTrace: stackTrace,
           );
-          SmartDialog.showToast('视频获取失败，请重试');
+          if (request.isCurrent) SmartDialog.showToast('视频获取失败，请重试');
         }
         break;
 
@@ -367,7 +402,13 @@ abstract final class PageUtils {
         int aid = ugcSeason.aid!;
         String bvid = IdUtils.av2bv(aid);
         String cover = ugcSeason.cover!;
-        final res = await SearchHttp.ab2cWithDimension(bvid: bvid);
+        final result = await SearchHttp.pageWithDimension(bvid: bvid);
+        if (!request.isCurrent) return;
+        if (result is Error) {
+          result.toast();
+          return;
+        }
+        final res = result.dataOrNull;
         final cid = res?.cid;
         if (cid != null) {
           toVideoPage(
@@ -458,8 +499,13 @@ abstract final class PageUtils {
     bool inApp = false,
     Map? parameters,
   }) async {
+    final route = Get.routing.route;
     if (!inApp && Pref.openInBrowser) {
-      if (!await PiliScheme.routePushFromUrl(url, selfHandle: true)) {
+      final handled = await PiliScheme.routePushFromUrl(url, selfHandle: true);
+      if (!identical(Get.routing.route, route) || !(route?.isCurrent ?? true)) {
+        return;
+      }
+      if (!handled) {
         await launchURL(url);
       }
     } else {
@@ -619,10 +665,11 @@ abstract final class PageUtils {
     int? progress, // milliseconds
     bool off = false,
   }) async {
+    final request = NavigationRequest();
     try {
-      SmartDialog.showLoading(msg: '资源获取中');
+      request.showLoading('资源获取中');
       final res = await SearchHttp.pgcInfo(seasonId: seasonId, epId: epId);
-      SmartDialog.dismiss(status: SmartStatus.loading);
+      if (!request.isCurrent) return;
       if (res case Success(:final response)) {
         final episodes = response.episodes;
         final hasEpisode = episodes != null && episodes.isNotEmpty;
@@ -708,9 +755,10 @@ abstract final class PageUtils {
         res.toast();
       }
     } catch (e, stackTrace) {
-      SmartDialog.dismiss(status: SmartStatus.loading);
-      SmartDialog.showToast('资源加载失败，请重试');
+      if (request.isCurrent) SmartDialog.showToast('资源加载失败，请重试');
       logger.w('加载番剧资源失败', error: e.runtimeType, stackTrace: stackTrace);
+    } finally {
+      await request.close();
     }
   }
 
@@ -721,10 +769,11 @@ abstract final class PageUtils {
     int? progress, // milliseconds
     bool off = false,
   }) async {
+    final request = NavigationRequest();
     try {
-      SmartDialog.showLoading(msg: '资源获取中');
+      request.showLoading('资源获取中');
       final res = await SearchHttp.pugvInfo(seasonId: seasonId, epId: epId);
-      SmartDialog.dismiss(status: SmartStatus.loading);
+      if (!request.isCurrent) return;
       if (res case Success(:final response)) {
         final episodes = response.episodes;
         if (episodes != null && episodes.isNotEmpty) {
@@ -757,9 +806,10 @@ abstract final class PageUtils {
         res.toast();
       }
     } catch (error, stackTrace) {
-      SmartDialog.dismiss(status: SmartStatus.loading);
       logger.w('加载课程资源失败', error: error.runtimeType, stackTrace: stackTrace);
-      SmartDialog.showToast('资源加载失败，请重试');
+      if (request.isCurrent) SmartDialog.showToast('资源加载失败，请重试');
+    } finally {
+      await request.close();
     }
   }
 

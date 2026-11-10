@@ -37,6 +37,8 @@ import 'package:pili_aurora/utils/extension/string_ext.dart';
 import 'package:pili_aurora/utils/extension/theme_ext.dart';
 import 'package:pili_aurora/utils/feed_back.dart';
 import 'package:pili_aurora/utils/id_utils.dart';
+import 'package:pili_aurora/utils/navigation_request.dart';
+import 'package:pili_aurora/services/logger.dart';
 import 'package:pili_aurora/utils/num_utils.dart';
 import 'package:pili_aurora/utils/page_utils.dart';
 import 'package:pili_aurora/utils/platform_utils.dart';
@@ -550,6 +552,7 @@ class _UgcIntroPanelState extends State<UgcIntroPanel> {
   Future<void> _openDescriptionUrl(String url) async {
     if (_openingDescriptionUrl) return;
     _openingDescriptionUrl = true;
+    final request = NavigationRequest();
     try {
       final ytbId = youtubeRegExp.firstMatch(url)?.group(1);
       final duration =
@@ -560,19 +563,18 @@ class _UgcIntroPanelState extends State<UgcIntroPanel> {
           ytbId != null) {
         final bvid = videoDetailCtr.bvid;
         final cid = videoDetailCtr.cid.value;
-        final route = ModalRoute.of(context);
         bool currentVideo() =>
             mounted &&
-            route?.isCurrent == true &&
+            request.isCurrent &&
             !videoDetailCtr.isClosed &&
             videoDetailCtr.bvid == bvid &&
             videoDetailCtr.cid.value == cid;
         final LoadingState<String> port;
-        SmartDialog.showLoading();
+        request.showLoading();
         try {
           port = await SponsorBlock.getPortVideo(bvid: bvid, cid: cid);
         } finally {
-          SmartDialog.dismiss();
+          await request.closeLoading();
         }
         if (!mounted || !currentVideo()) return;
         // 查询失败不能当成尚未绑定，避免未读到当前绑定就继续写入。
@@ -606,8 +608,12 @@ class _UgcIntroPanelState extends State<UgcIntroPanel> {
           return;
         }
       }
-      if (mounted) await PageUtils.handleWebview(url);
+      if (mounted && request.isCurrent) await PageUtils.handleWebview(url);
+    } catch (error, stackTrace) {
+      logger.w('打开视频描述链接失败', error: error.runtimeType, stackTrace: stackTrace);
+      if (mounted && request.isCurrent) SmartDialog.showToast('链接暂时无法打开，请重试');
     } finally {
+      await request.close();
       _openingDescriptionUrl = false;
     }
   }
