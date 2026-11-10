@@ -898,11 +898,16 @@ class NativePlaybackRuntime
       final base = hardwareVideoConfiguration(
         enabled: configuration.hardwareAccelerationEnabled,
         configured: configuration.hardwareDecoder,
-        windowsSourceSize:
-            Platform.isWindows &&
-                configuration.width != null &&
-                configuration.height != null
-            ? (width: configuration.width!, height: configuration.height!)
+        // 未知几何时固定最小占位输出，避免原生尺寸事件先按完整 4K
+        // 分配纹理、FILE_LOADED 后又缩到显示器上限。ready 前仍须等待
+        // 当前文件的原生几何，并取得最终尺寸的首帧回执。
+        windowsSourceSize: Platform.isWindows
+            ? configuration.width != null && configuration.height != null
+                  ? (
+                      width: configuration.width!,
+                      height: configuration.height!,
+                    )
+                  : (width: 1, height: 1)
             : null,
         windowsOutputLimit: Platform.isWindows
             ? WindowsVideoOutputLimit.detected
