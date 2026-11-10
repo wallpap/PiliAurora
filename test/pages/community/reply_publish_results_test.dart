@@ -1,5 +1,7 @@
 import 'dart:convert';
+import 'dart:async';
 import 'dart:io';
+import 'dart:ui' as ui;
 
 import 'package:fixnum/fixnum.dart';
 import 'package:flutter/services.dart';
@@ -9,6 +11,7 @@ import 'package:get/get.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:pili_aurora/common/widgets/flutter/text_field/controller.dart'
     show RichTextItem;
+import 'package:pili_aurora/common/widgets/route_aware_mixin.dart';
 import 'package:pili_aurora/grpc/bilibili/main/community/reply/v1.pb.dart'
     show ReplyInfo;
 import 'package:pili_aurora/http/api.dart';
@@ -20,12 +23,52 @@ import 'package:pili_aurora/pages/common/publish/common_rich_text_pub_page.dart'
 import 'package:pili_aurora/pages/video/reply/controller.dart';
 import 'package:pili_aurora/pages/video/reply/widgets/reply_item_grpc.dart';
 import 'package:pili_aurora/pages/video/reply_new/view.dart';
+import 'package:pili_aurora/pages/video/controller.dart';
+import 'package:pili_aurora/plugin/pl_player/controller.dart';
+import 'package:pili_aurora/plugin/pl_player/playback/playback_session.dart';
+import 'package:media_kit/media_kit.dart';
 import 'package:pili_aurora/utils/accounts.dart';
 import 'package:pili_aurora/utils/accounts/account.dart';
 import 'package:pili_aurora/utils/storage.dart';
 
 import '../../support/controlled_interceptor.dart';
 import '../../support/memory_box.dart';
+
+class _CapturePlayer implements Player {
+  final captured = Completer<ui.Image?>();
+  int calls = 0;
+  @override
+  Future<ui.Image?> screenshot({bool synchronized = true}) {
+    calls++;
+    return captured.future;
+  }
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
+class _CaptureFacade extends GetxController implements PlPlayerController {
+  _CaptureFacade(this.player);
+  Player player;
+  @override
+  Player get videoPlayerController => player;
+  @override
+  PlaybackOwner? get activePlaybackOwner => null;
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
+class _CaptureVideo extends GetxController implements VideoDetailController {
+  _CaptureVideo(this.plPlayerController);
+  @override
+  final _CaptureFacade plPlayerController;
+  @override
+  final bvid = 'BV17x411w7KC';
+  @override
+  final cid = 1.obs;
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -102,6 +145,7 @@ void main() {
     await tester.pumpWidget(
       GetMaterialApp(
         builder: FlutterSmartDialog.init(),
+        navigatorObservers: [routeObserver],
         home: Scaffold(
           body: Builder(
             builder: (context) {
@@ -144,6 +188,55 @@ void main() {
       'image_height': 1,
     },
   };
+
+  for (final change in ['切号', '替换播放器', '离页再返回']) {
+    testWidgets('评论截图$change后不进入新草稿', (
+      tester,
+    ) async {
+      await mount(tester);
+      final player = _CapturePlayer();
+      final facade = _CaptureFacade(player);
+      Get.put<VideoDetailController>(_CaptureVideo(facade), tag: 'capture');
+      Get.to(
+        () => const Scaffold(
+          body: ReplyPage(oid: 1, root: 0, parent: 0, replyType: 1),
+        ),
+        arguments: {'heroTag': 'capture'},
+      );
+      await settle(tester);
+      await tester.tap(find.byTooltip('更多'));
+      await settle(tester);
+      await tester.tap(find.text('视频截图'));
+      expect(player.calls, 1);
+      final recorder = ui.PictureRecorder();
+      Canvas(recorder).drawColor(Colors.white, BlendMode.src);
+      final picture = recorder.endRecording();
+      final image = (await tester.runAsync(() => picture.toImage(2, 2)))!;
+      picture.dispose();
+      if (change == '切号') {
+        Accounts.accountMode[AccountType.main.index] = replacement;
+      } else if (change == '替换播放器') {
+        facade.player = _CapturePlayer();
+      } else {
+        final navigator = Navigator.of(tester.element(find.byType(ReplyPage)))
+          ..push<void>(
+            MaterialPageRoute(
+              builder: (_) => const Scaffold(body: Text('新页面')),
+            ),
+          );
+        await settle(tester);
+        expect(find.text('新页面'), findsOneWidget);
+        navigator.pop();
+        await settle(tester);
+      }
+      player.captured.complete(image);
+      await tester.pump();
+      await tester.runAsync(() => image.toByteData(format: .png));
+      await until(tester, () => image.debugDisposed);
+      expect(state(tester).imageList, isEmpty);
+      await finish(tester);
+    });
+  }
 
   testWidgets('评论编辑器保留楼中楼根 ID，草稿按完整目标隔离', (tester) async {
     await mount(tester);

@@ -7,6 +7,7 @@ import 'package:pili_aurora/common/widgets/app_popup_menu_item.dart';
 import 'package:pili_aurora/common/widgets/image/cached_image.dart';
 import 'package:pili_aurora/common/widgets/image/network_img_layer.dart';
 import 'package:pili_aurora/common/widgets/selection_text.dart';
+import 'package:pili_aurora/common/widgets/route_aware_mixin.dart';
 import 'package:pili_aurora/models/remote/live/live_superchat/item.dart';
 import 'package:pili_aurora/pages/member/widget/medal_widget.dart';
 import 'package:pili_aurora/utils/app_scheme.dart';
@@ -133,17 +134,33 @@ class _SuperChatCardState extends State<SuperChatCard> {
           height: 38,
           onTap: () async {
             if (!mounted || _savingImage) return;
+            final route = ModalRoute.of(context);
+            var invalidated = false;
+            void onNavigation() {
+              if (!identical(routeObserver.currentRoute, route)) {
+                invalidated = true;
+              }
+            }
+
+            bool current() =>
+                mounted &&
+                !invalidated &&
+                identical(widget.item, item) &&
+                route?.isCurrent == true;
+            if (!current()) return;
             _savingImage = true;
+            routeObserver.addNavigationListener(onNavigation);
             try {
-              await _screenShot(context, item);
+              await _screenShot(context, item, isCurrent: current);
             } catch (error, stackTrace) {
               logger.w(
                 'SC 截图保存失败',
                 error: error.runtimeType,
                 stackTrace: stackTrace,
               );
-              if (mounted) SmartDialog.showToast('截图保存失败，请重试');
+              if (current()) SmartDialog.showToast('截图保存失败，请重试');
             } finally {
+              routeObserver.removeNavigationListener(onNavigation);
               _savingImage = false;
             }
           },
@@ -354,8 +371,11 @@ Widget _avatar(String face, String? faceFrame) {
   return avatar;
 }
 
-Future<void> _screenShot(BuildContext context, SuperChatItem item) async {
-  final route = ModalRoute.of(context);
+Future<void> _screenShot(
+  BuildContext context,
+  SuperChatItem item, {
+  required bool Function() isCurrent,
+}) async {
   final image = await Screenshot.screenshot(
     context,
     Material(
@@ -368,13 +388,24 @@ Future<void> _screenShot(BuildContext context, SuperChatItem item) async {
   );
   try {
     final bytes = await image.toByteData(format: .png);
-    if (!context.mounted || route?.isCurrent != true) return;
+    if (!isCurrent()) return;
     if (bytes == null) throw StateError('截图编码未返回数据');
     final picName = 'Bili_SuperChat_${item.roomid}_${item.id}';
-    await ImageUtils.saveByteImg(
+    final result = await ImageUtils.saveByteImg(
       bytes: bytes.buffer.asUint8List(),
       fileName: picName,
+      needToast: false,
+      showLoading: false,
     );
+    if (isCurrent()) {
+      SmartDialog.showToast(
+        result == null
+            ? '取消保存'
+            : result.isSuccess
+            ? '已保存'
+            : '保存失败，请检查相册权限后重试',
+      );
+    }
   } finally {
     image.dispose();
   }

@@ -12,6 +12,7 @@ import 'package:pili_aurora/common/widgets/flutter/text_field/text_field.dart';
 import 'package:pili_aurora/common/widgets/scroll_physics.dart'
     show platformClampingPhysics;
 import 'package:pili_aurora/common/widgets/view_safe_area.dart';
+import 'package:pili_aurora/common/widgets/route_aware_mixin.dart';
 import 'package:pili_aurora/grpc/bilibili/main/community/reply/v1.pb.dart'
     show ReplyInfo;
 import 'package:pili_aurora/http/loading_state.dart';
@@ -336,21 +337,38 @@ class _ReplyPageState extends CommonRichTextPubPageState<ReplyPage> {
                   if (_capturingScreenshot || _publishing.value) return;
                   _capturingScreenshot = true;
                   String? temporaryPath;
-                  bool Function() current = () => mounted && !_publishing.value;
+                  final account = Accounts.main;
+                  final route = ModalRoute.of(context);
+                  var invalidated = false;
+                  void onNavigation() {
+                    if (!identical(routeObserver.currentRoute, route)) {
+                      invalidated = true;
+                    }
+                  }
+
+                  bool pageCurrent() =>
+                      mounted &&
+                      !invalidated &&
+                      (route?.isCurrent ?? true) &&
+                      identical(account, Accounts.main) &&
+                      !_publishing.value;
+                  bool Function() current = pageCurrent;
+                  routeObserver.addNavigationListener(onNavigation);
                   try {
                     final video = Get.find<VideoDetailController>(tag: heroTag);
                     final bvid = video.bvid;
                     final cid = video.cid.value;
+                    final controller = video.plPlayerController;
+                    final player = controller.videoPlayerController;
+                    final owner = controller.activePlaybackOwner;
                     current = () =>
-                        mounted &&
+                        pageCurrent() &&
                         !video.isClosed &&
                         video.bvid == bvid &&
                         video.cid.value == cid &&
-                        !_publishing.value;
-                    final image = await video
-                        .plPlayerController
-                        .videoPlayerController
-                        ?.screenshot();
+                        identical(player, controller.videoPlayerController) &&
+                        identical(owner, controller.activePlaybackOwner);
+                    final image = await player?.screenshot();
                     if (image == null) {
                       if (current()) SmartDialog.showToast('截图失败，请重试');
                       return;
@@ -378,6 +396,7 @@ class _ReplyPageState extends CommonRichTextPubPageState<ReplyPage> {
                     );
                     if (current()) SmartDialog.showToast('截图失败，请重试');
                   } finally {
+                    routeObserver.removeNavigationListener(onNavigation);
                     _capturingScreenshot = false;
                     if (temporaryPath != null) {
                       try {
