@@ -3,16 +3,14 @@ import 'dart:typed_data';
 
 import 'package:pili_aurora/common/widgets/button/icon_button.dart';
 import 'package:pili_aurora/common/widgets/scaffold/simple_scaffold.dart';
-import 'package:pili_aurora/utils/extension/box_ext.dart';
+import 'package:pili_aurora/http/loading_state.dart';
+import 'package:pili_aurora/services/logger.dart';
 import 'package:pili_aurora/utils/extension/get_ext.dart';
 import 'package:pili_aurora/utils/extension/num_ext.dart';
 import 'package:pili_aurora/utils/extension/scroll_controller_ext.dart';
 import 'package:pili_aurora/utils/extension/size_ext.dart';
 import 'package:pili_aurora/utils/font_utils.dart';
-import 'package:pili_aurora/utils/storage.dart';
-import 'package:pili_aurora/utils/storage_key.dart';
 import 'package:pili_aurora/utils/storage_pref.dart';
-import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:get/get.dart';
 import 'package:material_ui/material_ui.dart';
 
@@ -36,7 +34,11 @@ class _FontSettingPageState extends State<FontSettingPage> {
 
   final Map<String, Uint8List> _customFonts = {};
 
-  late final List<String> _fonts;
+  List<String> _fonts = [];
+  Error? _fontError;
+  bool _saving = false;
+  bool _importing = false;
+  bool get _busy => _saving || _importing;
   late ColorScheme colorScheme;
   late bool isPortrait;
   late ScrollController scrollController;
@@ -46,13 +48,13 @@ class _FontSettingPageState extends State<FontSettingPage> {
   @override
   void initState() {
     super.initState();
-    _fonts = FontUtils.getFont().toList();
+    _loadFonts();
 
     if (_selectedFont != null && !_appFont.isCustom) {
       final index = _fonts.indexWhere((e) => e == _selectedFont);
       if (index != -1) {
         WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (scrollController.hasClients) {
+          if (mounted && scrollController.hasClients) {
             scrollController.jumpTo(index * _tileHeight);
           }
         });
@@ -68,27 +70,65 @@ class _FontSettingPageState extends State<FontSettingPage> {
     scrollController = PrimaryScrollController.of(context);
   }
 
+  void _loadFonts() {
+    final result = FontUtils.getFont();
+    _fontError = result is Error ? result : null;
+    _fonts = result.dataOrNull?.toList() ?? [];
+  }
+
   Future<void> _saveFontSetting() async {
-    if (_appFont != FontUtils.appFont) {
-      if (_appFont.isCustom) {
-        final bytes = _customFonts[_selectedFont];
-        assert(bytes != null);
-        FontUtils.fontFile.writeAsBytes(bytes!);
-      } else {
-        FontUtils.removeFontIfExists();
+    if (_busy) return;
+    final route = ModalRoute.of(context);
+    setState(() => _saving = true);
+    try {
+      final result = await FontUtils.saveSettings(
+        font: _appFont,
+        bytes: _customFonts[_selectedFont],
+        weight: _selectedWeight,
+        scale: _selectedScale,
+      );
+      if (result.isSuccess) {
+        try {
+          Get.updateMyAppTheme();
+        } catch (error, stackTrace) {
+          logger.w(
+            '字体已保存，界面刷新失败',
+            error: error.runtimeType,
+            stackTrace: stackTrace,
+          );
+          if (mounted && route?.isCurrent == true) {
+            const Error('字体已保存，界面刷新失败，请重启应用').toast();
+          }
+        }
+        if (mounted && route?.isCurrent == true) Navigator.of(context).pop();
+      } else if (mounted && route?.isCurrent == true) {
+        result.toast();
       }
-      FontUtils.appFont = _appFont;
+    } finally {
+      if (mounted) setState(() => _saving = false);
     }
+  }
 
-    await GStorage.setting.putAllNE({
-      SettingBoxKey.appFont: _selectedFont,
-      SettingBoxKey.appFontWeightV2: _selectedWeight,
-      SettingBoxKey.defaultTextScale: _selectedScale,
-    });
-
-    Get
-      ..back()
-      ..updateMyAppTheme();
+  Future<void> _importFonts() async {
+    if (_busy) return;
+    final route = ModalRoute.of(context);
+    setState(() => _importing = true);
+    try {
+      final result = await FontUtils.pickFonts();
+      if (!mounted || route?.isCurrent != true) return;
+      if (result case Success(:final response)) {
+        if (response != null && response.isNotEmpty) {
+          setState(() {
+            _customFonts.addAll(response);
+            _appFont = (fontFamily: response.keys.first, isCustom: true);
+          });
+        }
+      } else {
+        result.toast();
+      }
+    } finally {
+      if (mounted) setState(() => _importing = false);
+    }
   }
 
   @override
@@ -153,229 +193,238 @@ class _FontSettingPageState extends State<FontSettingPage> {
         title: const Text('App字体设置'),
         actions: [
           TextButton(
-            onPressed: () => setState(() {
-              _appFont = (fontFamily: null, isCustom: false);
-              _selectedWeight = _normalFontWeight;
-              _selectedScale = 1;
-            }),
+            onPressed: _busy
+                ? null
+                : () => setState(() {
+                    _appFont = (fontFamily: null, isCustom: false);
+                    _selectedWeight = _normalFontWeight;
+                    _selectedScale = 1;
+                  }),
             child: const Text('重置'),
           ),
           TextButton(
-            onPressed: _saveFontSetting,
-            child: const Text('确定'),
+            onPressed: _busy ? null : _saveFontSetting,
+            child: Text(_saving ? '保存中' : '确定'),
           ),
           const SizedBox(width: 12),
         ],
       ),
-      body: SafeArea(
-        top: false,
-        child: Flex(
-          direction: isPortrait ? .vertical : .horizontal,
-          children: [
-            Expanded(
-              flex: isPortrait ? 1 : 2,
-              child: Center(
-                child: Text(
-                  'abcdefghijklmnopqrstuvwxyz\n'
-                  'ABCDEFGHIJKLMNOPQRSTUVWXYZ\n'
-                  '1234567890.:,;\'"(!?)+-*/=\n'
-                  '${Platform.isWindows ? "中国智造，惠及全球" : "我能吞下玻璃而不伤身体"}\n\n'
-                  '注：部分字体可能无法应用',
-                  style: TextStyle(
-                    fontFamily: _selectedFont ?? '',
-                    fontWeight: .values[_selectedWeight],
-                    fontSize: 14 * _selectedScale,
+      body: AbsorbPointer(
+        absorbing: _busy,
+        child: SafeArea(
+          top: false,
+          child: Flex(
+            direction: isPortrait ? .vertical : .horizontal,
+            children: [
+              Expanded(
+                flex: isPortrait ? 1 : 2,
+                child: Center(
+                  child: Text(
+                    'abcdefghijklmnopqrstuvwxyz\n'
+                    'ABCDEFGHIJKLMNOPQRSTUVWXYZ\n'
+                    '1234567890.:,;\'"(!?)+-*/=\n'
+                    '${Platform.isWindows ? "中国智造，惠及全球" : "我能吞下玻璃而不伤身体"}\n\n'
+                    '注：部分字体可能无法应用',
+                    style: TextStyle(
+                      fontFamily: _selectedFont ?? '',
+                      fontWeight: .values[_selectedWeight],
+                      fontSize: 14 * _selectedScale,
+                    ),
                   ),
                 ),
               ),
-            ),
-            isPortrait
-                ? Divider(
-                    height: 1,
-                    color: colorScheme.primary.withValues(alpha: 0.3),
-                  )
-                : VerticalDivider(
-                    width: 1,
-                    color: colorScheme.primary.withValues(alpha: 0.3),
-                  ),
-            Expanded(
-              child: Column(
-                children: [
-                  Padding(
-                    padding: const .symmetric(horizontal: 16, vertical: 5),
-                    child: GestureDetector(
-                      behavior: .translucent,
-                      onTap: scrollController.jumpToTop,
-                      child: Row(
-                        children: [
-                          const Text(
-                            '字体：',
-                            style: TextStyle(fontWeight: .bold, fontSize: 15),
-                          ),
-                          Expanded(
-                            child: Text(
-                              _appFont.isCustom
-                                  ? _selectedFont!.split('/').last
-                                  : _selectedFont ?? '默认',
-                              style: TextStyle(
-                                fontSize: 15,
-                                fontFamily: _selectedFont ?? '',
+              isPortrait
+                  ? Divider(
+                      height: 1,
+                      color: colorScheme.primary.withValues(alpha: 0.3),
+                    )
+                  : VerticalDivider(
+                      width: 1,
+                      color: colorScheme.primary.withValues(alpha: 0.3),
+                    ),
+              Expanded(
+                child: Column(
+                  children: [
+                    Padding(
+                      padding: const .symmetric(horizontal: 16, vertical: 5),
+                      child: GestureDetector(
+                        behavior: .translucent,
+                        onTap: scrollController.jumpToTop,
+                        child: Row(
+                          children: [
+                            const Text(
+                              '字体：',
+                              style: TextStyle(fontWeight: .bold, fontSize: 15),
+                            ),
+                            Expanded(
+                              child: Text(
+                                _appFont.isCustom
+                                    ? _selectedFont!.split('/').last
+                                    : _selectedFont ?? '默认',
+                                style: TextStyle(
+                                  fontSize: 15,
+                                  fontFamily: _selectedFont ?? '',
+                                ),
                               ),
                             ),
-                          ),
-                          Padding(
-                            padding: const .only(left: 8),
-                            child: iconButton(
-                              size: 32,
-                              iconSize: 20,
-                              tooltip: '导入',
-                              context: context,
-                              onPressed: () async {
-                                SmartDialog.showLoading();
-                                final font = await FontUtils.pickFonts();
-                                SmartDialog.dismiss();
-                                if (!mounted) return;
-                                if (font != null) {
-                                  _customFonts.addAll(font);
-                                  _appFont = (
-                                    fontFamily: font.keys.first,
-                                    isCustom: true,
-                                  );
-                                  setState(() {});
-                                }
-                              },
-                              icon: const Icon(Icons.add),
+                            Padding(
+                              padding: const .only(left: 8),
+                              child: iconButton(
+                                size: 32,
+                                iconSize: 20,
+                                tooltip: '导入',
+                                context: context,
+                                onPressed: _busy ? null : _importFonts,
+                                icon: const Icon(Icons.add),
+                              ),
                             ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
                     ),
-                  ),
-                  Expanded(
-                    child: Material(
-                      type: .transparency,
-                      child: CustomScrollView(
-                        controller: scrollController,
-                        slivers: [
-                          SliverToBoxAdapter(
-                            child: ListTile(
-                              minTileHeight: _tileHeight,
-                              tileColor: _tileColor(null),
-                              onTap: () => _onFontChanged(null),
-                              title: const Text('默认'),
-                            ),
-                          ),
-                          if (FontUtils.isCustom)
+                    Expanded(
+                      child: Material(
+                        type: .transparency,
+                        child: CustomScrollView(
+                          controller: scrollController,
+                          slivers: [
+                            if (_fontError != null)
+                              SliverToBoxAdapter(
+                                child: ListTile(
+                                  title: Text(_fontError.toString()),
+                                  trailing: const Icon(Icons.refresh),
+                                  onTap: () => setState(_loadFonts),
+                                ),
+                              ),
                             SliverToBoxAdapter(
                               child: ListTile(
                                 minTileHeight: _tileHeight,
-                                tileColor: _tileColor(FontUtils.fontFamily),
-                                onTap: () => _onFontChanged(
-                                  FontUtils.fontFamily,
-                                  isCustom: true,
-                                ),
-                                title: Text(
-                                  FontUtils.fontFamily!.split('/').last,
-                                ),
+                                tileColor: _tileColor(null),
+                                onTap: () => _onFontChanged(null),
+                                title: const Text('默认'),
                               ),
                             ),
-                          ?customFonts,
-                          if (_fonts.isNotEmpty)
-                            SliverList.builder(
-                              itemCount: _fonts.length,
-                              itemBuilder: (context, index) {
-                                final font = _fonts[index];
-                                return ListTile(
+                            if (FontUtils.isCustom)
+                              SliverToBoxAdapter(
+                                child: ListTile(
                                   minTileHeight: _tileHeight,
-                                  tileColor: _tileColor(font),
-                                  onTap: () => _onFontChanged(font),
-                                  title: Text(
-                                    font,
-                                    style: TextStyle(fontFamily: font),
+                                  tileColor: _tileColor(FontUtils.fontFamily),
+                                  onTap: () => _onFontChanged(
+                                    FontUtils.fontFamily,
+                                    isCustom: true,
                                   ),
-                                );
+                                  title: Text(
+                                    FontUtils.fontFamily!.split('/').last,
+                                  ),
+                                ),
+                              ),
+                            ?customFonts,
+                            if (_fonts.isNotEmpty)
+                              SliverList.builder(
+                                itemCount: _fonts.length,
+                                itemBuilder: (context, index) {
+                                  final font = _fonts[index];
+                                  return ListTile(
+                                    minTileHeight: _tileHeight,
+                                    tileColor: _tileColor(font),
+                                    onTap: () => _onFontChanged(font),
+                                    title: Text(
+                                      font,
+                                      style: TextStyle(fontFamily: font),
+                                    ),
+                                  );
+                                },
+                              ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    _buildItem(
+                      Row(
+                        children: [
+                          const Text(
+                            '字重：',
+                            style: TextStyle(fontWeight: .bold),
+                          ),
+                          const SizedBox(
+                            width: 40,
+                            child: Text(
+                              'w100',
+                              style: TextStyle(fontWeight: .w100),
+                            ),
+                          ),
+                          Expanded(
+                            child: Slider(
+                              padding: .zero,
+                              value: _selectedWeight.toDouble(),
+                              min: 0,
+                              max: 8,
+                              divisions: 8,
+                              secondaryTrackValue: _normalFontWeight.toDouble(),
+                              label: 'w${(_selectedWeight + 1) * 100}',
+                              onChanged: (value) {
+                                setState(() => _selectedWeight = value.toInt());
                               },
                             ),
+                          ),
+                          const SizedBox(
+                            width: 50,
+                            child: Align(
+                              alignment: .centerRight,
+                              child: Text(
+                                'w900',
+                                style: TextStyle(fontWeight: .w900),
+                              ),
+                            ),
+                          ),
                         ],
                       ),
                     ),
-                  ),
-                  _buildItem(
-                    Row(
-                      children: [
-                        const Text('字重：', style: TextStyle(fontWeight: .bold)),
-                        const SizedBox(
-                          width: 40,
-                          child: Text(
-                            'w100',
-                            style: TextStyle(fontWeight: .w100),
+                    _buildItem(
+                      Row(
+                        children: [
+                          const Text(
+                            '字号：',
+                            style: TextStyle(fontWeight: .bold),
                           ),
-                        ),
-                        Expanded(
-                          child: Slider(
-                            padding: .zero,
-                            value: _selectedWeight.toDouble(),
-                            min: 0,
-                            max: 8,
-                            divisions: 8,
-                            secondaryTrackValue: _normalFontWeight.toDouble(),
-                            label: 'w${(_selectedWeight + 1) * 100}',
-                            onChanged: (value) {
-                              setState(() => _selectedWeight = value.toInt());
-                            },
+                          const SizedBox(
+                            width: 40,
+                            child: Text('小', style: TextStyle(fontSize: 11.9)),
                           ),
-                        ),
-                        const SizedBox(
-                          width: 50,
-                          child: Align(
-                            alignment: .centerRight,
-                            child: Text(
-                              'w900',
-                              style: TextStyle(fontWeight: .w900),
+                          Expanded(
+                            child: Slider(
+                              padding: .zero,
+                              value: _selectedScale,
+                              min: 0.85,
+                              max: 1.6,
+                              divisions: 15,
+                              secondaryTrackValue: 1,
+                              label: _selectedScale == 1.0
+                                  ? '默认'
+                                  : _selectedScale.toStringAsFixed(2),
+                              onChanged: (value) => setState(
+                                () => _selectedScale = value.toPrecision(2),
+                              ),
                             ),
                           ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  _buildItem(
-                    Row(
-                      children: [
-                        const Text('字号：', style: TextStyle(fontWeight: .bold)),
-                        const SizedBox(
-                          width: 40,
-                          child: Text('小', style: TextStyle(fontSize: 11.9)),
-                        ),
-                        Expanded(
-                          child: Slider(
-                            padding: .zero,
-                            value: _selectedScale,
-                            min: 0.85,
-                            max: 1.6,
-                            divisions: 15,
-                            secondaryTrackValue: 1,
-                            label: _selectedScale == 1.0
-                                ? '默认'
-                                : _selectedScale.toStringAsFixed(2),
-                            onChanged: (value) => setState(
-                              () => _selectedScale = value.toPrecision(2),
+                          const SizedBox(
+                            width: 50,
+                            child: Align(
+                              alignment: .centerRight,
+                              child: Text(
+                                '大',
+                                style: TextStyle(fontSize: 22.4),
+                              ),
                             ),
                           ),
-                        ),
-                        const SizedBox(
-                          width: 50,
-                          child: Align(
-                            alignment: .centerRight,
-                            child: Text('大', style: TextStyle(fontSize: 22.4)),
-                          ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

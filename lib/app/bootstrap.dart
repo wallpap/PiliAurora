@@ -24,6 +24,7 @@ import 'package:pili_aurora/services/logger.dart';
 import 'package:pili_aurora/utils/cache_manager.dart';
 import 'package:pili_aurora/utils/date_utils.dart';
 import 'package:pili_aurora/utils/font_utils.dart';
+import 'package:pili_aurora/http/loading_state.dart' as font_result;
 import 'package:pili_aurora/services/diagnostics/report_handler.dart';
 import 'package:pili_aurora/services/diagnostics/diagnostics.dart';
 import 'package:pili_aurora/utils/path_utils.dart';
@@ -144,7 +145,15 @@ Future<void> _bootstrapApplication(
     initializeDownloadPath(),
     initializeTemporaryPath(),
     CacheManager.ensureInitialized(directory: windows.cacheDirectory),
-    ?FontUtils.init(),
+    FontUtils.init().then<void>((result) {
+      if (result case font_result.Error(:final cause, :final stackTrace)) {
+        logger.w(
+          '自定义字体加载失败，使用默认字体',
+          error: cause?.runtimeType,
+          stackTrace: stackTrace,
+        );
+      }
+    }),
   ]);
   Get
     ..lazyPut(AccountService.new)
