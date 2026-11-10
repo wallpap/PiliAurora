@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/services.dart';
 import 'package:hive_ce/hive.dart';
@@ -160,6 +161,169 @@ void main() {
       PlaybackShutdownOutcome.released,
     );
     expect(fixture.runtime.retainedNativeFileCount, 0);
+  });
+
+  test('Windows 降画质在旧文件卸载后、下一次 open 前回收渲染器', () async {
+    if (!Platform.isWindows) return;
+    final fixture = _Fixture(subscribeToPlaybackEvents: true);
+    fixture.player
+      ..recordOperations = true
+      ..videoWidth = 3840
+      ..videoHeight = 2160;
+    fixture.output.waitForReset = true;
+    addTearDown(fixture.close);
+    expect((await fixture.load()).loaded, isTrue);
+    expect(fixture.output.resets, 0);
+    fixture.player
+      ..videoWidth = 640
+      ..videoHeight = 360;
+    fixture.events.clear();
+
+    final downgrade = fixture.load(
+      loadId: 2,
+      metadata: const PlaybackMetadataHint(
+        trust: PlaybackMetadataTrust.sourceHint,
+        width: 640,
+        height: 360,
+      ),
+    );
+    await _turn();
+    expect(fixture.output.resets, 0);
+    expect(fixture.player.opens, 1);
+    await fixture.player.unload();
+    fixture.player.endFile();
+    fixture.player.started = false;
+    fixture.player.entryId++;
+    await _turn();
+    expect(fixture.output.resets, 1);
+    expect(fixture.player.opens, 1);
+    expect(
+      fixture.events,
+      containsAllInOrder([
+        'stop',
+        'invalidate',
+        'command set vo null',
+        'reset-renderer',
+      ]),
+    );
+    fixture.output.resetReceipt.complete();
+    expect((await downgrade).loaded, isTrue);
+    expect(
+      fixture.events,
+      containsAllInOrder([
+        'reset-renderer',
+        'command change-list glsl-shaders clr ',
+        'command set vo libmpv',
+        'open',
+      ]),
+    );
+    expect(fixture.player.opens, 2);
+    expect(fixture.player.disposed, isFalse);
+    expect(fixture.runtime.retainedNativeFileCount, 1);
+  });
+
+  test('Windows 同尺寸切源复用渲染器，降画质和超分变更合并一次回收', () async {
+    if (!Platform.isWindows) return;
+    final fixture = _Fixture(subscribeToPlaybackEvents: true);
+    fixture.player.autoStop = true;
+    addTearDown(fixture.close);
+    expect((await fixture.load()).loaded, isTrue);
+    const sameSize = PlaybackMetadataHint(
+      trust: PlaybackMetadataTrust.sourceHint,
+      width: 640,
+      height: 360,
+    );
+    expect((await fixture.load(loadId: 2, metadata: sameSize)).loaded, isTrue);
+    expect(fixture.output.resets, 0);
+
+    fixture.player
+      ..videoWidth = 320
+      ..videoHeight = 180;
+    expect(
+      (await fixture.load(
+        loadId: 3,
+        metadata: const PlaybackMetadataHint(
+          trust: PlaybackMetadataTrust.sourceHint,
+          width: 320,
+          height: 180,
+        ),
+        shaders: const ['quality'],
+      )).loaded,
+      isTrue,
+    );
+    expect(fixture.output.resets, 1);
+  });
+
+  test('Windows 回收失败不打开新源，重试仍须重新取得回收回执', () async {
+    if (!Platform.isWindows) return;
+    final fixture = _Fixture(subscribeToPlaybackEvents: true);
+    fixture.player
+      ..autoStop = true
+      ..videoWidth = 3840
+      ..videoHeight = 2160;
+    addTearDown(fixture.close);
+    expect((await fixture.load()).loaded, isTrue);
+    fixture.player
+      ..videoWidth = 640
+      ..videoHeight = 360;
+    const lowSize = PlaybackMetadataHint(
+      trust: PlaybackMetadataTrust.sourceHint,
+      width: 640,
+      height: 360,
+    );
+    fixture.output.resetError = StateError('renderer reset failed');
+    expect((await fixture.load(loadId: 2, metadata: lowSize)).loaded, isFalse);
+    expect(fixture.output.resets, 1);
+    expect(fixture.player.opens, 1);
+    fixture.output.resetError = null;
+    expect((await fixture.load(loadId: 3, metadata: lowSize)).loaded, isTrue);
+    expect(fixture.output.resets, 2);
+    expect(fixture.player.opens, 2);
+  });
+
+  test('Windows 新源尺寸未知时回收，同一源恢复继续复用', () async {
+    if (!Platform.isWindows) return;
+    final fixture = _Fixture(subscribeToPlaybackEvents: true);
+    fixture.player.autoStop = true;
+    addTearDown(fixture.close);
+    final source = PlaybackSourceSnapshot.fromDataSource(
+      NetworkSource(
+        videoSource: 'https://example.test/movie',
+        audioSource: null,
+      ),
+    );
+    expect((await fixture.load(source: source)).loaded, isTrue);
+    expect((await fixture.load(loadId: 2, source: source)).loaded, isTrue);
+    expect(fixture.output.resets, 0);
+    expect((await fixture.load(loadId: 3)).loaded, isTrue);
+    expect(fixture.output.resets, 1);
+  });
+
+  test('Windows 延迟取得的原生几何也约束后续降画质回收', () async {
+    if (!Platform.isWindows) return;
+    final fixture = _Fixture(subscribeToPlaybackEvents: true);
+    fixture.player
+      ..autoStop = true
+      ..lateVideoGeometry = true
+      ..videoWidth = 3840
+      ..videoHeight = 2160;
+    addTearDown(fixture.close);
+    expect((await fixture.load()).loaded, isTrue);
+    fixture.player
+      ..videoWidth = 640
+      ..videoHeight = 360;
+    expect(
+      (await fixture.load(
+        loadId: 2,
+        metadata: const PlaybackMetadataHint(
+          trust: PlaybackMetadataTrust.sourceHint,
+          width: 640,
+          height: 360,
+        ),
+      )).loaded,
+      isTrue,
+    );
+    expect(fixture.output.resets, 1);
   });
 
   test('keep-open EOF 按文件归属通知，重复事件合并且 seek 后可再次结束', () async {
@@ -485,20 +649,31 @@ class _Fixture {
     await _turn();
   }
 
-  Future<PlaybackRuntimeLoadResult> load({int loadId = 1}) => runtime.load(
+  Future<PlaybackRuntimeLoadResult> load({
+    int loadId = 1,
+    PlaybackMetadataHint? metadata,
+    List<String> shaders = const [],
+    PlaybackSourceSnapshot? source,
+  }) => runtime.load(
     PlaybackPlan(
       contentKey: 'shutdown-fixture',
-      source: PlaybackSourceSnapshot.fromDataSource(
-        NetworkSource(
-          videoSource: 'https://example.test/live',
-          audioSource: null,
-        ),
-      ),
+      source:
+          source ??
+          PlaybackSourceSnapshot.fromDataSource(
+            NetworkSource(
+              videoSource: 'https://example.test/live',
+              audioSource: null,
+            ),
+          ),
       timeline: const PlaybackTimeline(
         kind: PlaybackTimelineKind.live,
         seekPolicy: PlaybackSeekPolicy.disabled,
       ),
-      configuration: PlaybackConfiguration(audioOnly: !player.hasVideo),
+      configuration: PlaybackConfiguration(
+        audioOnly: !player.hasVideo,
+        shaders: shaders,
+      ),
+      metadata: metadata,
     ),
     PlaybackExecutionContext(
       requestId: 1,
@@ -516,6 +691,7 @@ class _Fixture {
     recovery.dispose();
     await subscription.cancel();
     if (!output.releaseReceipt.isCompleted) output.releaseReceipt.complete();
+    if (!output.resetReceipt.isCompleted) output.resetReceipt.complete();
     player.startFile();
     await player.unload();
     player.endFile();
@@ -535,7 +711,11 @@ class _Player implements NativePlayer {
   final muteCalls = <String>[];
   final bool hasVideo;
   double? videoFps = 30;
+  int videoWidth = 640;
+  int videoHeight = 360;
+  bool lateVideoGeometry = false;
   bool autoStop = false;
+  bool recordOperations = false;
   int opens = 0;
   @override
   final current = <Media>[];
@@ -599,6 +779,7 @@ class _Player implements NativePlayer {
     onLoadSubmitted?.call();
     if (openTimesOut) throw TimeoutException('open reply');
     opens++;
+    if (recordOperations) calls.add('open');
     state.duration = const Duration(minutes: 5);
     state.completed = false;
     if (playable is Media) state.position = playable.start ?? Duration.zero;
@@ -606,26 +787,27 @@ class _Player implements NativePlayer {
       ..clear()
       ..add(const Media('https://example.test/movie'));
     startFile();
+    final parameters = hasVideo
+        ? NativeVideoOutputParameters(
+            width: videoWidth,
+            height: videoHeight,
+            displayWidth: videoWidth,
+            displayHeight: videoHeight,
+            pixelAspectRatio: 1,
+            rotation: 0,
+          )
+        : null;
     events.add(
       NativeFileLoaded(
         playlistEntryId: entryId,
-        videoOutputParameters: hasVideo
-            ? const NativeVideoOutputParameters(
-                width: 640,
-                height: 360,
-                displayWidth: 640,
-                displayHeight: 360,
-                pixelAspectRatio: 1,
-                rotation: 0,
-              )
-            : null,
+        videoOutputParameters: lateVideoGeometry ? null : parameters,
         videoTracks: hasVideo
             ? [
                 NativeVideoTrackMetadata(
                   id: '1',
                   type: 'video',
-                  demuxWidth: 640,
-                  demuxHeight: 360,
+                  demuxWidth: videoWidth,
+                  demuxHeight: videoHeight,
                   demuxFps: videoFps,
                   demuxPar: 1,
                   demuxRotate: 0,
@@ -639,6 +821,14 @@ class _Player implements NativePlayer {
         partiallySeekable: false,
       ),
     );
+    if (lateVideoGeometry && parameters != null) {
+      events.add(
+        NativeVideoOutputParametersChanged(
+          playlistEntryId: entryId,
+          videoOutputParameters: parameters,
+        ),
+      );
+    }
     emitProperty('estimated-frame-number', '0');
   }
 
@@ -718,7 +908,10 @@ class _Player implements NativePlayer {
     bool synchronized = true,
   }) async {}
   @override
-  Future<void> command(List<String> args, {int? seekObservationId}) async {}
+  Future<void> command(List<String> args, {int? seekObservationId}) async {
+    if (recordOperations) calls.add('command ${args.join(' ')}');
+  }
+
   @override
   dynamic noSuchMethod(Invocation invocation) =>
       throw StateError('Unexpected player call: ${invocation.memberName}');
@@ -728,6 +921,10 @@ class _Output implements VideoController {
   _Output(this.calls);
   final List<String> calls;
   final releaseReceipt = Completer<void>();
+  final resetReceipt = Completer<void>();
+  int resets = 0;
+  bool waitForReset = false;
+  Object? resetError;
   int releaseCalls = 0;
   OutputOperationToken? token;
   final progress = StreamController<VideoOutputProgress>.broadcast(sync: true);
@@ -744,6 +941,13 @@ class _Output implements VideoController {
   ) async => null;
   @override
   Future<void>? setSize({int? width, int? height}) => null;
+  @override
+  Future<void> resetRenderer() async {
+    resets++;
+    calls.add('reset-renderer');
+    if (resetError case final error?) throw error;
+    if (waitForReset) await resetReceipt.future;
+  }
 
   OutputPreparationResult _prepared(OutputOperationToken token) =>
       OutputPreparationResult(

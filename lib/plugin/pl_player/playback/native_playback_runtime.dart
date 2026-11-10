@@ -110,6 +110,7 @@ class NativePlaybackRuntime
   _PendingNativeLoad? _openingLoad;
   _NativeFileBinding? _activeBinding;
   PlaybackPlan? _activePlan;
+  VideoOutputSize? _rendererSourceSize;
   Duration Function() _activeNow = _fallbackNow;
   Duration? _lastAudioPtsAdvance;
   Duration? _lastVideoPositionAdvance;
@@ -512,6 +513,7 @@ class NativePlaybackRuntime
 
     _PendingNativeLoad? pendingLoad;
     try {
+      final resetForSource = _rendererNeedsSourceReset(plan);
       await _unloadActiveFile(player, context);
       if (!context.isCurrent()) return _supersededLoad();
       _activePlan = null;
@@ -595,13 +597,25 @@ class NativePlaybackRuntime
         baseShaders: configuration.playerOptions['glsl-shaders'],
         separator: Platform.isWindows ? ';' : ':',
       );
+      final resetRenderer =
+          Platform.isWindows &&
+          (resetForSource || shaderList != _appliedShaderList);
       await applyShaderList(
         shaderList,
         command: player.command,
-        resetRenderer: Platform.isWindows && shaderList != _appliedShaderList
-            ? output.resetRenderer
-            : null,
+        resetRenderer: resetRenderer ? output.resetRenderer : null,
       );
+      if (resetRenderer) {
+        _rendererSourceSize = null;
+        _diagnostics?.event(
+          'media.renderer.reset',
+          details: {
+            'loadId': context.loadId,
+            'sourceResources': resetForSource,
+            'shaderChanged': shaderList != _appliedShaderList,
+          },
+        );
+      }
       _appliedShaderList = shaderList;
       if (!context.isCurrent()) {
         await output.invalidateOutputGeneration(token);
@@ -705,6 +719,21 @@ class NativePlaybackRuntime
     } finally {
       if (identical(_pendingLoad, pendingLoad)) _pendingLoad = null;
     }
+  }
+
+  bool _rendererNeedsSourceReset(PlaybackPlan plan) {
+    final previous = _rendererSourceSize;
+    if (!Platform.isWindows || previous == null) return false;
+    if (plan.configuration.audioOnly) return true;
+    final width = plan.metadata?.width;
+    final height = plan.metadata?.height;
+    if (width != null && height != null && width > 0 && height > 0) {
+      // 提示仅决定是否回收缓存；新文件的输出仍须由原生几何确认。
+      return width < previous.width || height < previous.height;
+    }
+    // 同一源的恢复重载继续复用。新源尺寸未知时先回收旧渲染图，
+    // 避免其降分辨率后仍持有高分辨率的 GL 中间资源。
+    return !identical(_activePlan?.source, plan.source);
   }
 
   Future<PlaybackRuntimeLoadResult> _awaitPendingLoad(
@@ -1621,6 +1650,14 @@ class NativePlaybackRuntime
           _completeUnknownOutput(pending, 'output-geometry-expired');
           return;
         }
+      }
+      final sourceWidth = videoOutputParameters?.width;
+      final sourceHeight = videoOutputParameters?.height;
+      if (sourceWidth != null &&
+          sourceHeight != null &&
+          sourceWidth > 0 &&
+          sourceHeight > 0) {
+        _rendererSourceSize = (width: sourceWidth, height: sourceHeight);
       }
       final confirmation = await output
           .confirmFileLoaded(
