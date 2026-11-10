@@ -184,6 +184,23 @@ void main() {
     expect(requests, hasLength(2));
   });
 
+  test('早于待确认回执发起的查询不能解除核对要求', () async {
+    final pending = controller.update(ProfileType.uname, '新昵称');
+    await interceptor.waitForRequests(1);
+    final earlyRefresh = controller.load();
+    await interceptor.waitForRequests(2);
+    requests.first.reply.complete({'damaged': true});
+    expect(await pending, isA<UnknownResult>());
+    requests.last.reply.complete(info('原昵称'));
+    await earlyRefresh;
+    expect(controller.needsVerification, true);
+    expect(
+      (await controller.update(ProfileType.uname, '新昵称')).isSuccess,
+      false,
+    );
+    expect(requests, hasLength(2));
+  });
+
   test('释放后迟到响应不发布状态或通知', () async {
     final pending = controller.load();
     await interceptor.waitForRequests(1);

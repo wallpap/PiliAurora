@@ -29,6 +29,7 @@ class MemberProfileController extends ChangeNotifier {
   bool get saving => _operation != null;
   bool needsVerification = false;
   ProfileType? _verificationType;
+  int _verificationQuery = 0;
 
   bool _ownsAccount(Account owner) =>
       !_disposed &&
@@ -64,7 +65,8 @@ class MemberProfileController extends ChangeNotifier {
     if (_disposed || query != _query || !identical(owner, Accounts.main)) {
       return;
     }
-    if (result case Success(:final response) when needsVerification) {
+    if (result case Success(:final response)
+        when needsVerification && query > _verificationQuery) {
       final verified = switch (_verificationType) {
         ProfileType.uname => response.name != null,
         ProfileType.sign => response.sign != null,
@@ -122,6 +124,7 @@ class MemberProfileController extends ChangeNotifier {
         // 刷新替换快照不能解除仍在途写入的待确认屏障。
         needsVerification = true;
         _verificationType = type;
+        _verificationQuery = _query;
       }
       if (!owns(owner, source)) return result;
       if (result.isSuccess) {
@@ -168,6 +171,7 @@ class MemberProfileController extends ChangeNotifier {
       if (_ownsAccount(owner) && result is UnknownResult) {
         needsVerification = true;
         _verificationType = null;
+        _verificationQuery = _query;
       }
       return result;
     } catch (error, stackTrace) {
