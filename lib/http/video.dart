@@ -58,33 +58,39 @@ abstract final class VideoHttp {
     required int freshIdx,
     CancelToken? cancelToken,
   }) async {
-    final res = await Request().get(
-      Api.recommendListWeb,
-      cancelToken: cancelToken,
-      queryParameters: await WbiSign.makSign({
-        'version': 1,
-        'feed_version': 'V8',
-        'homepage_ver': 1,
-        'ps': ps,
-        'fresh_idx': freshIdx,
-        'brush': freshIdx,
-        'fresh_type': 4,
-      }),
-    );
-    if (res.data['code'] == 0) {
-      List<RcmdVideoItemModel> list = <RcmdVideoItemModel>[];
-      for (final i in res.data['data']['item']) {
-        // 过滤非视频卡片；作者屏蔽由发现列表统一处理，以保留补位所需数量。
-        if (i['goto'] == 'av' && i['owner'] != null) {
-          RcmdVideoItemModel videoItem = RcmdVideoItemModel.fromJson(i);
-          if (!RecommendFilter.filter(videoItem)) {
-            list.add(videoItem);
+    try {
+      final account = Accounts.get(AccountType.recommend);
+
+      return await Request().requestApi(
+        Api.recommendListWeb,
+        cancelToken: cancelToken,
+        queryParameters: await WbiSign.makSign({
+          'version': 1,
+          'feed_version': 'V8',
+          'homepage_ver': 1,
+          'ps': ps,
+          'fresh_idx': freshIdx,
+          'brush': freshIdx,
+          'fresh_type': 4,
+        }),
+        options: Options(extra: {'account': account}),
+        kind: ApiCallKind.query,
+        decode: (body) {
+          List<RcmdVideoItemModel> list = <RcmdVideoItemModel>[];
+          for (final i in body['data']['item']) {
+            // 过滤非视频卡片；作者屏蔽由发现列表统一处理，以保留补位所需数量。
+            if (i['goto'] == 'av' && i['owner'] != null) {
+              RcmdVideoItemModel videoItem = RcmdVideoItemModel.fromJson(i);
+              if (!RecommendFilter.filter(videoItem)) {
+                list.add(videoItem);
+              }
+            }
           }
-        }
-      }
-      return Success(list);
-    } else {
-      return Error(res.data['message']);
+          return list;
+        },
+      );
+    } catch (error, stackTrace) {
+      return Error.fromException(error, stackTrace);
     }
   }
 
@@ -93,6 +99,8 @@ abstract final class VideoHttp {
     required int freshIdx,
     CancelToken? cancelToken,
   }) async {
+    final account = Accounts.get(AccountType.recommend);
+
     final params = {
       'build': 8430300,
       'c_locale': 'zh_CN',
@@ -122,11 +130,12 @@ abstract final class VideoHttp {
       'statistics': Constants.statisticsApp,
       'voice_balance': 0,
     };
-    final res = await Request().get(
+    return await Request().requestApi(
       Api.recommendListApp,
       cancelToken: cancelToken,
       queryParameters: params,
       options: Options(
+        extra: {'account': account},
         headers: {
           'buvid': LoginHttp.buvid,
           'fp_local': '1111111111111111111111111111111111111111111111111111111111111111',
@@ -141,31 +150,30 @@ abstract final class VideoHttp {
           'bili-http-engine': 'cronet',
         },
       ),
-    );
-    if (res.data['code'] == 0) {
-      final list = <RcmdVideoItemAppModel>[];
-      for (final i in res.data['data']['items']) {
-        // 屏蔽推广卡片。
-        if (i['card_goto'] != 'ad_av' &&
-            i['card_goto'] != 'ad_web_s' &&
-            i['ad_info'] == null &&
-            i['can_play'] == 1 &&
-            i['args'] != null) {
-          if (enableFilter &&
-              i['args']?['tname'] != null &&
-              zoneRegExp.hasMatch(i['args']['tname'])) {
-            continue;
-          }
-          RcmdVideoItemAppModel videoItem = RcmdVideoItemAppModel.fromJson(i);
-          if (!RecommendFilter.filter(videoItem)) {
-            list.add(videoItem);
+      kind: ApiCallKind.query,
+      decode: (body) {
+        final list = <RcmdVideoItemAppModel>[];
+        for (final i in body['data']['items']) {
+          // 屏蔽推广卡片。
+          if (i['card_goto'] != 'ad_av' &&
+              i['card_goto'] != 'ad_web_s' &&
+              i['ad_info'] == null &&
+              i['can_play'] == 1 &&
+              i['args'] != null) {
+            if (enableFilter &&
+                i['args']?['tname'] != null &&
+                zoneRegExp.hasMatch(i['args']['tname'])) {
+              continue;
+            }
+            RcmdVideoItemAppModel videoItem = RcmdVideoItemAppModel.fromJson(i);
+            if (!RecommendFilter.filter(videoItem)) {
+              list.add(videoItem);
+            }
           }
         }
-      }
-      return Success(list);
-    } else {
-      return Error(res.data['message']);
-    }
+        return list;
+      },
+    );
   }
 
   // 最热视频
@@ -173,30 +181,32 @@ abstract final class VideoHttp {
     required int pn,
     required int ps,
   }) async {
-    final res = await Request().get(
+    final account = Accounts.get(AccountType.recommend);
+
+    return await Request().requestApi(
       Api.hotList,
       queryParameters: {'pn': pn, 'ps': ps},
-    );
-    if (res.data['code'] == 0) {
-      List<HotVideoItemModel> list = <HotVideoItemModel>[];
-      for (final i in res.data['data']['list']) {
-        if (!RecommendFilter.filterTitle(i['title']) &&
-            !RecommendFilter.filterLikeRatio(
-              i['stat']['like'],
-              i['stat']['view'],
-            )) {
-          if (enableFilter &&
-              i['tname'] != null &&
-              zoneRegExp.hasMatch(i['tname'])) {
-            continue;
+      options: Options(extra: {'account': account}),
+      kind: ApiCallKind.query,
+      decode: (body) {
+        List<HotVideoItemModel> list = <HotVideoItemModel>[];
+        for (final i in body['data']['list']) {
+          if (!RecommendFilter.filterTitle(i['title']) &&
+              !RecommendFilter.filterLikeRatio(
+                i['stat']['like'],
+                i['stat']['view'],
+              )) {
+            if (enableFilter &&
+                i['tname'] != null &&
+                zoneRegExp.hasMatch(i['tname'])) {
+              continue;
+            }
+            list.add(HotVideoItemModel.fromJson(i));
           }
-          list.add(HotVideoItemModel.fromJson(i));
         }
-      }
-      return Success(list);
-    } else {
-      return Error(res.data['message']);
-    }
+        return list;
+      },
+    );
   }
 
   // 视频流
@@ -302,22 +312,21 @@ abstract final class VideoHttp {
     required String bvid,
     Account? account,
   }) async {
-    final res = await Request().get(
-      Api.videoIntro,
-      queryParameters: await WbiSign.makSign({'bvid': bvid}),
-      options: account == null
-          ? null
-          : Options(
-              extra: {
-                'account': account,
-                'noRetry': true,
-              },
-            ),
-    );
-    if (res.data['code'] == 0) {
-      return Success(VideoDetailData.fromJson(res.data['data']));
-    } else {
-      return Error(res.data['message']);
+    try {
+      final noRetry = account != null;
+      account ??= Accounts.heartbeat;
+
+      return await Request().requestApi(
+        Api.videoIntro,
+        queryParameters: await WbiSign.makSign({'bvid': bvid}),
+        options: Options(extra: {'account': account, 'noRetry': noRetry}),
+        kind: ApiCallKind.query,
+        decode: (body) {
+          return VideoDetailData.fromJson(body['data']);
+        },
+      );
+    } catch (error, stackTrace) {
+      return Error.fromException(error, stackTrace);
     }
   }
 
@@ -347,21 +356,23 @@ abstract final class VideoHttp {
   static Future<LoadingState<List<HotVideoItemModel>?>> relatedVideoList({
     required String bvid,
   }) async {
-    final res = await Request().get(
+    final account = Accounts.get(AccountType.recommend);
+
+    return await Request().requestApi(
       Api.relatedList,
       queryParameters: {'bvid': bvid},
+      options: Options(extra: {'account': account}),
+      kind: ApiCallKind.query,
+      decode: (body) {
+        final items = (body['data'] as List?)?.map(
+          (i) => HotVideoItemModel.fromJson(i),
+        );
+        final list = RecommendFilter.applyFilterToRelatedVideos
+            ? items?.where((i) => !RecommendFilter.filterAll(i)).toList()
+            : items?.toList();
+        return list;
+      },
     );
-    if (res.data['code'] == 0) {
-      final items = (res.data['data'] as List?)?.map(
-        (i) => HotVideoItemModel.fromJson(i),
-      );
-      final list = RecommendFilter.applyFilterToRelatedVideos
-          ? items?.where((i) => !RecommendFilter.filterAll(i)).toList()
-          : items?.toList();
-      return Success(list);
-    } else {
-      return Error(res.data['message']);
-    }
   }
 
   // 获取点赞/投币/收藏状态 pgc
@@ -931,16 +942,18 @@ abstract final class VideoHttp {
     String? bvid,
     required int cid,
   }) async {
+    final account = Accounts.heartbeat;
+
     assert(aid != null || bvid != null);
-    final res = await Request().get(
+    return await Request().requestApi(
       Api.onlineTotal,
       queryParameters: {'aid': aid, 'bvid': bvid, 'cid': cid},
+      options: Options(extra: {'account': account}),
+      kind: ApiCallKind.query,
+      decode: (body) {
+        return body['data']['total'];
+      },
     );
-    if (res.data['code'] == 0) {
-      return Success(res.data['data']['total']);
-    } else {
-      return Error(res.data['message']);
-    }
   }
 
   static Future<LoadingState<AiConclusionData>> aiConclusion({
@@ -974,21 +987,27 @@ abstract final class VideoHttp {
     dynamic seasonId,
     dynamic epId,
   }) async {
-    assert(aid != null || bvid != null);
-    final res = await Request().get(
-      Api.playInfo,
-      queryParameters: await WbiSign.makSign({
-        'aid': ?aid,
-        'bvid': ?bvid,
-        'cid': cid,
-        'season_id': ?seasonId,
-        'ep_id': ?epId,
-      }),
-    );
-    if (res.data['code'] == 0) {
-      return Success(PlayInfoData.fromJson(res.data['data']));
-    } else {
-      return Error(res.data['message']);
+    try {
+      final account = Accounts.main;
+
+      assert(aid != null || bvid != null);
+      return await Request().requestApi(
+        Api.playInfo,
+        queryParameters: await WbiSign.makSign({
+          'aid': ?aid,
+          'bvid': ?bvid,
+          'cid': cid,
+          'season_id': ?seasonId,
+          'ep_id': ?epId,
+        }),
+        options: Options(extra: {'account': account}),
+        kind: ApiCallKind.query,
+        decode: (body) {
+          return PlayInfoData.fromJson(body['data']);
+        },
+      );
+    } catch (error, stackTrace) {
+      return Error.fromException(error, stackTrace);
     }
   }
 
@@ -1030,20 +1049,26 @@ abstract final class VideoHttp {
   static Future<LoadingState<List<HotVideoItemModel>>> getRankVideoList(
     int rid,
   ) async {
-    final res = await Request().get(
-      Api.getRankApi,
-      queryParameters: await WbiSign.makSign({'rid': rid, 'type': 'all'}),
-    );
-    if (res.data['code'] == 0) {
-      List<HotVideoItemModel> list = <HotVideoItemModel>[];
-      for (final i in res.data['data']['list']) {
-        if (_canAddRank(i)) {
-          list.add(HotVideoItemModel.fromJson(i));
-        }
-      }
-      return Success(list);
-    } else {
-      return Error(res.data['message']);
+    try {
+      final account = Accounts.get(AccountType.recommend);
+
+      return await Request().requestApi(
+        Api.getRankApi,
+        queryParameters: await WbiSign.makSign({'rid': rid, 'type': 'all'}),
+        options: Options(extra: {'account': account}),
+        kind: ApiCallKind.query,
+        decode: (body) {
+          List<HotVideoItemModel> list = <HotVideoItemModel>[];
+          for (final i in body['data']['list']) {
+            if (_canAddRank(i)) {
+              list.add(HotVideoItemModel.fromJson(i));
+            }
+          }
+          return list;
+        },
+      );
+    } catch (error, stackTrace) {
+      return Error.fromException(error, stackTrace);
     }
   }
 
@@ -1052,21 +1077,25 @@ abstract final class VideoHttp {
     int day = 3,
     required int seasonType,
   }) async {
-    final res = await Request().get(
-      Api.pgcRank,
-      queryParameters: await WbiSign.makSign({
-        'day': day,
-        'season_type': seasonType,
-      }),
-    );
-    if (res.data['code'] == 0) {
-      return Success(
-        (res.data['result']?['list'] as List?)
-            ?.map((e) => PgcRankItemModel.fromJson(e))
-            .toList(),
+    try {
+      final account = Accounts.get(AccountType.recommend);
+
+      return await Request().requestApi(
+        Api.pgcRank,
+        queryParameters: await WbiSign.makSign({
+          'day': day,
+          'season_type': seasonType,
+        }),
+        options: Options(extra: {'account': account}),
+        kind: ApiCallKind.query,
+        decode: (body) {
+          return (body['result']?['list'] as List?)
+              ?.map((e) => PgcRankItemModel.fromJson(e))
+              .toList();
+        },
       );
-    } else {
-      return Error(res.data['message']);
+    } catch (error, stackTrace) {
+      return Error.fromException(error, stackTrace);
     }
   }
 
@@ -1075,21 +1104,25 @@ abstract final class VideoHttp {
     int day = 3,
     required int seasonType,
   }) async {
-    final res = await Request().get(
-      Api.pgcSeasonRank,
-      queryParameters: await WbiSign.makSign({
-        'day': day,
-        'season_type': seasonType,
-      }),
-    );
-    if (res.data['code'] == 0) {
-      return Success(
-        (res.data['data']?['list'] as List?)
-            ?.map((e) => PgcRankItemModel.fromJson(e))
-            .toList(),
+    try {
+      final account = Accounts.get(AccountType.recommend);
+
+      return await Request().requestApi(
+        Api.pgcSeasonRank,
+        queryParameters: await WbiSign.makSign({
+          'day': day,
+          'season_type': seasonType,
+        }),
+        options: Options(extra: {'account': account}),
+        kind: ApiCallKind.query,
+        decode: (body) {
+          return (body['data']?['list'] as List?)
+              ?.map((e) => PgcRankItemModel.fromJson(e))
+              .toList();
+        },
       );
-    } else {
-      return Error(res.data['message']);
+    } catch (error, stackTrace) {
+      return Error.fromException(error, stackTrace);
     }
   }
 
@@ -1098,96 +1131,115 @@ abstract final class VideoHttp {
     dynamic uperMid,
     required int page,
   }) async {
-    final res = await Request().get(
+    final account = Accounts.main;
+
+    return await Request().requestApi(
       Api.archiveNoteList,
       queryParameters: {
-        'csrf': Accounts.main.csrf,
+        'csrf': account.csrf,
         'oid': oid,
         'oid_type': 0,
         'pn': page,
         'ps': 10,
         'uper_mid': ?uperMid,
       },
+      options: Options(extra: {'account': account}),
+      kind: ApiCallKind.query,
+      decode: (body) {
+        return VideoNoteData.fromJson(body['data']);
+      },
     );
-    if (res.data['code'] == 0) {
-      return Success(VideoNoteData.fromJson(res.data['data']));
-    } else {
-      return Error(res.data['message']);
-    }
   }
 
   static Future<LoadingState<List<PopularSeriesListItem>?>>
   popularSeriesList() async {
-    final res = await Request().get(
-      Api.popularSeriesList,
-      queryParameters: await WbiSign.makSign({'web_location': 333.934}),
-      options: Options(
-        headers: const {
-          'user-agent': BrowserUa.pc,
-          'origin': HttpString.baseUrl,
-          'referer': 'https://www.bilibili.com/v/popular/weekly',
+    try {
+      final account = Accounts.get(AccountType.recommend);
+
+      return await Request().requestApi(
+        Api.popularSeriesList,
+        queryParameters: await WbiSign.makSign({'web_location': 333.934}),
+        options: Options(
+          extra: {'account': account},
+          headers: const {
+            'user-agent': BrowserUa.pc,
+            'origin': HttpString.baseUrl,
+            'referer': 'https://www.bilibili.com/v/popular/weekly',
+          },
+        ),
+        kind: ApiCallKind.query,
+        decode: (body) {
+          return (body['data']?['list'] as List<dynamic>?)
+              ?.map(
+                (e) =>
+                    PopularSeriesListItem.fromJson(e as Map<String, dynamic>),
+              )
+              .toList();
         },
-      ),
-    );
-    if (res.data['code'] == 0) {
-      return Success(
-        (res.data['data']?['list'] as List<dynamic>?)
-            ?.map(
-              (e) => PopularSeriesListItem.fromJson(e as Map<String, dynamic>),
-            )
-            .toList(),
       );
-    } else {
-      return Error(res.data['message']);
+    } catch (error, stackTrace) {
+      return Error.fromException(error, stackTrace);
     }
   }
 
   static Future<LoadingState<PopularSeriesOneData>> popularSeriesOne({
     required int number,
   }) async {
-    final res = await Request().get(
-      Api.popularSeriesOne,
-      queryParameters: await WbiSign.makSign({
-        'number': number,
-        'web_location': 333.934,
-      }),
-      options: Options(
-        headers: {
-          'user-agent': BrowserUa.pc,
-          'origin': HttpString.baseUrl,
-          'referer': 'https://www.bilibili.com/v/popular/weekly?num=$number',
+    try {
+      final account = Accounts.get(AccountType.recommend);
+
+      return await Request().requestApi(
+        Api.popularSeriesOne,
+        queryParameters: await WbiSign.makSign({
+          'number': number,
+          'web_location': 333.934,
+        }),
+        options: Options(
+          extra: {'account': account},
+          headers: {
+            'user-agent': BrowserUa.pc,
+            'origin': HttpString.baseUrl,
+            'referer': 'https://www.bilibili.com/v/popular/weekly?num=$number',
+          },
+        ),
+        kind: ApiCallKind.query,
+        decode: (body) {
+          return PopularSeriesOneData.fromJson(body['data']);
         },
-      ),
-    );
-    if (res.data['code'] == 0) {
-      return Success(PopularSeriesOneData.fromJson(res.data['data']));
-    } else {
-      return Error(res.data['message']);
+      );
+    } catch (error, stackTrace) {
+      return Error.fromException(error, stackTrace);
     }
   }
 
   static Future<LoadingState<PopularPreciousData>> popularPrecious({
     required int page,
   }) async {
-    final res = await Request().get(
-      Api.popularPrecious,
-      queryParameters: await WbiSign.makSign({
-        'page_size': 100,
-        'page': page,
-        'web_location': 333.934,
-      }),
-      options: Options(
-        headers: const {
-          'user-agent': BrowserUa.pc,
-          'origin': HttpString.baseUrl,
-          'referer': 'https://www.bilibili.com/v/popular/history',
+    try {
+      final account = Accounts.get(AccountType.recommend);
+
+      return await Request().requestApi(
+        Api.popularPrecious,
+        queryParameters: await WbiSign.makSign({
+          'page_size': 100,
+          'page': page,
+          'web_location': 333.934,
+        }),
+        options: Options(
+          extra: {'account': account},
+          headers: const {
+            'user-agent': BrowserUa.pc,
+            'origin': HttpString.baseUrl,
+            'referer': 'https://www.bilibili.com/v/popular/history',
+          },
+        ),
+        kind: ApiCallKind.query,
+        decode: (body) {
+          return PopularPreciousData.fromJson(body['data']);
         },
-      ),
-    );
-    if (res.data['code'] == 0) {
-      return Success(PopularPreciousData.fromJson(res.data['data']));
-    } else {
-      return Error(res.data['message']);
+      );
+    } catch (error, stackTrace) {
+      return Error.fromException(error, stackTrace);
     }
   }
 
@@ -1197,7 +1249,9 @@ abstract final class VideoHttp {
     required int playurlType, // ugc 1, pgc 2
     int? qn,
   }) async {
-    final accessKey = Accounts.get(AccountType.video).accessKey;
+    final account = Accounts.get(AccountType.video);
+
+    final accessKey = account.accessKey;
     final params = {
       'access_key': ?accessKey,
       'actionKey': 'appkey',
@@ -1213,12 +1267,15 @@ abstract final class VideoHttp {
       'qn': qn ?? 80,
     };
     AppSign.appSign(params);
-    final res = await Request().get(Api.tvPlayUrl, queryParameters: params);
-    if (res.data['code'] == 0) {
-      return Success(PlayUrlModel.fromJson(res.data['data']));
-    } else {
-      return Error(res.data['message']);
-    }
+    return await Request().requestApi(
+      Api.tvPlayUrl,
+      queryParameters: params,
+      options: Options(extra: {'account': account}),
+      kind: ApiCallKind.query,
+      decode: (body) {
+        return PlayUrlModel.fromJson(body['data']);
+      },
+    );
   }
 
   static Future<LoadingState<VideoShotData>> videoshot({

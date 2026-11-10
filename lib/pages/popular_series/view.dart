@@ -150,7 +150,7 @@ class _PopularSeriesPageState extends State<PopularSeriesPage> with GridMixin {
                       Get.back();
                       if (!isCurr) {
                         _controller
-                          ..number = item.number!
+                          ..number = item.number
                           ..onReload();
                       }
                     },

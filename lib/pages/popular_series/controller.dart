@@ -8,6 +8,8 @@ import 'package:pili_aurora/models/remote/popular/popular_series_one/config.dart
 import 'package:pili_aurora/models/remote/popular/popular_series_one/data.dart';
 import 'package:pili_aurora/pages/common/discovery_list_controller.dart';
 import 'package:pili_aurora/utils/extension/iterable_ext.dart';
+import 'package:pili_aurora/utils/accounts.dart';
+import 'package:pili_aurora/models/common/account_type.dart';
 import 'package:get/get.dart';
 
 class PopularSeriesController
@@ -21,6 +23,7 @@ class PopularSeriesController
   final config = Rxn<PopularSeriesConfig>();
   String? reminder;
   List<PopularSeriesListItem>? seriesList;
+  int _seriesVersion = 0;
 
   @override
   void onInit() {
@@ -29,12 +32,20 @@ class PopularSeriesController
   }
 
   Future<void> _getSeriesList() async {
+    if (isClosed) return;
+    final version = ++_seriesVersion;
+    final account = Accounts.get(AccountType.recommend);
     final res = await VideoHttp.popularSeriesList();
+    if (isClosed ||
+        version != _seriesVersion ||
+        !identical(account, Accounts.get(AccountType.recommend))) {
+      return;
+    }
     if (res case Success(:final response)) {
       if (response != null && response.isNotEmpty) {
-        number = response.first.number!;
+        number = response.first.number;
         seriesList = response;
-        queryData();
+        await queryData();
       } else {
         loadingState.value = const Success(null);
       }
