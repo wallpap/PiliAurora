@@ -1,3 +1,4 @@
+import 'dart:async' show unawaited;
 import 'dart:typed_data';
 
 import 'package:pili_aurora/common/assets.dart';
@@ -6,6 +7,7 @@ import 'package:pili_aurora/common/constants.dart';
 import 'package:pili_aurora/common/style.dart';
 import 'package:pili_aurora/common/widgets/button/icon_button.dart';
 import 'package:pili_aurora/common/widgets/custom_toast.dart';
+import 'package:pili_aurora/common/widgets/route_aware_mixin.dart';
 import 'package:pili_aurora/common/widgets/image/network_img_layer.dart';
 import 'package:pili_aurora/grpc/bilibili/main/community/reply/v1.pb.dart'
     show ReplyInfo;
@@ -284,10 +286,32 @@ class _SavePanelState extends State<SavePanel> {
     if (_savingPicture) return;
     _savingPicture = true;
     final route = ModalRoute.of(context);
+    final item = widget.item;
     bool cancelled = false;
-    bool current() => mounted && !cancelled && route?.isCurrent == true;
+    bool current() =>
+        mounted &&
+        !cancelled &&
+        identical(item, widget.item) &&
+        route?.isCurrent == true;
     final loadingTag = 'save-panel-screenshot-${UniqueKey()}';
     bool loadingShown = false;
+    Future<void> closeLoading() async {
+      if (!loadingShown) return;
+      loadingShown = false;
+      try {
+        await SmartDialog.dismiss(tag: loadingTag);
+      } catch (error, stackTrace) {
+        logger.w('关闭截图提示失败', error: error.runtimeType, stackTrace: stackTrace);
+      }
+    }
+
+    void onNavigation() {
+      if (identical(routeObserver.currentRoute, route)) return;
+      cancelled = true;
+      unawaited(closeLoading());
+    }
+
+    routeObserver.addNavigationListener(onNavigation);
     try {
       if (!isShare &&
           PlatformUtils.isMobile &&
@@ -322,8 +346,7 @@ class _SavePanelState extends State<SavePanel> {
       if (!current()) return;
       final picName =
           "${Constants.appName}_${itemType}_${DateFormatUtils.only0_9.format(DateTime.now())}";
-      loadingShown = false;
-      await SmartDialog.dismiss(tag: loadingTag);
+      await closeLoading();
       if (!current()) return;
       if (isShare) {
         final result = await SharePlus.instance.share(
@@ -342,15 +365,24 @@ class _SavePanelState extends State<SavePanel> {
         final result = await ImageUtils.saveByteImg(
           bytes: pngBytes,
           fileName: picName,
+          showLoading: false,
+          needToast: false,
         );
-        if (current() && result?.isSuccess == true) Get.back();
+        if (!current()) return;
+        if (result?.isSuccess == true) {
+          SmartDialog.showToast(' 已保存 ');
+          Get.back();
+        } else if (result != null) {
+          SmartDialog.showToast('保存失败，请检查相册权限后重试');
+        }
       }
     } catch (error, stackTrace) {
       logger.w('图片保存或分享失败', error: error.runtimeType, stackTrace: stackTrace);
       if (current()) SmartDialog.showToast('图片保存或分享失败，请重试');
     } finally {
+      routeObserver.removeNavigationListener(onNavigation);
+      await closeLoading();
       _savingPicture = false;
-      if (loadingShown) await SmartDialog.dismiss(tag: loadingTag);
     }
   }
 
