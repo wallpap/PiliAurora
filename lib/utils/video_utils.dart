@@ -5,11 +5,24 @@ import 'package:pili_aurora/models/remote/live/live_room_play_info/codec.dart';
 import 'package:pili_aurora/utils/extension/iterable_ext.dart';
 import 'package:pili_aurora/utils/storage_pref.dart';
 
+/// 对外只交付安全文案，原始解析异常留给操作所有者诊断。
+class VideoSelectionException extends FormatException {
+  const VideoSelectionException(
+    super.message, {
+    required this.cause,
+    required this.stackTrace,
+  });
+
+  final Object cause;
+  final StackTrace stackTrace;
+}
+
 abstract final class VideoUtils {
   static CDNService cdnService = Pref.defaultCDNService;
   static String? liveCdnUrl = Pref.liveCdnUrl;
   static bool disableAudioCDN = Pref.disableAudioCDN;
 
+  /// 必须提供来源；缺少地址或解析失败抛出不含签名 URL 的 [FormatException]。
   static String getCdnUrl(
     Iterable<String> urls, {
     CDNService? defaultCDNService,
@@ -25,7 +38,7 @@ abstract final class VideoUtils {
     CDNService? defaultCDNService,
     bool isAudio = false,
   }) {
-    final sources = _CdnSources(urls.where((url) => url.isNotEmpty));
+    final sources = _CdnSources(urls);
     if (sources.originals.isEmpty) return const [];
     final rewriteHosts = !isAudio || !disableAudioCDN;
     final result = <String>{
@@ -46,6 +59,7 @@ abstract final class VideoUtils {
   }
 
   static String getLiveCdnUrl(CodecItem e, {int index = 0}) {
+    if (e.urlInfo.isEmpty) throw const FormatException('直播响应缺少播放来源');
     final urlInfo = e.urlInfo.getOrFirst(index);
     return (liveCdnUrl ?? urlInfo.host) + e.baseUrl + urlInfo.extra;
   }
@@ -67,9 +81,11 @@ abstract final class VideoUtils {
     Iterable<String> codecs,
     List<VideoDecodeFormatType> preferCodecs,
   ) {
+    final sources = codecs.toList(growable: false);
+    if (sources.isEmpty) throw const FormatException('下载响应缺少编码信息');
     if (preferCodecs.isNotEmpty) {
       int bestIndex = preferCodecs.length;
-      for (final e in codecs) {
+      for (final e in sources) {
         for (int i = 0; i < bestIndex; i++) {
           if (preferCodecs[i].codes.any(e.startsWith)) {
             bestIndex = i;
@@ -84,39 +100,57 @@ abstract final class VideoUtils {
         return preferCodecs[bestIndex];
       }
     }
-    return VideoDecodeFormatType.fromString(codecs.first);
+    try {
+      return VideoDecodeFormatType.fromString(sources.first);
+    } on StateError catch (error, stack) {
+      throw VideoSelectionException(
+        '下载响应包含不支持的编码',
+        cause: error,
+        stackTrace: stack,
+      );
+    }
   }
 }
 
 /// 一次解析整组来源；签名地址索引与回退优先级共用同一份快照。
 class _CdnSources {
-  _CdnSources(Iterable<String> urls) : originals = urls.toList() {
-    for (final url in originals) {
-      if (_mirrorRegex.hasMatch(url)) {
-        final uri = Uri.parse(url);
-        if (uri.queryParameters['os'] != 'mcdn') {
-          // 精确匹配使用接口原文，避免重新编码或借用其它主机的签名。
-          _signedMirrors.putIfAbsent(uri.host, () => url);
-          if (_primary == null) {
-            _primary = url;
-            _primaryUri = uri;
+  _CdnSources(Iterable<String> urls)
+    : originals = urls.where((url) => url.trim().isNotEmpty).toList() {
+    try {
+      for (final url in originals) {
+        if (_mirrorRegex.hasMatch(url)) {
+          final uri = Uri.parse(url);
+          if (uri.queryParameters['os'] != 'mcdn') {
+            // 精确匹配使用接口原文，避免重新编码或借用其它主机的签名。
+            _signedMirrors.putIfAbsent(uri.host, () => url);
+            if (_primary == null) {
+              _primary = url;
+              _primaryUri = uri;
+            }
+            continue;
           }
-          continue;
+        }
+        // 首个可直接使用的来源确定后，只需继续收集后续主机的签名地址。
+        if (_primary != null) continue;
+        if (_mCdnTfRegex.hasMatch(url)) {
+          _mcdnTf = url;
+        } else if (url.contains('/upgcxcode/')) {
+          _mcdnUpgcxcode = url;
+        } else if (url.contains('szbdyd.com')) {
+          _primary = url;
+          _primaryUri = Uri.parse(url);
+          _legacy = true;
+        } else {
+          _unknown.add(url);
         }
       }
-      // 首个可直接使用的来源确定后，只需继续收集后续主机的签名地址。
-      if (_primary != null) continue;
-      if (_mCdnTfRegex.hasMatch(url)) {
-        _mcdnTf = url;
-      } else if (url.contains('/upgcxcode/')) {
-        _mcdnUpgcxcode = url;
-      } else if (url.contains('szbdyd.com')) {
-        _primary = url;
-        _primaryUri = Uri.parse(url);
-        _legacy = true;
-      } else {
-        _unknown.add(url);
-      }
+    } on FormatException catch (error, stack) {
+      // Uri 的异常可能包含完整签名地址，边界只交付安全的协议错误。
+      throw VideoSelectionException(
+        '播放来源地址格式无效',
+        cause: error,
+        stackTrace: stack,
+      );
     }
   }
 
@@ -142,42 +176,55 @@ class _CdnSources {
     bool rewriteHosts = true,
     bool reportUnknown = true,
   }) {
-    if (service == CDNService.baseUrl) return originals.first;
-    if (_signedMirrors[service.host] case final signed? when rewriteHosts) {
-      return signed;
-    }
-    // Akamai 不能从其它来源改写主机，缺少原始签名时保留接口首选。
-    if (service == CDNService.akamai) return originals.firstOrNull ?? '';
-    if (reportUnknown) {
-      for (final url in _unknown) {
-        logger.w('unknown cdn type: $url');
+    if (originals.isEmpty) throw const FormatException('响应缺少播放来源');
+    try {
+      if (service == CDNService.baseUrl) return originals.first;
+      if (_signedMirrors[service.host] case final signed? when rewriteHosts) {
+        return signed;
       }
-    }
-    if (_primaryUri case final uri?) {
-      if (_legacy) {
-        return uri
-            .replace(
-              scheme: 'https',
-              host: uri.queryParameters['xy_usource'] ?? service.host,
-              port: 443,
-            )
+      // Akamai 不能从其它来源改写主机，缺少原始签名时保留接口首选。
+      if (service == CDNService.akamai) return originals.first;
+      if (reportUnknown && _unknown.isNotEmpty) {
+        logger.w('发现未识别的 CDN 来源，保留接口地址（${_unknown.length} 项）');
+      }
+      if (_primaryUri case final uri?) {
+        if (_legacy) {
+          return uri
+              .replace(
+                scheme: 'https',
+                host: uri.queryParameters['xy_usource'] ?? service.host,
+                port: 443,
+              )
+              .toString();
+        }
+        if (service == CDNService.backupUrl || !rewriteHosts) return _primary!;
+        return uri.replace(host: service.host).toString();
+      }
+      if (_mcdnUpgcxcode case final url?) {
+        return Uri.parse(url)
+            .replace(host: service.host ?? CDNService.ali.host)
             .toString();
       }
-      if (service == CDNService.backupUrl || !rewriteHosts) return _primary!;
-      return uri.replace(host: service.host).toString();
+      if (_mcdnTf case final url?) {
+        return Uri(
+          scheme: 'https',
+          host: _proxyTf,
+          queryParameters: {'url': url},
+        ).toString();
+      }
+      return originals.last;
+    } on FormatException catch (error, stack) {
+      throw VideoSelectionException(
+        '播放来源地址格式无效',
+        cause: error,
+        stackTrace: stack,
+      );
+    } on ArgumentError catch (error, stack) {
+      throw VideoSelectionException(
+        '播放来源地址格式无效',
+        cause: error,
+        stackTrace: stack,
+      );
     }
-    if (_mcdnUpgcxcode case final url?) {
-      return Uri.parse(url)
-          .replace(host: service.host ?? CDNService.ali.host)
-          .toString();
-    }
-    if (_mcdnTf case final url?) {
-      return Uri(
-        scheme: 'https',
-        host: _proxyTf,
-        queryParameters: {'url': url},
-      ).toString();
-    }
-    return originals.lastOrNull ?? '';
   }
 }

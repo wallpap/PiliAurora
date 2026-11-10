@@ -1,5 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pili_aurora/models/common/video/cdn_type.dart';
+import 'package:pili_aurora/models/common/video/video_decode_type.dart';
+import 'package:pili_aurora/services/diagnostics/diagnostics.dart';
 import 'package:pili_aurora/models/remote/live/live_room_play_info/codec.dart';
 import 'package:pili_aurora/models/remote/live/live_room_play_info/url_info.dart';
 import 'package:pili_aurora/utils/storage.dart';
@@ -27,6 +29,147 @@ void main() {
   tearDown(() {
     VideoUtils.disableAudioCDN = previousDisableAudioCdn;
     VideoUtils.liveCdnUrl = previousLiveCdnUrl;
+  });
+
+  test('单来源空输入始终明确失败，多来源仍交付空候选', () {
+    for (final service in CDNService.values) {
+      for (final empty in [
+        <String>[],
+        ['', '  '],
+      ]) {
+        expect(
+          () => VideoUtils.getCdnUrl(empty, defaultCDNService: service),
+          throwsA(
+            isA<FormatException>().having(
+              (error) => error.source,
+              'source',
+              isNull,
+            ),
+          ),
+        );
+        expect(
+          VideoUtils.getCdnUrls(empty, defaultCDNService: service),
+          isEmpty,
+        );
+      }
+    }
+  });
+
+  test('未知和相对来源保持原文，日志不包含地址或签名', () {
+    const url =
+        'https://unknown.example.test/private-path?private-signature=secret';
+    expect(VideoUtils.getCdnUrl([url], defaultCDNService: CDNService.hw), url);
+    final record = Diagnostics.instance.recentLogs.lastWhere(
+      (record) => record['message'].toString().contains('未识别的 CDN'),
+    );
+    expect(record.toString(), isNot(contains('unknown.example.test')));
+    expect(record.toString(), isNot(contains('private-path')));
+    expect(record.toString(), isNot(contains('private-signature')));
+    expect(record.toString(), isNot(contains('secret')));
+    expect(
+      VideoUtils.getCdnUrl([
+        '/relative-video?signature=x',
+      ], defaultCDNService: CDNService.hw),
+      '/relative-video?signature=x',
+    );
+  });
+
+  test('来源解析错误提示不带输入，保留原始原因和堆栈', () {
+    for (final url in [
+      'https://[private.szbdyd.com/video?private-signature=secret',
+      'https://upos-sz-mirrorcos.bilivideo.com/upgcxcode/video?os=%FF&private-signature=secret',
+      'https://foo.szbdyd.com/video?xy_usource=%5Bprivate-signature',
+    ]) {
+      for (final select in <Object Function()>[
+        () => VideoUtils.getCdnUrl([url], defaultCDNService: CDNService.hw),
+        () => VideoUtils.getCdnUrls([url], defaultCDNService: CDNService.hw),
+      ]) {
+        expect(
+          select,
+          throwsA(
+            isA<VideoSelectionException>()
+                .having(
+                  (error) => error.toString(),
+                  'message',
+                  isNot(contains('private-signature')),
+                )
+                .having((error) => error.source, 'source', isNull)
+                .having((error) => error.cause, 'cause', isNotNull)
+                .having(
+                  (error) => error.stackTrace.toString(),
+                  'stack',
+                  isNotEmpty,
+                ),
+          ),
+        );
+      }
+    }
+  });
+
+  test('编码保持偏好排序，无匹配时沿用首项，空或未知编码明确失败', () {
+    expect(
+      VideoUtils.selectCodec(
+        ['avc1.640028', 'hvc1.1'],
+        [VideoDecodeFormatType.HEVC, VideoDecodeFormatType.AVC],
+      ),
+      VideoDecodeFormatType.HEVC,
+    );
+    expect(
+      VideoUtils.selectCodec(['avc1.640028', 'hvc1.1'], []),
+      VideoDecodeFormatType.AVC,
+    );
+    expect(
+      VideoUtils.selectCodec(['avc1.640028'], [VideoDecodeFormatType.AV1]),
+      VideoDecodeFormatType.AVC,
+    );
+    expect(
+      () => VideoUtils.selectCodec([], []),
+      throwsA(isA<FormatException>()),
+    );
+    expect(
+      () => VideoUtils.selectCodec(['private-codec'], []),
+      throwsA(
+        isA<VideoSelectionException>().having(
+          (error) => error.toString(),
+          'message',
+          isNot(contains('private-codec')),
+        ),
+      ),
+    );
+    expect(
+      VideoUtils.selectCodec(
+        ['private-codec', 'avc1.640028'],
+        [VideoDecodeFormatType.AVC],
+      ),
+      VideoDecodeFormatType.AVC,
+    );
+  });
+
+  test('直播空来源明确失败，越界索引仍按首项回退', () {
+    final item = CodecItem(
+      currentQn: 1,
+      acceptQn: [1],
+      baseUrl: '/stream.flv',
+      urlInfo: [],
+    );
+    expect(
+      () => VideoUtils.getLiveCdnUrl(item),
+      throwsA(isA<FormatException>()),
+    );
+    expect(
+      () => VideoUtils.getLiveCdnUrls(item),
+      throwsA(isA<FormatException>()),
+    );
+    VideoUtils.liveCdnUrl = null;
+    item.urlInfo.add(
+      UrlInfo(host: 'https://a.example.test', extra: '?signature=x'),
+    );
+    for (final index in [-1, 1]) {
+      expect(
+        VideoUtils.getLiveCdnUrl(item, index: index),
+        'https://a.example.test/stream.flv?signature=x',
+      );
+    }
   });
 
   test('接口没有 Akamai 地址时不使用其它 CDN 的签名构造地址', () async {
