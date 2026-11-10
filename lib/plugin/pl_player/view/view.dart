@@ -495,7 +495,7 @@ class _PLVideoPlayerState extends State<PLVideoPlayer>
         maxVolume: plPlayerController.maxVolume,
         onChanged: (value) =>
             plPlayerController.setVolume(value, showIndicator: false),
-        onMuteChanged: plPlayerController.setMuted,
+        onMuteChanged: plPlayerController.setMutedFromControls,
         onOpened: () => plPlayerController.setControlsMenuOpen(true),
         onClosed: () => plPlayerController.setControlsMenuOpen(false),
       ),

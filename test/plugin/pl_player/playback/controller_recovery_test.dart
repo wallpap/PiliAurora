@@ -2,7 +2,8 @@ import 'dart:async';
 import 'dart:io' show Platform;
 
 import 'package:flutter/services.dart';
-import 'package:flutter/widgets.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:window_manager/window_manager.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hive_ce/hive.dart';
@@ -19,6 +20,7 @@ import 'package:pili_aurora/services/diagnostics/player_diagnostics.dart';
 import 'package:pili_aurora/services/audio_session.dart';
 import 'package:pili_aurora/services/service_locator.dart';
 import 'package:pili_aurora/utils/storage.dart';
+import 'package:pili_aurora/utils/storage_key.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -656,6 +658,179 @@ void main() {
     expect(f.controller.audioRecoveryStatus.value, AudioRecoveryStatus.idle);
   });
 
+  for (final unsupported in [false, true]) {
+    _recoveryTest('音量回执：静音${unsupported ? '拒绝' : '失败'}返回原因并可重试', (f) async {
+      await f.load();
+      const failure = PlaybackFailure(
+        category: PlaybackFailureCategory.audio,
+        operation: 'volume',
+        stage: PlaybackStage.observing,
+        recoverable: true,
+        cause: 'synthetic volume failure',
+      );
+      f.runtime.onVolume = (_) async => PlaybackRuntimeCommandResult(
+        applied: false,
+        failure: unsupported ? null : failure,
+      );
+      for (var i = 0; i < 2; i++) {
+        await expectLater(
+          f.controller.setMuted(true),
+          throwsA(
+            isA<PlayerVolumeException>()
+                .having(
+                  (error) => error.result.outcome,
+                  'outcome',
+                  unsupported
+                      ? CommandOutcome.unsupported
+                      : CommandOutcome.failed,
+                )
+                .having(
+                  (error) => error.result.failure,
+                  'failure',
+                  unsupported ? isNull : same(failure),
+                ),
+          ),
+        );
+        f.runtime.emitActual();
+        await f.tester.pump();
+        expect(f.controller.isMuted, isFalse);
+        expect(f.controller.volume.value, 1);
+        expect(
+          f.controller.currentPlaybackSnapshot.configuration.desired.volume,
+          100,
+        );
+      }
+      f.runtime.onVolume = null;
+      await f.controller.setMuted(true);
+      expect(f.runtime.volumes, [0, 100, 0, 100, 0]);
+      expect(f.controller.isMuted, isTrue);
+      await f.controller.setMuted(false);
+      expect(f.runtime.player.state.volume, 100);
+    });
+  }
+
+  _recoveryTest('音量回执：取消静音失败保留静音和原有音量', (f) async {
+    await f.load();
+    await f.controller.setVolume(.4, showIndicator: false);
+    await f.controller.setMuted(true);
+    f.runtime.onVolume = (_) async => const PlaybackRuntimeCommandResult(
+      applied: false,
+    );
+    await expectLater(
+      f.controller.setMuted(false),
+      throwsA(isA<PlayerVolumeException>()),
+    );
+    expect(f.controller.isMuted, isTrue);
+    expect(f.controller.volume.value, .4);
+    expect(
+      f.controller.currentPlaybackSnapshot.configuration.desired.volume,
+      0,
+    );
+    f.runtime.onVolume = null;
+    await f.controller.setMuted(false);
+    expect(f.runtime.player.state.volume, 40);
+    expect(f.controller.volume.value, .4);
+  });
+
+  _recoveryTest('音量回执：迟到静音失败不覆盖新调节和保存值', (f) async {
+    await f.load();
+    final pending = Completer<PlaybackRuntimeCommandResult>();
+    f.runtime.onVolume = (value) => value == 0
+        ? pending.future
+        : Future.value(const PlaybackRuntimeCommandResult());
+    final muted = expectLater(
+      f.controller.setMuted(true),
+      throwsA(
+        isA<PlayerVolumeException>().having(
+          (error) => error.isObsolete,
+          'obsolete',
+          isTrue,
+        ),
+      ),
+    );
+    await f.tester.pump();
+    final volume = f.controller.setVolume(.6, showIndicator: false);
+    await f.tester.pump();
+    pending.complete(const PlaybackRuntimeCommandResult(applied: false));
+    await f.tester.pump();
+    await Future.wait([muted, volume]);
+    expect(f.controller.isMuted, isFalse);
+    expect(f.controller.volume.value, .6);
+    expect(f.runtime.player.state.volume, 60);
+    await f.tester.pump(const Duration(milliseconds: 200));
+    expect(GStorage.setting.get(SettingBoxKey.desktopVolume), .6);
+  }, skip: !Platform.isWindows);
+
+  _recoveryTest('音量回执：切源后旧静音失败不回滚新媒体', (f) async {
+    await f.load();
+    final pending = Completer<PlaybackRuntimeCommandResult>();
+    f.runtime.onVolume = (value) => value == 0
+        ? pending.future
+        : Future.value(const PlaybackRuntimeCommandResult());
+    final muted = expectLater(
+      f.controller.setMuted(true),
+      throwsA(
+        isA<PlayerVolumeException>().having(
+          (error) => error.isObsolete,
+          'obsolete',
+          isTrue,
+        ),
+      ),
+    );
+    await f.tester.pump();
+    final original = f.runtime.loads.single;
+    final switching = f.controller.loadPlaybackPlan(
+      owner: f.owner,
+      plan: PlaybackPlan(
+        contentKey: 'next',
+        source: original.source,
+        timeline: original.timeline,
+        configuration: PlaybackConfiguration(),
+      ),
+      start: PlaybackStartPolicy.play,
+      live: false,
+    );
+    await f.tester.pump();
+    final unmuting = f.controller.setMuted(false);
+    pending.complete(const PlaybackRuntimeCommandResult(applied: false));
+    await f.tester.pump();
+    await Future.wait([muted, unmuting]);
+    expect((await switching).outcome, LoadOutcome.ready);
+    expect(f.controller.isMuted, isFalse);
+    expect(f.controller.volume.value, 1);
+    expect(f.runtime.volumes, [0]);
+    expect(f.runtime.loads.last.configuration.volume, 100);
+  });
+
+  _recoveryTest('音量回执：控件消费失败，失败调节不保存为成功音量', (f) async {
+    await f.tester.pumpWidget(
+      MaterialApp(
+        builder: FlutterSmartDialog.init(),
+        home: const Scaffold(),
+      ),
+    );
+    SmartDialog.config.toast = SmartConfigToast(displayType: .onlyRefresh);
+    try {
+      await f.load();
+      f.runtime.onVolume = (_) async => const PlaybackRuntimeCommandResult(
+        applied: false,
+      );
+      await f.controller.setMutedFromControls(true, showSuccess: true);
+      await f.tester.pump(const Duration(milliseconds: 300));
+      expect(find.text('音量设置失败，请重试'), findsOneWidget);
+      expect(find.text('静音'), findsNothing);
+      await f.controller.setVolume(.3, showIndicator: false);
+      await f.tester.pump(const Duration(milliseconds: 200));
+      expect(f.controller.isMuted, isFalse);
+      expect(f.controller.volume.value, 1);
+      expect(GStorage.setting.get(SettingBoxKey.desktopVolume), 1);
+    } finally {
+      await f.tester.pump(const Duration(seconds: 6));
+      await f.tester.pumpWidget(const SizedBox());
+      await f.tester.pump();
+    }
+  }, skip: !Platform.isWindows);
+
   _recoveryTest('静音时画面故障仍恢复；只听音频加静音时不检测画面', (f) async {
     await f.load();
     await f.controller.setMuted(true);
@@ -1033,6 +1208,8 @@ class _Runtime extends NativePlaybackRuntime {
   int loadId = 0;
   int repairs = 0;
   Future<PlaybackRuntimeCommandResult> Function()? onRepair;
+  final volumes = <double>[];
+  Future<PlaybackRuntimeCommandResult> Function(double)? onVolume;
   Future<void> Function(bool)? beforePlaying;
 
   void emitActual() {
@@ -1155,8 +1332,13 @@ class _Runtime extends NativePlaybackRuntime {
     double value,
     PlaybackExecutionContext context,
   ) async {
-    player.state.volume = value;
-    return const PlaybackRuntimeCommandResult();
+    volumes.add(value);
+    final result =
+        await onVolume?.call(value) ?? const PlaybackRuntimeCommandResult();
+    if (context.isCurrent() && result.applied && result.failure == null) {
+      player.state.volume = value;
+    }
+    return result;
   }
 
   @override

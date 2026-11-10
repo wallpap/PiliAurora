@@ -2,7 +2,9 @@
 
 ## 当前进度（2026-11-10）
 
-本轮只修复全量测试发现的失败，全仓异常处理检查尚未完成。Windows libmpv 已独立回退到 20261104（`10968442e`），没有保留应用层分片回退适配。
+本轮继续逐模块检查：播放器静音和音量命令已消费回执，失败恢复已确认状态及会话期望，迟到结果不影响新调节或新媒体。新增 6 项与既有 2 项必要回归通过，定向分析无问题；未重跑全量测试。全仓异常处理检查尚未完成。
+
+上一轮只修复全量测试发现的失败。Windows libmpv 已独立回退到 20261104（`10968442e`），没有保留应用层分片回退适配。
 
 失败均定位到测试环境或夹具：9 个语义回收用例需先准备 Windows Flutter 补丁；`e76272431` 新增上传账号参数后，旧生命周期测试未同步签名和缓存初始化；`4160a163d` 接入统一响应契约后，损坏弹幕响应会产生延迟诊断通知，测试需推进模拟时钟；`09b170f10` 的声音交接用例只等待连接，未等待新窗口就绪。修正没有更改生产逻辑，保留取消上传和迟到结果隔离断言，并加强声音消息序列断言。
 
@@ -59,6 +61,8 @@
 | 后台账号与历史同步：`http/init.dart`、`utils/login_utils.dart`、`request_utils.dart`、启动与 WebView Cookie 菜单 | Cookie 原生写入和登出清理串行，过期账号不分发，原生拒绝与异常沿 Future 返回；失败不阻断后续批次。启动／登录持有可选同步的失败并记录诊断，保留登录核心结果。历史同步等待缓存写入；手动重置只向所属页面／账号提示实际结果。 | `test/utils/background_sync_results_test.dart`、历史与账号资料生命周期回归 |
 | 播放器音频激活与小窗声音归属：`plugin/pl_player/controller.dart`、`services/desktop_playback_windows.dart` | 播放／暂停等待所属音频焦点操作；激活拒绝或异常保留播放结果并记录诊断。焦点与窗口声音切换串行，旧 owner／意图和排队目标失效后不再提交副作用；仅确认持有声音的小窗进程退出时恢复主声。IPC 断连或退出状态查询失败不当作进程退出，新窗口接管使旧恢复失效。 | `test/plugin/pl_player/playback/controller_recovery_test.dart`、`test/services/desktop_playback_windows_test.dart` |
 
+| 播放器静音与音量回执：`plugin/pl_player/controller.dart`、声音控件和 M 快捷键 | 消费原生命令回执，`setMuted` 通过带原 `CommandResult` 的异常交付失败，UI 包装负责提示。失败恢复已确认音量、静音状态和会话期望；旧 owner／媒体／调节的迟到回执不覆盖当前状态。加载期间沿用 `accepted` 语义。 | `test/plugin/pl_player/playback/controller_recovery_test.dart` |
+
 ## 检查后保留的实现
 
 - 消息 Session、聊天和分享已区分成功、失败与结果待确认。Session 保留传输不确定性，切号后拒绝旧结果，分享保留部分成功信息。统一 HTTP 与 gRPC 返回值时继续保留 unknown 语义。见[消息模块](../../lib/services/messaging/README.md)。
@@ -72,7 +76,7 @@
 
 - HTTP 传输、重试和其余业务适配器：逐接口核对响应结构、写入重试和调用方对可空返回值的处理。通用错误捕获的修正只覆盖部分问题，其余接口仍需逐一验收。
 - gRPC 各领域响应模型和调用方：请求、写入不确定性与解码契约已检查，模型字段和业务行为继续按领域核对。
-- 播放器 `setMuted` 对 `owner.setVolume` 的命令回执消费仍需检查。本批验证了焦点与声音切换的异步归属，未保证原生音量命令实际成功；后台同步、退出、音频初始化、桌面 IPC、直播连接和协议 worker 已检查。
+- 播放器其余命令调用方继续按领域检查；静音和音量已消费命令回执，加载期的配置接受不等于硬件实际输出。子窗口 IPC 远端音量 ACK 未扩展，Android／Windows 真实声音输出与窗口交接仍需设备验证。后台同步、退出、音频初始化、桌面 IPC、直播连接和协议 worker 已检查。
 - 其余页面查询、收藏／历史／动态等写入，以及公共工具、模型的返回值和异常处理。
 - 评论投票等其余 gRPC 领域模型的可选字段，以及原生表情输入、选图与裁剪失败／取消。评论发布／删除、内容搜索、弹幕发送、HTTP 赞踩／置顶／举报、评论可见性检查和表情包管理已完成本轮检查。
 - 搜索适配器之外的视频导航调用方，以及番剧／课程资料的领域消费。搜索首页、热搜、联想与结果分页已完成本轮检查。
@@ -84,6 +88,11 @@
 ## 验证记录
 
 新增关键回归已列入 `tool/run-ci-tests.ps1`。测试使用模拟 HTTP、文件选择器和平台输入；文件保存回归还用临时目录核对实际字节。Android 图库、真实账号登录、服务器写入、原生播放器、GPU 和窗口行为仍需设备验收，各次运行结果随提交记录。
+
+2026-11-10 播放器音量回执必要验证：
+
+- 新增 6 项与既有音量百分比／保存、静音音轨恢复各 1 项，共 8 个不同用例通过。首轮新增用例 5 项通过，切源夹具的 guarded conflict 修正后只复跑该单项，通过（`build/player-volume-contract-tests.log`、`player-volume-source-test.log`、`player-volume-legacy-test.log`、`player-volume-recovery-test.log`）。
+- 4 个修改文件定向分析通过，补偿调整后的生产与测试文件复查无问题（`build/player-volume-contract-analyze.log`、`player-volume-test-final-analyze.log`）。未跑全目录或完整 CI，未验证真实 Android／Windows 音量输出与子窗口声音交接。
 
 2026-11-10 全量检查及失败复验：
 

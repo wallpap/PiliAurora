@@ -92,6 +92,22 @@ import 'package:window_manager/window_manager.dart';
 
 typedef PlayCallback = Future<void>? Function();
 
+class PlayerVolumeException implements Exception {
+  const PlayerVolumeException(this.result);
+
+  final CommandResult result;
+
+  bool get isObsolete => switch (result.outcome) {
+    CommandOutcome.superseded ||
+    CommandOutcome.inactive ||
+    CommandOutcome.closed => true,
+    _ => false,
+  };
+
+  @override
+  String toString() => '播放器音量设置未完成（${result.outcome.name}）';
+}
+
 class PlPlayerController
     with
         BlockConfigMixin,
@@ -239,14 +255,109 @@ class PlPlayerController
 
   final RxBool muted = DesktopPlaybackWindows.isPlayerWindow.obs;
   bool get isMuted => muted.value;
+  int _volumeRevision = 0;
 
-  Future<void> setMuted(bool value) async {
-    muted.value = value;
-    final owner = _activeOwner;
-    if (owner != null && owner.isActive) {
-      await owner.setVolume(value ? 0 : volumePercent(volume.value));
+  Future<void> setMuted(bool value) =>
+      _changePlayerVolume(muted: value, volume: volume.value);
+
+  Future<void> setMutedFromControls(
+    bool value, {
+    bool showSuccess = false,
+  }) async {
+    final owner = activePlaybackOwner;
+    final request = _session.revision;
+    try {
+      await setMuted(value);
+      if (showSuccess &&
+          identical(owner, activePlaybackOwner) &&
+          request == _session.revision &&
+          isMuted == value) {
+        SmartDialog.showToast('${value ? '' : '取消'}静音');
+      }
+    } catch (error, stackTrace) {
+      _reportVolumeFailure(error, stackTrace, owner, request);
     }
-    _audioRecovery?.onPlaybackChanged();
+  }
+
+  Future<void> _changePlayerVolume({
+    required bool muted,
+    required double volume,
+  }) async {
+    final revision = ++_volumeRevision;
+    final owner = activePlaybackOwner;
+    final request = _session.revision;
+    final previousMuted = isMuted;
+    final previousVolume = this.volume.value;
+    bool isCurrent() =>
+        revision == _volumeRevision &&
+        identical(owner, activePlaybackOwner) &&
+        request == _session.revision;
+    this.muted.value = muted;
+    this.volume.value = volume;
+    try {
+      if (owner != null) {
+        final result = await owner.setVolume(muted ? 0 : volumePercent(volume));
+        if (!isCurrent()) {
+          throw const PlayerVolumeException(CommandResult.superseded());
+        }
+        switch (result.outcome) {
+          case CommandOutcome.applied:
+          case CommandOutcome.accepted:
+          case CommandOutcome.noMedia:
+            break;
+          default:
+            throw PlayerVolumeException(result);
+        }
+      }
+    } catch (_) {
+      if (isCurrent()) {
+        final applied = _session.currentSnapshot.configuration.applied.volume;
+        this.muted.value = previousMuted;
+        this.volume.value = previousMuted
+            ? previousVolume
+            : (applied / 100).clamp(0.0, maxVolume);
+        if (owner != null &&
+            _session.currentSnapshot.configuration.desired.volume != applied) {
+          // 同时撤回失败的期望，避免下一次自动重载重新应用它。
+          try {
+            final restored = await owner.setVolume(applied);
+            if (restored.outcome == CommandOutcome.failed ||
+                restored.outcome == CommandOutcome.unsupported) {
+              _diagnostics?.event(
+                'playback.volume.rollbackIncomplete',
+                level: DiagnosticLogLevel.warning,
+                details: {'outcome': restored.outcome.name},
+              );
+            }
+          } catch (error, stackTrace) {
+            logger.w(
+              '恢复播放器音量期望失败',
+              error: error.runtimeType,
+              stackTrace: stackTrace,
+            );
+          }
+        }
+      }
+      if (!isCurrent()) {
+        throw const PlayerVolumeException(CommandResult.superseded());
+      }
+      rethrow;
+    } finally {
+      if (isCurrent()) _audioRecovery?.onPlaybackChanged();
+    }
+  }
+
+  void _reportVolumeFailure(
+    Object error,
+    StackTrace stackTrace,
+    PlaybackOwner? owner,
+    int request,
+  ) {
+    if (error is PlayerVolumeException && error.isObsolete) return;
+    logger.w('播放器音量设置失败', error: error, stackTrace: stackTrace);
+    if (identical(owner, activePlaybackOwner) && request == _session.revision) {
+      SmartDialog.showToast('音量设置失败，请重试');
+    }
   }
 
   /// 听视频
@@ -945,7 +1056,15 @@ class PlPlayerController
     _playbackSpeed.value = desired.playbackSpeed;
     onlyPlayAudio.value = desired.audioOnly;
     if (!isMuted && PlatformUtils.isDesktop) {
-      volume.value = (desired.volume / 100).clamp(0.0, 1.0);
+      final configuration = snapshot.configuration;
+      // 失败会保留期望配置供重试；控件不能把它当作已生效的音量。
+      final playerVolume =
+          configuration.pending.contains(
+            PlaybackConfigurationKey.volume,
+          )
+          ? desired.volume
+          : configuration.applied.volume;
+      volume.value = (playerVolume / 100).clamp(0.0, 1.0);
     }
     final wasBuffering = isBuffering.value;
     if ((snapshot.phase == PlaybackPhase.loading ||
@@ -2150,22 +2269,33 @@ class PlPlayerController
   Future<void> setVolume(double volume, {bool showIndicator = true}) async {
     volume = roundVolumeRatio(volume.clamp(0.0, maxVolume));
     final changed = this.volume.value != volume;
-    this.volume.value = volume;
-    if (changed || isMuted) {
-      muted.value = false;
+    final owner = activePlaybackOwner;
+    final request = _session.revision;
+    var revision = _volumeRevision;
+    if (changed ||
+        isMuted ||
+        _session.currentSnapshot.configuration.applied.volume !=
+            volumePercent(volume)) {
       try {
-        final owner = _activeOwner;
-        if (owner != null && owner.isActive) {
-          await owner.setVolume(volumePercent(volume));
-        }
-        if (PlatformUtils.isMobile) {
+        final changing = _changePlayerVolume(muted: false, volume: volume);
+        revision = _volumeRevision;
+        await changing;
+        if (PlatformUtils.isMobile &&
+            identical(owner, activePlaybackOwner) &&
+            request == _session.revision) {
           FlutterVolumeController.updateShowSystemUI(false);
           await FlutterVolumeController.setVolume(volume);
         }
-      } catch (err, stackTrace) {
-        logger.w(err.toString(), error: err, stackTrace: stackTrace);
+      } catch (error, stackTrace) {
+        if (revision == _volumeRevision) {
+          _reportVolumeFailure(error, stackTrace, owner, request);
+        }
       }
-      _audioRecovery?.onPlaybackChanged();
+    }
+    if (revision != _volumeRevision ||
+        !identical(owner, activePlaybackOwner) ||
+        request != _session.revision) {
+      return;
     }
     if (showIndicator) {
       volumeIndicator.value = true;
@@ -2178,7 +2308,7 @@ class PlPlayerController
       if (PlatformUtils.isDesktop) {
         setting.put(
           SettingBoxKey.desktopVolume,
-          roundVolumeRatio(volume),
+          roundVolumeRatio(this.volume.value),
         );
       }
     });
