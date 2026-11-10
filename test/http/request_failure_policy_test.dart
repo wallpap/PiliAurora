@@ -49,6 +49,27 @@ void main() {
     );
   });
 
+  test('播放列表上报降噪只匹配实际服务端点', () {
+    expect(
+      expected(
+        'https://api.bilibili.com/x/v1/medialist/history',
+        method: 'POST',
+      ),
+      true,
+    );
+    expect(
+      expected('https://example.test/x/v1/medialist/history', method: 'POST'),
+      false,
+    );
+    expect(
+      expected(
+        'https://api.bilibili.com/x/v1/medialist/history/extra',
+        method: 'POST',
+      ),
+      false,
+    );
+  });
+
   test('active cancellation is expected for any request', () {
     expect(
       expected('https://example.test/video', type: DioExceptionType.cancel),

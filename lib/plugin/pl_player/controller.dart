@@ -842,10 +842,6 @@ class PlPlayerController
           .listen(_onOrientationChanged);
     }
 
-    if (!Accounts.heartbeat.isLogin || Pref.historyPause) {
-      enableHeart = false;
-    }
-
     if (Platform.isAndroid) {
       if (DeviceUtils.sdkInt < 31) {
         final callback = Runnable.implement($Runnable(run: _onUserLeaveHint));
@@ -2634,15 +2630,20 @@ class PlPlayerController
     dynamic pgcType,
     VideoType? videoType,
   }) {
+    final account = Accounts.heartbeat;
     if (isLive ||
+        !account.isLogin ||
+        Pref.historyPause ||
         !enableHeart ||
         progress == 0 ||
         (playerStatus.isPaused && !isManual)) {
       return null;
     }
 
-    Future<void> send() {
-      return VideoHttp.heartBeat(
+    Future<void> send() async {
+      // 进度上报不打断播放；HTTP 层保留失败与待确认结果，写入不自动重试。
+      await VideoHttp.heartBeat(
+        account: account,
         aid: aid ?? _aid,
         bvid: bvid ?? _bvid,
         cid: cid ?? this.cid,

@@ -243,8 +243,9 @@ class LiveRoomController extends GetxController {
     mid = account.mid;
     queryLiveUrl(autoFullScreenFlag: true);
     queryLiveInfoH5();
-    if (Accounts.heartbeat.isLogin && !Pref.historyPause) {
-      VideoHttp.roomEntryAction(roomId: roomId);
+    final heartbeat = Accounts.heartbeat;
+    if (heartbeat.isLogin && !Pref.historyPause) {
+      VideoHttp.roomEntryAction(account: heartbeat, roomId: roomId);
     }
     if (showSuperChat) {
       pageController = PageController();

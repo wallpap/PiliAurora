@@ -6,6 +6,7 @@ final _backgroundEndpoints = {
   for (final url in [
     '${HttpString.apiBaseUrl}${Api.heartBeat}',
     '${HttpString.apiBaseUrl}${Api.historyReport}',
+    '${HttpString.apiBaseUrl}${Api.mediaListHistory}',
     '${HttpString.apiBaseUrl}${Api.onlineTotal}',
     '${HttpString.apiBaseUrl}/x/v2/dm/web/seg.so',
     Api.roomEntryAction,

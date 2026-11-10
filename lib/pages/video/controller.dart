@@ -1468,8 +1468,13 @@ class VideoDetailController extends GetxController
   }
 
   void updateMediaListHistory(int aid) {
-    if (args['sortField'] != null) {
+    final account = Accounts.heartbeat;
+    if (!isClosed &&
+        account.isLogin &&
+        !Pref.historyPause &&
+        args['sortField'] != null) {
       VideoHttp.medialistHistory(
+        account: account,
         desc: _mediaDesc ? 1 : 0,
         oid: aid,
         upperMid: args['mediaId'],

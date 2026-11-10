@@ -9,6 +9,9 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:hive_ce/hive.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:pili_aurora/plugin/pl_player/controller.dart';
+import 'package:pili_aurora/models/common/account_type.dart';
+import 'package:pili_aurora/utils/accounts.dart';
+import 'package:pili_aurora/utils/accounts/account.dart';
 import 'package:pili_aurora/plugin/pl_player/models/data_source.dart';
 import 'package:pili_aurora/plugin/pl_player/models/play_status.dart';
 import 'package:pili_aurora/plugin/pl_player/playback/audio_recovery.dart';
@@ -36,6 +39,39 @@ void main() {
         );
   });
   tearDownAll(Hive.close);
+
+  _recoveryTest('历史上报：启用期间暂停历史或退出账号，发送前立即停止上报', (f) async {
+    final previous = Accounts.heartbeat;
+    final previousPause = GStorage.localCache.get(LocalCacheKey.historyPause);
+    addTearDown(() async {
+      Accounts.accountMode[AccountType.heartbeat.index] = previous;
+      if (previousPause == null) {
+        await GStorage.localCache.delete(LocalCacheKey.historyPause);
+      } else {
+        await GStorage.localCache.put(
+          LocalCacheKey.historyPause,
+          previousPause,
+        );
+      }
+    });
+    f.controller.enableHeart = true;
+    Accounts.accountMode[AccountType.heartbeat.index] = LoginAccount(
+      BiliCookieJar.fromJson({'DedeUserID': '1', 'bili_jct': 'fixture'}),
+      null,
+      null,
+    );
+    await GStorage.localCache.put(LocalCacheKey.historyPause, true);
+    expect(
+      f.controller.makeHeartBeat(10, type: .completed, isManual: true),
+      isNull,
+    );
+    await GStorage.localCache.put(LocalCacheKey.historyPause, false);
+    Accounts.accountMode[AccountType.heartbeat.index] = AnonymousAccount();
+    expect(
+      f.controller.makeHeartBeat(10, type: .completed, isManual: true),
+      isNull,
+    );
+  });
 
   for (final failure in [false, true]) {
     _recoveryTest('音频焦点：播放等待激活，${failure ? '异常' : '拒绝'}保留播放结果', (f) async {

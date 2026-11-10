@@ -799,22 +799,31 @@ abstract final class VideoHttp {
     return res;
   }
 
-  static Future<void> roomEntryAction({required Object roomId}) {
-    return Request().post(
+  static Future<LoadingState<void>> roomEntryAction({
+    Account? account,
+    required Object roomId,
+  }) {
+    account ??= Accounts.heartbeat;
+    return Request().requestApi<void>(
       Api.roomEntryAction,
-      queryParameters: {'csrf': Accounts.heartbeat.csrf},
+      kind: ApiCallKind.mutation,
+      decode: (_) {},
+      queryParameters: {'csrf': account.csrf},
       data: {'room_id': roomId, 'platform': 'pc'},
+      options: Options(extra: {'account': account}),
     );
   }
 
-  static Future<void> historyReport({
+  static Future<LoadingState<void>> historyReport({
     Account? account,
     required Object aid,
     required Object type,
   }) {
     account ??= Accounts.heartbeat;
-    return Request().post(
+    return Request().requestApi<void>(
       Api.historyReport,
+      kind: ApiCallKind.mutation,
+      decode: (_) {},
       data: {'aid': aid, 'type': type, 'csrf': account.csrf},
       options: Options(
         extra: {'account': account},
@@ -824,7 +833,8 @@ abstract final class VideoHttp {
   }
 
   // 视频播放进度
-  static Future<void> heartBeat({
+  static Future<LoadingState<void>> heartBeat({
+    Account? account,
     Object? aid,
     Object? bvid,
     required Object cid,
@@ -834,9 +844,12 @@ abstract final class VideoHttp {
     Object? subType,
     required VideoType videoType,
   }) {
+    account ??= Accounts.heartbeat;
     final isPugv = videoType == VideoType.pugv;
-    return Request().post(
+    return Request().requestApi<void>(
       Api.heartBeat,
+      kind: ApiCallKind.mutation,
+      decode: (_) {},
       data: {
         if (isPugv) 'aid': ?aid else 'bvid': ?bvid,
         'cid': cid,
@@ -845,26 +858,36 @@ abstract final class VideoHttp {
         'type': videoType.type,
         'sub_type': ?subType,
         'played_time': progress,
-        'csrf': Accounts.heartbeat.csrf,
+        'csrf': account.csrf,
       },
-      options: Options(contentType: Headers.formUrlEncodedContentType),
+      options: Options(
+        extra: {'account': account},
+        contentType: Headers.formUrlEncodedContentType,
+      ),
     );
   }
 
-  static Future<void> medialistHistory({
+  static Future<LoadingState<void>> medialistHistory({
+    Account? account,
     required int desc,
     required Object oid,
     required Object upperMid,
   }) {
-    return Request().post(
+    account ??= Accounts.heartbeat;
+    return Request().requestApi<void>(
       Api.mediaListHistory,
+      kind: ApiCallKind.mutation,
+      decode: (_) {},
       data: {
         'desc': desc,
         'oid': oid,
         'upper_mid': upperMid,
-        'csrf': Accounts.heartbeat.csrf,
+        'csrf': account.csrf,
       },
-      options: Options(contentType: Headers.formUrlEncodedContentType),
+      options: Options(
+        extra: {'account': account},
+        contentType: Headers.formUrlEncodedContentType,
+      ),
     );
   }
 
