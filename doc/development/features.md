@@ -12,13 +12,13 @@
 | 弹幕与评论 | `danmaku/`、`danmaku_block/`、`main_reply/`、`my_reply/`、`video/reply/` | `danmaku.dart`、`reply.dart`；远端同名模型 | `test/pages/danmaku/`、`test/pages/danmaku_block/`、`test/pages/community/` |
 | 表情包 | `emote/manage.dart`、`preview.dart` | `ReplyHttp`；兼容详情 `emotes` 与列表 `emote` | `test/pages/community/`、`test/http/community_response_test.dart` |
 | 直播 | `live/`、`live_room/`、`live_follow/`、`live_search/`、`live_dm_block/` | `live.dart`；`lib/services/live_stream/` | `test/pages/live/`、`test/pages/live_room/`、`test/pages/live_follow/` |
-| 账号、登录、会员 | `login/`、`login_devices/`、`log_table/`、`member/`、`member_profile/` | `login.dart`、`member.dart`、`user.dart`；`lib/services/account_service.dart`、`lib/utils/accounts/` | `test/pages/login/`、`test/pages/account_queries/`、`test/utils/accounts/` |
+| 账号、登录、会员 | `login/`、`login_devices/`、`log_table/`、`member/`、`member_profile/` | `login.dart`、`member.dart`、`member_profile.dart`、`user.dart`；`lib/services/account_service.dart`、`lib/utils/accounts/` | `test/pages/login/`、`test/pages/account_queries/`、`test/pages/member_profile/`、`test/utils/accounts/` |
 | 动态、关注、粉丝 | `dynamics*`、`follow/`、`follow_type/` | `dynamics.dart`、`follow.dart`、`fan.dart` | `test/pages/dynamics/`、`test/pages/follow/`、`test/pages/follow_type/` |
 | 消息、私信、分享 | `msg_feed_top/`、`whisper*`、`share/` | [消息模块](../../lib/services/messaging/README.md)；`msg.dart`、`lib/grpc/im.dart` | `test/services/messaging/` |
 | 收藏、历史、稍后再看、订阅 | `fav*`、`history*`、`later*`、`subscription*` | `fav.dart`、`pgc.dart`；`models/remote/fav/`、`history/`、`later/` | `test/pages/fav/`、`test/pages/history/`、`test/pages/subscription/` |
 | 下载与离线 | `download/` | `download.dart`；`lib/services/download/`；路径在 `lib/app/app_paths.dart` | `test/services/download/` |
 | 设置与主题 | `setting/`、`settings_search/`、`space_setting/` | `lib/common/style.dart`、`lib/utils/theme_utils.dart`、`storage_pref.dart` | `test/pages/setting/`、`test/pages/space_setting/` |
-| WebView、DLNA、空降助手 | `webview/`、`dlna/`、`sponsor_block/` | 从 import 定位插件，核对 `third_party/` 的平台实现 | `test/pages/sponsor_block/`、对应依赖包测试 |
+| WebView、DLNA、空降助手 | `webview/`、`dlna/`、`sponsor_block/` | 从 import 定位插件，核对 `third_party/` 的平台实现 | `test/pages/dlna/`、`test/pages/video/cast_results_test.dart`、`test/pages/sponsor_block/`、对应依赖包测试 |
 
 表中的 `models/` 相对 `lib/`；测试及探针路径相对仓库根目录。测试选择、夹具和设备边界见[测试目录](../../test/README.md)，设置生效时机见[设置行为](settings-behavior.md)。
 
