@@ -2,7 +2,6 @@ import 'package:pili_aurora/common/assets.dart';
 import 'package:pili_aurora/common/constants.dart';
 import 'package:pili_aurora/common/style.dart';
 import 'package:pili_aurora/common/widgets/animated_height.dart';
-import 'package:pili_aurora/common/widgets/dialog/dialog.dart';
 import 'package:pili_aurora/common/widgets/expandable.dart';
 import 'package:pili_aurora/common/widgets/gesture/tap_gesture_recognizer.dart';
 import 'package:pili_aurora/common/widgets/image/network_img_layer.dart';
@@ -12,8 +11,6 @@ import 'package:pili_aurora/common/widgets/scroll_physics.dart'
 import 'package:pili_aurora/common/widgets/selection_text.dart';
 import 'package:pili_aurora/common/widgets/stat/stat.dart';
 import 'package:pili_aurora/common/widgets/translucent_column.dart';
-import 'package:pili_aurora/http/sponsor_block.dart';
-import 'package:pili_aurora/http/loading_state.dart';
 import 'package:pili_aurora/models/remote/video/video_ai_conclusion/model_result.dart';
 import 'package:pili_aurora/models/remote/video/video_detail/data.dart';
 import 'package:pili_aurora/models/remote/video/video_detail/desc_v2.dart';
@@ -24,6 +21,7 @@ import 'package:pili_aurora/pages/mine/controller.dart';
 import 'package:pili_aurora/pages/search/widgets/search_text.dart';
 import 'package:pili_aurora/pages/video/controller.dart';
 import 'package:pili_aurora/pages/video/introduction/ugc/controller.dart';
+import 'package:pili_aurora/pages/video/introduction/ugc/description_link_action.dart';
 import 'package:pili_aurora/pages/video/introduction/ugc/widgets/action_item.dart';
 import 'package:pili_aurora/pages/video/introduction/ugc/widgets/page.dart';
 import 'package:pili_aurora/pages/video/introduction/ugc/widgets/season.dart';
@@ -37,10 +35,7 @@ import 'package:pili_aurora/utils/extension/string_ext.dart';
 import 'package:pili_aurora/utils/extension/theme_ext.dart';
 import 'package:pili_aurora/utils/feed_back.dart';
 import 'package:pili_aurora/utils/id_utils.dart';
-import 'package:pili_aurora/utils/navigation_request.dart';
-import 'package:pili_aurora/services/logger.dart';
 import 'package:pili_aurora/utils/num_utils.dart';
-import 'package:pili_aurora/utils/page_utils.dart';
 import 'package:pili_aurora/utils/platform_utils.dart';
 import 'package:pili_aurora/utils/request_utils.dart';
 import 'package:pili_aurora/utils/utils.dart';
@@ -547,84 +542,32 @@ class _UgcIntroPanelState extends State<UgcIntroPanel> {
     );
   }
 
-  bool _openingDescriptionUrl = false;
+  final _descriptionLinkAction = UgcDescriptionLinkAction();
 
-  Future<void> _openDescriptionUrl(String url) async {
-    if (_openingDescriptionUrl) return;
-    _openingDescriptionUrl = true;
-    final request = NavigationRequest();
-    try {
-      final ytbId = youtubeRegExp.firstMatch(url)?.group(1);
-      final duration =
-          videoDetailCtr.data.timeLength ??
-          videoDetailCtr.plPlayerController.durationInMilliseconds;
-      if (videoDetailCtr.plPlayerController.enableSponsorBlock &&
-          duration > 0 &&
-          ytbId != null) {
-        final bvid = videoDetailCtr.bvid;
-        final cid = videoDetailCtr.cid.value;
-        bool currentVideo() =>
-            mounted &&
-            request.isCurrent &&
-            !videoDetailCtr.isClosed &&
-            videoDetailCtr.bvid == bvid &&
-            videoDetailCtr.cid.value == cid;
-        final LoadingState<String> port;
-        request.showLoading();
-        try {
-          port = await SponsorBlock.getPortVideo(bvid: bvid, cid: cid);
-        } finally {
-          await request.closeLoading();
-        }
-        if (!mounted || !currentVideo()) return;
-        // 查询失败不能当成尚未绑定，避免未读到当前绑定就继续写入。
-        if (port is Error && port.code != 404) {
-          port.toast();
-          await PageUtils.handleWebview(url);
-          return;
-        }
-        final alreadyBound = port.dataOrNull == ytbId;
-        final confirmed = await showConfirmDialog(
-          context: context,
-          title: const Text('空降助手：搬运视频同步'),
-          content: Text(
-            '${alreadyBound ? "" : "是否将"}该视频${alreadyBound ? "已" : ""}绑定到此YouTube视频($ytbId)',
-          ),
-        );
-        if (!currentVideo()) return;
-        if (!alreadyBound && confirmed) {
-          final result = await SponsorBlock.postPortVideo(
-            bvid: bvid,
-            cid: cid,
-            ytbId: ytbId,
-            videoDuration: (duration / 1000).round(),
-          );
-          if (!currentVideo()) return;
-          if (result.isSuccess) {
-            SmartDialog.showToast('提交搬运视频成功');
-          } else {
-            result.toast();
-          }
-          return;
-        }
-      }
-      if (mounted && request.isCurrent) await PageUtils.handleWebview(url);
-    } catch (error, stackTrace) {
-      logger.w('打开视频描述链接失败', error: error.runtimeType, stackTrace: stackTrace);
-      if (mounted && request.isCurrent) SmartDialog.showToast('链接暂时无法打开，请重试');
-    } finally {
-      await request.close();
-      _openingDescriptionUrl = false;
-    }
+  Future<void> _openDescriptionUrl(String url) {
+    final source = videoDetailCtr.data;
+    final bvid = videoDetailCtr.bvid;
+    final cid = videoDetailCtr.cid.value;
+    return _descriptionLinkAction.run(
+      context: context,
+      url: url,
+      bvid: bvid,
+      cid: cid,
+      duration:
+          source.timeLength ??
+          videoDetailCtr.plPlayerController.durationInMilliseconds,
+      enableSponsorBlock: videoDetailCtr.plPlayerController.enableSponsorBlock,
+      isCurrent: () =>
+          mounted &&
+          !videoDetailCtr.isClosed &&
+          identical(source, videoDetailCtr.data) &&
+          videoDetailCtr.bvid == bvid &&
+          videoDetailCtr.cid.value == cid,
+    );
   }
 
   static final RegExp urlRegExp = RegExp(
     Constants.urlRegex.pattern + r'|av\d+|bv[a-z\d]{10}|(?:\d+[:：])?\d+[:：]\d+',
-    caseSensitive: false,
-  );
-
-  static final youtubeRegExp = RegExp(
-    r'(?:youtube\.com\/(?:[^\/\n\s]+\/\S+\/|(?:v|e(?:mbed)?)\/|\S*?[?&]v=)|youtu\.be\/)([a-z0-9_\-]{11})',
     caseSensitive: false,
   );
 
