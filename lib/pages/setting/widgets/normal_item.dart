@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:pili_aurora/services/logger.dart';
+import 'package:pili_aurora/pages/setting/widgets/setting_save.dart';
 
 import 'package:pili_aurora/common/widgets/flutter/list_tile.dart';
 import 'package:material_ui/material_ui.dart' hide ListTile;
@@ -43,9 +44,16 @@ class _NormalItemState extends State<NormalItem> {
     final source = widget;
     setState(() => _busy = true);
     try {
-      await source.onTap!(context, () {
-        if (mounted && identical(widget, source)) refresh();
-      });
+      bool isCurrent() =>
+          mounted &&
+          identical(widget, source) &&
+          (ModalRoute.of(context)?.isCurrent ?? false);
+      await withSettingPresentation(
+        isCurrent,
+        () => source.onTap!(context, () {
+          if (mounted && identical(widget, source)) refresh();
+        }),
+      );
     } catch (error, stackTrace) {
       logger.w('执行设置操作失败', error: error.runtimeType, stackTrace: stackTrace);
       if (mounted &&

@@ -8,6 +8,7 @@ import 'package:pili_aurora/pages/setting/models/model.dart';
 import 'package:pili_aurora/pages/setting/models/content_settings.dart';
 import 'package:pili_aurora/pages/setting/models/video_settings.dart';
 import 'package:pili_aurora/utils/storage.dart';
+import 'package:pili_aurora/pages/setting/widgets/setting_save.dart';
 import 'package:pili_aurora/utils/storage_key.dart';
 
 import '../../support/memory_box.dart';
@@ -126,6 +127,38 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('设置保存失败，请重试'), findsNothing);
     expect(tester.takeException(), isNull);
+    await finish(tester);
+    visible.dispose();
+  });
+
+  testWidgets('普通设置离页后内部保存回执不提示', (tester) async {
+    final pending = Completer<void>();
+    final visible = ValueNotifier(true);
+    await mount(
+      tester,
+      ValueListenableBuilder(
+        valueListenable: visible,
+        builder: (_, show, _) => show
+            ? NormalModel(
+                title: '异步设置',
+                onTap: (_, _) async {
+                  await saveSetting(
+                    key: 'fixture',
+                    write: () => pending.future,
+                    canPresent: () => true,
+                  );
+                },
+              ).widget
+            : const SizedBox(),
+      ),
+    );
+    await tester.tap(find.text('异步设置'));
+    await tester.pump();
+    visible.value = false;
+    await tester.pump();
+    pending.completeError(StateError('private-save'));
+    await tester.pumpAndSettle();
+    expect(find.text('设置保存失败，请重试'), findsNothing);
     await finish(tester);
     visible.dispose();
   });
