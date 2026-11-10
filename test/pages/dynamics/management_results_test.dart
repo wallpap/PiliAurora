@@ -344,6 +344,142 @@ void main() {
     expect(requests, hasLength(2));
   });
 
+  test('空间动态分页拒绝重复游标、去重并保留失败页重试位置', () async {
+    final controller = own(MemberDynamicsController(1));
+    Map<String, dynamic> page(List<String> ids, String cursor) => {
+      'code': 0,
+      'data': {
+        'has_more': true,
+        'offset': cursor,
+        'items': [
+          for (final id in ids) {'id_str': id},
+        ],
+      },
+    };
+    var pending = controller.queryData();
+    await interceptor.waitForRequests(1);
+    requests[0].reply.complete(page(['1', '2'], 'a'));
+    await pending;
+    pending = controller.onLoadMore();
+    await interceptor.waitForRequests(2);
+    requests[1].reply.complete({'code': -403, 'message': '分页失败'});
+    await pending;
+    expect(controller.loadMoreError.value?.errMsg, '分页失败');
+    expect(controller.offset, 'a');
+    expect(controller.page, 2);
+    await controller.onLoadMore();
+    expect(requests, hasLength(2));
+    pending = controller.retryLoadMore();
+    await interceptor.waitForRequests(3);
+    requests[2].reply.complete(page(['2', '3', '3'], 'b'));
+    await pending;
+    expect(controller.loadMoreError.value, isNull);
+    expect(controller.loadingState.value.data!.map((item) => item.idStr), [
+      '1',
+      '2',
+      '3',
+    ]);
+    pending = controller.onLoadMore();
+    await interceptor.waitForRequests(4);
+    requests[3].reply.complete(page(['4'], 'a'));
+    await pending;
+    expect(controller.isEnd, isTrue);
+    await controller.onLoadMore();
+    expect(requests, hasLength(4));
+  });
+
+  test('空间动态连续无增长页即使游标变化也有限界', () async {
+    final controller = own(MemberDynamicsController(1));
+    controller.loadingState.value = Success([item('1')]);
+    controller.page = 2;
+    for (var index = 0; index < 5; index++) {
+      final pending = controller.onLoadMore();
+      await interceptor.waitForRequests(index + 1);
+      requests[index].reply.complete({
+        'code': 0,
+        'data': {
+          'has_more': true,
+          'offset': 'cursor-$index',
+          'items': [
+            {'id_str': '1'},
+          ],
+        },
+      });
+      await pending;
+    }
+    expect(controller.isEnd, isTrue);
+    expect(controller.loadingState.value.data!.single.idStr, '1');
+    await controller.onLoadMore();
+    expect(requests, hasLength(5));
+  });
+
+  test('空间动态旧分页失败不污染刷新结果，刷新清理重试状态', () async {
+    final controller = own(MemberDynamicsController(1))
+      ..loadingState.value = Success([item('1')])
+      ..page = 2
+      ..offset = 'a';
+    final old = controller.onLoadMore();
+    await interceptor.waitForRequests(1);
+    final refresh = controller.onRefresh();
+    await interceptor.waitForRequests(2);
+    requests[1].reply.complete(dynamics('2'));
+    await refresh;
+    requests[0].reply.complete({'code': -403, 'message': '旧分页失败'});
+    await old;
+    expect(controller.loadMoreError.value, isNull);
+    expect(controller.loadingState.value.data!.single.idStr, '2');
+  });
+
+  testWidgets('空间动态旧确认来源不能操作刷新后的同ID动态，新账号不能写入其他空间', (tester) async {
+    await mount(tester);
+    final controller = own(MemberDynamicsController(1));
+    final source = item('1');
+    controller.loadingState.value = Success([source]);
+    final remove = controller.removalAction(source);
+    final top = controller.topAction(source);
+    controller.loadingState.value = Success([item('1')]);
+    await remove('1');
+    await top(false, '1');
+    Accounts.accountMode[AccountType.main.index] = account(3);
+    await controller.onRemove('1');
+    await controller.onSetTop(false, '1');
+    expect(requests, isEmpty);
+    await finish(tester);
+  });
+
+  testWidgets('空间动态删除后分页不复活已确认删除的条目，过期置顶意图不反向操作', (tester) async {
+    await mount(tester);
+    final controller = own(MemberDynamicsController(1));
+    controller.loadingState.value = Success([item('1'), item('2')]);
+    final removal = controller.onRemove('1');
+    await until(tester, () => requests.length == 1);
+    requests[0].reply.complete({'code': 0});
+    await settle(tester);
+    await removal;
+    final pending = controller.onLoadMore();
+    await until(tester, () => requests.length == 2);
+    requests[1].reply.complete({
+      'code': 0,
+      'data': {
+        'has_more': false,
+        'offset': 'next',
+        'items': [
+          {'id_str': '1'},
+          {'id_str': '3'},
+        ],
+      },
+    });
+    await settle(tester);
+    await pending;
+    expect(controller.loadingState.value.data!.map((item) => item.idStr), [
+      '2',
+      '3',
+    ]);
+    await controller.onSetTop(true, '3');
+    expect(requests, hasLength(2));
+    await finish(tester);
+  });
+
   testWidgets('动态页删除固定账号，目标作者变化或失败时保留列表', (tester) async {
     await mount(tester);
     final controller = own(

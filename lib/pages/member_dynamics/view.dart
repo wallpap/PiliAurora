@@ -73,6 +73,19 @@ class _MemberDynamicsPageState extends State<MemberDynamicsPage>
             ),
           ),
         ),
+        Obx(() {
+          final error = _memberDynamicController.loadMoreError.value;
+          return error == null
+              ? const SliverToBoxAdapter()
+              : SliverToBoxAdapter(
+                  child: Center(
+                    child: TextButton(
+                      onPressed: _memberDynamicController.retryLoadMore,
+                      child: Text('$error，点击重试'),
+                    ),
+                  ),
+                );
+        }),
       ],
     ),
   );
@@ -107,10 +120,11 @@ class _MemberDynamicsPageState extends State<MemberDynamicsPage>
     if (index == list.length - 1) {
       _memberDynamicController.onLoadMore();
     }
+    final item = list[index];
     return DynamicPanel(
-      item: list[index],
-      onRemove: _memberDynamicController.onRemove,
-      onSetTop: _memberDynamicController.onSetTop,
+      item: item,
+      onRemove: _memberDynamicController.removalAction(item),
+      onSetTop: _memberDynamicController.topAction(item),
     );
   }
 }
