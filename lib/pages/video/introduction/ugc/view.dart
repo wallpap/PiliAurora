@@ -560,8 +560,10 @@ class _UgcIntroPanelState extends State<UgcIntroPanel> {
           ytbId != null) {
         final bvid = videoDetailCtr.bvid;
         final cid = videoDetailCtr.cid.value;
+        final route = ModalRoute.of(context);
         bool currentVideo() =>
             mounted &&
+            route?.isCurrent == true &&
             !videoDetailCtr.isClosed &&
             videoDetailCtr.bvid == bvid &&
             videoDetailCtr.cid.value == cid;
@@ -595,6 +597,7 @@ class _UgcIntroPanelState extends State<UgcIntroPanel> {
             ytbId: ytbId,
             videoDuration: (duration / 1000).round(),
           );
+          if (!currentVideo()) return;
           if (result.isSuccess) {
             SmartDialog.showToast('提交搬运视频成功');
           } else {
