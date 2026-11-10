@@ -1,9 +1,9 @@
-import 'dart:async' show FutureOr;
 import 'dart:io' show File, Platform;
 import 'dart:math' as math;
 import 'dart:typed_data' show Uint8List;
 
 import 'package:pili_aurora/common/constants.dart';
+import 'package:pili_aurora/services/logger.dart';
 import 'package:pili_aurora/http/init.dart';
 import 'package:pili_aurora/http/loading_state.dart';
 import 'package:pili_aurora/utils/cache_manager.dart';
@@ -28,56 +28,95 @@ abstract final class ImageUtils {
       ? 'Pictures/${Constants.appName}'
       : Constants.appName;
 
-  // 图片分享
-  static Future<void> onShareImg(String url) async {
+  static bool _sharing = false;
+
+  // 返回系统分享状态：取消和平台无法确认均保留原始 status，不宣称分享成功。
+  static Future<LoadingState<ShareResult>> onShareImg(String url) async {
+    if (_sharing) return const Error('图片正在分享，请稍候');
+    _sharing = true;
+    var loadingShown = false;
     try {
       SmartDialog.showLoading();
-      final res = await CacheManager.manager.getSingleFile(
-        url.http2https,
-      );
-      SmartDialog.dismiss();
-      await SharePlus.instance.share(
-        ShareParams(
-          files: [XFile(res.path)],
+      loadingShown = true;
+      final file = await CacheManager.manager.getSingleFile(url.http2https);
+      SmartDialog.dismiss(status: .loading);
+      loadingShown = false;
+      return Success(
+        await SharePlus.instance.share(
+          ShareParams(files: [XFile(file.path)]),
         ),
       );
-    } catch (e) {
-      SmartDialog.showToast(e.toString());
+    } catch (error, stackTrace) {
+      final failure = _failure('图片分享失败，请重试', error, stackTrace)..toast();
+      return failure;
     } finally {
-      SmartDialog.dismiss(status: .loading);
+      _sharing = false;
+      if (loadingShown) SmartDialog.dismiss(status: .loading);
     }
   }
 
-  // 获取存储权限
-  static Future<bool> requestPer() async {
-    final status = Platform.isAndroid
-        ? await Permission.storage.request()
-        : await Permission.photos.request();
-    if (status == PermissionStatus.denied ||
-        status == PermissionStatus.permanentlyDenied) {
+  static Error _failure(String message, Object error, StackTrace stackTrace) {
+    logger.w(message, error: error.runtimeType, stackTrace: stackTrace);
+    return Error(message, cause: error, stackTrace: stackTrace);
+  }
+
+  /// 保留平台权限状态，拒绝、受限与插件查询失败不能混为已授权。
+  static Future<LoadingState<PermissionStatus>> requestPer() async {
+    try {
+      final status = Platform.isAndroid
+          ? await Permission.storage.request()
+          : await Permission.photos.request();
+      return Success(status);
+    } catch (error, stackTrace) {
+      return _failure('无法获取存储权限，请稍后重试', error, stackTrace);
+    }
+  }
+
+  static Future<bool> openPermissionSettings() async {
+    try {
+      if (await openAppSettings()) return true;
+      SmartDialog.showToast('无法打开系统设置，请手动前往应用权限设置');
+    } catch (error, stackTrace) {
+      _failure('无法打开系统设置，请手动前往应用权限设置', error, stackTrace).toast();
+    }
+    return false;
+  }
+
+  static Future<bool> checkPermissionDependOnSdkInt() async {
+    if (Platform.isAndroid && DeviceUtils.sdkInt >= 29) return true;
+    final result = await requestPer();
+    if (result case Success(:final response)) {
+      if (response == PermissionStatus.granted ||
+          response == PermissionStatus.limited) {
+        return true;
+      }
       SmartDialog.show(
         builder: (context) => AlertDialog(
           title: const Text('提示'),
-          content: const Text('存储权限未授权'),
+          content: Text(
+            response == PermissionStatus.restricted
+                ? '存储权限受系统限制，请检查设备权限设置'
+                : '存储权限未授权',
+          ),
           actions: [
+            const TextButton(
+              onPressed: SmartDialog.dismiss,
+              child: Text('取消'),
+            ),
             TextButton(
-              onPressed: () {
-                SmartDialog.dismiss();
-                openAppSettings();
+              onPressed: () async {
+                await SmartDialog.dismiss();
+                await openPermissionSettings();
               },
               child: const Text('去授权'),
             ),
           ],
         ),
       );
-      return false;
+    } else {
+      result.toast();
     }
-    return true;
-  }
-
-  static FutureOr<bool> checkPermissionDependOnSdkInt() {
-    if (Platform.isAndroid && DeviceUtils.sdkInt >= 29) return true;
-    return requestPer();
+    return false;
   }
 
   static Future<bool> downloadLivePhoto({
@@ -111,8 +150,8 @@ abstract final class ImageUtils {
         needToast: true,
       );
       return saved?.isSuccess == true;
-    } catch (err) {
-      SmartDialog.showToast(err.toString());
+    } catch (error, stackTrace) {
+      _failure('动态图片保存失败，请重试', error, stackTrace).toast();
       return false;
     } finally {
       if (!silentDownImg) SmartDialog.dismiss(status: SmartStatus.loading);
@@ -148,7 +187,7 @@ abstract final class ImageUtils {
             ),
         ], skipIfExists: false);
         if (!saved.isSuccess) {
-          SmartDialog.showToast('保存失败，${saved.errorMessage ?? '请重试'}');
+          SmartDialog.showToast('保存失败，请检查相册权限后重试');
           return false;
         }
       } else {
@@ -163,8 +202,8 @@ abstract final class ImageUtils {
       }
       SmartDialog.showToast(' 已保存 ');
       return true;
-    } catch (_) {
-      SmartDialog.showToast('保存失败');
+    } catch (error, stackTrace) {
+      _failure('图片保存失败，请重试', error, stackTrace).toast();
       return false;
     } finally {
       if (!silentDownImg) SmartDialog.dismiss(status: .loading);
