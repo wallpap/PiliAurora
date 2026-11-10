@@ -2,7 +2,6 @@ import 'dart:async';
 import 'dart:math';
 
 import 'package:pili_aurora/common/widgets/button/icon_button.dart';
-import 'package:pili_aurora/services/logger.dart';
 import 'package:pili_aurora/common/widgets/loading_widget/loading_widget.dart';
 import 'package:pili_aurora/common/widgets/pair.dart';
 import 'package:pili_aurora/common/widgets/scaffold/simple_scaffold.dart';
@@ -37,6 +36,27 @@ class PostPanel extends CommonSlidePage {
 
   @override
   State<PostPanel> createState() => _PostPanelState();
+
+  /// 支持秒、分:秒和时:分:秒；小数仅用于秒，避免含糊输入被静默接受。
+  static double? parseSegmentTime(String text) {
+    final parts = text.trim().split(':');
+    if (parts.isEmpty || parts.length > 3) return null;
+    double seconds = 0;
+    for (var index = 0; index < parts.length; index++) {
+      final last = index == parts.length - 1;
+      if (!(last ? RegExp(r'^\d+(?:\.\d+)?$') : RegExp(r'^\d+$')).hasMatch(
+        parts[index],
+      )) {
+        return null;
+      }
+      final value = double.tryParse(parts[index]);
+      if (value == null || !value.isFinite || (index > 0 && value >= 60)) {
+        return null;
+      }
+      seconds = seconds * 60 + value;
+    }
+    return seconds.isFinite ? seconds : null;
+  }
 
   static void updateSegment({
     required bool isFirst,
@@ -198,26 +218,19 @@ class PostPanel extends CommonSlidePage {
                   );
                 }
                 if (res != null) {
-                  try {
-                    List<num> split = res
-                        .split(':')
-                        .reversed
-                        .map(num.parse)
-                        .toList();
-                    double duration = 0;
-                    for (int i = 0; i < split.length; i++) {
-                      duration += split[i] * pow(60, i);
-                    }
-                    if (duration <= videoDuration) {
-                      updateSegment(
-                        isFirst: isFirst,
-                        item: item,
-                        value: duration,
-                      );
-                      (context as Element).markNeedsBuild();
-                    }
-                  } catch (e, stackTrace) {
-                    logger.w(e.toString(), error: e, stackTrace: stackTrace);
+                  if (!context.mounted) return;
+                  final duration = parseSegmentTime(res);
+                  if (duration == null) {
+                    SmartDialog.showToast('请输入有效时间，例如 01:23.500');
+                  } else if (duration > videoDuration) {
+                    SmartDialog.showToast('时间不能超过视频时长');
+                  } else {
+                    updateSegment(
+                      isFirst: isFirst,
+                      item: item,
+                      value: duration,
+                    );
+                    (context as Element).markNeedsBuild();
                   }
                 }
               },

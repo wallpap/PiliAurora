@@ -1,4 +1,5 @@
 import 'package:pili_aurora/common/widgets/pair.dart';
+import 'package:pili_aurora/services/logger.dart';
 import 'package:pili_aurora/common/widgets/scaffold/simple_scaffold.dart';
 import 'package:pili_aurora/http/constants.dart';
 import 'package:pili_aurora/http/loading_state.dart';
@@ -45,6 +46,25 @@ class _SponsorBlockPageState extends State<SponsorBlockPage> {
   int _userVersion = 0;
 
   Box setting = GStorage.setting;
+  final _saving = <String>{};
+
+  Future<bool> _save(String key, Object value, VoidCallback apply) async {
+    if (!_saving.add(key)) return false;
+    try {
+      await setting.put(key, value);
+      if (key == SettingBoxKey.blockServer) {
+        AccountManager.blockServer = value as String;
+      }
+      if (mounted) setState(apply);
+      return true;
+    } catch (error, stackTrace) {
+      logger.w('空降助手设置保存失败', error: error.runtimeType, stackTrace: stackTrace);
+      if (mounted) SmartDialog.showToast('设置保存失败，请重试');
+      return false;
+    } finally {
+      _saving.remove(key);
+    }
+  }
 
   @override
   void initState() {
@@ -99,7 +119,7 @@ class _SponsorBlockPageState extends State<SponsorBlockPage> {
           _textController.text = _blockLimit.toString();
           showDialog(
             context: context,
-            builder: (_) => AlertDialog(
+            builder: (dialogContext) => AlertDialog(
               title: Text('最短片段时长', style: titleStyle),
               content: TextFormField(
                 keyboardType: const .numberWithOptions(decimal: true),
@@ -117,14 +137,22 @@ class _SponsorBlockPageState extends State<SponsorBlockPage> {
                   ),
                 ),
                 TextButton(
-                  onPressed: () {
-                    try {
-                      _blockLimit = double.parse(_textController.text);
-                      Get.back();
-                      setting.put(SettingBoxKey.blockLimit, _blockLimit);
-                      (context as Element).markNeedsBuild();
-                    } catch (e) {
-                      SmartDialog.showToast(e.toString());
+                  onPressed: () async {
+                    final value = double.tryParse(_textController.text);
+                    if (value == null || !value.isFinite || value < 0) {
+                      SmartDialog.showToast('请输入大于或等于 0 的有效秒数');
+                      return;
+                    }
+                    final saved = await _save(
+                      SettingBoxKey.blockLimit,
+                      value,
+                      () => _blockLimit = value,
+                    );
+                    if (saved &&
+                        mounted &&
+                        dialogContext.mounted &&
+                        ModalRoute.of(dialogContext)?.isCurrent == true) {
+                      Navigator.of(dialogContext).pop();
                     }
                   },
                   child: const Text('确定'),
@@ -168,7 +196,7 @@ class _SponsorBlockPageState extends State<SponsorBlockPage> {
           _textController.text = _userId;
           showDialog(
             context: context,
-            builder: (_) {
+            builder: (dialogContext) {
               return AlertDialog(
                 title: Text('用户ID', style: titleStyle),
                 content: TextFormField(
@@ -190,14 +218,23 @@ class _SponsorBlockPageState extends State<SponsorBlockPage> {
                 ),
                 actions: [
                   TextButton(
-                    onPressed: () {
-                      Get.back();
-                      _userId = Digest(
+                    onPressed: () async {
+                      final value = Digest(
                         List.generate(16, (_) => Utils.random.nextInt(256)),
                       ).toString();
-                      setting.put(SettingBoxKey.blockUserID, _userId);
-                      _getUserInfo();
-                      (context as Element).markNeedsBuild();
+
+                      final saved = await _save(
+                        SettingBoxKey.blockUserID,
+                        value,
+                        () => _userId = value,
+                      );
+                      if (saved && mounted) {
+                        if (dialogContext.mounted &&
+                            ModalRoute.of(dialogContext)?.isCurrent == true) {
+                          Navigator.of(dialogContext).pop();
+                        }
+                        _getUserInfo();
+                      }
                     },
                     child: const Text('随机'),
                   ),
@@ -211,13 +248,21 @@ class _SponsorBlockPageState extends State<SponsorBlockPage> {
                     ),
                   ),
                   TextButton(
-                    onPressed: () {
-                      if (key.currentState?.validate() == true) {
-                        Get.back();
-                        _userId = _textController.text;
-                        setting.put(SettingBoxKey.blockUserID, _userId);
+                    onPressed: () async {
+                      if (key.currentState?.validate() != true) return;
+                      final value = _textController.text;
+
+                      final saved = await _save(
+                        SettingBoxKey.blockUserID,
+                        value,
+                        () => _userId = value,
+                      );
+                      if (saved && mounted) {
+                        if (dialogContext.mounted &&
+                            ModalRoute.of(dialogContext)?.isCurrent == true) {
+                          Navigator.of(dialogContext).pop();
+                        }
                         _getUserInfo();
-                        (context as Element).markNeedsBuild();
                       }
                     },
                     child: const Text('确定'),
@@ -233,10 +278,9 @@ class _SponsorBlockPageState extends State<SponsorBlockPage> {
 
   Widget _blockToastItem(TextStyle titleStyle) => Builder(
     builder: (context) {
-      void update() {
-        _blockToast = !_blockToast;
-        setting.put(SettingBoxKey.blockToast, _blockToast);
-        (context as Element).markNeedsBuild();
+      Future<void> update() async {
+        final value = !_blockToast;
+        await _save(SettingBoxKey.blockToast, value, () => _blockToast = value);
       }
 
       return ListTile(
@@ -263,10 +307,9 @@ class _SponsorBlockPageState extends State<SponsorBlockPage> {
     TextStyle subTitleStyle,
   ) => Builder(
     builder: (context) {
-      void update() {
-        _blockTrack = !_blockTrack;
-        setting.put(SettingBoxKey.blockTrack, _blockTrack);
-        (context as Element).markNeedsBuild();
+      Future<void> update() async {
+        final value = !_blockTrack;
+        await _save(SettingBoxKey.blockTrack, value, () => _blockTrack = value);
       }
 
       return ListTile(
@@ -333,7 +376,7 @@ class _SponsorBlockPageState extends State<SponsorBlockPage> {
           _textController.text = _blockServer;
           showDialog(
             context: context,
-            builder: (_) => AlertDialog(
+            builder: (dialogContext) => AlertDialog(
               title: Text('服务器地址', style: titleStyle),
               content: TextFormField(
                 keyboardType: TextInputType.url,
@@ -342,14 +385,31 @@ class _SponsorBlockPageState extends State<SponsorBlockPage> {
               ),
               actions: [
                 TextButton(
-                  onPressed: () {
-                    Get.back();
-                    _blockServer = HttpString.sponsorBlockBaseUrl;
-                    setting.put(SettingBoxKey.blockServer, _blockServer);
-                    AccountManager.blockServer = _blockServer;
-                    _checkServerStatus();
-                    _getUserInfo();
-                    (context as Element).markNeedsBuild();
+                  onPressed: () async {
+                    const value = HttpString.sponsorBlockBaseUrl;
+                    final uri = Uri.tryParse(value);
+                    if (uri == null ||
+                        !const ['http', 'https'].contains(uri.scheme) ||
+                        uri.host.isEmpty ||
+                        uri.userInfo.isNotEmpty ||
+                        uri.hasQuery ||
+                        uri.hasFragment) {
+                      SmartDialog.showToast('请输入有效的 HTTP 或 HTTPS 服务器地址');
+                      return;
+                    }
+                    final saved = await _save(
+                      SettingBoxKey.blockServer,
+                      value,
+                      () => _blockServer = value,
+                    );
+                    if (saved && mounted) {
+                      if (dialogContext.mounted &&
+                          ModalRoute.of(dialogContext)?.isCurrent == true) {
+                        Navigator.of(dialogContext).pop();
+                      }
+                      _checkServerStatus();
+                      _getUserInfo();
+                    }
                   },
                   child: const Text('重置'),
                 ),
@@ -363,14 +423,31 @@ class _SponsorBlockPageState extends State<SponsorBlockPage> {
                   ),
                 ),
                 TextButton(
-                  onPressed: () {
-                    Get.back();
-                    _blockServer = _textController.text;
-                    setting.put(SettingBoxKey.blockServer, _blockServer);
-                    AccountManager.blockServer = _blockServer;
-                    _checkServerStatus();
-                    _getUserInfo();
-                    (context as Element).markNeedsBuild();
+                  onPressed: () async {
+                    final value = _textController.text.trim();
+                    final uri = Uri.tryParse(value);
+                    if (uri == null ||
+                        !const ['http', 'https'].contains(uri.scheme) ||
+                        uri.host.isEmpty ||
+                        uri.userInfo.isNotEmpty ||
+                        uri.hasQuery ||
+                        uri.hasFragment) {
+                      SmartDialog.showToast('请输入有效的 HTTP 或 HTTPS 服务器地址');
+                      return;
+                    }
+                    final saved = await _save(
+                      SettingBoxKey.blockServer,
+                      value,
+                      () => _blockServer = value,
+                    );
+                    if (saved && mounted) {
+                      if (dialogContext.mounted &&
+                          ModalRoute.of(dialogContext)?.isCurrent == true) {
+                        Navigator.of(dialogContext).pop();
+                      }
+                      _checkServerStatus();
+                      _getUserInfo();
+                    }
                   },
                   child: const Text('确定'),
                 ),
@@ -428,7 +505,7 @@ class _SponsorBlockPageState extends State<SponsorBlockPage> {
   ) {
     showDialog(
       context: context,
-      builder: (_) => AlertDialog(
+      builder: (dialogContext) => AlertDialog(
         clipBehavior: Clip.hardEdge,
         contentPadding: const EdgeInsets.symmetric(vertical: 16),
         title: Text.rich(
@@ -460,20 +537,17 @@ class _SponsorBlockPageState extends State<SponsorBlockPage> {
         content: SlideColorPicker(
           color: color,
           showResetBtn: true,
-          onChanged: (Color? color) {
-            _blockColor[index] = color ?? item.first.color;
-            setting.put(
-              SettingBoxKey.blockColor,
-              {
-                for (final category in SegmentType.values)
-                  category.name: _blockColor[category.index]
-                      .toARGB32()
-                      .toRadixString(16)
-                      .padLeft(8, '0')
-                      .substring(2),
-              },
-            );
-            (context as Element).markNeedsBuild();
+          onChanged: (Color? color) async {
+            final colors = List<Color>.of(_blockColor);
+            colors[index] = color ?? item.first.color;
+            await _save(SettingBoxKey.blockColor, {
+              for (final category in SegmentType.values)
+                category.name: colors[category.index]
+                    .toARGB32()
+                    .toRadixString(16)
+                    .padLeft(8, '0')
+                    .substring(2),
+            }, () => _blockColor[index] = colors[index]);
           },
         ),
       ),
@@ -598,21 +672,13 @@ class _SponsorBlockPageState extends State<SponsorBlockPage> {
                 builder: (btnContext) {
                   return PopupMenuButton<SkipType>(
                     initialValue: item.second,
-                    onSelected: (e) {
-                      final updateItem = isDisable || e == SkipType.disable;
-                      item.second = e;
-                      setting.put(
-                        SettingBoxKey.blockSettings,
-                        {
-                          for (final e in _blockSettings)
-                            e.first.name: e.second.index,
-                        },
-                      );
-                      if (updateItem) {
-                        (context as Element).markNeedsBuild();
-                      } else {
-                        (btnContext as Element).markNeedsBuild();
-                      }
+                    onSelected: (e) async {
+                      await _save(SettingBoxKey.blockSettings, {
+                        for (final entry in _blockSettings)
+                          entry.first.name: identical(entry, item)
+                              ? e.index
+                              : entry.second.index,
+                      }, () => item.second = e);
                     },
                     itemBuilder: (context) => SkipType.values
                         .map(

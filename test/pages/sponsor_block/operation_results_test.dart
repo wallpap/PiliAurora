@@ -90,19 +90,31 @@ class _Block extends GetxController with BlockMixin {
   }
 }
 
+class _SettingBox extends MemoryBox<dynamic> {
+  _SettingBox() : super({SettingBoxKey.blockUserID: 'synthetic-user'});
+  bool fail = false;
+  @override
+  Future<void> put(dynamic key, dynamic value) async {
+    if (fail) throw StateError('fixture save failed');
+    await super.put(key, value);
+  }
+}
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   final adapter = ControlledHttpAdapter();
+  final settings = _SettingBox();
   late _Video video;
   late _Block block;
   setUpAll(() {
-    GStorage.setting = MemoryBox({SettingBoxKey.blockUserID: 'synthetic-user'});
+    GStorage.setting = settings;
     GStorage.video = MemoryBox();
     Request();
     Request.dio.interceptors.clear();
     Request.dio.httpClientAdapter = adapter;
   });
   setUp(() {
+    settings.fail = false;
     adapter.requests.clear();
     adapter.pending.clear();
     video = _Video()
@@ -277,6 +289,40 @@ void main() {
     expect(find.text('正常'), findsOneWidget);
     expect(find.text('服务器无法获取信息'), findsNothing);
     await finish(tester);
+  });
+
+  testWidgets('偏好写入失败保留确认值和输入，重试成功后再关闭', (tester) async {
+    await mount(tester, settings: true);
+    await until(tester, () => adapter.requests.length == 2);
+    adapter.pending[0].complete(ResponseBody.fromString('123', 200));
+    adapter.json(1, {'viewCount': 1, 'minutesSaved': 2, 'segmentCount': 3});
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('最短片段时长'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextFormField), '4.5');
+    settings.fail = true;
+    await tester.tap(find.text('确定'));
+    await tester.pumpAndSettle();
+    expect(find.byType(AlertDialog), findsOneWidget);
+    expect(find.text('4.5'), findsOneWidget);
+    expect(find.text('设置保存失败，请重试'), findsOneWidget);
+    expect(settings.get(SettingBoxKey.blockLimit), isNull);
+    settings.fail = false;
+    await tester.tap(find.text('确定'));
+    await tester.pumpAndSettle();
+    expect(find.byType(AlertDialog), findsNothing);
+    expect(settings.get(SettingBoxKey.blockLimit), 4.5);
+    expect(find.text('4.5s'), findsOneWidget);
+    await finish(tester);
+  });
+
+  test('片段时间明确区分非法输入，支持小数秒', () {
+    for (final text in ['', ':', '1:2:3:4', '1:60', '1.2:03', '-1', 'NaN']) {
+      expect(PostPanel.parseSegmentTime(text), isNull, reason: text);
+    }
+    expect(PostPanel.parseSegmentTime('01:23.500'), 83.5);
+    expect(PostPanel.parseSegmentTime('1:02:03'), 3723);
+    expect(PostPanel.parseSegmentTime('120'), 120);
   });
 
   test('查询的 Future 等待片段消费者完成，旧响应不进入消费者', () async {
