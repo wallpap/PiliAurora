@@ -1,3 +1,8 @@
+import 'dart:async';
+
+import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
+import 'package:pili_aurora/services/logger.dart';
+
 import 'package:pili_aurora/common/widgets/flutter/list_tile.dart';
 import 'package:material_ui/material_ui.dart' hide ListTile;
 
@@ -8,7 +13,8 @@ class NormalItem extends StatefulWidget {
   final ValueGetter<String>? getSubtitle;
   final Widget? leading;
   final Widget Function(ThemeData theme)? getTrailing;
-  final void Function(BuildContext context, VoidCallback setState)? onTap;
+  final FutureOr<void> Function(BuildContext context, VoidCallback setState)?
+  onTap;
   final EdgeInsetsGeometry? contentPadding;
   final TextStyle? titleStyle;
 
@@ -30,6 +36,28 @@ class NormalItem extends StatefulWidget {
 }
 
 class _NormalItemState extends State<NormalItem> {
+  bool _busy = false;
+
+  Future<void> _activate() async {
+    if (_busy) return;
+    final source = widget;
+    setState(() => _busy = true);
+    try {
+      await source.onTap!(context, () {
+        if (mounted && identical(widget, source)) refresh();
+      });
+    } catch (error, stackTrace) {
+      logger.w('执行设置操作失败', error: error.runtimeType, stackTrace: stackTrace);
+      if (mounted &&
+          identical(widget, source) &&
+          (ModalRoute.of(context)?.isCurrent ?? false)) {
+        SmartDialog.showToast('设置保存失败，请重试');
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     late final theme = Theme.of(context);
@@ -44,9 +72,7 @@ class _NormalItemState extends State<NormalItem> {
     }
     return ListTile(
       contentPadding: widget.contentPadding,
-      onTap: widget.onTap == null
-          ? null
-          : () => widget.onTap!(context, refresh),
+      onTap: widget.onTap == null || _busy ? null : _activate,
       title: Text(
         widget.title ?? widget.getTitle!(),
         style: widget.titleStyle ?? theme.textTheme.titleMedium!,

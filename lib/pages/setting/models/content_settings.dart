@@ -1,6 +1,5 @@
 import 'dart:io' show Platform;
 
-import 'package:flutter/services.dart' show FilteringTextInputFormatter;
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:get/get.dart';
@@ -20,6 +19,8 @@ import 'package:pili_aurora/pages/home/controller.dart';
 import 'package:pili_aurora/pages/main/controller.dart';
 import 'package:pili_aurora/pages/setting/models/model.dart';
 import 'package:pili_aurora/pages/setting/widgets/select_dialog.dart';
+import 'package:pili_aurora/pages/setting/widgets/setting_input_dialog.dart';
+import 'package:pili_aurora/pages/setting/widgets/setting_save.dart';
 import 'package:pili_aurora/pages/video/reply/widgets/reply_item_grpc.dart';
 import 'package:pili_aurora/utils/accounts.dart';
 import 'package:pili_aurora/utils/storage.dart';
@@ -375,93 +376,63 @@ List<SettingsModel> get contentSettings => [
   ),
 ];
 
-void _showDynDialog(BuildContext context) {
-  String dynamicPeriod = Pref.dynamicPeriod.toString();
-  showDialog(
-    context: context,
-    builder: (context) => AlertDialog(
-      title: const Text('检查周期'),
-      content: TextFormField(
-        autofocus: true,
-        initialValue: dynamicPeriod,
-        keyboardType: TextInputType.number,
-        onChanged: (value) => dynamicPeriod = value,
-        inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-        decoration: const InputDecoration(suffixText: 'min'),
-      ),
-      actions: [
-        TextButton(
-          onPressed: Get.back,
-          child: Text(
-            '取消',
-            style: TextStyle(color: ColorScheme.of(context).outline),
-          ),
-        ),
-        TextButton(
-          onPressed: () {
-            try {
-              final val = int.parse(dynamicPeriod);
-              Get.back();
-              GStorage.setting.put(SettingBoxKey.dynamicPeriod, val);
-              Get.find<MainController>().dynamicPeriod = val * 60 * 1000;
-            } catch (e) {
-              SmartDialog.showToast(e.toString());
-            }
-          },
-          child: const Text('确定'),
-        ),
-      ],
-    ),
-  );
-}
+Future<void> _showDynDialog(BuildContext context) => showDialog<void>(
+  context: context,
+  builder: (_) => SettingInputDialog<int>(
+    title: '检查周期',
+    initialValue: Pref.dynamicPeriod.toString(),
+    numeric: true,
+    suffix: 'min',
+    validationMessage: '请输入大于 0 的分钟数',
+    isCurrent: () => context.mounted,
+    parse: (value) {
+      final minutes = int.parse(value);
+      if (minutes <= 0) throw const FormatException();
+      return minutes;
+    },
+    save: (value) async {
+      await GStorage.setting.put(SettingBoxKey.dynamicPeriod, value);
+      if (Get.isRegistered<MainController>()) {
+        Get.find<MainController>().dynamicPeriod = value * 60 * 1000;
+      }
+    },
+  ),
+);
 
-void _showReplyLengthDialog(BuildContext context, VoidCallback setState) {
-  String replyLengthLimit = ReplyItemGrpc.replyLengthLimit.toString();
-  showDialog(
-    context: context,
-    builder: (context) => AlertDialog(
-      title: const Text('评论折叠行数'),
-      content: TextFormField(
-        autofocus: true,
-        initialValue: replyLengthLimit,
-        keyboardType: TextInputType.number,
-        onChanged: (value) => replyLengthLimit = value,
-        inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-        decoration: const InputDecoration(suffixText: '行'),
-      ),
-      actions: [
-        TextButton(
-          onPressed: Get.back,
-          child: Text(
-            '取消',
-            style: TextStyle(color: ColorScheme.of(context).outline),
-          ),
-        ),
-        TextButton(
-          onPressed: () async {
-            try {
-              final val = int.parse(replyLengthLimit);
-              Get.back();
-              ReplyItemGrpc.replyLengthLimit = val == 0 ? null : val;
-              await GStorage.setting.put(SettingBoxKey.replyLengthLimit, val);
-              setState();
-            } catch (e) {
-              SmartDialog.showToast(e.toString());
-            }
-          },
-          child: const Text('确定'),
-        ),
-      ],
-    ),
-  );
-}
+Future<void> _showReplyLengthDialog(
+  BuildContext context,
+  VoidCallback setState,
+) => showDialog<void>(
+  context: context,
+  builder: (_) => SettingInputDialog<int>(
+    title: '评论折叠行数',
+    initialValue: (ReplyItemGrpc.replyLengthLimit ?? 0).toString(),
+    numeric: true,
+    suffix: '行',
+    validationMessage: '请输入非负整数',
+    isCurrent: () => context.mounted,
+    parse: (value) {
+      final lines = int.parse(value);
+      if (lines < 0) throw const FormatException();
+      return lines;
+    },
+    save: (value) async {
+      await GStorage.setting.put(SettingBoxKey.replyLengthLimit, value);
+      ReplyItemGrpc.replyLengthLimit = value == 0 ? null : value;
+      setState();
+    },
+  ),
+);
 
 Future<void> _showFavDialog(BuildContext context) async {
-  if (Accounts.main.isLogin) {
-    final res = await FavHttp.allFavFolders(Accounts.main.mid);
+  final account = Accounts.main;
+  if (account.isLogin) {
+    final res = await FavHttp.allFavFolders(account.mid, account: account);
+    if (!context.mounted || !identical(account, Accounts.main)) return;
     if (res case Success(:final response)) {
       final list = response.list;
       if (list == null || list.isEmpty) {
+        SmartDialog.showToast('暂无可选收藏夹');
         return;
       }
       final quickFavId = Pref.quickFavId;
@@ -474,10 +445,21 @@ Future<void> _showFavDialog(BuildContext context) async {
           contentPadding: const EdgeInsets.only(top: 5, bottom: 18),
           content: SingleChildScrollView(
             child: RadioGroup(
-              onChanged: (value) {
-                Get.back();
-                GStorage.setting.put(SettingBoxKey.quickFavId, value);
-                SmartDialog.showToast('设置成功');
+              onChanged: (value) async {
+                if (!identical(account, Accounts.main)) return;
+                final saved = await saveSetting(
+                  key: SettingBoxKey.quickFavId,
+                  write: () =>
+                      GStorage.setting.put(SettingBoxKey.quickFavId, value),
+                  canPresent: () =>
+                      context.mounted && identical(account, Accounts.main),
+                  successMessage: '设置成功',
+                );
+                if (saved &&
+                    context.mounted &&
+                    (ModalRoute.of(context)?.isCurrent ?? false)) {
+                  Navigator.pop(context);
+                }
               },
               groupValue: quickFavId,
               child: Column(

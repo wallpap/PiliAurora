@@ -165,7 +165,8 @@ class NormalModel extends SettingsModel {
   final ValueGetter<String>? getTitle;
   final ValueGetter<String>? getSubtitle;
   final Widget Function(ThemeData theme)? getTrailing;
-  final void Function(BuildContext context, VoidCallback setState)? onTap;
+  final FutureOr<void> Function(BuildContext context, VoidCallback setState)?
+  onTap;
 
   const NormalModel({
     super.subtitle,

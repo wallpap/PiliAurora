@@ -1,3 +1,5 @@
+import 'package:pili_aurora/pages/setting/widgets/setting_save.dart';
+
 import 'dart:io' show Platform;
 
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
@@ -632,7 +634,7 @@ List<SettingsModel> get playProgressExtraSettings => [
 void _showDmChartColorDialog(BuildContext context, VoidCallback setState) {
   showDialog<void>(
     context: context,
-    builder: (context) => AlertDialog(
+    builder: (_) => AlertDialog(
       clipBehavior: Clip.hardEdge,
       contentPadding: const EdgeInsets.symmetric(vertical: 16),
       title: const Text('高能进度条颜色'),
@@ -640,15 +642,17 @@ void _showDmChartColorDialog(BuildContext context, VoidCallback setState) {
         color: Pref.dmChartColor ?? const Color(0xFFFB7299),
         showResetBtn: true,
         onChanged: (color) async {
-          if (color == null) {
-            await GStorage.setting.delete(SettingBoxKey.dmChartColor);
-          } else {
-            await GStorage.setting.put(
-              SettingBoxKey.dmChartColor,
-              color.toARGB32(),
-            );
-          }
-          setState();
+          await saveSetting(
+            key: SettingBoxKey.dmChartColor,
+            write: () => color == null
+                ? GStorage.setting.delete(SettingBoxKey.dmChartColor)
+                : GStorage.setting.put(
+                    SettingBoxKey.dmChartColor,
+                    color.toARGB32(),
+                  ),
+            apply: setState,
+            canPresent: () => context.mounted,
+          );
         },
       ),
     ),

@@ -1,8 +1,5 @@
 import 'dart:io';
 
-import 'package:flutter/services.dart' show FilteringTextInputFormatter;
-import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
-import 'package:get/get.dart';
 import 'package:material_design_icons_flutter/material_design_icons_flutter.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:pili_aurora/models/common/audio_normalization.dart';
@@ -16,9 +13,9 @@ import 'package:pili_aurora/pages/setting/models/model.dart';
 import 'package:pili_aurora/pages/setting/widgets/decoder_test_dialog.dart';
 import 'package:pili_aurora/pages/setting/widgets/ordered_multi_select_dialog.dart';
 import 'package:pili_aurora/pages/setting/widgets/select_dialog.dart';
+import 'package:pili_aurora/pages/setting/widgets/setting_input_dialog.dart';
 import 'package:pili_aurora/plugin/pl_player/models/audio_output_type.dart';
 import 'package:pili_aurora/plugin/pl_player/models/hwdec_type.dart';
-import 'package:pili_aurora/utils/filtering_text.dart';
 import 'package:pili_aurora/utils/storage.dart';
 import 'package:pili_aurora/utils/storage_key.dart';
 import 'package:pili_aurora/utils/storage_pref.dart';
@@ -276,8 +273,8 @@ Future<void> _showCDNDialog(BuildContext context, VoidCallback setState) async {
     builder: (context) => const CdnSelectDialog(),
   );
   if (res != null) {
-    VideoUtils.cdnService = res;
     await GStorage.setting.put(SettingBoxKey.CDNService, res.name);
+    VideoUtils.cdnService = res;
     setState();
   }
 }
@@ -303,49 +300,31 @@ Future<void> _showCdnFallbackOrderDialog(
   }
 }
 
-Future<void> _showLiveCDNDialog(
-  BuildContext context,
-  VoidCallback setState,
-) async {
-  String host = Pref.liveCdnUrl ?? '';
-  String? res = await showDialog<String>(
-    context: context,
-    builder: (context) => AlertDialog(
-      title: const Text('输入CDN host'),
-      content: TextFormField(
-        initialValue: host,
-        autofocus: true,
-        onChanged: (value) => host = value,
+Future<void> _showLiveCDNDialog(BuildContext context, VoidCallback setState) =>
+    showDialog<void>(
+      context: context,
+      builder: (_) => SettingInputDialog<String>(
+        title: '输入CDN host',
+        initialValue: Pref.liveCdnUrl ?? '',
+        validationMessage: '请输入有效的 CDN host',
+        isCurrent: () => context.mounted,
+        parse: (value) => value.trim(),
+        save: (value) async {
+          final host = value.isEmpty
+              ? null
+              : value.startsWith('http')
+              ? value
+              : 'https://$value';
+          if (host == null) {
+            await GStorage.setting.delete(SettingBoxKey.liveCdnUrl);
+          } else {
+            await GStorage.setting.put(SettingBoxKey.liveCdnUrl, host);
+          }
+          VideoUtils.liveCdnUrl = host;
+          setState();
+        },
       ),
-      actions: [
-        TextButton(
-          onPressed: Get.back,
-          child: Text(
-            '取消',
-            style: TextStyle(color: ColorScheme.of(context).outline),
-          ),
-        ),
-        TextButton(
-          onPressed: () => Get.back(result: host),
-          child: const Text('确定'),
-        ),
-      ],
-    ),
-  );
-  if (res != null) {
-    if (res.isEmpty) {
-      res = null;
-      await GStorage.setting.delete(SettingBoxKey.liveCdnUrl);
-    } else {
-      if (!res.startsWith('http')) {
-        res = 'https://$res';
-      }
-      await GStorage.setting.put(SettingBoxKey.liveCdnUrl, res);
-    }
-    VideoUtils.liveCdnUrl = res;
-    setState();
-  }
-}
+    );
 
 Future<void> _showVideoQaDialog(
   BuildContext context,
@@ -579,112 +558,76 @@ Future<void> _showHwDecDialog(
   }
 }
 
-void _showAutoSyncDialog(BuildContext context, VoidCallback setState) {
-  String autosync = Pref.autosync.toString();
-  showDialog(
-    context: context,
-    builder: (context) => AlertDialog(
-      title: const Text('音频时钟平滑'),
-      content: TextFormField(
-        autofocus: true,
-        initialValue: autosync,
-        keyboardType: TextInputType.number,
-        onChanged: (value) => autosync = value,
-        inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+Future<void> _showAutoSyncDialog(BuildContext context, VoidCallback setState) =>
+    showDialog<void>(
+      context: context,
+      builder: (_) => SettingInputDialog<String>(
+        title: '音频时钟平滑',
+        initialValue: Pref.autosync.toString(),
+        numeric: true,
+        validationMessage: '请输入非负整数',
+        isCurrent: () => context.mounted,
+        parse: (value) {
+          if (int.parse(value) < 0) throw const FormatException();
+          return value;
+        },
+        save: (value) async {
+          await GStorage.setting.put(SettingBoxKey.autosync, value);
+          setState();
+        },
       ),
-      actions: [
-        TextButton(
-          onPressed: Get.back,
-          child: Text(
-            '取消',
-            style: TextStyle(color: ColorScheme.of(context).outline),
-          ),
-        ),
-        TextButton(
-          onPressed: () async {
-            try {
-              // validate
-              int.parse(autosync);
-              Get.back();
-              await GStorage.setting.put(SettingBoxKey.autosync, autosync);
-              setState();
-            } catch (e) {
-              SmartDialog.showToast(e.toString());
-            }
-          },
-          child: const Text('确定'),
-        ),
-      ],
-    ),
-  );
-}
+    );
 
-void _showDecimalDialog(
+Future<void> _showDecimalDialog(
   BuildContext context,
   VoidCallback setState, {
   required String key,
   required double defVal,
   required String title,
   required String? suffix,
-}) {
-  String value = (GStorage.setting.get(key) ?? defVal).toString();
-  showDialog(
-    context: context,
-    builder: (context) => AlertDialog(
-      title: Text(title),
-      content: TextFormField(
-        autofocus: true,
-        initialValue: value,
-        keyboardType: const .numberWithOptions(decimal: true),
-        onChanged: (val) => value = val,
-        inputFormatters: FilteringText.decimal,
-        decoration: suffix == null ? null : InputDecoration(suffixText: suffix),
-      ),
-      actions: [
-        TextButton(
-          onPressed: Get.back,
-          child: Text(
-            '取消',
-            style: TextStyle(color: ColorScheme.of(context).outline),
-          ),
-        ),
-        TextButton(
-          onPressed: () async {
-            try {
-              final val = double.parse(value);
-              Get.back();
-              await GStorage.setting.put(key, val);
-              setState();
-            } catch (e) {
-              SmartDialog.showToast(e.toString());
-            }
-          },
-          child: const Text('确定'),
-        ),
-      ],
-    ),
-  );
-}
+}) => showDialog<void>(
+  context: context,
+  builder: (_) => SettingInputDialog<double>(
+    title: title,
+    initialValue: (GStorage.setting.get(key) ?? defVal).toString(),
+    suffix: suffix,
+    validationMessage: '请输入有效的非负数',
+    isCurrent: () => context.mounted,
+    parse: (value) {
+      final number = double.parse(value);
+      if (!number.isFinite || number < 0) throw const FormatException();
+      return number;
+    },
+    save: (value) async {
+      await GStorage.setting.put(key, value);
+      setState();
+    },
+  ),
+);
 
-void _showBufferSizeDialog(BuildContext context, VoidCallback setState) =>
-    _showDecimalDialog(
-      context,
-      setState,
-      key: SettingBoxKey.bufferSize,
-      defVal: Pref.bufferSize,
-      title: '缓冲大小',
-      suffix: 'MB',
-    );
+Future<void> _showBufferSizeDialog(
+  BuildContext context,
+  VoidCallback setState,
+) => _showDecimalDialog(
+  context,
+  setState,
+  key: SettingBoxKey.bufferSize,
+  defVal: Pref.bufferSize,
+  title: '缓冲大小',
+  suffix: 'MB',
+);
 
-void _showBufferSecDialog(BuildContext context, VoidCallback setState) =>
-    _showDecimalDialog(
-      context,
-      setState,
-      key: SettingBoxKey.bufferSec,
-      defVal: Pref.bufferSec,
-      title: '缓冲时长',
-      suffix: 's',
-    );
+Future<void> _showBufferSecDialog(
+  BuildContext context,
+  VoidCallback setState,
+) => _showDecimalDialog(
+  context,
+  setState,
+  key: SettingBoxKey.bufferSec,
+  defVal: Pref.bufferSec,
+  title: '缓冲时长',
+  suffix: 's',
+);
 
 List<SettingsModel> get videoEnhancementSettings => [
   if (Platform.isAndroid)
@@ -759,51 +702,35 @@ Future<void> audioNormalization(
   );
   if (res != null && context.mounted) {
     if (res == '3') {
-      String param = '';
-      await showDialog(
+      String? savedParam;
+      await showDialog<void>(
         context: context,
-        builder: (context) => AlertDialog(
-          title: const Text('自定义参数'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            spacing: 16,
-            children: [
-              const Text('等同于 --lavfi-complex="[aid1] 参数 [ao]"'),
-              TextField(
-                autofocus: true,
-                onChanged: (value) => param = value,
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: Get.back,
-              child: Text(
-                '取消',
-                style: TextStyle(color: ColorScheme.of(context).outline),
-              ),
-            ),
-            TextButton(
-              onPressed: () {
-                Get.back();
-                GStorage.setting.put(key, param);
-                if (!fallback &&
-                    AudioNormalization.loudnormRegExp.hasMatch(param)) {
-                  audioNormalization(context, setState, fallback: true);
-                }
-                setState();
-              },
-              child: const Text('确定'),
-            ),
-          ],
+        builder: (_) => SettingInputDialog<String>(
+          title: '自定义参数',
+          description: '等同于 --lavfi-complex="[aid1] 参数 [ao]"',
+          initialValue: '',
+          parse: (value) => value,
+          validationMessage: '请输入有效参数',
+          isCurrent: () => context.mounted,
+          save: (value) async {
+            await GStorage.setting.put(key, value);
+            savedParam = value;
+            setState();
+          },
         ),
       );
-    } else {
-      GStorage.setting.put(key, res);
-      if (res == '2') {
-        audioNormalization(context, setState, fallback: true);
+      if (context.mounted &&
+          !fallback &&
+          savedParam != null &&
+          AudioNormalization.loudnormRegExp.hasMatch(savedParam!)) {
+        await audioNormalization(context, setState, fallback: true);
       }
+    } else {
+      await GStorage.setting.put(key, res);
       setState();
+      if (res == '2' && context.mounted) {
+        await audioNormalization(context, setState, fallback: true);
+      }
     }
   }
 }
