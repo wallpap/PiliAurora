@@ -274,12 +274,10 @@ class _AudioPageState extends State<AudioPage> {
                             ),
                             onTap: () {
                               Get.back();
-                              if (!isCurr) {
-                                _controller.playIndex(
-                                  index,
-                                  subId: [e.subId],
-                                );
-                              }
+                              _controller.playIndex(
+                                index,
+                                subId: [e.subId],
+                              );
                             },
                             title: Text.rich(
                               maxLines: 1,
@@ -324,9 +322,7 @@ class _AudioPageState extends State<AudioPage> {
                       minTileHeight: 45,
                       onTap: () {
                         Get.back();
-                        if (!isCurr) {
-                          _controller.playIndex(index);
-                        }
+                        _controller.playIndex(index);
                       },
                       title: Text.rich(
                         maxLines: 1,

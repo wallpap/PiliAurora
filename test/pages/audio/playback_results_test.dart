@@ -301,4 +301,27 @@ void main() {
     await tester.pump();
     expect(find.text('音频播放失败，请重试'), findsOneWidget);
   });
+  _check(
+    'same target is skipped while pending or ready and another part can play',
+    (tester) async {
+      await host(tester);
+      final operation = controller.playIndex(0);
+      await _until(tester, () => adapter.requests.isNotEmpty);
+      await controller.playIndex(0, subId: [Int64.ONE]);
+      await tester.pump(const Duration(milliseconds: 100));
+      expect(adapter.requests.length, 1);
+      adapter.reply(0, _source());
+      await _complete(tester, operation);
+      await controller.playIndex(0);
+      await controller.playIndex(0, subId: [Int64.ONE]);
+      await tester.pump(const Duration(milliseconds: 100));
+      expect(adapter.requests.length, 1);
+      final nextPart = controller.playIndex(0, subId: [Int64(10)]);
+      await _until(tester, () => adapter.requests.length == 2);
+      adapter.reply(1, _source('https://media.example/part'));
+      await _complete(tester, nextPart);
+      expect(controller.subId, [Int64(10)]);
+      expect(player.opened.length, 2);
+    },
+  );
 }

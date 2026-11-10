@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'dart:io' show Platform;
 
+import 'package:flutter/foundation.dart' show listEquals;
+
 import 'package:pili_aurora/utils/volume_utils.dart';
 import 'package:pili_aurora/common/constants.dart';
 import 'package:pili_aurora/common/widgets/dialog/simple_dialog_option.dart';
@@ -87,6 +89,7 @@ class AudioController extends GetxController
   int _playGeneration = 0;
   Account? _playAccount;
   bool _playbackReady = false;
+  int? _pendingPlayGeneration;
   Future<void>? _playerInitialization;
   Future<bool>? _mediaOpening;
   @override
@@ -342,6 +345,7 @@ class AudioController extends GetxController
 
   Future<bool> _queryPlayUrl() async {
     final generation = ++_playGeneration;
+    _pendingPlayGeneration = generation;
     _playAccount = Accounts.main;
     _playbackReady = false;
     _querySponsorBlock();
@@ -360,6 +364,10 @@ class AudioController extends GetxController
       return false;
     } catch (error, stack) {
       return _playbackFailed(error, stack, generation);
+    } finally {
+      if (_pendingPlayGeneration == generation) {
+        _pendingPlayGeneration = null;
+      }
     }
   }
 
@@ -408,6 +416,7 @@ class AudioController extends GetxController
     String? referer,
     http_model.Volume? volume,
   }) {
+    _pendingPlayGeneration = generation;
     final previous = _mediaOpening;
     // 原生 open 不能撤销，串行打开才能保证最后一次选曲最终拥有播放器。
     final operation = () async {
@@ -433,6 +442,10 @@ class AudioController extends GetxController
         return true;
       } catch (error, stack) {
         return _playbackFailed(error, stack, generation);
+      } finally {
+        if (_pendingPlayGeneration == generation) {
+          _pendingPlayGeneration = null;
+        }
       }
     }();
     _mediaOpening = operation;
@@ -821,17 +834,23 @@ class AudioController extends GetxController
   }
 
   Future<void> playIndex(int index, {List<Int64>? subId}) async {
-    if (index == this.index && subId == null && _playbackReady) {
+    final audioItem = playlist![index];
+    final item = audioItem.item;
+    final targetSubIds =
+        subId ??
+        (item.subId.isNotEmpty ? item.subId : [audioItem.parts.first.subId]);
+    if (index == this.index &&
+        item.oid == oid &&
+        item.itemType == itemType &&
+        listEquals(targetSubIds, this.subId) &&
+        _ownsPlayback(_playGeneration) &&
+        (_playbackReady || _pendingPlayGeneration == _playGeneration)) {
       return;
     }
     _start = null;
     this.index = index;
-    final audioItem = playlist![index];
-    final item = audioItem.item;
     oid = item.oid;
-    this.subId =
-        subId ??
-        (item.subId.isNotEmpty ? item.subId : [audioItem.parts.first.subId]);
+    this.subId = List.of(targetSubIds);
     itemType = item.itemType;
     final operation = _queryPlayUrl();
     final generation = _playGeneration;
