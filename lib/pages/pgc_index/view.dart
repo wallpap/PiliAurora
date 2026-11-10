@@ -207,14 +207,17 @@ class _PgcIndexPageState extends ConsumerState<PgcIndexPage>
     final bool isCurr;
 
     if (item is PgcConditionOrder) {
-      text = item.name!;
+      if (item.field == null) return const SizedBox.shrink();
+      text = item.name ?? item.field!;
       key = 'order';
       value = item.field;
       isCurr = indexParams[key] == item.field;
     } else if (item is PgcConditionValue) {
-      text = item.name!;
+      text = item.name ?? item.keyword ?? '其他';
       if (data.order?.isNotEmpty == true) index -= 1;
-      key = data.filter![index].field!;
+      final field = data.filter![index].field;
+      if (field == null) return const SizedBox.shrink();
+      key = field;
       value = item.keyword;
       isCurr = indexParams[key] == item.keyword;
     } else {

@@ -364,13 +364,16 @@ abstract final class FavHttp {
     required int pn,
     int? followStatus,
     Object? mid,
+    Account? account,
   }) async {
+    account ??= Accounts.main;
     return await Request().requestApi(
       Api.favPgc,
       kind: ApiCallKind.query,
       decode: (body) => FavPgcData.fromJson(body['data']),
+      options: Options(extra: {'account': account}),
       queryParameters: {
-        'vmid': mid ?? Accounts.main.mid,
+        'vmid': mid ?? account.mid,
         'type': type,
         'follow_status': ?followStatus,
         'pn': pn,

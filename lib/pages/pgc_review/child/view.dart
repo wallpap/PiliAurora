@@ -30,11 +30,13 @@ class PgcReviewChildPage extends StatefulWidget {
     required this.type,
     required this.name,
     required this.mediaId,
+    this.controllerTag,
   });
 
   final PgcReviewType type;
   final String name;
-  final dynamic mediaId;
+  final Object? mediaId;
+  final String? controllerTag;
 
   @override
   State<PgcReviewChildPage> createState() => _PgcReviewChildPageState();
@@ -49,7 +51,9 @@ class _PgcReviewChildPageState extends State<PgcReviewChildPage>
   @override
   void initState() {
     super.initState();
-    _tag = '${widget.mediaId}${widget.type.name}';
+    _tag =
+        widget.controllerTag ??
+        '${widget.mediaId}${widget.type.name}#${identityHashCode(this)}';
     _controller = Get.put(
       PgcReviewController(type: widget.type, mediaId: widget.mediaId),
       tag: _tag,
@@ -126,18 +130,28 @@ class _PgcReviewChildPageState extends State<PgcReviewChildPage>
   }
 
   Widget _itemWidget(ThemeData theme, int index, PgcReviewItemModel item) {
-    final author = item.author!;
+    final author = item.author;
+    final account = Accounts.main;
+    final list = _controller.loadingState.value.dataOrNull;
+    bool isCurrent() =>
+        mounted &&
+        identical(account, Accounts.main) &&
+        identical(list, _controller.loadingState.value.dataOrNull) &&
+        list?.contains(item) == true;
     void showMore() => showDialog(
       context: context,
       builder: (context) => SimpleDialog(
         clipBehavior: Clip.hardEdge,
         contentPadding: const EdgeInsets.symmetric(vertical: 12),
         children: [
-          if (author.mid == Accounts.main.mid) ...[
+          if (Accounts.main.isLogin &&
+              author?.mid == Accounts.main.mid &&
+              item.reviewId != null) ...[
             DialogOption(
               child: const Text('编辑', style: TextStyle(fontSize: 14)),
               onPressed: () {
                 Get.back();
+                if (!isCurrent()) return;
                 showModalBottomSheet(
                   context: context,
                   useSafeArea: true,
@@ -158,26 +172,30 @@ class _PgcReviewChildPageState extends State<PgcReviewChildPage>
               child: const Text('删除', style: TextStyle(fontSize: 14)),
               onPressed: () {
                 Get.back();
+                if (!isCurrent()) return;
                 showConfirmDialog(
                   context: context,
                   title: const Text('删除短评，同时删除评分？'),
-                  onConfirm: () => _controller.onDel(index, item.reviewId!),
+                  onConfirm: () {
+                    if (isCurrent()) _controller.onDel(item.reviewId!);
+                  },
                 );
               },
             ),
           ],
-          DialogOption(
-            child: const Text('举报', style: TextStyle(fontSize: 14)),
-            onPressed: () => Get
-              ..back()
-              ..toNamed(
-                '/webview',
-                parameters: {
-                  'url':
-                      'https://www.bilibili.com/appeal/?reviewId=${item.reviewId}&type=shortComment&mediaId=${widget.mediaId}',
-                },
-              ),
-          ),
+          if (item.reviewId != null)
+            DialogOption(
+              child: const Text('举报', style: TextStyle(fontSize: 14)),
+              onPressed: () => Get
+                ..back()
+                ..toNamed(
+                  '/webview',
+                  parameters: {
+                    'url':
+                        'https://www.bilibili.com/appeal/?reviewId=${item.reviewId}&type=shortComment&mediaId=${widget.mediaId}',
+                  },
+                ),
+            ),
         ],
       ),
     );
@@ -185,7 +203,7 @@ class _PgcReviewChildPageState extends State<PgcReviewChildPage>
     return Material(
       type: MaterialType.transparency,
       child: InkWell(
-        onTap: isLongReview
+        onTap: isLongReview && item.articleId != null
             ? () => Get.toNamed(
                 '/articlePage',
                 parameters: {
@@ -205,14 +223,16 @@ class _PgcReviewChildPageState extends State<PgcReviewChildPage>
             children: [
               GestureDetector(
                 behavior: HitTestBehavior.opaque,
-                onTap: () => Get.toNamed('/member?mid=${author.mid}'),
+                onTap: author?.mid == null
+                    ? null
+                    : () => Get.toNamed('/member?mid=${author!.mid}'),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     NetworkImgLayer(
                       height: 34,
                       width: 34,
-                      src: author.avatar,
+                      src: author?.avatar,
                       type: ImageType.avatar,
                     ),
                     const SizedBox(width: 10),
@@ -226,11 +246,11 @@ class _PgcReviewChildPageState extends State<PgcReviewChildPage>
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             Text(
-                              author.uname!,
+                              author?.uname ?? '匿名用户',
                               style: TextStyle(
                                 color:
-                                    author.vip != null &&
-                                        author.vip!.status > 0 &&
+                                    author?.vip != null &&
+                                        author!.vip!.status > 0 &&
                                         author.vip!.type == 2
                                     ? theme.colorScheme.vipColor
                                     : theme.colorScheme.outline,
@@ -238,7 +258,7 @@ class _PgcReviewChildPageState extends State<PgcReviewChildPage>
                               ),
                             ),
                             BiliUtils.levelPicture(
-                              author.level!,
+                              author?.level ?? 0,
                               height: 11,
                             ),
                           ],
@@ -291,16 +311,19 @@ class _PgcReviewChildPageState extends State<PgcReviewChildPage>
                 ),
               if (isLongReview)
                 Text(
-                  item.content!,
+                  item.content ?? '',
                   style: const TextStyle(height: 1.75),
                 )
               else
                 SelectionText(
-                  item.content!,
+                  item.content ?? '',
                   style: const TextStyle(height: 1.75),
                 ),
-              Builder(
-                builder: (context) {
+              Obx(
+                () {
+                  final pending =
+                      _controller.pendingReviews.contains(item.reviewId) ||
+                      item.reviewId == null;
                   final Color color = theme.colorScheme.outline;
                   final Color primary = theme.colorScheme.primary;
                   final ButtonStyle style = TextButton.styleFrom(
@@ -323,11 +346,9 @@ class _PgcReviewChildPageState extends State<PgcReviewChildPage>
                               padding: WidgetStatePropertyAll(.zero),
                               minimumSize: WidgetStatePropertyAll(.square(40)),
                             ),
-                            onPressed: () => _controller.onDislike(
-                              item,
-                              isDislike,
-                              item.reviewId,
-                            ),
+                            onPressed: pending
+                                ? null
+                                : () => _controller.onDislike(item),
                             child: Icon(
                               isDislike
                                   ? FontAwesomeIcons.solidThumbsDown.data
@@ -341,13 +362,9 @@ class _PgcReviewChildPageState extends State<PgcReviewChildPage>
                         height: 32,
                         child: TextButton(
                           style: style,
-                          onPressed: isLongReview
+                          onPressed: isLongReview || pending
                               ? null
-                              : () => _controller.onLike(
-                                  item,
-                                  isLike,
-                                  item.reviewId,
-                                ),
+                              : () => _controller.onLike(item),
                           child: Row(
                             spacing: 4,
                             children: [
@@ -359,7 +376,9 @@ class _PgcReviewChildPageState extends State<PgcReviewChildPage>
                                 color: isLike ? primary : color,
                               ),
                               Text(
-                                NumUtils.numFormat(item.stat?.likes ?? 0),
+                                item.stat?.likes == null
+                                    ? '赞'
+                                    : NumUtils.numFormat(item.stat!.likes),
                                 style: TextStyle(
                                   color: isLike ? primary : color,
                                   fontSize: 12,

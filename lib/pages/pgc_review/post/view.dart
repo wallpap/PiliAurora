@@ -17,9 +17,9 @@ class PgcReviewPostPanel extends StatefulWidget {
   });
 
   final String name;
-  final dynamic mediaId;
+  final Object? mediaId;
   // modify
-  final dynamic reviewId;
+  final Object? reviewId;
   final int? score;
   final String? content;
 
@@ -33,6 +33,8 @@ class _PgcReviewPostPanelState extends State<PgcReviewPostPanel> {
   late final RxBool _shareFeed = false.obs;
   late final RxBool _enablePost = _isMod.obs;
   late final _isMod = widget.reviewId != null;
+  final _posting = false.obs;
+  final _account = Accounts.main;
 
   @override
   void initState() {
@@ -207,8 +209,16 @@ class _PgcReviewPostPanelState extends State<PgcReviewPostPanel> {
                     borderRadius: BorderRadius.all(Radius.circular(6)),
                   ),
                 ),
-                onPressed: _enablePost.value ? _onPost : null,
-                child: _isMod ? const Text('编辑') : const Text('发布'),
+                onPressed: _enablePost.value && !_posting.value
+                    ? _onPost
+                    : null,
+                child: Text(
+                  _posting.value
+                      ? '提交中…'
+                      : _isMod
+                      ? '编辑'
+                      : '发布',
+                ),
               ),
             ),
           ),
@@ -218,36 +228,68 @@ class _PgcReviewPostPanelState extends State<PgcReviewPostPanel> {
   }
 
   Future<void> _onPost() async {
-    if (_isMod) {
-      final res = await PgcHttp.pgcReviewMod(
-        mediaId: widget.mediaId,
-        score: _score.value * 2,
-        content: _controller.text,
-        reviewId: widget.reviewId,
-      );
-      if (res.isSuccess) {
-        Get.back();
-        SmartDialog.showToast('编辑成功');
-      } else {
-        res.toast();
-      }
+    if (_posting.value) return;
+    final account = _account;
+    if (!identical(account, Accounts.main)) {
+      SmartDialog.showToast('账号已切换，请重新打开点评面板');
       return;
     }
-    if (!Accounts.main.isLogin) {
+    if (!account.isLogin) {
       SmartDialog.showToast('账号未登录');
       return;
     }
-    final res = await PgcHttp.pgcReviewPost(
-      mediaId: widget.mediaId,
-      score: _score.value * 2,
-      content: _controller.text,
-      shareFeed: _isMod ? false : _shareFeed.value,
-    );
-    if (res.isSuccess) {
-      Get.back();
-      SmartDialog.showToast('点评成功');
-    } else {
-      res.toast();
+    final mediaId = widget.mediaId;
+    final reviewId = widget.reviewId;
+    final score = _score.value;
+    final content = _controller.text;
+    final shareFeed = _shareFeed.value;
+    if (score < 1 || score > 5) {
+      SmartDialog.showToast('请先选择评分');
+      return;
+    }
+    final route = ModalRoute.of(context);
+    _posting.value = true;
+    try {
+      final res = _isMod
+          ? await PgcHttp.pgcReviewMod(
+              mediaId: mediaId,
+              score: score * 2,
+              content: content,
+              reviewId: reviewId,
+              account: account,
+            )
+          : await PgcHttp.pgcReviewPost(
+              mediaId: mediaId,
+              score: score * 2,
+              content: content,
+              shareFeed: shareFeed,
+              account: account,
+            );
+      if (!mounted ||
+          route?.isCurrent == false ||
+          !identical(account, Accounts.main) ||
+          mediaId != widget.mediaId ||
+          reviewId != widget.reviewId) {
+        return;
+      }
+      if (res.isSuccess) {
+        final unchanged =
+            content == _controller.text &&
+            score == _score.value &&
+            shareFeed == _shareFeed.value;
+        if (unchanged) Navigator.of(context).pop();
+        SmartDialog.showToast(
+          unchanged
+              ? _isMod
+                    ? '编辑成功'
+                    : '点评成功'
+              : '提交成功，已保留新草稿',
+        );
+      } else {
+        res.toast();
+      }
+    } finally {
+      _posting.value = false;
     }
   }
 }

@@ -135,21 +135,30 @@ class _PgcPageState extends State<PgcPage> with AutomaticKeepAliveClientMixin {
                                 (item) {
                                   return Tab(
                                     text:
-                                        '${item.date} ${item.isToday == 1 ? '今天' : '周${const [
-                                                '一',
-                                                '二',
-                                                '三',
-                                                '四',
-                                                '五',
-                                                '六',
-                                                '日',
-                                              ][item.dayOfWeek! - 1]}'}',
+                                        '${item.date ?? ''} ${item.isToday == 1 ? '今天' : switch (item.dayOfWeek) {
+                                                1 => '周一',
+                                                2 => '周二',
+                                                3 => '周三',
+                                                4 => '周四',
+                                                5 => '周五',
+                                                6 => '周六',
+                                                7 => '周日',
+                                                _ => '',
+                                              }}',
                                   );
                                 },
                               ).toList(),
                             ),
                           ),
                         ],
+                      ),
+                      Obx(
+                        () => controller.timelineWarning.value == null
+                            ? const SizedBox.shrink()
+                            : TextButton(
+                                onPressed: controller.queryPgcTimeline,
+                                child: Text(controller.timelineWarning.value!),
+                              ),
                       ),
                       Expanded(
                         child: TabBarView(
@@ -313,10 +322,7 @@ class _PgcPageState extends State<PgcPage> with AutomaticKeepAliveClientMixin {
         const Spacer(),
         IconButton(
           tooltip: '刷新',
-          onPressed: () => controller
-            ..followPage = 1
-            ..followEnd = false
-            ..queryPgcFollow(),
+          onPressed: controller.queryPgcFollow,
           icon: const Icon(
             Icons.refresh,
             size: 20,

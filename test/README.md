@@ -80,6 +80,8 @@ fvm flutter test test/services/diagnostics/ test/pages/about/diagnostics_page_te
 
 `http/validate_response_test.dart` 检查风控挑战与通过／拒绝结果、缺失证明、业务码和传输待确认；`utils/gaia_validation_test.dart` 通过导航替身返回验证结果，检查取消、过期操作、字段校验、一次性成功通知及等待异步消费者，消费者失败不重发请求。原生极验 WebView 的加载、脚本与设备行为需单独验证。
 
+`http/pgc_response_test.dart` 覆盖番剧 11 个接口的业务码、解析原因、写入待确认、账号／CSRF、可空内容和追番状态类型。`pages/pgc/operation_results_test.dart` 覆盖时间表部分失败与日期合并、乱序／关闭、点评分页游标与去重、赞踩／删除互斥和未知计数，以及提交草稿与迟到面板。真实评分写入与番剧播放仍需另行验收。
+
 `http/metadata_response_test.dart` 与 `pages/metadata/` 覆盖音乐／赛事响应、可选封面和评论、空赛事、重复加载、乱序与账号隔离；音乐页面检查加载、错误重试和无评论降级，点赞检查在途禁用、未知计数与写入待确认，旧详情的评论不覆盖刷新后的空状态。
 
 `http/sponsor_block_response_test.dart` 覆盖空降助手 8 个接口的 HTTP 状态、损坏响应、写入待确认、账号隔离与本地参数校验；`pages/sponsor_block/operation_results_test.dart` 挂真实提交／设置页面，检查草稿、防重入、关闭／切换视频后的迟到结果、投票和查询代次，另检查查询等待消费者完成。既有 `block_mixin_test.dart` 与 `utils/sponsor_block_settings_test.dart` 检查跳过／静音行为和配置兼容。真实服务写入、播放器动作和 UGC 搬运绑定确认流需另外验收。

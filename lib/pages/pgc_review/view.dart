@@ -17,7 +17,7 @@ class PgcReviewPage extends StatefulWidget {
   });
 
   final String name;
-  final dynamic mediaId;
+  final Object? mediaId;
 
   @override
   State<PgcReviewPage> createState() => _PgcReviewPageState();
@@ -26,6 +26,8 @@ class PgcReviewPage extends StatefulWidget {
 class _PgcReviewPageState extends State<PgcReviewPage>
     with SingleTickerProviderStateMixin, AutomaticKeepAliveClientMixin {
   late final TabController _tabController;
+  String _tag(PgcReviewType type) =>
+      '${widget.mediaId}${type.name}#${identityHashCode(this)}';
 
   @override
   void initState() {
@@ -78,14 +80,12 @@ class _PgcReviewPageState extends State<PgcReviewPage>
             dividerColor: Colors.transparent,
             tabs: PgcReviewType.values.map((e) => Tab(text: e.label)).toList(),
             onTap: (index) {
-              try {
-                if (!_tabController.indexIsChanging) {
-                  final item = PgcReviewType.values[index];
-                  Get.find<PgcReviewController>(
-                    tag: '${widget.mediaId}${item.name}',
-                  ).scrollController.animToTop();
-                }
-              } catch (_) {}
+              final tag = _tag(PgcReviewType.values[index]);
+              if (!_tabController.indexIsChanging &&
+                  Get.isRegistered<PgcReviewController>(tag: tag)) {
+                Get.find<PgcReviewController>(tag: tag).scrollController
+                    .animToTop();
+              }
             },
           ),
           Expanded(
@@ -96,6 +96,7 @@ class _PgcReviewPageState extends State<PgcReviewPage>
                   .map(
                     (e) => PgcReviewChildPage(
                       type: e,
+                      controllerTag: _tag(e),
                       name: widget.name,
                       mediaId: widget.mediaId,
                     ),
