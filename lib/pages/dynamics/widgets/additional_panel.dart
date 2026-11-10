@@ -346,17 +346,24 @@ Widget? addWidget(
 
       case 'ADDITIONAL_TYPE_VOTE' when (additional.vote != null):
         final vote = additional.vote!;
+        void openVote() {
+          final voteId = vote.voteId;
+          if (voteId == null || voteId <= 0) {
+            SmartDialog.showToast('投票卡片信息无效');
+            return;
+          }
+          final dynamicId = idStr is int
+              ? idStr
+              : int.tryParse(idStr.toString());
+          showVoteDialog(
+            context,
+            voteId,
+            dynamicId != null && dynamicId > 0 ? dynamicId : null,
+          );
+        }
         child = InkWell(
           borderRadius: borderRadius,
-          onTap: () => showVoteDialog(
-            context,
-            vote.voteId!,
-            idStr is int
-                ? idStr
-                : idStr is String
-                ? int.parse(idStr)
-                : null,
-          ),
+          onTap: openVote,
           child: Padding(
             padding: const EdgeInsets.symmetric(
               horizontal: 12,
@@ -405,15 +412,7 @@ Widget? addWidget(
                 ),
                 const SizedBox(width: 10),
                 FilledButton.tonal(
-                  onPressed: () => showVoteDialog(
-                    context,
-                    vote.voteId!,
-                    idStr is int
-                        ? idStr
-                        : idStr is String
-                        ? int.parse(idStr)
-                        : null,
-                  ),
+                  onPressed: openVote,
                   style: FilledButton.styleFrom(
                     shape: const RoundedRectangleBorder(
                       borderRadius: BorderRadius.all(Radius.circular(6)),

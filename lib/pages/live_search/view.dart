@@ -1,3 +1,4 @@
+import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:get/get.dart';
 import 'package:material_ui/material_ui.dart';
@@ -32,7 +33,12 @@ class _LiveSearchPageState extends ConsumerState<LiveSearchPage>
     final value = _input.text.trim();
     if (value.isEmpty) return;
     if (IdUtils.digitOnlyRegExp.hasMatch(value)) {
-      PageUtils.toLiveRoom(int.parse(value));
+      final roomId = int.tryParse(value);
+      if (roomId == null || roomId <= 0) {
+        SmartDialog.showToast('请输入有效的直播间号');
+        return;
+      }
+      PageUtils.toLiveRoom(roomId);
       return;
     }
     setState(() {

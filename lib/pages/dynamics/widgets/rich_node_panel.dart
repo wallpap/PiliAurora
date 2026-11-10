@@ -1,3 +1,5 @@
+import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
+
 import 'dart:io' show Platform;
 
 import 'package:pili_aurora/common/widgets/emote_tooltip.dart';
@@ -119,10 +121,14 @@ TextSpan? richNode(
                   ..onTap = () => Get.toNamed(
                     '/searchResult',
                     parameters: {
-                      'keyword': i.origText!.substring(
-                        1,
-                        i.origText!.length - 1,
-                      ),
+                      'keyword': switch (i.origText ?? i.text ?? '') {
+                        final text
+                            when text.length >= 2 &&
+                                text.startsWith('#') &&
+                                text.endsWith('#') =>
+                          text.substring(1, text.length - 1),
+                        final text => text,
+                      },
                     },
                   ),
               ),
@@ -174,11 +180,18 @@ TextSpan? richNode(
                   text: '投票：${i.text}',
                   style: style,
                   recognizer: NoDeadlineTapGestureRecognizer()
-                    ..onTap = () => showVoteDialog(
-                      context,
-                      int.parse(i.rid!),
-                      parseIntOrNull(item.basic?.commentIdStr),
-                    ),
+                    ..onTap = () {
+                      final voteId = int.tryParse(i.rid ?? '');
+                      if (voteId == null || voteId <= 0) {
+                        SmartDialog.showToast('投票卡片信息无效');
+                        return;
+                      }
+                      showVoteDialog(
+                        context,
+                        voteId,
+                        parseIntOrNull(item.basic?.commentIdStr),
+                      );
+                    },
                 ),
               );
             break;

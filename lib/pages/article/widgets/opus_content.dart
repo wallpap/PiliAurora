@@ -1,3 +1,5 @@
+import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
+
 import 'dart:math' as math;
 
 import 'package:pili_aurora/common/assets.dart';
@@ -639,10 +641,14 @@ class OpusContent extends StatelessWidget {
                       : () {
                           try {
                             if (type == 'LINK_CARD_TYPE_VOTE') {
-                              showVoteDialog(
-                                context,
-                                card.vote?.voteId ?? int.parse(card.oid!),
-                              );
+                              final voteId =
+                                  card.vote?.voteId ??
+                                  int.tryParse(card.oid ?? '');
+                              if (voteId == null || voteId <= 0) {
+                                SmartDialog.showToast('投票卡片信息无效');
+                                return;
+                              }
+                              showVoteDialog(context, voteId);
                               return;
                             }
                             if (type == 'LINK_CARD_TYPE_ITEM_NULL') {
@@ -656,11 +662,15 @@ class OpusContent extends StatelessWidget {
                                   children: [
                                     DialogOption(
                                       onPressed: () {
-                                        Get.back();
-                                        PiliScheme.videoPush(
-                                          int.parse(card.oid!),
-                                          null,
+                                        final aid = int.tryParse(
+                                          card.oid ?? '',
                                         );
+                                        if (aid == null || aid <= 0) {
+                                          SmartDialog.showToast('视频卡片信息无效');
+                                          return;
+                                        }
+                                        Navigator.pop(context);
+                                        PiliScheme.videoPush(aid, null);
                                       },
                                       child: const Text('视频'),
                                     ),

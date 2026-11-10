@@ -421,7 +421,11 @@ class UserInfoCard extends StatelessWidget {
             IconButton.outlined(
               onPressed: () {
                 if (Accounts.main.isLogin) {
-                  int mid = int.parse(card.mid!);
+                  final mid = int.tryParse(card.mid ?? '');
+                  if (mid == null || mid <= 0) {
+                    SmartDialog.showToast('用户信息无效，请刷新后重试');
+                    return;
+                  }
                   Get.toNamed(
                     '/whisperDetail',
                     arguments: {

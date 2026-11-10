@@ -22,6 +22,7 @@ class MemberCheeseItem extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final createdAt = int.tryParse(item.ctime ?? '');
     Widget child = Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -41,10 +42,12 @@ class MemberCheeseItem extends StatelessWidget {
             ),
           ),
         ],
-        if (item.ctime != null) ...[
+        if (createdAt != null &&
+            createdAt > 0 &&
+            createdAt <= 8640000000000) ...[
           const Spacer(),
           Text(
-            '收藏于${DateFormatUtils.dateFormat(int.parse(item.ctime!))}',
+            '收藏于${DateFormatUtils.dateFormat(createdAt)}',
             style: TextStyle(
               fontSize: 12,
               color: theme.colorScheme.outline,
