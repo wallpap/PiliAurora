@@ -4,13 +4,11 @@ import 'package:pili_aurora/services/logger.dart';
 import 'package:pili_aurora/utils/extension/core_palettes_ext.dart';
 import 'package:pili_aurora/utils/extension/theme_ext.dart';
 import 'package:pili_aurora/utils/font_utils.dart';
-import 'package:pili_aurora/utils/storage.dart';
-import 'package:pili_aurora/utils/storage_key.dart';
 import 'package:pili_aurora/utils/storage_pref.dart';
 import 'package:cupertino_ui/cupertino_ui.dart' show CupertinoThemeData;
 import 'package:dynamic_color/dynamic_color.dart' show DynamicColorPlugin;
 import 'package:flutter/foundation.dart' show PlatformDispatcher;
-import 'package:flutter/services.dart';
+import 'package:material_color_utilities/palettes/tonal_palette.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:pili_aurora/common/widgets/app_menu_theme.dart';
 
@@ -48,41 +46,62 @@ abstract final class ThemeUtils {
     );
   }
 
-  /// from [DynamicColorBuilderState.initPlatformState]
-  static Future<bool> initPlatformState() async {
-    if (_light != null || _dark != null) return true;
-    // Platform messages may fail, so we use a try/catch PlatformException.
+  static Future<bool>? _platformInitialization;
+
+  /// 只探测平台能力，不覆盖用户已经保存的动态取色偏好。
+  static Future<bool> initPlatformState() {
+    if (_light != null && _dark != null) return Future.value(true);
+    return _platformInitialization ??= _loadPlatformColors().whenComplete(() {
+      _platformInitialization = null;
+    });
+  }
+
+  static Future<bool> _loadPlatformColors() async {
     try {
-      final colors = await DynamicColorPlugin.channel.invokeMethod(
+      final colors = await DynamicColorPlugin.channel.invokeMethod<Object?>(
         DynamicColorPlugin.methodName,
       );
-
       if (colors != null) {
-        final corePalettes = CorePalettesExt.fromList(colors.toList());
-        logger.d('dynamic_color: Core palette detected.');
-        _light = corePalettes.toColorScheme();
-        _dark = corePalettes.toColorScheme(brightness: Brightness.dark);
+        if (colors is! List ||
+            colors.length != 5 * TonalPalette.commonSize ||
+            colors.any(
+              (color) =>
+                  color is! int || color < -0x80000000 || color > 0xffffffff,
+            )) {
+          throw const FormatException('平台调色板数据无效');
+        }
+        final palettes = CorePalettesExt.fromList(
+          colors.cast<int>().map((color) => color & 0xffffffff).toList(),
+        );
+        final light = palettes.toColorScheme();
+        final dark = palettes.toColorScheme(brightness: Brightness.dark);
+        _light = light;
+        _dark = dark;
         return true;
       }
-    } on PlatformException catch (e) {
-      logger.w('dynamic_color: Failed to obtain core palette.', error: e);
+    } catch (error, stackTrace) {
+      logger.w('读取平台调色板失败', error: error.runtimeType, stackTrace: stackTrace);
     }
-
     try {
-      final Color? accentColor = await DynamicColorPlugin.getAccentColor();
-
-      if (accentColor != null) {
-        logger.d('dynamic_color: Accent color detected.');
+      final accent = await DynamicColorPlugin.channel.invokeMethod<Object?>(
+        DynamicColorPlugin.accentColorMethodName,
+      );
+      if (accent != null) {
+        if (accent is! int || accent < -0x80000000 || accent > 0xffffffff) {
+          throw const FormatException('平台强调色数据无效');
+        }
         final variant = Pref.schemeVariant;
-        _light = accentColor.asColorSchemeSeed(variant, .light);
-        _dark = accentColor.asColorSchemeSeed(variant, .dark);
+        final light = Color(accent & 0xffffffff)
+            .asColorSchemeSeed(variant, .light);
+        final dark = Color(accent & 0xffffffff)
+            .asColorSchemeSeed(variant, .dark);
+        _light = light;
+        _dark = dark;
         return true;
       }
-    } on PlatformException catch (e) {
-      logger.w('dynamic_color: Failed to obtain accent color.', error: e);
+    } catch (error, stackTrace) {
+      logger.w('读取平台强调色失败', error: error.runtimeType, stackTrace: stackTrace);
     }
-    logger.i('dynamic_color: Dynamic color not detected on this device.');
-    GStorage.setting.put(SettingBoxKey.dynamicColor, false);
     return false;
   }
 

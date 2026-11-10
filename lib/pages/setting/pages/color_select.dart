@@ -17,7 +17,7 @@ import 'package:pili_aurora/utils/storage_pref.dart';
 import 'package:pili_aurora/utils/theme_utils.dart';
 import 'package:collection/collection.dart';
 import 'package:flex_seed_scheme/flex_seed_scheme.dart';
-import 'package:flutter/foundation.dart' show kReleaseMode;
+import 'package:pili_aurora/services/logger.dart';
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:get/get.dart';
 import 'package:material_ui/material_ui.dart';
@@ -45,17 +45,35 @@ class _ColorSelectPageState extends State<ColorSelectPage> {
   final ctr = Get.put(_ColorSelectController());
   FlexSchemeVariant _dynamicSchemeVariant = Pref.schemeVariant;
 
+  bool _changingDynamicColor = false;
+
   Future<void> _onChanged([bool? val]) async {
+    if (_changingDynamicColor) return;
     val ??= !ctr.dynamicColor.value;
-    if (val && !await ThemeUtils.initPlatformState()) {
-      SmartDialog.showToast('设备可能不支持动态取色');
-      if (kReleaseMode) {
+    _changingDynamicColor = true;
+    try {
+      if (val && !await ThemeUtils.initPlatformState()) {
+        if (mounted) SmartDialog.showToast('暂时无法获取系统颜色，请稍后重试');
         return;
       }
+      if (!mounted) return;
+      try {
+        await GStorage.setting.put(SettingBoxKey.dynamicColor, val);
+      } catch (error, stackTrace) {
+        logger.w(
+          '动态取色偏好保存失败',
+          error: error.runtimeType,
+          stackTrace: stackTrace,
+        );
+        if (mounted) SmartDialog.showToast('设置保存失败，请重试');
+        return;
+      }
+      if (!mounted) return;
+      ctr.dynamicColor.value = val;
+      Get.updateMyAppTheme();
+    } finally {
+      _changingDynamicColor = false;
     }
-    ctr.dynamicColor.value = val;
-    await GStorage.setting.put(SettingBoxKey.dynamicColor, val);
-    Get.updateMyAppTheme();
   }
 
   late ThemeData theme;

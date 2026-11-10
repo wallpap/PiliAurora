@@ -37,7 +37,6 @@ import 'package:pili_aurora/plugin/pl_player/models/hwdec_type.dart';
 import 'package:pili_aurora/plugin/pl_player/models/play_repeat.dart';
 import 'package:pili_aurora/utils/device_utils.dart';
 import 'package:pili_aurora/utils/accounts.dart';
-import 'package:pili_aurora/utils/extension/iterable_ext.dart';
 import 'package:pili_aurora/utils/global_data.dart';
 import 'package:pili_aurora/utils/login_utils.dart';
 import 'package:pili_aurora/utils/platform_utils.dart';
@@ -1073,13 +1072,25 @@ abstract final class Pref {
       _setting.get(SettingBoxKey.minimizeOnExit, defaultValue: true);
 
   static Size get windowSize {
-    final List<double>? size = (_setting.get(SettingBoxKey.windowSize) as List?)
-        ?.fromCast<double>();
-    return size == null ? const Size(1180.0, 720.0) : Size(size[0], size[1]);
+    final size = _windowPair(SettingBoxKey.windowSize);
+    if (size == null || size[0] <= 0 || size[1] <= 0) {
+      return const Size(1180, 720);
+    }
+    return Size(size[0], size[1]);
   }
 
   static List<double>? get windowPosition =>
-      (_setting.get(SettingBoxKey.windowPosition) as List?)?.fromCast<double>();
+      _windowPair(SettingBoxKey.windowPosition);
+
+  static List<double>? _windowPair(String key) {
+    final value = _setting.get(key);
+    if (value is! List ||
+        value.length != 2 ||
+        value.any((item) => item is! num || !item.isFinite)) {
+      return null;
+    }
+    return value.cast<num>().map((item) => item.toDouble()).toList();
+  }
 
   static bool get isWindowMaximized =>
       _setting.get(SettingBoxKey.isWindowMaximized, defaultValue: false);

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:dynamic_color/dynamic_color.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -59,6 +61,52 @@ void main() {
       );
     },
   );
+  test('损坏原生调色板/强调色及平台错误保留确认偏好，可重新探测', () async {
+    await GStorage.setting.put(SettingBoxKey.dynamicColor, true);
+    for (final palette in [
+      <int>[],
+      [1],
+      'bad',
+      List.filled(65, 'bad'),
+    ]) {
+      binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        DynamicColorPlugin.channel,
+        (call) async =>
+            call.method == DynamicColorPlugin.methodName ? palette : 'invalid',
+      );
+      expect(await ThemeUtils.initPlatformState(), false);
+      expect(Pref.dynamicColor, true);
+    }
+    binding.defaultBinaryMessenger.setMockMethodCallHandler(
+      DynamicColorPlugin.channel,
+      (_) async => throw PlatformException(code: 'temporary'),
+    );
+    expect(await ThemeUtils.initPlatformState(), false);
+    expect(Pref.dynamicColor, true);
+  });
+  test('并发探测共享原生调用，失败后可以重试', () async {
+    final palette = Completer<Object?>();
+    final calls = <String>[];
+    binding.defaultBinaryMessenger.setMockMethodCallHandler(
+      DynamicColorPlugin.channel,
+      (call) async {
+        calls.add(call.method);
+        return call.method == DynamicColorPlugin.methodName
+            ? palette.future
+            : null;
+      },
+    );
+    final first = ThemeUtils.initPlatformState();
+    final second = ThemeUtils.initPlatformState();
+    expect(identical(first, second), true);
+    palette.complete(null);
+    expect(await first, false);
+    expect(await second, false);
+    expect(calls, [
+      DynamicColorPlugin.methodName,
+      DynamicColorPlugin.accentColorMethodName,
+    ]);
+  });
   test(
     'dynamic colors handle absence, accent fallback and caching',
     () async {
@@ -72,7 +120,7 @@ void main() {
       );
       await GStorage.setting.put(SettingBoxKey.dynamicColor, true);
       expect(await ThemeUtils.initPlatformState(), isFalse);
-      expect(Pref.dynamicColor, isFalse);
+      expect(Pref.dynamicColor, isTrue);
       expect(calls, [
         DynamicColorPlugin.methodName,
         DynamicColorPlugin.accentColorMethodName,
