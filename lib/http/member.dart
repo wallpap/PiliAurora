@@ -38,28 +38,63 @@ import 'package:pili_aurora/utils/app_sign.dart';
 import 'package:pili_aurora/utils/utils.dart';
 import 'package:pili_aurora/utils/wbi_sign.dart';
 import 'package:dio/dio.dart';
-import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 
 abstract final class MemberHttp {
-  static Future<void> reportMember(
-    dynamic mid, {
-    String? reason,
+  static Future<LoadingState<void>> reportMember(
+    Object mid, {
+    required Account account,
+    required String reason,
     int? reasonV2,
   }) async {
-    final res = await Request().post(
-      Api.reportMember,
-      data: {
-        'mid': mid,
-        'reason': reason,
-        'reason_v2': ?reasonV2,
-        'csrf': Accounts.main.csrf,
-      },
-      options: Options(contentType: Headers.formUrlEncodedContentType),
-    );
-    if (res.data['status'] == true) {
-      SmartDialog.showToast('举报成功');
-    } else {
-      SmartDialog.showToast('举报失败');
+    // 举报使用独立的 status 协议，不能套用 code/message/data 解码。
+    Request();
+    LoadingState<void> decode(Response<dynamic> response) {
+      final body = response.data;
+      if (body is! Map<String, dynamic> || body['status'] is! bool) {
+        throw const FormatException('成员举报响应缺少布尔状态');
+      }
+      if (body['status'] == false) {
+        final message = body['message'] ?? body['msg'];
+        return Error(message is String ? message : '举报失败，请稍后重试');
+      }
+      final status = response.statusCode;
+      if (status != null && (status < 200 || status >= 300)) {
+        throw FormatException('举报成功状态与 HTTP $status 冲突');
+      }
+      return const Success(null);
+    }
+
+    try {
+      final response = await Request.dio.post<dynamic>(
+        Api.reportMember,
+        data: {
+          'mid': mid,
+          'reason': reason,
+          'reason_v2': ?reasonV2,
+          'csrf': account.csrf,
+        },
+        options: Options(
+          extra: {'account': account, 'noRetry': true},
+          contentType: Headers.formUrlEncodedContentType,
+        ),
+      );
+      return decode(response);
+    } on DioException catch (error, stackTrace) {
+      final response = error.response;
+      if (response != null &&
+          response.data is Map<String, dynamic> &&
+          response.data['status'] == false) {
+        final failure = decode(response) as Error;
+        return Error(
+          failure.errMsg,
+          cause: error,
+          stackTrace: stackTrace,
+        );
+      }
+      return UnknownResult(cause: error, stackTrace: stackTrace);
+    } catch (error, stackTrace) {
+      Error.fromException(error, stackTrace);
+      return UnknownResult(cause: error, stackTrace: stackTrace);
     }
   }
 
@@ -506,25 +541,22 @@ abstract final class MemberHttp {
 
   static Future<LoadingState<void>> specialAction({
     required Account account,
-    int? fid,
+    required int fid,
     bool isAdd = true,
-  }) async {
-    final res = await Request().post(
+  }) {
+    return Request().requestApi<void>(
       isAdd ? Api.addSpecial : Api.delSpecial,
+      kind: ApiCallKind.mutation,
+      decode: (_) {},
       data: {
         'fid': fid,
         'csrf': account.csrf,
       },
       options: Options(
-        extra: {'account': account, 'noRetry': true},
+        extra: {'account': account},
         contentType: Headers.formUrlEncodedContentType,
       ),
     );
-    if (res.data['code'] == 0) {
-      return const Success(null);
-    } else {
-      return Error(res.data['message']);
-    }
   }
 
   // 设置分组
@@ -532,9 +564,11 @@ abstract final class MemberHttp {
     String fids,
     String tagids, {
     required Account account,
-  }) async {
-    final res = await Request().post(
+  }) {
+    return Request().requestApi<void>(
       Api.addUsers,
+      kind: ApiCallKind.mutation,
+      decode: (_) {},
       queryParameters: {
         'x-bili-device-req-json':
             '{"platform":"web","device":"pc","spmid":"333.1387"}',
@@ -546,15 +580,10 @@ abstract final class MemberHttp {
         // 'cross_domain': true
       },
       options: Options(
-        extra: {'account': account, 'noRetry': true},
+        extra: {'account': account},
         contentType: Headers.formUrlEncodedContentType,
       ),
     );
-    if (res.data['code'] == 0) {
-      return const Success(null);
-    } else {
-      return Error(res.data['message']);
-    }
   }
 
   // 获取某分组下的up
@@ -595,9 +624,18 @@ abstract final class MemberHttp {
   static Future<LoadingState<int>> createFollowTag(
     String tagName, {
     required Account account,
-  }) async {
-    final res = await Request().post(
+  }) {
+    return Request().requestApi<int>(
       Api.createFollowTag,
+      kind: ApiCallKind.mutation,
+      decode: (body) {
+        final data = body['data'];
+        final id = data is Map<String, dynamic> ? data['tagid'] : null;
+        if (id is! int || id <= 0) {
+          throw const FormatException('新建分组响应缺少有效 ID');
+        }
+        return id;
+      },
       queryParameters: {
         'x-bili-device-req-json':
             '{"platform":"web","device":"pc","spmid":"333.1387"}',
@@ -607,24 +645,21 @@ abstract final class MemberHttp {
         'csrf': account.csrf,
       },
       options: Options(
-        extra: {'account': account, 'noRetry': true},
+        extra: {'account': account},
         contentType: Headers.formUrlEncodedContentType,
       ),
     );
-    if (res.data['code'] == 0) {
-      return Success(res.data['data']['tagid']);
-    } else {
-      return Error(res.data['message']);
-    }
   }
 
   static Future<LoadingState<void>> updateFollowTag(
-    Object tagid,
-    Object name, {
+    int tagid,
+    String name, {
     required Account account,
-  }) async {
-    final res = await Request().post(
+  }) {
+    return Request().requestApi<void>(
       Api.updateFollowTag,
+      kind: ApiCallKind.mutation,
+      decode: (_) {},
       queryParameters: {
         'x-bili-device-req-json':
             '{"platform":"web","device":"pc","spmid":"333.1387"}',
@@ -635,23 +670,20 @@ abstract final class MemberHttp {
         'csrf': account.csrf,
       },
       options: Options(
-        extra: {'account': account, 'noRetry': true},
+        extra: {'account': account},
         contentType: Headers.formUrlEncodedContentType,
       ),
     );
-    if (res.data['code'] == 0) {
-      return const Success(null);
-    } else {
-      return Error(res.data['message']);
-    }
   }
 
   static Future<LoadingState<void>> delFollowTag(
-    Object tagid, {
+    int tagid, {
     required Account account,
-  }) async {
-    final res = await Request().post(
+  }) {
+    return Request().requestApi<void>(
       Api.delFollowTag,
+      kind: ApiCallKind.mutation,
+      decode: (_) {},
       queryParameters: {
         'x-bili-device-req-json':
             '{"platform":"web","device":"pc","spmid":"333.1387"}',
@@ -661,15 +693,10 @@ abstract final class MemberHttp {
         'csrf': account.csrf,
       },
       options: Options(
-        extra: {'account': account, 'noRetry': true},
+        extra: {'account': account},
         contentType: Headers.formUrlEncodedContentType,
       ),
     );
-    if (res.data['code'] == 0) {
-      return const Success(null);
-    } else {
-      return Error(res.data['message']);
-    }
   }
 
   // 获取up播放数、点赞数
