@@ -9,10 +9,10 @@ import 'package:pili_aurora/common/widgets/dialog/simple_dialog_option.dart';
 import 'package:pili_aurora/pages/main/controller.dart';
 import 'package:pili_aurora/pages/setting/models/model.dart';
 import 'package:pili_aurora/pages/setting/widgets/clear_cache_item.dart';
+import 'package:pili_aurora/pages/setting/widgets/doc_provider_item.dart';
 import 'package:pili_aurora/pages/setting/widgets/slider_dialog.dart';
 import 'package:pili_aurora/services/download/download_service.dart';
 import 'package:pili_aurora/services/logger.dart';
-import 'package:pili_aurora/utils/android/bindings.g.dart';
 import 'package:pili_aurora/utils/cache_manager.dart';
 import 'package:pili_aurora/utils/filtering_text.dart';
 import 'package:pili_aurora/utils/path_utils.dart';
@@ -92,14 +92,7 @@ List<SettingsModel> get systemSettings => [
           onTap: _showDownPathDialog,
         ),
       ] else if (Platform.isAndroid)
-        SwitchModel(
-          title: '允许三方APP访问私有存储',
-          subtitle: '允许三方APP（例如MT管理器）通过访问外部存储的方式访问私有存储下的文件',
-          leading: const Icon(Icons.storage),
-          setKey: SettingBoxKey.enableDocProvider,
-          defaultVal: Pref.enableDocProvider,
-          onChanged: AndroidHelper.updateDocProvider,
-        ),
+        const _DocProviderModel(),
       const _ClearCacheModel(),
       NormalModel(
         title: '最大缓存大小',
@@ -117,6 +110,18 @@ class _ClearCacheModel extends NormalModel {
 
   @override
   Widget get widget => const ClearCacheItem();
+}
+
+class _DocProviderModel extends NormalModel {
+  const _DocProviderModel()
+    : super(
+        title: DocProviderItem.title,
+        subtitle: DocProviderItem.description,
+        leading: const Icon(Icons.storage),
+      );
+
+  @override
+  Widget get widget => const DocProviderItem();
 }
 
 List<SettingsModel> get diagnosticSettings => [
