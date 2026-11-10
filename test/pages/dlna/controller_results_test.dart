@@ -116,11 +116,10 @@ void main() {
       manager: manager,
       searchDuration: const Duration(milliseconds: 1),
     );
-    final search = controller.search();
-    await tick();
     manager
       ..pendingStop = Completer<void>()
       ..failStop = true;
+    final search = controller.search();
     await Future<void>.delayed(const Duration(milliseconds: 10));
     expect(manager.stops, greaterThan(0));
     expect(controller.searching, true);
