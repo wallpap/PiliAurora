@@ -8,6 +8,7 @@ import 'package:pili_aurora/utils/app_scheme.dart';
 import 'package:pili_aurora/utils/extension/num_ext.dart';
 import 'package:pili_aurora/utils/image_utils.dart';
 import 'package:get/get.dart';
+import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:material_ui/material_ui.dart';
 
 class ArticleOpus extends StatelessWidget {
@@ -48,22 +49,30 @@ class ArticleOpus extends StatelessWidget {
                     onTap: () {
                       switch (item.attributes?.clazz) {
                         case 'article-card card':
-                          if (card.id != null) {
+                          final match = RegExp(r'^cv([0-9]+)$')
+                              .firstMatch(card.id ?? '');
+                          final articleId = int.tryParse(match?[1] ?? '');
+                          if (articleId != null && articleId > 0) {
                             Get.toNamed(
                               '/articlePage',
                               parameters: {
-                                'id': card.id!.substring(2),
+                                'id': '$articleId',
                                 'type': 'read',
                               },
                             );
+                          } else {
+                            SmartDialog.showToast('专栏卡片信息无效');
                           }
                         case 'video-card card':
                           if (card.id != null) {
                             PiliScheme.videoPush(null, card.id);
                           }
                         case 'vote-card card':
-                          if (card.id != null) {
-                            showVoteDialog(context, int.parse(card.id!));
+                          final voteId = int.tryParse(card.id ?? '');
+                          if (voteId != null && voteId > 0) {
+                            showVoteDialog(context, voteId);
+                          } else {
+                            SmartDialog.showToast('投票卡片信息无效');
                           }
                       }
                     },

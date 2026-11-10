@@ -204,9 +204,15 @@ class ChatItem extends StatelessWidget {
       return GestureDetector(
         behavior: .opaque,
         onTap: () {
-          dynamic roomId = content['sourceID'];
-          if (roomId is String) {
-            roomId = int.parse(roomId);
+          final sourceId = content['sourceID'];
+          final roomId = switch (sourceId) {
+            int value => value,
+            String value => int.tryParse(value),
+            _ => null,
+          };
+          if (roomId == null || roomId <= 0) {
+            SmartDialog.showToast('直播卡片信息无效');
+            return;
           }
           PageUtils.toLiveRoom(roomId);
         },
