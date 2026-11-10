@@ -1,11 +1,14 @@
 import 'dart:async';
 import 'dart:math';
 
+import 'package:dio/dio.dart' show Options;
+
 import 'package:pili_aurora/common/widgets/button/icon_button.dart';
 import 'package:pili_aurora/services/logger.dart';
 import 'package:pili_aurora/common/widgets/scroll_physics.dart'
     show ReloadMixin;
 import 'package:pili_aurora/http/api.dart';
+import 'package:pili_aurora/http/api_response.dart';
 import 'package:pili_aurora/http/constants.dart';
 import 'package:pili_aurora/http/init.dart';
 import 'package:pili_aurora/http/loading_state.dart';
@@ -85,10 +88,21 @@ class UgcIntroController extends CommonIntroController with ReloadMixin {
   }
 
   // 获取视频简介&分p
+  int _introQuery = 0;
   @override
   Future<void> queryVideoIntro() async {
+    if (isClosed) return;
+    final version = ++_introQuery;
+    final video = bvid;
+    final account = Accounts.heartbeat;
     queryVideoTags();
     final res = await VideoHttp.videoIntro(bvid: bvid);
+    if (isClosed ||
+        version != _introQuery ||
+        bvid != video ||
+        !identical(account, Accounts.heartbeat)) {
+      return;
+    }
     if (res case Success(:final response)) {
       if (response.redirectUrl != null &&
           videoDetailCtr.epId == null &&
@@ -114,6 +128,7 @@ class UgcIntroController extends CommonIntroController with ReloadMixin {
           ..isPageReversed = videoDetail.value.isPageReversed;
       }
       videoDetail.value = response;
+      status.value = true;
       try {
         if (videoDetailCtr.cover.value.isEmpty ||
             (videoDetailCtr.videoUrl.isNullOrEmpty &&
@@ -144,14 +159,26 @@ class UgcIntroController extends CommonIntroController with ReloadMixin {
   }
 
   // 获取up主粉丝数
+  int _statQuery = 0;
   Future<void> queryUserStat(List<Staff>? staff) async {
+    final version = ++_statQuery;
+    final video = bvid;
+    final account = Accounts.main;
+    bool current() =>
+        !isClosed &&
+        version == _statQuery &&
+        video == bvid &&
+        identical(account, Accounts.main);
     if (staff != null && staff.isNotEmpty) {
-      final res = await Request().get(
+      final res = await Request().requestApi<Map<String, dynamic>>(
         Api.relations,
+        kind: ApiCallKind.query,
+        options: Options(extra: {'account': account}),
+        decode: (body) => body['data'] as Map<String, dynamic>,
         queryParameters: {'fids': staff.map((item) => item.mid).join(',')},
       );
-      if (res.data['code'] == 0) {
-        staffRelations.addAll({'status': true, ...?res.data['data']});
+      if (res case Success(:final response) when current()) {
+        staffRelations.assignAll({'status': true, ...response});
       }
     } else {
       final mid = videoDetail.value.owner?.mid;
@@ -160,9 +187,9 @@ class UgcIntroController extends CommonIntroController with ReloadMixin {
       }
       final res = await MemberHttp.memberCardInfo(
         mid: mid,
-        account: Accounts.main,
+        account: account,
       );
-      if (res case Success(:final response)) {
+      if (res case Success(:final response) when current()) {
         userStat.value = response;
       }
     }
@@ -758,27 +785,47 @@ class UgcIntroController extends CommonIntroController with ReloadMixin {
       return null;
     }
     SmartDialog.showLoading(msg: '正在获取AI总结');
+    final account = Accounts.heartbeat;
     final res = await VideoHttp.aiConclusion(
       bvid: bvid,
       cid: cid,
       upMid: mid,
     );
-    SmartDialog.dismiss();
+    unawaited(
+      SmartDialog.dismiss(status: .loading)
+          .catchError((Object error, StackTrace stackTrace) {
+            logger.w(
+              '关闭 AI 总结加载提示失败',
+              error: error.runtimeType,
+              stackTrace: stackTrace,
+            );
+          }),
+    );
+    if (!identical(account, Accounts.heartbeat)) return null;
     if (res case Success(:final response)) {
       return response.modelResult;
     } else if (res is Error && res.code == 1) {
       SmartDialog.showToast("AI处理中，请稍后再试");
     } else {
-      SmartDialog.showToast("当前视频暂不支持AI视频总结");
+      res.toast();
     }
     return null;
   }
 
   Future<void> aiConclusion() async {
-    aiConclusionResult = await getAiConclusion(
+    final video = bvid;
+    final part = cid.value;
+    final account = Accounts.heartbeat;
+    final result = await getAiConclusion(
       bvid,
       cid.value,
       videoDetail.value.owner?.mid,
     );
+    if (!isClosed &&
+        video == bvid &&
+        part == cid.value &&
+        identical(account, Accounts.heartbeat)) {
+      aiConclusionResult = result;
+    }
   }
 }

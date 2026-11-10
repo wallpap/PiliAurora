@@ -6,6 +6,7 @@ import 'package:pili_aurora/http/init.dart';
 import 'package:pili_aurora/models/common/account_type.dart';
 import 'package:pili_aurora/models/remote/video/video_detail/stat.dart';
 import 'package:pili_aurora/models/remote/video/video_detail/stat_detail.dart';
+import 'package:pili_aurora/models/remote/video/video_detail/staff.dart';
 import 'package:pili_aurora/pages/video/introduction/pgc/controller.dart';
 import 'package:pili_aurora/pages/video/introduction/ugc/controller.dart';
 import 'package:pili_aurora/utils/accounts.dart';
@@ -13,6 +14,7 @@ import 'package:pili_aurora/utils/accounts/account.dart';
 import 'package:pili_aurora/utils/global_data.dart';
 import 'package:pili_aurora/utils/id_utils.dart';
 import 'package:pili_aurora/utils/storage.dart';
+import 'package:pili_aurora/utils/storage_key.dart';
 
 import '../../support/controlled_interceptor.dart';
 import '../../support/memory_box.dart';
@@ -21,6 +23,8 @@ class _Ugc extends UgcIntroController {
   final stat = VideoStat.fromJson({});
   @override
   StatDetail getStat() => stat;
+  @override
+  bool get isShowOnlineTotal => true;
 }
 
 class _Pgc extends PgcIntroController {
@@ -245,5 +249,67 @@ void main() {
       expect(controller.hasTriple, isFalse);
     });
     await finish(tester);
+  });
+  test('视频与分P变更后忽略迟到标签、在线人数和合作关系查询', () async {
+    final controller = ugc()..cid = 1.obs;
+    final tags = controller.queryVideoTags();
+    await interceptor.waitForRequests(1);
+    final online = controller.queryOnlineTotal();
+    await interceptor.waitForRequests(2);
+    final relations = controller.queryUserStat([Staff(mid: 1)]);
+    await interceptor.waitForRequests(3);
+    controller.bvid = IdUtils.av2bv(2);
+    controller.cid.value = 2;
+    requests[0].reply.complete({
+      'code': 0,
+      'data': [
+        {'tag_id': 1, 'tag_name': 'old tag'},
+      ],
+    });
+    requests[1].reply.complete({
+      'code': 0,
+      'data': {'total': '100'},
+    });
+    requests[2].reply.complete({
+      'code': 0,
+      'data': {
+        '1': {'attribute': 2},
+      },
+    });
+    await Future.wait([tags, online, relations]);
+    expect(controller.videoTags.value, isNull);
+    expect(controller.total.value, '1');
+    expect(controller.staffRelations, isEmpty);
+  });
+  test('标签读取失败保留已有快照，关闭后简介结果不继续派生查询', () async {
+    final controller = ugc()..cid = 1.obs;
+    var reading = controller.queryVideoTags();
+    await interceptor.waitForRequests(1);
+    requests[0].reply.complete({
+      'code': 0,
+      'data': [
+        {'tag_id': 1, 'tag_name': 'tag'},
+      ],
+    });
+    await reading;
+    final previous = controller.videoTags.value;
+    reading = controller.queryVideoTags();
+    await interceptor.waitForRequests(2);
+    requests[1].reply.complete({'code': -403, 'message': '拒绝查询'});
+    await reading;
+    expect(controller.videoTags.value, same(previous));
+    // 简介查询还会独立读取标签；固定签名缓存避免夹具依赖导航请求。
+    await GStorage.localCache.putAll({
+      LocalCacheKey.mixinKey: 'fixture-key',
+      LocalCacheKey.timeStamp: DateTime.now().millisecondsSinceEpoch,
+    });
+    final introduction = controller.queryVideoIntro();
+    await interceptor.waitForRequests(4);
+    controller.onDelete();
+    requests[2].reply.complete({'code': 0, 'data': []});
+    requests[3].reply.complete({'code': -403, 'message': '拒绝简介'});
+    await introduction;
+    expect(requests, hasLength(4));
+    expect(controller.status.value, isTrue);
   });
 }

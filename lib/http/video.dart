@@ -223,61 +223,70 @@ abstract final class VideoHttp {
     String? language,
     bool voiceBalance = false,
     CancelToken? cancelToken,
+    Account? account,
   }) async {
-    final dmImgStr = Utils.base64EncodeRandomString(16, 64);
-    final dmCoverImgStr = Utils.base64EncodeRandomString(32, 128);
-    final params = await WbiSign.makSign({
-      'avid': ?avid,
-      'bvid': ?bvid,
-      'ep_id': ?epid,
-      'season_id': ?seasonId,
-      'cid': cid,
-      'qn': qn,
-      // 获取所有格式的视频
-      'fnval': 4048,
-      'fourk': 1,
-      'fnver': 0,
-      'voice_balance': voiceBalance ? 1 : 0,
-      'gaia_source': 'pre-load',
-      'isGaiaAvoided': true,
-      'web_location': 1315873,
-      // 免登录查看1080p
-      if (tryLook) 'try_look': 1,
-      'dm_img_list': '[]',
-      'dm_img_str': dmImgStr,
-      'dm_cover_img_str': dmCoverImgStr,
-      'dm_img_inter': '{"ds":[],"wh":[0,0,0],"of":[0,0,0]}',
-      'cur_language': ?language,
-    });
-
+    account ??= Accounts.get(AccountType.video);
+    if (cancelToken?.isCancelled == true) {
+      final error = cancelToken!.cancelError;
+      return Error('请求已取消', cause: error, stackTrace: error?.stackTrace);
+    }
     try {
-      if (cancelToken?.isCancelled == true) return const Error('请求已取消');
-      final res = await Request().get(
+      final dmImgStr = Utils.base64EncodeRandomString(16, 64);
+      final dmCoverImgStr = Utils.base64EncodeRandomString(32, 128);
+      final params = await WbiSign.makSign({
+        'avid': ?avid,
+        'bvid': ?bvid,
+        'ep_id': ?epid,
+        'season_id': ?seasonId,
+        'cid': cid,
+        'qn': qn,
+        // 获取所有格式的视频
+        'fnval': 4048,
+        'fourk': 1,
+        'fnver': 0,
+        'voice_balance': voiceBalance ? 1 : 0,
+        'gaia_source': 'pre-load',
+        'isGaiaAvoided': true,
+        'web_location': 1315873,
+        // 免登录查看1080p
+        if (tryLook) 'try_look': 1,
+        'dm_img_list': '[]',
+        'dm_img_str': dmImgStr,
+        'dm_cover_img_str': dmCoverImgStr,
+        'dm_img_inter': '{"ds":[],"wh":[0,0,0],"of":[0,0,0]}',
+        'cur_language': ?language,
+      });
+
+      final result = await Request().requestApi<PlayUrlModel>(
         videoType.api,
+        kind: ApiCallKind.query,
+        options: Options(extra: {'account': account}),
         queryParameters: params,
         cancelToken: cancelToken,
+        errorMessages: const {
+          -404: '视频不存在或已被删除',
+          87008: '当前视频可能是专属视频，可能需包月充电观看',
+        },
+        decode: (body) {
+          switch (videoType) {
+            case .ugc:
+              return PlayUrlModel.fromJson(body['data']);
+            case .pgc:
+              final result = body['result'];
+              return PlayUrlModel.fromJson(result['video_info'])
+                ..lastPlayTime =
+                    result['play_view_business_info']?['user_status']?['watch_progress']?['current_watch_progress'];
+            case .pugv:
+              final result = body['data'];
+              return PlayUrlModel.fromJson(result)
+                ..lastPlayTime =
+                    result['play_view_business_info']?['user_status']?['watch_progress']?['current_watch_progress'];
+          }
+        },
       );
-
-      if (res.data['code'] == 0) {
-        late PlayUrlModel data;
-        switch (videoType) {
-          case .ugc:
-            data = PlayUrlModel.fromJson(res.data['data']);
-
-          case .pgc:
-            final result = res.data['result'];
-            data = PlayUrlModel.fromJson(result['video_info'])
-              ..lastPlayTime =
-                  result['play_view_business_info']?['user_status']?['watch_progress']?['current_watch_progress'];
-
-          case .pugv:
-            final result = res.data['data'];
-            data = PlayUrlModel.fromJson(result)
-              ..lastPlayTime =
-                  result['play_view_business_info']?['user_status']?['watch_progress']?['current_watch_progress'];
-        }
-        return Success(data);
-      } else if (epid != null && videoType == .ugc) {
+      // 仅业务拒绝允许尝试番剧协议；网络或解析失败不能冒充资源类型不匹配。
+      if (result case Error(:final code, cause: null)
+          when code != null && epid != null && videoType == .ugc) {
         return await videoUrl(
           avid: avid,
           bvid: bvid,
@@ -287,24 +296,16 @@ abstract final class VideoHttp {
           seasonId: seasonId,
           tryLook: tryLook,
           videoType: .pgc,
+          language: language,
+          voiceBalance: voiceBalance,
           cancelToken: cancelToken,
+          account: account,
         );
       }
-      return Error(
-        _parseVideoErr(res.data['code'], res.data['message']),
-        code: res.data['code'],
-      );
-    } catch (e, s) {
-      return Error.fromException(e, s);
+      return result;
+    } catch (error, stackTrace) {
+      return Error.fromException(error, stackTrace);
     }
-  }
-
-  static String _parseVideoErr(int? code, String? msg) {
-    return switch (code) {
-      -404 => '视频不存在或已被删除',
-      87008 => '当前视频可能是专属视频，可能需包月充电观看($msg})',
-      _ => '错误($code): $msg',
-    };
   }
 
   // 视频信息 标题、简介
@@ -961,22 +962,27 @@ abstract final class VideoHttp {
     required int cid,
     int? upMid,
   }) async {
-    final params = await WbiSign.makSign({
-      'bvid': bvid,
-      'cid': cid,
-      'up_mid': ?upMid,
-    });
-    final res = await Request().get(Api.aiConclusion, queryParameters: params);
-    final int? code = res.data['code'];
-    if (code == 0) {
-      final int? dataCode = res.data['data']?['code'];
-      if (dataCode == 0) {
-        return Success(AiConclusionData.fromJson(res.data['data']));
-      } else {
-        return Error(null, code: dataCode);
-      }
-    } else {
-      return Error(res.data['message']);
+    try {
+      final account = Accounts.heartbeat;
+      final result = await Request().requestApi<Map<String, dynamic>>(
+        Api.aiConclusion,
+        kind: ApiCallKind.query,
+        options: Options(extra: {'account': account}),
+        queryParameters: await WbiSign.makSign({
+          'bvid': bvid,
+          'cid': cid,
+          'up_mid': ?upMid,
+        }),
+        decode: (body) => body['data'] as Map<String, dynamic>,
+      );
+      if (result is! Success<Map<String, dynamic>>) return result as Error;
+      final data = result.response;
+      final code = data['code'];
+      if (code is! int) throw const FormatException('AI 总结响应缺少业务状态');
+      if (code != 0) return Error(null, code: code);
+      return Success<AiConclusionData>(AiConclusionData.fromJson(data));
+    } catch (error, stackTrace) {
+      return Error.fromException(error, stackTrace);
     }
   }
 
@@ -1011,22 +1017,43 @@ abstract final class VideoHttp {
     }
   }
 
-  static Future<String?> getSubtitles(
+  static Future<LoadingState<String>> getSubtitles(
     String subtitleUrl, {
     SubtitleFormat format = .vtt,
   }) async {
-    final res = await Request().get("https:$subtitleUrl");
-    if (res.data?['body'] case List list) {
-      switch (format) {
-        case .json:
-          throw UnimplementedError();
-        case .vtt:
-          return compute<List, String>(SubtitleUtils.json2Vtt, list);
-        case .srt:
-          return compute<List, String>(SubtitleUtils.json2Srt, list);
-      }
+    final url = subtitleUrl.startsWith('//')
+        ? 'https:$subtitleUrl'
+        : subtitleUrl;
+    final uri = Uri.tryParse(url);
+    if (uri == null ||
+        !['http', 'https'].contains(uri.scheme) ||
+        uri.host.isEmpty) {
+      return const Error('字幕地址无效，请重新选择');
     }
-    return null;
+    Request();
+    try {
+      final response = await Request.dio.get<dynamic>(
+        url,
+        options: Options(extra: {'account': const NoAccount()}),
+      );
+      final data = response.data;
+      final body = data is Map<String, dynamic> ? data['body'] : null;
+      if (body is! List) throw const FormatException('字幕响应缺少正文列表');
+      final subtitle = switch (format) {
+        .json => jsonEncode(data),
+        .vtt => await compute<List, String>(SubtitleUtils.json2Vtt, body),
+        .srt => await compute<List, String>(SubtitleUtils.json2Srt, body),
+      };
+      return Success(subtitle);
+    } on DioException catch (error, stackTrace) {
+      return await decodeApiException(
+        error,
+        stackTrace,
+        kind: ApiCallKind.query,
+      );
+    } catch (error, stackTrace) {
+      return Error.fromException(error, stackTrace);
+    }
   }
 
   static bool _canAddRank(Map i) {
@@ -1282,8 +1309,10 @@ abstract final class VideoHttp {
     required String bvid,
     required int cid,
   }) async {
-    final res = await Request().get(
+    final result = await Request().requestApi<VideoShotData>(
       Api.videoshot,
+      kind: ApiCallKind.query,
+      decode: (body) => VideoShotData.fromJson(body['data']),
       queryParameters: {
         // 'aid': IdUtils.bv2av(_bvid),
         'bvid': bvid,
@@ -1297,14 +1326,9 @@ abstract final class VideoHttp {
         },
       ),
     );
-    if (res.data['code'] == 0) {
-      final data = VideoShotData.fromJson(res.data['data']);
-      if (data.index.isNotEmpty) {
-        return Success(data);
-      } else {
-        return const Error(null);
-      }
+    if (result case Success(:final response) when response.index.isEmpty) {
+      return const Error('暂无视频预览');
     }
-    return Error(res.data['message']);
+    return result;
   }
 }

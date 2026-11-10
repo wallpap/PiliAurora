@@ -153,15 +153,27 @@ abstract class CommonIntroController extends GetxController
   }
 
   // 查看同时在看人数
+  int _onlineQuery = 0;
   Future<void> queryOnlineTotal() async {
-    if (!isShowOnlineTotal) {
+    if (!isShowOnlineTotal || isClosed) {
       return;
     }
+    final version = ++_onlineQuery;
+    final video = bvid;
+    final part = cid.value;
+    final account = Accounts.heartbeat;
     final result = await VideoHttp.onlineTotal(
       aid: IdUtils.bv2av(bvid),
       bvid: bvid,
       cid: cid.value,
     );
+    if (isClosed ||
+        version != _onlineQuery ||
+        bvid != video ||
+        cid.value != part ||
+        !identical(account, Accounts.heartbeat)) {
+      return;
+    }
     if (result case Success(:final response)) {
       total.value = response;
     }
@@ -208,8 +220,17 @@ abstract class CommonIntroController extends GetxController
   }
 
   Future<void> queryVideoTags() async {
+    final video = bvid;
+    final part = cid.value;
+    final account = Accounts.main;
     final result = await UserHttp.videoTags(bvid: bvid, cid: cid.value);
-    videoTags.value = result.dataOrNull;
+    if (isClosed ||
+        bvid != video ||
+        cid.value != part ||
+        !identical(account, Accounts.main)) {
+      return;
+    }
+    if (result case Success(:final response)) videoTags.value = response;
   }
 
   bool _savingLater = false;

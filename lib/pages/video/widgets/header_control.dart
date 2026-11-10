@@ -455,11 +455,16 @@ class HeaderControlState extends State<HeaderControl>
   }
 
   void onExportSubtitle() {
+    final video = videoDetailCtr.bvid;
+    final part = videoDetailCtr.cid.value;
+    final videoDetail = introController.videoDetail.value;
+    final subtitleItems = List.of(videoDetailCtr.subtitles);
+    final cachedSubtitles = Map.of(videoDetailCtr.vttSubtitles);
     showDialog(
       context: context,
       builder: (context) {
         SubtitleFormat format = .vtt;
-        final subtitles = videoDetailCtr.subtitles;
+        final subtitles = subtitleItems;
         return SimpleDialog(
           clipBehavior: .hardEdge,
           contentPadding: const .only(bottom: 12),
@@ -496,19 +501,25 @@ class HeaderControlState extends State<HeaderControl>
                   switch (format) {
                     case .vtt || .srt:
                       var subtitle = format == .vtt
-                          ? videoDetailCtr.vttSubtitles[i]?.id
+                          ? cachedSubtitles[i]?.id
                           : null;
                       if (subtitle == null) {
                         final res = await VideoHttp.getSubtitles(
                           item.subtitleUrl!,
                           format: format,
                         );
-                        if (res == null) return;
-                        subtitle = res;
-                        if (format == .vtt) {
+                        if (res is! Success<String>) {
+                          res.toast();
+                          return;
+                        }
+                        subtitle = res.response;
+                        if (format == .vtt &&
+                            !videoDetailCtr.isClosed &&
+                            video == videoDetailCtr.bvid &&
+                            part == videoDetailCtr.cid.value) {
                           videoDetailCtr.vttSubtitles[i] = (
                             isData: true,
-                            id: res,
+                            id: res.response,
                           );
                         }
                       }
@@ -530,22 +541,21 @@ class HeaderControlState extends State<HeaderControl>
                         ),
                       );
                   }
-                  final videoDetail = introController.videoDetail.value;
                   final name =
-                      '${videoDetail.title}-${videoDetail.owner?.name}(${videoDetail.owner?.mid})-${videoDetailCtr.bvid}-${videoDetailCtr.cid.value}-${item.lanDoc}.${format.name}'
+                      '${videoDetail.title}-${videoDetail.owner?.name}(${videoDetail.owner?.mid})-$video-$part-${item.lanDoc}.${format.name}'
                           .replaceAll(
                             Platform.isWindows ? RegExp(r'[<>:/\\|?*"]') : '/',
                             '_',
                           );
                   // Reserved characters may not be used in file names. See: https://docs.microsoft.com/en-us/windows/win32/fileio/naming-a-file#naming-conventions
-                  StorageUtils.saveBytes2File(
+                  await StorageUtils.saveBytes2File(
                     name: name,
                     bytes: bytes,
                     allowedExtensions: [format.name],
                   );
                 } catch (e, s) {
-                  Utils.reportError(e, s);
-                  SmartDialog.showToast(e.toString());
+                  Error.fromException(e, s);
+                  SmartDialog.showToast('字幕导出失败，请稍后重试');
                 }
               },
               child: Text(item.lanDoc ?? item.lan),

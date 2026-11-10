@@ -1281,12 +1281,20 @@ class VideoDetailController extends GetxController
       }
       return;
     }
+    if (index > subtitles.length) {
+      SmartDialog.showToast('字幕列表已更新，请重新选择');
+      return;
+    }
     final item = subtitles[index - 1];
     var subtitle = vttSubtitles[index - 1];
     if (subtitle == null) {
-      final result = await VideoHttp.getSubtitles(item.subtitleUrl!);
-      if (!valid() || result == null) return;
-      subtitle = (isData: true, id: result);
+      final result = await VideoHttp.getSubtitles(item.subtitleUrl ?? '');
+      if (!valid()) return;
+      if (result is! Success<String>) {
+        result.toast();
+        return;
+      }
+      subtitle = (isData: true, id: result.response);
       vttSubtitles[index - 1] = subtitle;
     }
     if (!valid()) return;
