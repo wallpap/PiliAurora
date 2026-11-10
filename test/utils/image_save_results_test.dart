@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'dart:typed_data';
 
@@ -19,20 +20,29 @@ void main() {
   late Directory directory;
   late _Picker picker;
   late FilePickerPlatform previous;
+  late _Adapter adapter;
+  late _Cache manager;
 
   setUpAll(() {
     directory = Directory.systemTemp.createTempSync('pili-image-results-');
     tmpDirPath = directory.path;
     GStorage.setting = MemoryBox<dynamic>();
+    manager = _Cache(File('${directory.path}/unused.png'));
+    CacheManager.manager = manager;
     ImageUtils.silentDownImg = false;
     Request();
     Request.dio.interceptors.clear();
-    Request.dio.httpClientAdapter = _Adapter();
   });
   setUp(() {
     previous = FilePickerPlatform.instance;
     picker = _Picker();
     FilePickerPlatform.instance = picker;
+    adapter = _Adapter();
+    Request.dio.httpClientAdapter = adapter;
+    ImageUtils.silentDownImg = false;
+    manager
+      ..gate = null
+      ..calls = 0;
   });
   tearDown(() => FilePickerPlatform.instance = previous);
   tearDownAll(() {
@@ -49,6 +59,12 @@ void main() {
     await dismissal;
   }
 
+  Future<void> settleLoading(WidgetTester tester) async {
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pump(const Duration(milliseconds: 300));
+  }
+
   testWidgets('动态图片取消保存返回 false 并释放加载提示', (tester) async {
     await mount(tester);
     final result = await tester.runAsync(
@@ -60,6 +76,7 @@ void main() {
     expect(picker.bytes, [1, 2, 3]);
     await tester.pumpAndSettle();
     expect(SmartDialog.config.loading.isExist, isFalse);
+    expect(directory.listSync(), isEmpty);
     await finish(tester);
   });
 
@@ -114,7 +131,7 @@ void main() {
     final source = File('${directory.path}/cached.png')
       ..writeAsBytesSync([1, 3, 5]);
     final destination = Directory('${directory.path}/saved')..createSync();
-    CacheManager.manager = _Cache(source);
+    manager.file = source;
     picker.directory = destination.path;
     final result = await tester.runAsync(
       () => ImageUtils.downloadImg([
@@ -128,6 +145,169 @@ void main() {
     expect(picker.directoryCalls, 1);
     await finish(tester);
   });
+
+  testWidgets('普通图片下载互斥并去重，偏好变化不会关闭其他操作的提示', (tester) async {
+    await mount(tester);
+    final source = File('${directory.path}/concurrent.png')
+      ..writeAsBytesSync([1, 2]);
+    final cacheGate = Completer<File>();
+    manager
+      ..file = source
+      ..gate = cacheGate;
+    final saving = ImageUtils.downloadImg([
+      'https://example.test/concurrent.png',
+      'https://example.test/concurrent.png',
+    ]);
+    await tester.pump();
+    expect(
+      await ImageUtils.downloadImg(['https://example.test/other.png']),
+      isFalse,
+    );
+    expect(
+      await ImageUtils.downloadLivePhoto(
+        liveUrl: 'https://example.test/live.mp4',
+      ),
+      isFalse,
+    );
+    expect(manager.calls, 1);
+    expect(adapter.calls, 0);
+    SmartDialog.showLoading(msg: '其他操作');
+    ImageUtils.silentDownImg = true;
+    cacheGate.complete(source);
+    expect(await saving, isFalse); // 取消目录选择。
+    await settleLoading(tester);
+    expect(SmartDialog.config.loading.isExist, isTrue);
+    expect(find.text('正在下载原图'), findsNothing);
+    expect(picker.directoryCalls, 1);
+    expect(source.existsSync(), isTrue);
+    SmartDialog.dismiss(status: .loading);
+    await settleLoading(tester);
+    await finish(tester);
+  });
+
+  testWidgets('动态图片成功、取消及下载失败仅清理独立临时目录，并允许重试', (tester) async {
+    await mount(tester);
+    final sentinel = File('${directory.path}/unrelated.mp4')
+      ..writeAsBytesSync([9]);
+    for (final status in [200, 503, 200]) {
+      adapter.status = status;
+      picker.target = status == 200 && picker.bytes == null
+          ? Uri.parse('content://synthetic/saved')
+          : null;
+      final expected = status == 200 && picker.target != null;
+      final saved = await tester.runAsync(
+        () => ImageUtils.downloadLivePhoto(
+          liveUrl: 'https://example.test/same.mp4',
+        ),
+      );
+      expect(saved, expected);
+      expect(sentinel.readAsBytesSync(), [9]);
+      expect(
+        directory.listSync().whereType<Directory>().where(
+          (entry) => entry.path.contains('live-image-'),
+        ),
+        isEmpty,
+      );
+      await settleLoading(tester);
+      await finish(tester);
+      await mount(tester);
+    }
+    sentinel.deleteSync();
+  });
+
+  testWidgets('下载期间取消提示丢弃迟到结果，随后可重试', (tester) async {
+    await mount(tester);
+    final source = File('${directory.path}/cancelled.png')
+      ..writeAsBytesSync([2, 4]);
+    final gate = Completer<File>();
+    manager
+      ..file = source
+      ..gate = gate;
+    final saving = ImageUtils.downloadImg([
+      'https://example.test/cancelled.png',
+    ]);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    SmartDialog.dismiss(status: .allDialog);
+    await settleLoading(tester);
+    gate.complete(source);
+    expect(await saving, isFalse);
+    expect(picker.directoryCalls, 0);
+    manager.gate = null;
+    expect(
+      await ImageUtils.downloadImg(['https://example.test/cancelled.png']),
+      isFalse,
+    );
+    expect(picker.directoryCalls, 1);
+    await settleLoading(tester);
+    await finish(tester);
+  });
+
+  testWidgets('批量同名图片自动编号，已有文件和共享缓存原路径不被覆盖', (tester) async {
+    await mount(tester);
+    final source = File('${directory.path}/keep.png')
+      ..writeAsBytesSync([1, 2, 3]);
+    final destination = Directory('${directory.path}/names')..createSync();
+    File('${destination.path}/same.png').writeAsBytesSync([9]);
+    manager.file = source;
+    picker.directory = destination.path;
+    expect(
+      await tester.runAsync(
+        () => ImageUtils.downloadImg([
+          'https://first.test/same.png',
+          'https://second.test/same.png',
+        ]),
+      ),
+      isTrue,
+    );
+    expect(File('${destination.path}/same.png').readAsBytesSync(), [9]);
+    expect(File('${destination.path}/same (1).png').readAsBytesSync(), [
+      1,
+      2,
+      3,
+    ]);
+    expect(File('${destination.path}/same (2).png').readAsBytesSync(), [
+      1,
+      2,
+      3,
+    ]);
+    picker.directory = directory.path;
+    expect(
+      await tester.runAsync(
+        () => ImageUtils.downloadImg(['https://example.test/keep.png']),
+      ),
+      isTrue,
+    );
+    expect(source.readAsBytesSync(), [1, 2, 3]);
+    await settleLoading(tester);
+    await finish(tester);
+  });
+
+  testWidgets('动态图片保存异常清理临时文件并保留其他操作提示', (tester) async {
+    await mount(tester);
+    picker.error = StateError('private-path');
+    SmartDialog.showLoading(msg: '其他操作');
+    expect(
+      await tester.runAsync(
+        () => ImageUtils.downloadLivePhoto(
+          liveUrl: 'https://example.test/live.mp4',
+        ),
+      ),
+      isFalse,
+    );
+    await settleLoading(tester);
+    expect(SmartDialog.config.loading.isExist, isTrue);
+    expect(find.textContaining('private-path'), findsNothing);
+    expect(
+      directory.listSync().whereType<Directory>().where(
+        (entry) => entry.path.contains('live-image-'),
+      ),
+      isEmpty,
+    );
+    SmartDialog.dismiss(status: .loading);
+    await settleLoading(tester);
+    await finish(tester);
+  });
 }
 
 class _Picker extends FilePickerPlatform {
@@ -135,6 +315,7 @@ class _Picker extends FilePickerPlatform {
   String? directory;
   Uint8List? bytes;
   int directoryCalls = 0;
+  Object? error;
 
   @override
   Future<Uri?> saveFile({
@@ -149,6 +330,7 @@ class _Picker extends FilePickerPlatform {
     WebOptions webOptions = const WebOptions(),
   }) async {
     this.bytes = Uint8List.fromList(bytes);
+    if (error != null) throw error!;
     if (target?.scheme == 'file') File.fromUri(target!).writeAsBytesSync(bytes);
     return target;
   }
@@ -169,28 +351,39 @@ class _Picker extends FilePickerPlatform {
 
 class _Cache extends Fake implements cache.DefaultCacheManager {
   _Cache(this.file);
-  final File file;
+  File file;
+  Completer<File>? gate;
+  int calls = 0;
   @override
   Future<File> getSingleFile(
     String url, {
     String? key,
     Map<String, String>? headers,
-  }) async => file;
+  }) async {
+    calls++;
+    return gate?.future ?? file;
+  }
 }
 
 class _Adapter implements HttpClientAdapter {
+  int status = 200;
+  int calls = 0;
   @override
   Future<ResponseBody> fetch(
     RequestOptions options,
     Stream<Uint8List>? requestStream,
     Future<void>? cancelFuture,
-  ) async => ResponseBody.fromBytes(
-    [1, 2, 3],
-    200,
-    headers: {
-      'content-length': ['3'],
-    },
-  );
+  ) async {
+    calls++;
+    return ResponseBody.fromBytes(
+      [1, 2, 3],
+      status,
+      headers: {
+        'content-length': ['3'],
+      },
+    );
+  }
+
   @override
   void close({bool force = false}) {}
 }

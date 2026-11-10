@@ -1,8 +1,10 @@
-import 'dart:io' show File, Platform;
+import 'dart:async' show unawaited;
+import 'dart:io' show Directory, File, Platform;
 import 'dart:math' as math;
 import 'dart:typed_data' show Uint8List;
 
 import 'package:pili_aurora/common/constants.dart';
+import 'package:pili_aurora/common/widgets/custom_toast.dart';
 import 'package:pili_aurora/services/logger.dart';
 import 'package:pili_aurora/http/init.dart';
 import 'package:pili_aurora/http/loading_state.dart';
@@ -29,29 +31,30 @@ abstract final class ImageUtils {
       : Constants.appName;
 
   static bool _sharing = false;
+  static bool _downloading = false;
 
   // 返回系统分享状态：取消和平台无法确认均保留原始 status，不宣称分享成功。
   static Future<LoadingState<ShareResult>> onShareImg(String url) async {
     if (_sharing) return const Error('图片正在分享，请稍候');
     _sharing = true;
-    var loadingShown = false;
+    final loading = _ImageLoading();
     try {
-      SmartDialog.showLoading();
-      loadingShown = true;
+      loading.show('正在加载图片');
       final file = await CacheManager.manager.getSingleFile(url.http2https);
-      SmartDialog.dismiss(status: .loading);
-      loadingShown = false;
+      loading.close();
+      if (loading.cancelled) return const Error('已取消图片分享');
       return Success(
         await SharePlus.instance.share(
           ShareParams(files: [XFile(file.path)]),
         ),
       );
     } catch (error, stackTrace) {
-      final failure = _failure('图片分享失败，请重试', error, stackTrace)..toast();
+      final failure = _failure('图片分享失败，请重试', error, stackTrace);
+      if (!loading.cancelled) failure.toast();
       return failure;
     } finally {
       _sharing = false;
-      if (loadingShown) SmartDialog.dismiss(status: .loading);
+      loading.close();
     }
   }
 
@@ -122,14 +125,19 @@ abstract final class ImageUtils {
   static Future<bool> downloadLivePhoto({
     required String liveUrl,
   }) async {
+    if (!_beginDownload()) return false;
+    final loading = _ImageLoading(enabled: !silentDownImg);
+    Directory? temporaryDirectory;
     try {
       if (PlatformUtils.isMobile && !await checkPermissionDependOnSdkInt()) {
         return false;
       }
-      if (!silentDownImg) SmartDialog.showLoading(msg: '正在下载');
+      loading.show(PlatformUtils.isMobile ? '正在下载并保存' : '正在下载');
 
-      String videoName = "video_${Utils.getFileName(liveUrl)}";
-      String videoPath = '$tmpDirPath/$videoName';
+      final videoName = 'video_${Utils.getFileName(liveUrl)}';
+      temporaryDirectory = await Directory(tmpDirPath)
+          .createTemp('live-image-');
+      final videoPath = path.join(temporaryDirectory.path, videoName);
 
       final res = await Request().downloadFile(liveUrl.http2https, videoPath);
       if (res.statusCode != 200) {
@@ -142,7 +150,8 @@ abstract final class ImageUtils {
         );
       }
 
-      if (!silentDownImg) SmartDialog.showLoading(msg: '正在保存');
+      if (loading.cancelled) return false;
+      if (!PlatformUtils.isMobile) loading.close();
       final saved = await saveFileImg(
         filePath: videoPath,
         fileName: videoName,
@@ -151,10 +160,20 @@ abstract final class ImageUtils {
       );
       return saved?.isSuccess == true;
     } catch (error, stackTrace) {
-      _failure('动态图片保存失败，请重试', error, stackTrace).toast();
+      final failure = _failure('动态图片保存失败，请重试', error, stackTrace);
+      if (!loading.cancelled) failure.toast();
       return false;
     } finally {
-      if (!silentDownImg) SmartDialog.dismiss(status: SmartStatus.loading);
+      loading.close();
+      try {
+        // 下载使用独立目录，取消、失败与成功均只清理本次拥有的文件。
+        if (temporaryDirectory != null) {
+          await temporaryDirectory.delete(recursive: true);
+        }
+      } catch (error, stackTrace) {
+        _failure('动态图片临时文件清理失败', error, stackTrace);
+      }
+      _downloading = false;
     }
   }
 
@@ -163,20 +182,21 @@ abstract final class ImageUtils {
       SmartDialog.showToast('没有可保存的图片');
       return false;
     }
-    if (PlatformUtils.isMobile && !await checkPermissionDependOnSdkInt()) {
-      return false;
-    }
-    if (!silentDownImg) {
-      SmartDialog.showLoading(msg: '正在下载原图');
-    }
-    final futures = imgList.map((url) async {
-      final name = Utils.getFileName(url);
-      final file = await CacheManager.manager.getSingleFile(url.http2https);
-      return (file, name);
-    });
+    if (!_beginDownload()) return false;
+    final loading = _ImageLoading(enabled: !silentDownImg);
     try {
+      if (PlatformUtils.isMobile && !await checkPermissionDependOnSdkInt()) {
+        return false;
+      }
+      loading.show(PlatformUtils.isMobile ? '正在下载并保存原图' : '正在下载原图');
+      final futures = imgList.toSet().map((url) async {
+        final name = Utils.getFileName(url);
+        final file = await CacheManager.manager.getSingleFile(url.http2https);
+        return (file, name);
+      });
       // 下载结果属于共享缓存，部分失败时不删除已成功的文件。
-      final result = await Future.wait(futures, eagerError: true);
+      final result = await Future.wait(futures);
+      if (loading.cancelled) return false;
       if (PlatformUtils.isMobile) {
         final saved = await SaverGallery.saveFiles([
           for (final (file, name) in result)
@@ -191,23 +211,53 @@ abstract final class ImageUtils {
           return false;
         }
       } else {
+        loading.close();
         final dst = await FilePicker.getDirectoryPath();
         if (dst == null) {
           SmartDialog.showToast('取消保存');
           return false;
         }
-        await Future.wait([
-          for (final (src, name) in result) src.copy(path.join(dst, name)),
-        ]);
+        for (final (src, name) in result) {
+          final destination = path.join(dst, name);
+          if (path.equals(
+            path.absolute(src.path),
+            path.absolute(destination),
+          )) {
+            continue; // 选择缓存所在目录时，文件已存在且归共享缓存所有。
+          }
+          var target = File(destination);
+          var suffix = 1;
+          while (target.existsSync()) {
+            target = File(
+              path.join(
+                dst,
+                '${path.basenameWithoutExtension(name)} (${suffix++})${path.extension(name)}',
+              ),
+            );
+          }
+          // 顺序复制，避免本批同名图片竞争同一目标；已有文件保留。
+          await src.copy(target.path);
+        }
       }
       SmartDialog.showToast(' 已保存 ');
       return true;
     } catch (error, stackTrace) {
-      _failure('图片保存失败，请重试', error, stackTrace).toast();
+      final failure = _failure('图片保存失败，请重试', error, stackTrace);
+      if (!loading.cancelled) failure.toast();
       return false;
     } finally {
-      if (!silentDownImg) SmartDialog.dismiss(status: .loading);
+      loading.close();
+      _downloading = false;
     }
+  }
+
+  static bool _beginDownload() {
+    if (_downloading) {
+      SmartDialog.showToast('图片正在保存，请稍候');
+      return false;
+    }
+    _downloading = true;
+    return true;
   }
 
   static final _suffixRegex = RegExp(
@@ -308,7 +358,7 @@ abstract final class ImageUtils {
     SaveResult? res;
     fileName += '.$ext';
     if (PlatformUtils.isMobile) {
-      if (showLoading) SmartDialog.showLoading(msg: '正在保存');
+      final loading = _ImageLoading(enabled: showLoading)..show('正在保存');
       try {
         res = await SaverGallery.saveImage(
           bytes,
@@ -317,12 +367,12 @@ abstract final class ImageUtils {
           skipIfExists: false,
         );
       } finally {
-        if (showLoading) SmartDialog.dismiss(status: .loading);
+        loading.close();
       }
       if (res.isSuccess) {
         SmartDialog.showToast(' 已保存 ');
       } else {
-        SmartDialog.showToast('保存失败，${res.errorMessage}');
+        SmartDialog.showToast('保存失败，请检查相册权限后重试');
       }
     } else {
       final savePath = await FilePicker.saveFile(
@@ -376,9 +426,48 @@ abstract final class ImageUtils {
       if (res.isSuccess) {
         SmartDialog.showToast(' 已保存 ');
       } else {
-        SmartDialog.showToast('保存失败，${res.errorMessage}');
+        SmartDialog.showToast('保存失败，请检查相册权限后重试');
       }
     }
     return res;
+  }
+}
+
+/// 每次操作只关闭自己的提示，偏好变化或其他操作不会改变其所有权。
+final class _ImageLoading {
+  _ImageLoading({this.enabled = true});
+
+  final bool enabled;
+  final String _tag = 'image-operation-${UniqueKey()}';
+  bool _shown = false;
+  bool cancelled = false;
+
+  void show(String message) {
+    if (!enabled || _shown) return;
+    _shown = true;
+    SmartDialog.show<void>(
+      tag: _tag,
+      builder: (_) => LoadingWidget(message),
+      debounce: false,
+      clickMaskDismiss: false,
+      backType: SmartBackType.normal,
+      onDismiss: () {
+        if (_shown) cancelled = true;
+      },
+    );
+  }
+
+  void close() {
+    if (!_shown) return;
+    _shown = false;
+    unawaited(_dismiss());
+  }
+
+  Future<void> _dismiss() async {
+    try {
+      await SmartDialog.dismiss(tag: _tag);
+    } catch (error, stackTrace) {
+      ImageUtils._failure('关闭图片加载提示失败', error, stackTrace);
+    }
   }
 }
