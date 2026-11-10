@@ -21,6 +21,95 @@ void main() {
     GStorage.localCache = MemoryBox<dynamic>();
   });
 
+  test('音频回调未就绪时不回退触发底层视频', () async {
+    final handler = VideoPlayerServiceHandler();
+    var videoPlays = 0;
+    var audioPlays = 0;
+    final owner = Object();
+    PlPlayerController.setPlayCallBack(() async => videoPlays++, owner: owner);
+    addTearDown(() {
+      PlPlayerController.setPlayCallBack(null, owner: owner);
+      handler.clear();
+    });
+    handler.onPlay = () {
+      audioPlays++;
+      return null;
+    };
+
+    await handler.play();
+    expect(audioPlays, 1);
+    expect(videoPlays, 0);
+    handler.onPlay = null;
+    await handler.play();
+    expect(videoPlays, 1);
+  });
+
+  test('同步与异步控制错误均通过返回的 Future 交付', () async {
+    final handler = VideoPlayerServiceHandler();
+    addTearDown(handler.clear);
+    final cause = StateError('synthetic command failure');
+    final stack = StackTrace.fromString('#0 audio.command');
+    handler
+      ..onPlay = () {
+        Error.throwWithStackTrace(cause, stack);
+      }
+      ..onPause = () {
+        return Future<void>.error(cause, stack);
+      }
+      ..onSeek = (_) {
+        Error.throwWithStackTrace(cause, stack);
+      };
+
+    for (final command in [
+      handler.play,
+      handler.pause,
+      () => handler.seek(Duration.zero),
+    ]) {
+      final operation = command();
+      try {
+        await operation;
+        fail('command should fail');
+      } catch (error, trace) {
+        expect(error, same(cause));
+        expect(trace.toString(), contains('#0 audio.command'));
+      }
+    }
+  });
+
+  test('停止回执不清除等待期间换入或替换的媒体', () async {
+    final handler = VideoPlayerServiceHandler()..enableBackgroundPlay = true;
+    addTearDown(handler.clear);
+    final paused = Completer<void>();
+    handler
+      ..onVideoDetailChange(Part(part: 'old'), 1, 'current')
+      ..onPause = () => paused.future;
+    final stopping = handler.stop();
+    handler.onVideoDetailChange(Part(part: 'new'), 2, 'current');
+    paused.complete();
+    await stopping;
+
+    expect(handler.mediaItem.value?.title, 'new');
+    handler.onPause = () async {};
+    await handler.stop();
+    expect(handler.mediaItem.value, isNull);
+    expect(
+      handler.playbackState.value.processingState,
+      AudioProcessingState.idle,
+    );
+  });
+
+  test('停止失败保留当前媒体以便重试', () async {
+    final handler = VideoPlayerServiceHandler()..enableBackgroundPlay = true;
+    addTearDown(handler.clear);
+    final cause = StateError('synthetic pause failure');
+    handler
+      ..onVideoDetailChange(Part(part: 'current'), 1, 'current')
+      ..onPause = () async => throw cause;
+
+    await expectLater(handler.stop(), throwsA(same(cause)));
+    expect(handler.mediaItem.value?.title, 'current');
+  });
+
   test('关闭服务立即清除通知，禁用期间 clear 仍清理媒体', () {
     final handler = VideoPlayerServiceHandler()..enableBackgroundPlay = true;
     addTearDown(handler.clear);

@@ -90,24 +90,33 @@ class VideoPlayerServiceHandler extends BaseAudioHandler with SeekHandler {
   Future<void>? Function(Duration position)? onSeek;
 
   @override
-  Future<void> play() {
-    return onPlay?.call() ??
-        PlPlayerController.playIfExists() ??
-        Future.syncValue(null);
+  Future<void> play() async {
+    final callback = onPlay;
+    if (callback != null) {
+      await callback();
+    } else {
+      await PlPlayerController.playIfExists();
+    }
   }
 
   @override
-  Future<void> pause() {
-    return onPause?.call() ??
-        PlPlayerController.pauseIfExists() ??
-        Future.syncValue(null);
+  Future<void> pause() async {
+    final callback = onPause;
+    if (callback != null) {
+      await callback();
+    } else {
+      await PlPlayerController.pauseIfExists();
+    }
   }
 
   @override
-  Future<void> seek(Duration position) {
-    return onSeek?.call(position) ??
-        PlPlayerController.seekToIfExists(position, isSeek: false) ??
-        Future.syncValue(null);
+  Future<void> seek(Duration position) async {
+    final callback = onSeek;
+    if (callback != null) {
+      await callback(position);
+    } else {
+      await PlPlayerController.seekToIfExists(position, isSeek: false);
+    }
   }
 
   void setMediaItem(MediaItem newMediaItem) {
@@ -367,7 +376,9 @@ class VideoPlayerServiceHandler extends BaseAudioHandler with SeekHandler {
 
   @override
   Future<void> stop() async {
+    final current = _item.lastOrNull;
     await pause();
-    clear();
+    // 暂停回执只能结束发起时的媒体，不能清除等待期间换入的通知。
+    if (identical(_item.lastOrNull, current)) clear();
   }
 }
