@@ -1,11 +1,14 @@
 import 'dart:async';
 import 'dart:io' show Platform, Directory, File;
+import 'dart:ui' as ui;
 
 import 'package:flutter/services.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:window_manager/window_manager.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:get/get.dart';
 import 'package:hive_ce/hive.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:pili_aurora/plugin/pl_player/controller.dart';
@@ -47,6 +50,129 @@ void main() {
   tearDownAll(() async {
     await Hive.close();
     await shaderRoot.delete(recursive: true);
+  });
+
+  Future<void> mountScreenshot(_Fixture f) => f.tester.pumpWidget(
+    GetMaterialApp(
+      builder: FlutterSmartDialog.init(),
+      home: const Scaffold(),
+    ),
+  );
+
+  Future<void> dismissScreenshotToasts(_Fixture f) async {
+    await f.tester.pump(const Duration(milliseconds: 300));
+    final dismissed = SmartDialog.dismiss(status: .allToast);
+    await f.tester.pump();
+    await f.tester.pump(const Duration(milliseconds: 300));
+    await f.tester.pumpAndSettle();
+    await dismissed;
+  }
+
+  Future<ui.Image> screenshotImage(_Fixture f) async {
+    final recorder = ui.PictureRecorder();
+    Canvas(recorder).drawColor(Colors.white, BlendMode.src);
+    final picture = recorder.endRecording();
+    try {
+      return (await f.tester.runAsync(() => picture.toImage(2, 2)))!;
+    } finally {
+      picture.dispose();
+    }
+  }
+
+  _recoveryTest('截图：原生失败消费异常，下一次操作仍可重试', (f) async {
+    await mountScreenshot(f);
+    await f.load();
+    var calls = 0;
+    f.runtime.player.capture = () {
+      calls++;
+      return Future.error(StateError('synthetic capture failure'));
+    };
+    await f.controller.takeScreenshot();
+    f.runtime.player.capture = () async {
+      calls++;
+      return null;
+    };
+    await f.controller.takeScreenshot();
+    expect(calls, 2);
+    expect(f.tester.takeException(), isNull);
+    await dismissScreenshotToasts(f);
+  });
+
+  _recoveryTest('截图：目标变化后迟到图片直接释放，不弹出预览', (f) async {
+    await mountScreenshot(f);
+    await f.load();
+    final image = await screenshotImage(f);
+    final captured = Completer<ui.Image?>();
+    f.runtime.player.capture = () => captured.future;
+    final capture = f.controller.takeScreenshot();
+    f.controller.cid = 123;
+    captured.complete(image);
+    await capture;
+    await f.tester.pump();
+    expect(image.debugDisposed, isTrue);
+    expect(find.byType(RawImage), findsNothing);
+    await dismissScreenshotToasts(f);
+  });
+
+  _recoveryTest('截图：预览持有图片，重复操作合并，关闭后释放', (f) async {
+    await mountScreenshot(f);
+    await f.load();
+    final image = await screenshotImage(f);
+    var calls = 0;
+    f.runtime.player.capture = () async {
+      calls++;
+      return image;
+    };
+    final capture = f.controller.takeScreenshot();
+    await f.tester.pumpAndSettle();
+    expect(find.byType(RawImage), findsOneWidget);
+    expect(image.debugDisposed, isFalse);
+    await f.controller.takeScreenshot();
+    expect(calls, 1);
+    Navigator.of(Get.context!).pop();
+    await f.tester.pumpAndSettle();
+    await capture;
+    expect(image.debugDisposed, isTrue);
+    await dismissScreenshotToasts(f);
+  });
+
+  _recoveryTest('截图：取消保存保留预览，重试成功后关闭并释放', (f) async {
+    final previousPicker = FilePickerPlatform.instance;
+    final picker = _ScreenshotPicker();
+    FilePickerPlatform.instance = picker;
+    addTearDown(() => FilePickerPlatform.instance = previousPicker);
+    await mountScreenshot(f);
+    await f.load();
+    final image = await screenshotImage(f);
+    f.runtime.player.capture = () async => image;
+    final capture = f.controller.takeScreenshot();
+    await f.tester.pumpAndSettle();
+    final preview = f.tester.widget<GestureDetector>(
+      find
+          .ancestor(
+            of: find.byType(RawImage),
+            matching: find.byType(GestureDetector),
+          )
+          .first,
+    );
+    preview.onTap!();
+    await f.tester.runAsync(() => image.toByteData(format: .png));
+    await f.tester.pump();
+    expect(picker.requested.isCompleted, isTrue);
+    expect(find.byType(RawImage), findsOneWidget);
+    expect(image.debugDisposed, isFalse);
+    expect(picker.bytes, isNotEmpty);
+    picker
+      ..requested = Completer<void>()
+      ..target = Uri.file('E:/screenshot.png');
+    preview.onTap!();
+    await f.tester.runAsync(() => image.toByteData(format: .png));
+    await f.tester.pumpAndSettle();
+    expect(picker.requested.isCompleted, isTrue);
+    expect(find.byType(RawImage), findsNothing);
+    await capture;
+    expect(image.debugDisposed, isTrue);
+    await dismissScreenshotToasts(f);
   });
 
   _recoveryTest('超分资源准备失败保留档位，同档位选择可以重试', (f) async {
@@ -1110,6 +1236,29 @@ void _recoveryTest(
 
 enum _Mode { separate, combined, audioOnly, videoOnly }
 
+class _ScreenshotPicker extends FilePickerPlatform {
+  Completer<void> requested = Completer<void>();
+  Uint8List? bytes;
+  Uri? target;
+
+  @override
+  Future<Uri?> saveFile({
+    required String fileName,
+    required Uint8List bytes,
+    required String mimeType,
+    String? dialogTitle,
+    String? initialDirectory,
+    Function(FilePickerStatus)? onFileSaving,
+    WindowsOptions windowsOptions = const WindowsOptions(),
+    LinuxOptions linuxOptions = const LinuxOptions(),
+    WebOptions webOptions = const WebOptions(),
+  }) async {
+    this.bytes = bytes;
+    requested.complete();
+    return target;
+  }
+}
+
 class _AudioSession extends AudioSessionHandler {
   final activations = <bool>[];
   Future<bool> Function(bool)? change;
@@ -1454,6 +1603,11 @@ class _Diagnostics implements PlayerDiagnostics {
 }
 
 class _Player implements NativePlayer {
+  Future<ui.Image?> Function()? capture;
+  @override
+  Future<ui.Image?> screenshot({bool synchronized = true}) async =>
+      capture?.call();
+
   @override
   final state = PlayerState();
   final playback = _Streams();

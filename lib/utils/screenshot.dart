@@ -42,19 +42,20 @@ abstract final class Screenshot {
       focusManager: FocusManager(),
     );
 
-    pipelineOwner.rootNode = renderView;
-    renderView.prepareInitialFrame();
-
-    final rootElement = RenderObjectToWidgetAdapter(
-      container: renderView,
-      debugShortDescription: kDebugMode ? 'screenshot' : null,
-      child: Directionality(
-        textDirection: Directionality.maybeOf(context) ?? .ltr,
-        child: widget,
-      ),
-    ).attachToRenderTree(buildOwner);
-
+    RenderObjectToWidgetElement<RenderBox>? rootElement;
     try {
+      pipelineOwner.rootNode = renderView;
+      renderView.prepareInitialFrame();
+
+      rootElement = RenderObjectToWidgetAdapter(
+        container: renderView,
+        debugShortDescription: kDebugMode ? 'screenshot' : null,
+        child: Directionality(
+          textDirection: Directionality.maybeOf(context) ?? .ltr,
+          child: widget,
+        ),
+      ).attachToRenderTree(buildOwner);
+
       buildOwner
         ..buildScope(rootElement)
         ..finalizeTree();
@@ -84,11 +85,22 @@ abstract final class Screenshot {
 
       return image;
     } finally {
-      pipelineOwner
-        ..rootNode = null
-        ..dispose();
-      buildOwner.finalizeTree();
-      renderView.dispose();
+      try {
+        if (rootElement != null) {
+          // 卸载离屏树，使图片订阅、动画等 Widget 资源按正常生命周期释放。
+          RenderObjectToWidgetAdapter(container: renderView)
+              .attachToRenderTree(buildOwner, rootElement);
+          buildOwner
+            ..buildScope(rootElement)
+            ..finalizeTree();
+        }
+      } finally {
+        buildOwner.focusManager.dispose();
+        pipelineOwner
+          ..rootNode = null
+          ..dispose();
+        renderView.dispose();
+      }
     }
   }
 }

@@ -2828,45 +2828,86 @@ class PlPlayerController
   bool _takingScreenshot = false;
   Future<void> takeScreenshot() async {
     if (_takingScreenshot) return;
+    final requestCid = cid;
+    final requestBvid = _bvid;
+    final route = Get.rawRoute;
     _takingScreenshot = true;
     try {
       await _showScreenshot();
+    } catch (error, stackTrace) {
+      logger.w('播放器截图失败', error: error.runtimeType, stackTrace: stackTrace);
+      if (!_facadeDisposed &&
+          requestCid == cid &&
+          requestBvid == _bvid &&
+          route?.isCurrent == true) {
+        SmartDialog.showToast('截图失败，请重试');
+      }
     } finally {
       _takingScreenshot = false;
     }
   }
 
   Future<void> _showScreenshot() async {
+    if (_facadeDisposed) return;
+    final source = videoPlayerController;
+    final requestCid = cid;
+    final requestBvid = _bvid;
+    final context = Get.context;
+    if (context == null) return;
+    final route = Get.rawRoute;
+    bool current() =>
+        !_facadeDisposed &&
+        context.mounted &&
+        identical(source, videoPlayerController) &&
+        requestCid == cid &&
+        requestBvid == _bvid &&
+        route?.isCurrent == true;
     SmartDialog.showToast('截图中');
-    final image = await videoPlayerController?.screenshot();
+    final image = await source?.screenshot();
     if (image != null) {
+      if (!context.mounted || !current()) {
+        image.dispose();
+        return;
+      }
+      final time = DurationUtils.formatDuration(positionInMilliseconds / 1000)
+          .replaceAll(':', '-');
       Future<void>? saveTask;
       SmartDialog.showToast('点击弹窗保存截图');
       try {
         await showDialog<void>(
-          context: Get.context!,
+          context: context,
           builder: (context) => GestureDetector(
             onTap: () {
               if (saveTask != null) return;
               saveTask = () async {
                 try {
                   final bytes = await image.toByteData(format: .png);
+                  if (!context.mounted ||
+                      ModalRoute.of(context)?.isCurrent != true) {
+                    return;
+                  }
                   if (bytes != null) {
-                    final time = DurationUtils.formatDuration(
-                      positionInMilliseconds / 1000,
-                    ).replaceAll(':', '-');
-                    await ImageUtils.saveByteImg(
+                    final saved = await ImageUtils.saveByteImg(
                       bytes: bytes.buffer.asUint8List(),
-                      fileName: 'screenshot_${cid}_$time',
+                      fileName: 'screenshot_${requestCid}_$time',
                     );
+                    if (saved?.isSuccess == true &&
+                        context.mounted &&
+                        ModalRoute.of(context)?.isCurrent == true) {
+                      Navigator.of(context).pop();
+                    }
                   } else {
                     SmartDialog.showToast('保存失败');
                   }
                 } catch (error, stackTrace) {
-                  logger.w('保存截图失败', error: error, stackTrace: stackTrace);
-                  SmartDialog.showToast('保存失败');
+                  logger.w(
+                    '保存截图失败',
+                    error: error.runtimeType,
+                    stackTrace: stackTrace,
+                  );
+                  if (context.mounted) SmartDialog.showToast('保存失败');
                 } finally {
-                  if (context.mounted) Navigator.of(context).pop();
+                  saveTask = null;
                 }
               }();
             },
@@ -2902,7 +2943,7 @@ class PlPlayerController
           image.dispose();
         }
       }
-    } else {
+    } else if (current()) {
       SmartDialog.showToast('截图失败');
     }
   }

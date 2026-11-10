@@ -1,8 +1,11 @@
+import 'dart:typed_data';
+
 import 'package:pili_aurora/common/assets.dart';
 import 'package:pili_aurora/services/logger.dart';
 import 'package:pili_aurora/common/constants.dart';
 import 'package:pili_aurora/common/style.dart';
 import 'package:pili_aurora/common/widgets/button/icon_button.dart';
+import 'package:pili_aurora/common/widgets/custom_toast.dart';
 import 'package:pili_aurora/common/widgets/image/network_img_layer.dart';
 import 'package:pili_aurora/grpc/bilibili/main/community/reply/v1.pb.dart'
     show ReplyInfo;
@@ -65,6 +68,7 @@ class _SavePanelState extends State<SavePanel> {
   final boundaryKey = GlobalKey();
 
   bool showBottom = true;
+  bool _savingPicture = false;
 
   // item
   Object get _item => widget.item;
@@ -277,26 +281,52 @@ class _SavePanelState extends State<SavePanel> {
   }
 
   Future<void> _onSaveOrSharePic([bool isShare = false]) async {
-    if (!isShare &&
-        PlatformUtils.isMobile &&
-        !await ImageUtils.checkPermissionDependOnSdkInt()) {
-      return;
-    }
-    SmartDialog.showLoading();
+    if (_savingPicture) return;
+    _savingPicture = true;
+    final route = ModalRoute.of(context);
+    bool cancelled = false;
+    bool current() => mounted && !cancelled && route?.isCurrent == true;
+    final loadingTag = 'save-panel-screenshot-${UniqueKey()}';
+    bool loadingShown = false;
     try {
-      final boundary =
-          boundaryKey.currentContext!.findRenderObject()
-              as RenderRepaintBoundary;
+      if (!isShare &&
+          PlatformUtils.isMobile &&
+          !await ImageUtils.checkPermissionDependOnSdkInt()) {
+        return;
+      }
+      if (!current()) return;
+      loadingShown = true;
+      SmartDialog.show<void>(
+        tag: loadingTag,
+        builder: (_) => const LoadingWidget('正在生成截图'),
+        debounce: false,
+        clickMaskDismiss: false,
+        backType: SmartBackType.normal,
+        onDismiss: () {
+          if (loadingShown) cancelled = true;
+        },
+      );
+      final boundary = boundaryKey.currentContext?.findRenderObject();
+      if (boundary is! RenderRepaintBoundary) {
+        throw StateError('图片截图尚未就绪');
+      }
       final image = await boundary.toImage(pixelRatio: 3);
-      final byteData = await image.toByteData(format: .png);
-      image.dispose();
-      final pngBytes = byteData!.buffer.asUint8List();
+      late final Uint8List pngBytes;
+      try {
+        final byteData = await image.toByteData(format: .png);
+        if (byteData == null) throw StateError('图片截图编码未返回数据');
+        pngBytes = byteData.buffer.asUint8List();
+      } finally {
+        image.dispose();
+      }
+      if (!current()) return;
       final picName =
           "${Constants.appName}_${itemType}_${DateFormatUtils.only0_9.format(DateTime.now())}";
+      loadingShown = false;
+      await SmartDialog.dismiss(tag: loadingTag);
+      if (!current()) return;
       if (isShare) {
-        Get.back();
-        SmartDialog.dismiss();
-        await SharePlus.instance.share(
+        final result = await SharePlus.instance.share(
           ShareParams(
             files: [
               XFile.fromData(
@@ -307,17 +337,20 @@ class _SavePanelState extends State<SavePanel> {
             ],
           ),
         );
+        if (current() && result.status == ShareResultStatus.success) Get.back();
       } else {
         final result = await ImageUtils.saveByteImg(
           bytes: pngBytes,
           fileName: picName,
         );
-        if (result?.isSuccess == true) Get.back();
+        if (current() && result?.isSuccess == true) Get.back();
       }
-    } catch (e, stackTrace) {
-      logger.w('on save/share reply: $e', error: e, stackTrace: stackTrace);
+    } catch (error, stackTrace) {
+      logger.w('图片保存或分享失败', error: error.runtimeType, stackTrace: stackTrace);
+      if (current()) SmartDialog.showToast('图片保存或分享失败，请重试');
     } finally {
-      SmartDialog.dismiss(status: .loading);
+      _savingPicture = false;
+      if (loadingShown) await SmartDialog.dismiss(tag: loadingTag);
     }
   }
 

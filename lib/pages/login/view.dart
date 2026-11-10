@@ -1,5 +1,6 @@
 import 'package:pili_aurora/common/constants.dart';
 import 'package:pili_aurora/common/dial_prefix.dart';
+import 'package:pili_aurora/common/widgets/custom_toast.dart';
 import 'package:pili_aurora/common/widgets/loading_widget/http_error.dart';
 import 'package:pili_aurora/common/widgets/loading_widget/loading_widget.dart';
 import 'package:pili_aurora/common/widgets/scaffold/simple_scaffold.dart';
@@ -7,6 +8,7 @@ import 'package:pili_aurora/common/widgets/scroll_physics.dart' show tabBarView;
 import 'package:pili_aurora/common/widgets/view_insets_safe_area.dart';
 import 'package:pili_aurora/http/loading_state.dart';
 import 'package:pili_aurora/pages/login/controller.dart';
+import 'package:pili_aurora/services/logger.dart';
 import 'package:pili_aurora/utils/extension/size_ext.dart';
 import 'package:pili_aurora/utils/extension/widget_ext.dart';
 import 'package:pili_aurora/utils/image_utils.dart';
@@ -34,6 +36,67 @@ class _LoginPageState extends State<LoginPage> {
   // 二维码生成时间
   bool showPassword = false;
   GlobalKey globalKey = GlobalKey();
+  bool _savingQRCode = false;
+
+  Future<void> _saveQRCode() async {
+    if (_savingQRCode) return;
+    final state = _loginPageCtr.codeInfo.value;
+    final code = state.dataOrNull;
+    if (code == null || _loginPageCtr.qrCodeLeftTime.value <= 0) {
+      SmartDialog.showToast('请先刷新二维码');
+      return;
+    }
+    final route = ModalRoute.of(context);
+    bool cancelled = false;
+    bool current() =>
+        mounted &&
+        !cancelled &&
+        !_loginPageCtr.isClosed &&
+        identical(state, _loginPageCtr.codeInfo.value) &&
+        _loginPageCtr.qrCodeLeftTime.value > 0 &&
+        route?.isCurrent == true;
+    _savingQRCode = true;
+    final loadingTag = 'qr-screenshot-${UniqueKey()}';
+    bool loadingShown = true;
+    SmartDialog.show<void>(
+      tag: loadingTag,
+      builder: (_) => const LoadingWidget('正在生成截图'),
+      debounce: false,
+      clickMaskDismiss: false,
+      backType: SmartBackType.normal,
+      onDismiss: () {
+        if (loadingShown) cancelled = true;
+      },
+    );
+    try {
+      final boundary = globalKey.currentContext?.findRenderObject();
+      if (boundary is! RenderRepaintBoundary) {
+        throw StateError('二维码截图尚未就绪');
+      }
+      final image = await boundary.toImage(pixelRatio: 3);
+      late final Uint8List pngBytes;
+      try {
+        final byteData = await image.toByteData(format: .png);
+        if (byteData == null) throw StateError('二维码截图编码未返回数据');
+        pngBytes = byteData.buffer.asUint8List();
+      } finally {
+        image.dispose();
+      }
+      if (!current()) return;
+      loadingShown = false;
+      await SmartDialog.dismiss(tag: loadingTag);
+      if (!current()) return;
+      final picName =
+          '${Constants.appName}_loginQRCode_${code.authCode.hashCode.toUnsigned(32).toRadixString(16)}';
+      await ImageUtils.saveByteImg(bytes: pngBytes, fileName: picName);
+    } catch (error, stackTrace) {
+      logger.w('二维码截图保存失败', error: error.runtimeType, stackTrace: stackTrace);
+      if (current()) SmartDialog.showToast('二维码截图保存失败，请重试');
+    } finally {
+      _savingQRCode = false;
+      if (loadingShown) await SmartDialog.dismiss(tag: loadingTag);
+    }
+  }
 
   @override
   void didChangeDependencies() {
@@ -66,20 +129,7 @@ class _LoginPageState extends State<LoginPage> {
               label: const Text('刷新二维码'),
             ),
             TextButton.icon(
-              onPressed: () async {
-                SmartDialog.showLoading(msg: '正在生成截图');
-                final boundary =
-                    globalKey.currentContext!.findRenderObject()
-                        as RenderRepaintBoundary;
-                final image = await boundary.toImage(pixelRatio: 3);
-                final byteData = await image.toByteData(format: .png);
-                final pngBytes = byteData!.buffer.asUint8List();
-                image.dispose();
-                SmartDialog.dismiss();
-                final picName =
-                    "${Constants.appName}_loginQRCode_${_loginPageCtr.codeInfo.value.data.authCode.hashCode.toUnsigned(32).toRadixString(16)}";
-                ImageUtils.saveByteImg(bytes: pngBytes, fileName: picName);
-              },
+              onPressed: _saveQRCode,
               icon: const Icon(Icons.save),
               label: const Text('保存至相册'),
             ),

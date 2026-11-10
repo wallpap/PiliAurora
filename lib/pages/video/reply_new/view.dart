@@ -66,6 +66,7 @@ class ReplyPage extends CommonRichTextPubPage {
 }
 
 class _ReplyPageState extends CommonRichTextPubPageState<ReplyPage> {
+  bool _capturingScreenshot = false;
   final _publishing = false.obs;
   final RxBool _syncToDynamic = false.obs;
   final heroTag = Get.arguments?['heroTag'];
@@ -332,36 +333,64 @@ class _ReplyPageState extends CommonRichTextPubPageState<ReplyPage> {
                     SmartDialog.showToast('最多选择$limit张图片');
                     return;
                   }
+                  if (_capturingScreenshot || _publishing.value) return;
+                  _capturingScreenshot = true;
+                  String? temporaryPath;
+                  bool Function() current = () => mounted && !_publishing.value;
                   try {
-                    final plPlayerController = Get.find<VideoDetailController>(
-                      tag: heroTag,
-                    );
-                    final res = await plPlayerController
+                    final video = Get.find<VideoDetailController>(tag: heroTag);
+                    final bvid = video.bvid;
+                    final cid = video.cid.value;
+                    current = () =>
+                        mounted &&
+                        !video.isClosed &&
+                        video.bvid == bvid &&
+                        video.cid.value == cid &&
+                        !_publishing.value;
+                    final image = await video
                         .plPlayerController
                         .videoPlayerController
                         ?.screenshot();
-                    if (res != null) {
-                      try {
-                        final png = await res.toByteData(format: .png);
-                        if (mounted && png != null) {
-                          final path =
-                              '$tmpDirPath/${Utils.generateRandomString(8)}.png';
-                          await File(path)
-                              .writeAsBytes(png.buffer.asUint8List());
-                          if (mounted && imageList.length < limit) {
-                            imageList.add(FilePicModel(path: path));
-                          } else {
-                            await File(path).delete();
-                          }
-                        }
-                      } finally {
-                        res.dispose();
-                      }
-                    } else {
-                      logger.d('null screenshot');
+                    if (image == null) {
+                      if (current()) SmartDialog.showToast('截图失败，请重试');
+                      return;
                     }
-                  } catch (e, stackTrace) {
-                    logger.w(e.toString(), error: e, stackTrace: stackTrace);
+                    try {
+                      final png = await image.toByteData(format: .png);
+                      if (!current()) return;
+                      if (png == null) throw StateError('截图编码未返回数据');
+                      temporaryPath =
+                          '$tmpDirPath/${Utils.generateRandomString(8)}.png';
+                      await File(temporaryPath)
+                          .writeAsBytes(png.buffer.asUint8List());
+                      if (current() && imageList.length < limit) {
+                        imageList.add(FilePicModel(path: temporaryPath));
+                        temporaryPath = null; // 图片草稿取得临时文件所有权。
+                      }
+                    } finally {
+                      image.dispose();
+                    }
+                  } catch (error, stackTrace) {
+                    logger.w(
+                      '评论截图失败',
+                      error: error.runtimeType,
+                      stackTrace: stackTrace,
+                    );
+                    if (current()) SmartDialog.showToast('截图失败，请重试');
+                  } finally {
+                    _capturingScreenshot = false;
+                    if (temporaryPath != null) {
+                      try {
+                        final file = File(temporaryPath);
+                        if (file.existsSync()) await file.delete();
+                      } catch (error, stackTrace) {
+                        logger.w(
+                          '评论截图临时文件清理失败',
+                          error: error.runtimeType,
+                          stackTrace: stackTrace,
+                        );
+                      }
+                    }
                   }
                 },
                 icon: Icon(

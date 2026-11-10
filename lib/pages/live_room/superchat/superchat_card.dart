@@ -1,5 +1,8 @@
 import 'dart:async' show Timer;
 
+import 'package:pili_aurora/services/logger.dart';
+import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
+
 import 'package:pili_aurora/common/widgets/app_popup_menu_item.dart';
 import 'package:pili_aurora/common/widgets/image/cached_image.dart';
 import 'package:pili_aurora/common/widgets/image/network_img_layer.dart';
@@ -42,6 +45,7 @@ class SuperChatCard extends StatefulWidget {
 
 class _SuperChatCardState extends State<SuperChatCard> {
   Timer? _timer;
+  bool _savingImage = false;
   RxInt? _remains;
 
   @override
@@ -127,9 +131,21 @@ class _SuperChatCardState extends State<SuperChatCard> {
         ),
         AppPopupMenuItem(
           height: 38,
-          onTap: () {
-            if (!mounted) return;
-            _screenShot(context, item);
+          onTap: () async {
+            if (!mounted || _savingImage) return;
+            _savingImage = true;
+            try {
+              await _screenShot(context, item);
+            } catch (error, stackTrace) {
+              logger.w(
+                'SC 截图保存失败',
+                error: error.runtimeType,
+                stackTrace: stackTrace,
+              );
+              if (mounted) SmartDialog.showToast('截图保存失败，请重试');
+            } finally {
+              _savingImage = false;
+            }
           },
           child: const Text(
             '保存为图片',
@@ -339,6 +355,7 @@ Widget _avatar(String face, String? faceFrame) {
 }
 
 Future<void> _screenShot(BuildContext context, SuperChatItem item) async {
+  final route = ModalRoute.of(context);
   final image = await Screenshot.screenshot(
     context,
     Material(
@@ -349,12 +366,16 @@ Future<void> _screenShot(BuildContext context, SuperChatItem item) async {
     pixelRatio: 3,
     future: Future.pause, // wait for asset async loaded
   );
-  final bytes = await image.toByteData(format: .png);
-  image.dispose();
-  final picName =
-      'Bili_SuperChat_${item.roomid}_${item.userInfo.uname}_￥${item.price}_${item.id}';
-  ImageUtils.saveByteImg(
-    bytes: bytes!.buffer.asUint8List(),
-    fileName: picName,
-  );
+  try {
+    final bytes = await image.toByteData(format: .png);
+    if (!context.mounted || route?.isCurrent != true) return;
+    if (bytes == null) throw StateError('截图编码未返回数据');
+    final picName = 'Bili_SuperChat_${item.roomid}_${item.id}';
+    await ImageUtils.saveByteImg(
+      bytes: bytes.buffer.asUint8List(),
+      fileName: picName,
+    );
+  } finally {
+    image.dispose();
+  }
 }
