@@ -5,9 +5,7 @@ import 'package:pili_aurora/common/widgets/image/network_img_layer.dart';
 import 'package:pili_aurora/common/widgets/progress_bar/video_progress_indicator.dart';
 import 'package:pili_aurora/common/widgets/stat/stat.dart';
 import 'package:pili_aurora/common/widgets/video_popup_menu.dart';
-import 'package:pili_aurora/http/search.dart';
 import 'package:pili_aurora/models/horizontal_video_model.dart';
-import 'package:pili_aurora/models/remote/video/video_detail/dimension.dart';
 import 'package:pili_aurora/utils/date_utils.dart';
 import 'package:pili_aurora/utils/duration_utils.dart';
 import 'package:pili_aurora/utils/page_utils.dart';
@@ -45,7 +43,7 @@ class VideoCardH extends StatelessWidget {
           InkWell(
             onLongPress: onLongPress,
             onSecondaryTap: PlatformUtils.isMobile ? null : onLongPress,
-            onTap: onTap ?? () => pushVideoH(videoItem),
+            onTap: onTap ?? () => pushVideoH(videoItem, context: context),
             child: Padding(
               padding: const .symmetric(
                 horizontal: Style.safeSpace,
@@ -216,7 +214,10 @@ class VideoCardH extends StatelessWidget {
   }
 }
 
-Future<void> pushVideoH(HorizontalVideoModel videoItem) async {
+Future<void> pushVideoH(
+  HorizontalVideoModel videoItem, {
+  required BuildContext context,
+}) async {
   if (videoItem.isPugv ?? false) {
     PageUtils.viewPugv(seasonId: videoItem.seasonId);
     return;
@@ -234,25 +235,13 @@ Future<void> pushVideoH(HorizontalVideoModel videoItem) async {
     return;
   }
 
-  int? cid = videoItem.cid;
-  Dimension? dimension = videoItem.dimension;
-  if (cid == null) {
-    if (await SearchHttp.ab2cWithDimension(
-          aid: videoItem.aid,
-          bvid: videoItem.bvid,
-        )
-        case final res?) {
-      cid = res.cid;
-      dimension = res.dimension;
-    }
-  }
-  if (cid != null) {
-    PageUtils.toVideoPage(
-      bvid: videoItem.bvid,
-      cid: cid,
-      cover: videoItem.cover,
-      title: videoItem.title,
-      dimension: dimension,
-    );
-  }
+  await PageUtils.openVideo(
+    context: context,
+    aid: videoItem.aid,
+    bvid: videoItem.bvid,
+    cid: videoItem.cid,
+    cover: videoItem.cover,
+    title: videoItem.title,
+    dimension: videoItem.dimension,
+  );
 }

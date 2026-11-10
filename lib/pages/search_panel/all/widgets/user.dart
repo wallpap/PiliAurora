@@ -116,6 +116,7 @@ class SearchAllUserItem extends StatelessWidget {
                   itemBuilder: (context, index) {
                     final video = list[index];
                     return _buildVideoItem(
+                      context,
                       colorScheme,
                       index == list.length - 1
                           ? const .only(right: 12)
@@ -137,6 +138,7 @@ class SearchAllUserItem extends StatelessWidget {
 }
 
 Widget _buildVideoItem(
+  BuildContext context,
   ColorScheme colorScheme,
   EdgeInsets padding,
   SearchVideoItemModel video,
@@ -153,7 +155,7 @@ Widget _buildVideoItem(
       cursor: SystemMouseCursors.click,
       child: GestureDetector(
         behavior: .opaque,
-        onTap: () => pushVideoH(video),
+        onTap: () => pushVideoH(video, context: context),
         onLongPress: PlatformUtils.isMobile
             ? () {
                 HapticFeedback.vibrate();

@@ -8,7 +8,6 @@ import 'package:pili_aurora/common/widgets/image/cached_image.dart';
 import 'package:pili_aurora/common/widgets/image/network_img_layer.dart';
 import 'package:pili_aurora/common/widgets/image_viewer/hero.dart';
 import 'package:pili_aurora/common/widgets/selection_text.dart';
-import 'package:pili_aurora/http/search.dart';
 import 'package:pili_aurora/models/common/image_preview_type.dart';
 import 'package:pili_aurora/pages/whisper_detail/widget/message_content_card.dart';
 import 'package:pili_aurora/services/messaging/message_models.dart';
@@ -170,14 +169,23 @@ class ChatItem extends StatelessWidget {
           MessageContentKind.notify => msgTypeNotifyMsg_10(theme, payload),
           MessageContentKind.pictureCard => msgTypePictureCard_13(payload),
           MessageContentKind.tip => msgTypeTipMessage_18(theme, payload),
-          MessageContentKind.shareV2 => msgTypeShareV2_7(payload, textColor),
-          MessageContentKind.videoCard => msgTypeVideoCard_11(theme, payload),
+          MessageContentKind.shareV2 => msgTypeShareV2_7(
+            context,
+            payload,
+            textColor,
+          ),
+          MessageContentKind.videoCard => msgTypeVideoCard_11(
+            context,
+            theme,
+            payload,
+          ),
           MessageContentKind.articleCard => msgTypeArticleCard_12(payload),
           MessageContentKind.commonShareCard => msgTypeCommonShareCard_14(
             payload,
             textColor,
           ),
           MessageContentKind.legacyCard => msgType_16(
+            context,
             theme,
             payload,
             textColor,
@@ -253,7 +261,12 @@ class ChatItem extends StatelessWidget {
     );
   }
 
-  Widget msgType_16(ThemeData theme, content, Color textColor) {
+  Widget msgType_16(
+    BuildContext context,
+    ThemeData theme,
+    content,
+    Color textColor,
+  ) {
     return Center(
       child: Container(
         constraints: const BoxConstraints(maxWidth: 400),
@@ -282,26 +295,11 @@ class ChatItem extends StatelessWidget {
                       .firstMatch(i['jump_url'])
                       ?.group(0);
                   if (bvid != null) {
-                    try {
-                      SmartDialog.showLoading();
-                      final res = await SearchHttp.ab2cWithDimension(
-                        bvid: bvid,
-                      );
-                      final cid = res?.cid;
-                      SmartDialog.dismiss();
-                      if (cid != null) {
-                        PageUtils.toVideoPage(
-                          bvid: bvid,
-                          cid: cid,
-                          cover: i['cover_url'],
-                          dimension: res!.dimension,
-                          // 接口提供标题时可同时传入。
-                        );
-                      }
-                    } catch (err) {
-                      SmartDialog.dismiss();
-                      SmartDialog.showToast(err.toString());
-                    }
+                    await PageUtils.openVideo(
+                      context: context,
+                      bvid: bvid,
+                      cover: i['cover_url'],
+                    );
                   } else {
                     SmartDialog.showToast('未匹配到 BV 号');
                     PageUtils.handleWebview(i['jump_url']);
@@ -359,7 +357,7 @@ class ChatItem extends StatelessWidget {
     );
   }
 
-  Widget msgTypeVideoCard_11(ThemeData theme, content) {
+  Widget msgTypeVideoCard_11(BuildContext context, ThemeData theme, content) {
     String? attachMsg;
     try {
       attachMsg = content['attach_msg']?['content'];
@@ -378,31 +376,19 @@ class ChatItem extends StatelessWidget {
               textColor: theme.colorScheme.onSurface,
             )
           : null,
-      onTap: () async {
-        try {
-          SmartDialog.showLoading();
-          final bvid = content['bvid'];
-          final res = await SearchHttp.ab2cWithDimension(bvid: bvid);
-          final cid = res?.cid;
-          SmartDialog.dismiss();
-          if (cid != null) {
-            PageUtils.toVideoPage(
-              bvid: bvid,
-              cid: cid,
-              cover: content['cover'],
-              dimension: res!.dimension,
-              // 接口提供标题时可同时传入。
-            );
-          }
-        } catch (err) {
-          SmartDialog.dismiss();
-          SmartDialog.showToast(err.toString());
-        }
-      },
+      onTap: () => PageUtils.openVideo(
+        context: context,
+        bvid: content['bvid'],
+        cover: content['cover'],
+      ),
     );
   }
 
-  Widget msgTypeShareV2_7(dynamic content, Color textColor) {
+  Widget msgTypeShareV2_7(
+    BuildContext context,
+    dynamic content,
+    Color textColor,
+  ) {
     String? type;
     GestureTapCallback onTap;
     switch (content['source']) {
@@ -415,33 +401,12 @@ class ChatItem extends StatelessWidget {
       // 视频。
       case 5:
         type = '视频';
-        onTap = () async {
-          dynamic aid = content['id'];
-          if (aid is String) {
-            aid = int.tryParse(aid);
-          }
-          dynamic bvid = content["bvid"];
-          if (aid == null && bvid == null) {
-            SmartDialog.showToast('null');
-          }
-          bvid ??= IdUtils.av2bv(aid);
-          SmartDialog.showLoading();
-          final res = await SearchHttp.ab2cWithDimension(
-            bvid: bvid,
-          );
-          final cid = res?.cid;
-          SmartDialog.dismiss();
-          if (cid != null) {
-            PageUtils.toVideoPage(
-              aid: aid,
-              bvid: bvid,
-              cid: cid,
-              cover: content['thumb'],
-              dimension: res!.dimension,
-              // 查询接口支持时可同时展示视频标题。
-            );
-          }
-        };
+        onTap = () => PageUtils.openVideo(
+          context: context,
+          aid: content['id'],
+          bvid: content['bvid'],
+          cover: content['thumb'],
+        );
         break;
 
       // 专栏。

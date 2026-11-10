@@ -5,7 +5,6 @@ import 'package:pili_aurora/common/widgets/image/network_img_layer.dart';
 import 'package:pili_aurora/common/widgets/progress_bar/video_progress_indicator.dart';
 import 'package:pili_aurora/common/widgets/select_mask.dart';
 import 'package:pili_aurora/common/widgets/stat/stat.dart';
-import 'package:pili_aurora/http/search.dart';
 import 'package:pili_aurora/models/common/badge_type.dart';
 import 'package:pili_aurora/models/common/stat_type.dart';
 import 'package:pili_aurora/models/remote/later/list.dart';
@@ -13,7 +12,6 @@ import 'package:pili_aurora/pages/later/controller.dart';
 import 'package:pili_aurora/utils/duration_utils.dart';
 import 'package:pili_aurora/utils/page_utils.dart';
 import 'package:pili_aurora/utils/platform_utils.dart';
-import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:material_ui/material_ui.dart';
 
 // 视频卡片 - 水平布局
@@ -61,19 +59,15 @@ class VideoCardHLater extends StatelessWidget {
                   }
                   return;
                 }
-                try {
-                  final cid =
-                      videoItem.cid ??
-                      await SearchHttp.ab2c(
-                        aid: videoItem.aid,
-                        bvid: videoItem.bvid,
-                      );
-                  if (cid != null) {
-                    onViewLater(cid);
-                  }
-                } catch (err) {
-                  SmartDialog.showToast(err.toString());
-                }
+                await PageUtils.openVideo(
+                  context: context,
+                  aid: videoItem.aid,
+                  bvid: videoItem.bvid,
+                  cid: videoItem.cid,
+                  isCurrent: () =>
+                      !ctr.isClosed && !ctr.enableMultiSelect.value,
+                  onResolved: onViewLater,
+                );
               },
         child: Padding(
           padding: const EdgeInsets.symmetric(

@@ -7,14 +7,12 @@ import 'package:pili_aurora/common/widgets/image/network_img_layer.dart';
 import 'package:pili_aurora/common/widgets/image_grid/image_grid_view.dart';
 import 'package:pili_aurora/http/dynamics.dart';
 import 'package:pili_aurora/http/loading_state.dart';
-import 'package:pili_aurora/http/search.dart';
 import 'package:pili_aurora/models/common/image_preview_type.dart'
     show SourceModel;
 import 'package:pili_aurora/models/dynamics/result.dart';
 import 'package:pili_aurora/pages/dynamics/widgets/vote.dart';
 import 'package:pili_aurora/utils/page_utils.dart';
 import 'package:pili_aurora/utils/parse_string.dart';
-import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:get/get.dart';
 import 'package:material_ui/material_ui.dart';
 
@@ -253,24 +251,10 @@ TextSpan? richNode(
                   text: '${i.text} ',
                   style: style,
                   recognizer: NoDeadlineTapGestureRecognizer()
-                    ..onTap = () async {
-                      try {
-                        final res = await SearchHttp.ab2cWithDimension(
-                          bvid: i.rid,
-                        );
-                        final cid = res?.cid;
-                        if (cid != null) {
-                          PageUtils.toVideoPage(
-                            bvid: i.rid,
-                            cid: cid,
-                            dimension: res!.dimension,
-                            // title: res.title,
-                          );
-                        }
-                      } catch (err) {
-                        SmartDialog.showToast(err.toString());
-                      }
-                    },
+                    ..onTap = () => PageUtils.openVideo(
+                      context: context,
+                      bvid: i.rid,
+                    ),
                 ),
               );
             break;

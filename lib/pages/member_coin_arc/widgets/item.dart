@@ -4,7 +4,6 @@ import 'package:pili_aurora/common/widgets/image/image_save.dart';
 import 'package:pili_aurora/common/widgets/image/network_img_layer.dart';
 import 'package:pili_aurora/common/widgets/stat/stat.dart';
 import 'package:pili_aurora/common/widgets/video_card/video_card_v.dart';
-import 'package:pili_aurora/http/search.dart';
 import 'package:pili_aurora/models/common/badge_type.dart';
 import 'package:pili_aurora/models/common/stat_type.dart';
 import 'package:pili_aurora/models/remote/member/coin_like_arc/item.dart';
@@ -39,19 +38,12 @@ class MemberCoinLikeItem extends StatelessWidget {
             return;
           }
 
-          if (item.param != null) {
-            final res = await SearchHttp.ab2cWithDimension(aid: item.param);
-            final cid = res?.cid;
-            if (cid != null) {
-              PageUtils.toVideoPage(
-                aid: int.parse(item.param!),
-                cid: cid,
-                cover: item.cover,
-                title: item.title,
-                dimension: res!.dimension,
-              );
-            }
-          }
+          await PageUtils.openVideo(
+            context: context,
+            aid: item.param,
+            cover: item.cover,
+            title: item.title,
+          );
         },
         onLongPress: onLongPress,
         onSecondaryTap: PlatformUtils.isMobile ? null : onLongPress,

@@ -5,10 +5,8 @@ import 'package:pili_aurora/common/widgets/badge.dart';
 import 'package:pili_aurora/common/widgets/image/network_img_layer.dart';
 import 'package:pili_aurora/common/widgets/progress_bar/video_progress_indicator.dart';
 import 'package:pili_aurora/common/widgets/select_mask.dart';
-import 'package:pili_aurora/http/search.dart';
 import 'package:pili_aurora/models/common/badge_type.dart';
 import 'package:pili_aurora/models/remote/history/list.dart';
-import 'package:pili_aurora/models/remote/video/video_detail/dimension.dart';
 import 'package:pili_aurora/pages/common/multi_select/base.dart';
 import 'package:pili_aurora/utils/date_utils.dart';
 import 'package:pili_aurora/utils/duration_utils.dart';
@@ -84,31 +82,17 @@ class HistoryItem extends StatelessWidget {
                     );
                   }
                 } else {
-                  int? cid = item.history.cid;
-                  Dimension? dimension;
-                  if (cid == null) {
-                    if (await SearchHttp.ab2cWithDimension(
-                          aid: aid,
-                          bvid: bvid,
-                          part: item.history.page,
-                        )
-                        case final res?) {
-                      cid = res.cid;
-                      dimension = res.dimension;
-                    }
-                  }
-                  if (cid != null) {
-                    // TODO: dimension
-                    PageUtils.toVideoPage(
-                      aid: aid,
-                      bvid: bvid,
-                      cid: cid,
-                      cover: item.cover,
-                      title: item.title,
-                      dimension: dimension,
-                      progress: item.playbackProgress,
-                    );
-                  }
+                  await PageUtils.openVideo(
+                    context: context,
+                    aid: aid,
+                    bvid: bvid,
+                    cid: item.history.cid,
+                    part: item.history.page,
+                    cover: item.cover,
+                    title: item.title,
+                    progress: item.playbackProgress,
+                    isCurrent: () => !ctr.enableMultiSelect.value,
+                  );
                 }
               },
         onLongPress: onLongPress,

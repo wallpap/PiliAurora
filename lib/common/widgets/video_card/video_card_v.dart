@@ -4,18 +4,14 @@ import 'package:pili_aurora/common/widgets/image/image_save.dart';
 import 'package:pili_aurora/common/widgets/image/network_img_layer.dart';
 import 'package:pili_aurora/common/widgets/stat/stat.dart';
 import 'package:pili_aurora/common/widgets/video_popup_menu.dart';
-import 'package:pili_aurora/http/search.dart';
 import 'package:pili_aurora/models/home/rcmd/result.dart';
 import 'package:pili_aurora/models/model_rec_video_item.dart';
-import 'package:pili_aurora/models/remote/video/video_detail/dimension.dart';
 import 'package:pili_aurora/utils/app_scheme.dart';
 import 'package:pili_aurora/utils/date_utils.dart';
 import 'package:pili_aurora/utils/duration_utils.dart';
 import 'package:pili_aurora/utils/extension/dimension_ext.dart';
-import 'package:pili_aurora/utils/id_utils.dart';
 import 'package:pili_aurora/utils/page_utils.dart';
 import 'package:pili_aurora/utils/platform_utils.dart';
-import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:intl/intl.dart';
 import 'package:material_ui/material_ui.dart';
 
@@ -30,46 +26,32 @@ class VideoCardV extends StatelessWidget {
     this.onRemove,
   });
 
-  Future<void> onPushDetail() async {
+  Future<void> onPushDetail(BuildContext context) async {
     switch (videoItem.goto) {
       case 'bangumi':
         PageUtils.viewPgc(epId: videoItem.param!);
         break;
       case 'av':
-        var bvid = videoItem.bvid ?? IdUtils.av2bv(videoItem.aid!);
-        var cid = videoItem.cid;
         bool isVertical = false;
-        Dimension? dimension;
         if (videoItem is RcmdVideoItemAppModel) {
           if (videoItem.uri case final uri?) {
             isVertical = uri.isVerticalFromUri;
           }
         }
-        if (cid == null) {
-          if (await SearchHttp.ab2cWithDimension(aid: videoItem.aid, bvid: bvid)
-              case final res?) {
-            cid = res.cid;
-            dimension = res.dimension;
-          }
-        }
-        if (cid != null) {
-          PageUtils.toVideoPage(
-            aid: videoItem.aid,
-            bvid: bvid,
-            cid: cid,
-            cover: videoItem.cover,
-            title: videoItem.title,
-            isVertical: isVertical,
-            dimension: dimension,
-          );
-        }
+        await PageUtils.openVideo(
+          context: context,
+          aid: videoItem.aid,
+          bvid: videoItem.bvid,
+          cid: videoItem.cid,
+          cover: videoItem.cover,
+          title: videoItem.title,
+          isVertical: isVertical,
+        );
         break;
       // 动态
       case 'picture':
-        try {
-          PiliScheme.routePushFromUrl(videoItem.uri!);
-        } catch (err) {
-          SmartDialog.showToast(err.toString());
+        if (videoItem.uri?.isNotEmpty == true) {
+          await PiliScheme.routePushFromUrl(videoItem.uri!);
         }
         break;
       default:
@@ -91,7 +73,7 @@ class VideoCardV extends StatelessWidget {
       children: [
         Card(
           child: InkWell(
-            onTap: onPushDetail,
+            onTap: () => onPushDetail(context),
             onLongPress: onLongPress,
             onSecondaryTap: PlatformUtils.isMobile ? null : onLongPress,
             borderRadius: const .all(.circular(12)),

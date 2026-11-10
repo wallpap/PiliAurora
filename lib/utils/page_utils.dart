@@ -21,6 +21,7 @@ import 'package:pili_aurora/pages/share/view.dart';
 import 'package:pili_aurora/services/messaging/session.dart';
 import 'package:pili_aurora/services/messaging/sharing.dart';
 import 'package:pili_aurora/utils/android/android_helper.dart';
+import 'package:pili_aurora/utils/accounts.dart';
 import 'package:pili_aurora/utils/app_scheme.dart';
 import 'package:pili_aurora/utils/extension/context_ext.dart';
 import 'package:pili_aurora/utils/extension/get_ext.dart';
@@ -574,6 +575,87 @@ abstract final class PageUtils {
       off: off,
       preventDuplicates: off,
     );
+  }
+
+  /// 卡片缺少分 P 时由本次导航持有查询，回执只交付给原账号与来源。
+  static Future<void> openVideo({
+    required BuildContext context,
+    Object? aid,
+    String? bvid,
+    int? cid,
+    int? part,
+    String? cover,
+    String? title,
+    int? progress,
+    bool isVertical = false,
+    Dimension? dimension,
+    bool Function()? isCurrent,
+    void Function(int cid)? onResolved,
+  }) async {
+    if (!context.mounted) return;
+    final source = context.widget;
+    final request = NavigationRequest();
+    final account = Accounts.heartbeat;
+    final mainAccount = Accounts.main;
+    bool current() =>
+        context.mounted &&
+        identical(context.widget, source) &&
+        request.isCurrent &&
+        identical(account, Accounts.heartbeat) &&
+        identical(mainAccount, Accounts.main) &&
+        (isCurrent?.call() ?? true);
+    try {
+      if (!current()) return;
+      final value = aid is int ? aid : int.tryParse(aid?.toString() ?? '');
+      final parsedAid = value != null && value > 0 ? value : null;
+      final targetBvid = bvid?.trim();
+      if ((parsedAid == null || parsedAid <= 0) &&
+          (targetBvid == null || targetBvid.isEmpty)) {
+        SmartDialog.showToast('视频标识缺失，请刷新列表');
+        return;
+      }
+      if (cid == null || cid <= 0) {
+        request.showLoading('资源获取中');
+        final result = await SearchHttp.pageWithDimension(
+          account: account,
+          aid: parsedAid,
+          bvid: targetBvid,
+          part: part,
+        );
+        await request.closeLoading();
+        if (!current()) return;
+        if (result is Error) {
+          result.toast();
+          return;
+        }
+        cid = result.dataOrNull?.cid;
+        dimension ??= result.dataOrNull?.dimension;
+      }
+      if (!current()) return;
+      if (cid == null || cid <= 0) {
+        SmartDialog.showToast('该视频暂无可播放分 P');
+        return;
+      }
+      if (onResolved != null) {
+        onResolved(cid);
+      } else {
+        toVideoPage(
+          aid: parsedAid,
+          bvid: targetBvid?.isNotEmpty == true ? targetBvid : null,
+          cid: cid,
+          cover: cover,
+          title: title,
+          progress: progress,
+          isVertical: isVertical,
+          dimension: dimension,
+        );
+      }
+    } catch (error, stackTrace) {
+      logger.w('打开视频失败', error: error.runtimeType, stackTrace: stackTrace);
+      if (current()) SmartDialog.showToast('视频获取失败，请重试');
+    } finally {
+      await request.close();
+    }
   }
 
   static Future<void>? toVideoPage({

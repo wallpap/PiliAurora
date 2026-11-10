@@ -2,13 +2,10 @@ import 'package:pili_aurora/common/style.dart';
 import 'package:pili_aurora/common/widgets/badge.dart';
 import 'package:pili_aurora/common/widgets/image/image_save.dart';
 import 'package:pili_aurora/common/widgets/image/network_img_layer.dart';
-import 'package:pili_aurora/http/search.dart';
 import 'package:pili_aurora/models/common/badge_type.dart';
 import 'package:pili_aurora/models/remote/space/space_archive/item.dart';
-import 'package:pili_aurora/models/remote/video/video_detail/dimension.dart';
 import 'package:pili_aurora/utils/app_scheme.dart';
 import 'package:pili_aurora/utils/duration_utils.dart';
-import 'package:pili_aurora/utils/id_utils.dart';
 import 'package:pili_aurora/utils/page_utils.dart';
 import 'package:pili_aurora/utils/platform_utils.dart';
 import 'package:material_ui/material_ui.dart';
@@ -22,7 +19,7 @@ class VideoCardVMemberHome extends StatelessWidget {
     required this.videoItem,
   });
 
-  Future<void> onPushDetail() async {
+  Future<void> onPushDetail(BuildContext context) async {
     String? goto = videoItem.goto;
     switch (goto) {
       case 'bangumi':
@@ -37,31 +34,14 @@ class VideoCardVMemberHome extends StatelessWidget {
           return;
         }
 
-        String? aid = videoItem.param;
-        String? bvid = videoItem.bvid;
-        if (aid == null && bvid == null) {
-          return;
-        }
-
-        bvid ??= IdUtils.av2bv(int.parse(aid!));
-        int? cid = videoItem.cid;
-        Dimension? dimension;
-        if (cid == null) {
-          if (await SearchHttp.ab2cWithDimension(aid: aid, bvid: bvid)
-              case final res?) {
-            cid = res.cid;
-            dimension = res.dimension;
-          }
-        }
-        if (cid != null) {
-          PageUtils.toVideoPage(
-            bvid: bvid,
-            cid: cid,
-            cover: videoItem.cover,
-            title: videoItem.title,
-            dimension: dimension,
-          );
-        }
+        await PageUtils.openVideo(
+          context: context,
+          aid: videoItem.param,
+          bvid: videoItem.bvid,
+          cid: videoItem.cid,
+          cover: videoItem.cover,
+          title: videoItem.title,
+        );
         break;
 
       default:
@@ -81,7 +61,7 @@ class VideoCardVMemberHome extends StatelessWidget {
     );
     return Card(
       child: InkWell(
-        onTap: onPushDetail,
+        onTap: () => onPushDetail(context),
         onLongPress: onLongPress,
         onSecondaryTap: PlatformUtils.isMobile ? null : onLongPress,
         borderRadius: const .all(.circular(12)),
