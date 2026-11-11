@@ -115,6 +115,15 @@ Android `media.output.preloaded` 记录预挂载策略、证据和解码前 sele
 
 Android 视频输出建立后，`AndroidRasterScheduling` 将唯一 Raster 线程的 CPU 亲和性扩展到应用主线程可用的集合，让系统选择运行核心；输出释放或初始化失败时恢复。`raster.scheduling.applied` 记录原始、应用和实际 CPU 集合，`unavailable` 与 `restore.failed` 记录应用及恢复失败。多 Raster 线程或已有集合无需扩展时沿用当前策略。排查低帧率视频卡顿时还需检查 Raster 唤醒到实际运行的延迟，这段等待可能发生在 Flutter Raster 计时开始之前。对照入口见[播放慢帧探针](../../tool/probes/README.md#android-播放慢帧对照)。
 
+Windows 播放时画面与声音同时断续，先检查播放器日志的
+`Audio device underrun detected.`，再对齐同窗口 Raster 慢帧和 mpv 丢帧。
+同步模式须使用同一音视频素材重复对照，单轮无欠载不足以确认修复。
+资源释放测试的通过结果不能替代真实 WASAPI 输出的连续性验收，设备对照入口见
+[播放器资源探针](../../tool/probes/README.md#windows-播放器资源回收探针)。
+Windows 共享纹理须在输出线程完成绘制与复制提交后发布；Raster 回调不等待绘制锁。
+排查类似停顿时分别测量 `glFinish`、Raster 锁等待与纹理复制，避免将相邻慢帧都归因于
+Dart 工作量。其他 GPU 与真实音视频仍须分别验证。
+
 ### 直播
 
 `lib/pages/live_room/` → `lib/http/live.dart` 与 `lib/services/live_stream/` → 直播包解码 → 消息和弹幕 UI。连接、包解码、历史与未读消息、渲染和退出清理需要分别检查；消息时序见[直播消息流程](../development/runtime-flows.md#直播消息与弹幕)。

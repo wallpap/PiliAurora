@@ -1195,7 +1195,7 @@ packages:
       path: "third_party/media_kit_video"
       relative: true
     source: path
-    version: "1.2.5+piliaurora.15"
+    version: "1.2.5+piliaurora.16"
   meta:
     dependency: transitive
     description:

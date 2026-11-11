@@ -30,6 +30,8 @@ PLATFORM = r'''
 inline std::atomic<int> pending_receipts{0}, unsafe_releases{0}, context_creates{0},
     context_frees{0}, surface_creates{0}, surface_frees{0}, registrations{0};
 inline bool fail_surface_create = false, fail_resize = false;
+inline thread_local bool copy_required = false;
+inline std::atomic<int> unsafe_publications{0};
 inline void CheckBarrier() { if(pending_receipts.load()) ++unsafe_releases; }
 class ANGLESurfaceManager {
   int32_t width_, height_;
@@ -39,7 +41,7 @@ class ANGLESurfaceManager {
     if(fail_surface_create) throw std::runtime_error("injected ANGLE constructor failure");
     ++surface_creates;
   }
-  ~ANGLESurfaceManager() { CheckBarrier(); ++surface_frees; }
+  ~ANGLESurfaceManager() { CheckBarrier(); ++surface_frees; copy_required = false; }
   void SetSize(int32_t width, int32_t height) {
     if(width==width_ && height==height_) return;
     CheckBarrier();
@@ -50,8 +52,8 @@ class ANGLESurfaceManager {
   int32_t height() const { return height_; }
   void* handle() const { return reinterpret_cast<void*>(1); }
   void MakeCurrent(bool) {}
-  void Read() {}
-  void Draw(std::function<void()> callback) { callback(); }
+  void Read() { copy_required = false; }
+  void Draw(std::function<void()> callback) { copy_required = true; callback(); }
 };
 inline void* eglGetProcAddress(const char*) { return nullptr; }
 struct mpv_handle {};
@@ -102,7 +104,10 @@ struct TextureRegistrar {
     if(receipts.count(id)) throw std::runtime_error("duplicate unregistration");
     ++pending_receipts; receipts.emplace(id, std::move(callback));
   }
-  bool MarkTextureFrameAvailable(int64_t) { return true; }
+  bool MarkTextureFrameAvailable(int64_t) {
+    if(copy_required) ++unsafe_publications;
+    return true;
+  }
   bool Receipt() {
     std::function<void()> callback;
     {
@@ -198,6 +203,7 @@ int main() {
       f.Drain();
       f.pool.Post([&] {
         f.output->Render();
+        Require(unsafe_publications==0, "hardware frame published before shared texture copy");
         Require(f.output->texture_sampling_frames_.empty(), "unprepared output reports consumption");
         f.output->output_prepared_ = true;
         render_update_flags = 0;

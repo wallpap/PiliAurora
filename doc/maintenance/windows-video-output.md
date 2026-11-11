@@ -35,7 +35,9 @@ Windows 根视图在最小化或 Flutter 报告 hidden/paused/detached 时关闭
 初始纹理 ID 用于完成 Dart 控制器创建，视频首帧就绪另行通知。真实纹理替换要等渲染成功后发布；同尺寸请求沿用已发布的画面。源尺寸由 Dart 的 `video-out-params` 观察事件送入原生队列，避免渲染线程同步查询正在等待首帧的 mpv 核心。
 
 ANGLE Surface 的 D3D 纹理作为默认 framebuffer 的绘制目标，随后通过 D3D 复制供 Flutter
-读取。创建与扩容时不生成额外 GL 纹理或调用 `eglBindTexImage`，避免改动 mpv 共用的
+读取。绘制和复制均在输出线程提交，之后才通知 Flutter 帧可用；Raster 纹理回调只读取
+已发布描述符，避免在引擎图形调用中等待输出线程的 `glFinish`。创建与扩容时不生成额外
+GL 纹理或调用 `eglBindTexImage`，避免改动 mpv 共用的
 GL 纹理状态。真实直播的首次播放、刷新与纹理像素验证见
 [`windows_live_startup.dart`](../../tool/probes/playback/windows_live_startup.dart) 及[运行说明](../../tool/probes/README.md#windows-直播首帧探针)。
 

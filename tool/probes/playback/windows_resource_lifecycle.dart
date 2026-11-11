@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:ui' as ui;
 
+import 'package:ffi/ffi.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
@@ -37,6 +38,11 @@ Future<void> main() async {
     if (!File(entry['source'] as String).existsSync()) {
       throw ArgumentError('Local fixture required');
     }
+    if (entry['audioSource'] case final String audio) {
+      if (!File(audio).existsSync()) {
+        throw ArgumentError('Local audio fixture required');
+      }
+    }
   }
   await output.parent.create(recursive: true);
   MediaKit.ensureInitialized();
@@ -70,6 +76,7 @@ Future<void> main() async {
   final playerOptionOverrides =
       (config['playerOptions'] as Map?)?.cast<String, String>() ??
       const <String, String>{};
+  final decoder = config['decoder'] as String? ?? 'd3d11va';
   final runtime = NativePlaybackRuntime(
     configuration: PlaybackRuntimeConfig(
       playerOptions: {
@@ -78,7 +85,7 @@ Future<void> main() async {
         ...playerOptionOverrides,
       },
       hardwareAccelerationEnabled: true,
-      hardwareDecoder: 'd3d11va',
+      hardwareDecoder: decoder,
     ),
     diagnosticsExtra: () => const {},
   );
@@ -109,16 +116,23 @@ Future<void> main() async {
   final watch = Stopwatch()..start();
   final rows = <Map<String, Object?>>[];
   final trace = <Map<String, Object?>>[];
+  final underruns = <int>[];
+  final frameDropChecks = <Map<String, Object?>>[];
+  StreamSubscription<PlayerLog>? logSubscription;
   var phase = 'baseline';
   var tracing = false;
   Future<void>? traceTask;
   final report = <String, Object?>{
     'schemaVersion': 1,
-    'scope': 'productionSession;localMedia;nullAudioOutput;noCachePurge',
+    'scope': 'productionSession;localMedia;noCachePurge',
+    'audioOutput': playerOptionOverrides['ao'] ?? 'null',
+    'renderFlutterVideo': config['renderFlutterVideo'] != false,
     'outputPolicy': 'sourceSizeCappedToPhysicalDisplayAfterLoad',
     'sourceShaderPolicy': config['sourceShaderPolicy'] == true,
     'rows': rows,
     'trace': trace,
+    'audioUnderrunsMs': underruns,
+    'frameDropChecks': frameDropChecks,
     'passed': false,
   };
   Future<void> save() => output.writeAsString(
@@ -153,6 +167,11 @@ Future<void> main() async {
         'sourceHeight': player.state.height,
         'playing': player.state.playing,
         'positionMs': player.state.position.inMilliseconds,
+        'frameDrops': player.getProperty('frame-drop-count'),
+        'decoderFrameDrops': player.getProperty('decoder-frame-drop-count'),
+        'avsync': player.getProperty('avsync'),
+        if (!tracing) 'audioOutput': player.getProperty('current-ao'),
+        if (!tracing) 'audioParams': player.getProperty('audio-params'),
         'decoder': player.getProperty('hwdec-current'),
         'shaderCount':
             session.currentSnapshot.configuration.applied.shaders.length,
@@ -182,6 +201,10 @@ Future<void> main() async {
         'sourceWidth': row['sourceWidth'],
         'sourceHeight': row['sourceHeight'],
         'decoder': row['decoder'],
+        'positionMs': row['positionMs'],
+        'frameDrops': row['frameDrops'],
+        'decoderFrameDrops': row['decoderFrameDrops'],
+        'avsync': row['avsync'],
         'nativeShaderCount': row['nativeShaderCount'],
         'd3dTexture': resources?['d3dTexture'],
         'renderContext': resources?['renderContext'],
@@ -239,7 +262,7 @@ Future<void> main() async {
           source: PlaybackSourceSnapshot.fromDataSource(
             NetworkSource(
               videoSource: entry['source'] as String,
-              audioSource: null,
+              audioSource: entry['audioSource'] as String?,
             ),
           ),
           timeline: const PlaybackTimeline(
@@ -252,17 +275,19 @@ Future<void> main() async {
             height: entry['height'] as int?,
           ),
           configuration: PlaybackConfiguration(
-            hwdec: 'd3d11va',
+            hwdec: decoder,
             shaders: shaders.map(
               (name) => AssetUtils.tryGetPath(
                 'assets/shaders/$name',
               )!,
             ),
-            mediaOptions: const {
+            mediaOptions: {
               'cache': 'yes',
               'cache-secs': '16',
               'demuxer-max-bytes': '4194304',
               'demuxer-max-back-bytes': '4194304',
+              ...(config['mediaOptions'] as Map?)?.cast<String, String>() ??
+                  const <String, String>{},
             },
           ),
         ),
@@ -271,6 +296,25 @@ Future<void> main() async {
       check(loaded.outcome == LoadOutcome.ready, 'Source load failed');
       phase = '$name.loaded';
       final player = runtime.player!;
+      // Release 运行时默认只订阅 error；探针须显式接收 WASAPI 的 warn。
+      final logLevel = 'warn'.toNativeUtf8();
+      try {
+        check(
+          NativePlayer.mpv.mpv_request_log_messages(
+                player.ctx,
+                logLevel.cast(),
+              ) >=
+              0,
+          'Native log subscription failed',
+        );
+      } finally {
+        calloc.free(logLevel);
+      }
+      logSubscription ??= player.stream.log.listen((event) {
+        if (event.text.contains('Audio device underrun detected.')) {
+          underruns.add(watch.elapsedMilliseconds);
+        }
+      });
       final video = runtime.videoController!;
       final size = VideoOutputSizePolicy.fitWithinLimit(
         source: VideoOutputSizePolicy.videoDisplaySize(
@@ -278,7 +322,14 @@ Future<void> main() async {
         ),
         limit: WindowsVideoOutputLimit.detected,
       )!;
-      await video.setSize(width: size.width, height: size.height);
+      await video.setSize(
+        width: entry['outputWidth'] as int? ?? size.width,
+        height: entry['outputHeight'] as int? ?? size.height,
+      );
+      if (config['renderFlutterVideo'] == false) {
+        display.value = null;
+        await WidgetsBinding.instance.endOfFrame;
+      }
       check(
         (await owner.setPlaying(true)).outcome == CommandOutcome.applied,
         'Play failed',
@@ -288,7 +339,7 @@ Future<void> main() async {
         Duration(seconds: entry['seconds'] as int? ?? 5),
       );
       check(
-        player.getProperty('hwdec-current') == 'd3d11va',
+        player.getProperty('hwdec-current') == decoder,
         'Decoder changed',
       );
       phase = '$name.pixels';
@@ -319,6 +370,15 @@ Future<void> main() async {
       for (var sample = 0; sample < 3; sample++) {
         await Future<void>.delayed(const Duration(seconds: 1));
         await record('$name.$sample');
+      }
+      if (entry['maxFrameDrops'] case final int limit) {
+        final drops = int.parse(player.getProperty('frame-drop-count'));
+        frameDropChecks.add({
+          'stage': name,
+          'actual': drops,
+          'limit': limit,
+          'passed': drops <= limit,
+        });
       }
       if (entry['maxCreatedTextures'] case final int limit) {
         final resources = (rows.last['native'] as Map)['resources'] as Map;
@@ -428,6 +488,13 @@ Future<void> main() async {
       shaderChecks.every((entry) => entry['passed'] == true),
       'Source shader policy check failed',
     );
+    if (config['maxAudioUnderruns'] case final int limit) {
+      check(underruns.length <= limit, 'Audio output underrun limit exceeded');
+    }
+    check(
+      frameDropChecks.every((entry) => entry['passed'] == true),
+      'Video frame drop limit exceeded',
+    );
     report['passed'] = true;
   } catch (error, stack) {
     report['error'] = '$error';
@@ -435,6 +502,7 @@ Future<void> main() async {
   } finally {
     tracing = false;
     await traceTask;
+    await logSubscription?.cancel();
     await save();
     await gpu.invokeMethod<void>('stop');
   }

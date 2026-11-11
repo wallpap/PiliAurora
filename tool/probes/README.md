@@ -576,8 +576,23 @@ python tool/probes/windows/windows_renderer_release_probe.py
 
 ## Windows 播放器资源回收探针
 
+音画连续性对照可在 `playerOptions` 设置 `ao: wasapi`、`volume: 0`，
+并为每个 case 提供本地 `audioSource`。`mediaOptions` 可覆盖 `video-sync`
+等文件选项，便于保持其他条件不变。`trace` 记录位置、呈现丢帧、解码丢帧和
+音画偏差；`audioUnderrunsMs` 记录 WASAPI 欠载的探针单调时刻。
+设置 `maxAudioUnderruns: 0` 后，出现欠载会令 `passed=false` 并以非零退出。
+探针会显式订阅原生 warn 日志，Release 构建也能捕获欠载。每个 case 可设置
+`maxFrameDrops`，在退出释放后验收丢帧上限，避免增大音频缓冲掩盖画面停顿。
+默认空音频输出的资源验收不能证明真实声音连续。对照素材的音视频时长均应
+覆盖测量窗口，避免视频结束后继续播放外部音轨。
+
+顶层 `decoder` 可指定预期硬解模式（默认 `d3d11va`）；case 的 `outputWidth`、
+`outputHeight` 可覆盖最终输出尺寸。`renderFlutterVideo: false` 在加载后移除
+Flutter 视频控件，用于区分输出与解码；此对照须同时设置 `checkFrames: false`，
+其通过结果只反映后台播放与释放，不能证明屏幕呈现流畅。
+
 `playback/windows_resource_lifecycle.dart` 使用生产 Session、Runtime、libmpv 与 ANGLE，
-离线执行指定的画质和超分序列。音频输出为空，不读取账号或清理缓存。每阶段静置后
+离线执行指定的画质和超分序列。默认音频输出为空，不读取账号或清理缓存。每阶段静置后
 采集三个样本，分别记录进程内存、DXGI 预算、输出纹理名义字节和原生创建／释放
 计数。关闭后要求 `released` 成功、全部原生资源计数归零。
 

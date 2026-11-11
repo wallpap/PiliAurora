@@ -358,6 +358,9 @@ bool VideoOutput::Render() {
       render_status = mpv_render_context_render(render_context_, params);
     }
     if (render_status < 0) return false;
+    // 共享纹理复制在输出线程提交后再通知 Flutter，避免 Raster 回调
+    // 持有引擎图形上下文时等待正在 glFinish 的绘制线程。
+    if (surface_manager_ != nullptr) surface_manager_->Read();
     const bool current_file_frame =
         output_prepared_ && active_token_.has_value() &&
         !active_token_invalidated_ && frame_seen_token_.has_value() &&
@@ -861,7 +864,6 @@ bool VideoOutput::ApplyResize(int64_t required_width, int64_t required_height) {
                 if (texture_id_ && surface_manager_ && !texture_update_pending_) {
                   const auto texture = textures_.find(texture_id_);
                   if (texture != textures_.end()) {
-                    surface_manager_->Read();
                     descriptor = texture->second.get();
                     consumed_texture_id = texture_id_;
                   }
