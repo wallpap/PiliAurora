@@ -629,6 +629,9 @@ class NativePlaybackRuntime
           'startMs': source.start?.inMilliseconds,
           'sourceType': plan.source.isNetwork ? 'network-snapshot' : 'local',
           'audioOnly': plan.configuration.audioOnly,
+          'shaderCount': plan.configuration.shaders.length,
+          'sourceWidthHint': plan.metadata?.width,
+          'sourceHeightHint': plan.metadata?.height,
           'outputEpoch': token.outputEpoch,
         },
       );

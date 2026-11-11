@@ -14,6 +14,7 @@ import 'package:pili_aurora/plugin/pl_player/playback/native_playback_runtime.da
 import 'package:pili_aurora/plugin/pl_player/playback/playback_contracts.dart';
 import 'package:pili_aurora/plugin/pl_player/playback/playback_session.dart';
 import 'package:pili_aurora/plugin/pl_player/playback/shader_updates.dart';
+import 'package:pili_aurora/plugin/pl_player/playback/super_resolution_policy.dart';
 import 'package:pili_aurora/plugin/pl_player/utils/native_video_options.dart';
 import 'package:pili_aurora/services/diagnostics/process_metrics.dart';
 import 'package:pili_aurora/services/windows_video_output_limit.dart';
@@ -72,7 +73,23 @@ Future<void> main() async {
     ),
     diagnosticsExtra: () => const {},
   );
-  final session = PlaybackSession(runtime: runtime);
+  final session = PlaybackSession(
+    runtime: runtime,
+    configurationForPlan: config['sourceShaderPolicy'] == true
+        ? (plan) => superResolutionConfigurationForPlan(
+            plan,
+            display: VideoOutputSizePolicy.physicalDisplaySize(
+              WidgetsBinding
+                  .instance
+                  .platformDispatcher
+                  .views
+                  .first
+                  .display
+                  .size,
+            ),
+          )
+        : null,
+  );
   final owner = session.attach();
   void attach() => display.value = runtime.videoController;
   runtime.videoControllerListenable.addListener(attach);
@@ -89,6 +106,7 @@ Future<void> main() async {
     'schemaVersion': 1,
     'scope': 'productionSession;localMedia;nullAudioOutput;noCachePurge',
     'outputPolicy': 'sourceSizeCappedToPhysicalDisplayAfterLoad',
+    'sourceShaderPolicy': config['sourceShaderPolicy'] == true,
     'rows': rows,
     'trace': trace,
     'passed': false,
@@ -125,6 +143,13 @@ Future<void> main() async {
         'playing': player.state.playing,
         'positionMs': player.state.position.inMilliseconds,
         'decoder': player.getProperty('hwdec-current'),
+        'shaderCount':
+            session.currentSnapshot.configuration.applied.shaders.length,
+        'nativeShaderCount': player
+            .getProperty('glsl-shaders')
+            .split(';')
+            .where((shader) => shader.contains('Anime4K_'))
+            .length,
         if (!tracing) ...{
           'videoParameters': player.getProperty('video-params'),
           'cacheState': player.getProperty('demuxer-cache-state'),
@@ -146,6 +171,7 @@ Future<void> main() async {
         'sourceWidth': row['sourceWidth'],
         'sourceHeight': row['sourceHeight'],
         'decoder': row['decoder'],
+        'nativeShaderCount': row['nativeShaderCount'],
         'd3dTexture': resources?['d3dTexture'],
         'renderContext': resources?['renderContext'],
         if (adapter?.isNotEmpty == true) 'gpuLocal': adapter!.first['local'],
@@ -191,7 +217,7 @@ Future<void> main() async {
       };
       final loaded = await owner.load(
         PlaybackPlan(
-          contentKey: 'local-fixture-$index',
+          contentKey: entry['contentKey'] as String? ?? 'local-fixture-$index',
           source: PlaybackSourceSnapshot.fromDataSource(
             NetworkSource(
               videoSource: entry['source'] as String,
@@ -352,6 +378,29 @@ Future<void> main() async {
     check(
       checks.every((entry) => entry['passed'] == true),
       'Memory retention check failed',
+    );
+    final shaderChecks = <Map<String, Object?>>[];
+    report['shaderChecks'] = shaderChecks;
+    for (final entry in cases) {
+      if (entry['maxActiveShaders'] case final int limit) {
+        final name = entry['name'] as String;
+        final samples = rows.where(
+          (row) => (row['stage'] as String).startsWith('$name.'),
+        );
+        check(samples.isNotEmpty, 'Shader samples required');
+        shaderChecks.add({
+          'stage': name,
+          'maxActiveShaders': limit,
+          'actual': samples.map((row) => row['nativeShaderCount']).toList(),
+          'passed': samples.every(
+            (row) => (row['nativeShaderCount'] as int) <= limit,
+          ),
+        });
+      }
+    }
+    check(
+      shaderChecks.every((entry) => entry['passed'] == true),
+      'Source shader policy check failed',
     );
     report['passed'] = true;
   } catch (error, stack) {

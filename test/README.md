@@ -263,6 +263,11 @@ EOF 回归覆盖 keep-open 播放结束通知的文件归属、重复合并与 s
 
 `plugin/pl_player/playback/super_resolution_policy_test.dart` 检查源视频与当前屏幕物理分辨率的长短边比较，以及尺寸未知时延后加载超分的判定。`super_resolution_selection_test.dart` 检查不可用的显式选择保留档位和设置。超分入口由播放器底栏和视频更多设置面板提供。
 
+`controller_recovery_test.dart` 的切源超分回归接入真实门面与 Session，检查效率／质量
+两档、直接加载／异步查询、横竖屏源，以及查询和打开期间到达的配置。超过屏幕的
+4K 来源首次打开时必须清除超分，允许的分辨率保留档位、倍速和音量，并且只加载一次。
+原生 shader 与内存对照使用[资源回收探针](../tool/probes/README.md#windows-播放器资源回收探针)。
+
 `pages/video/playback_lifecycle_test.dart` 覆盖查询与媒体绑定、旧响应取消、重载意图和字幕归属，以及重选来源成功后确认、连续选择合并、失败重试和离页恢复；`playback_source_test.dart` 检查候选优先级及缺失来源／编码的安全异常。`pages/live_room/source_results_test.dart` 检查切流／画质的加载回执、偏好保存部分成功、迟到结果隔离和确认来源恢复；`controller_test.dart` 继续覆盖消息连接 single-flight、token/history 代次、暂停／恢复及关闭后的迟到回调。
 
 `services/audio_session_test.dart` 覆盖 duck 重复开始、结束先于音量命令完成及用户新音量保护；`audio_handler_lifecycle_test.dart` 覆盖多页面媒体归属、最后一项释放 keepalive、音频未就绪不触发底层视频，以及停止回执不清新媒体。以上使用受控请求与播放器替身，真实音视频、耳机和系统媒体控制需设备验证。

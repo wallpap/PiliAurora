@@ -881,6 +881,7 @@ class PlPlayerController
   late final PlaybackSession _session = PlaybackSession(
     runtime: _runtime,
     monotonicNow: _monotonicNow,
+    configurationForPlan: _configurationForPlaybackPlan,
   );
   PlaybackMediaClock get mediaClock => _session;
   PlaybackNetworkRecovery? _networkRecovery;
@@ -1289,6 +1290,10 @@ class PlPlayerController
     VideoType? videoType,
   }) {
     if (!owner.isActive) return;
+    // 旧来源的资源准备即使迟到完成，也不能覆盖新来源的 shader 配置。
+    _shaderRequestGeneration++;
+    _shaderPendingOwner = null;
+    _shaderPendingMode = null;
     final sameContent = _currentPlan?.contentKey == plan.contentKey;
     activatePlaybackOwner(owner);
     _networkRecovery?.dispose();
@@ -1311,9 +1316,11 @@ class PlPlayerController
     _epid = epid;
     _seasonId = seasonId;
     _pgcType = pgcType;
-    superResolutionType.value = isAnim
-        ? Pref.superResolutionType
-        : SuperResolutionType.disable;
+    if (!sameContent) {
+      superResolutionType.value = isAnim
+          ? Pref.superResolutionType
+          : SuperResolutionType.disable;
+    }
     if (showSeekPreview) {
       _clearPreview();
     } else {
@@ -1435,6 +1442,9 @@ class PlPlayerController
         source: _shaderSourceSize.value,
         display: _shaderDisplaySize,
       );
+
+  PlaybackConfiguration _configurationForPlaybackPlan(PlaybackPlan plan) =>
+      superResolutionConfigurationForPlan(plan, display: _shaderDisplaySize);
 
   Future<void> setShader([SuperResolutionType? type]) async {
     final owner = _activeOwner;

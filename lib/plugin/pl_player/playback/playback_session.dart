@@ -13,6 +13,7 @@ class PlaybackSession implements PlaybackMediaClock {
     required PlaybackRuntimePort runtime,
     Duration Function()? monotonicNow,
     int Function()? mediaClockNowUs,
+    this.configurationForPlan,
     this.loadBudget = const Duration(seconds: 30),
     this.commandBudget = const Duration(seconds: 5),
     this.shutdownBudget = const Duration(seconds: 10),
@@ -51,6 +52,9 @@ class PlaybackSession implements PlaybackMediaClock {
   final PlaybackRuntimePort _runtime;
   final Duration Function() _now;
   final int Function() _mediaClockNowUs;
+
+  /// 合并用户配置后、打开来源前应用同步约束；不得发起会话命令。
+  final PlaybackConfiguration Function(PlaybackPlan plan)? configurationForPlan;
   final PlaybackOperationScheduler _operations;
   final Duration loadBudget;
   final Duration commandBudget;
@@ -706,6 +710,8 @@ class PlaybackSession implements PlaybackMediaClock {
         throw const _PlaybackSuperseded();
       }
       if (request.deadline <= _now()) throw TimeoutException('load deadline');
+      // 排队和候选轮换期间配置仍可能变化，每次 open 都重新核对来源约束。
+      plan = _mergeConfigChangesSinceAcceptance(request, plan);
       final thisLoadId = ++_loadId;
       request.loadId = thisLoadId;
       _stage = PlaybackStage.initializing;
@@ -755,7 +761,7 @@ class PlaybackSession implements PlaybackMediaClock {
           result.output.strategy == PlaybackOutputStrategy.failed) {
         return result;
       }
-      final desired = _configurationDuringLoad(request, plan.configuration);
+      final desired = _configurationDuringLoad(request, plan);
       if (!_sameConfiguration(desired, plan.configuration)) {
         plan = plan.withConfiguration(desired);
         // 配置在本次加载期间变化时，以相同结构协议重新加载最新完整计划。
@@ -809,7 +815,7 @@ class PlaybackSession implements PlaybackMediaClock {
     _AcceptedRequest request,
     PlaybackPlan plan,
   ) {
-    final config = _configurationDuringLoad(request, plan.configuration);
+    final config = _configurationDuringLoad(request, plan);
     final merged = plan.withConfiguration(config);
     request.finalPlan = merged;
     _desiredConfiguration = config;
@@ -818,9 +824,9 @@ class PlaybackSession implements PlaybackMediaClock {
 
   PlaybackConfiguration _configurationDuringLoad(
     _AcceptedRequest request,
-    PlaybackConfiguration base,
+    PlaybackPlan plan,
   ) {
-    var result = base;
+    var result = plan.configuration;
     bool changed(PlaybackConfigurationKey key) =>
         (_configurationRevisions[key] ?? 0) >
         (request.configurationRevisionsAtAcceptance[key] ?? 0);
@@ -864,7 +870,7 @@ class PlaybackSession implements PlaybackMediaClock {
     if (changed(PlaybackConfigurationKey.mediaOptions)) {
       result = result.copyWith(mediaOptions: desired.mediaOptions);
     }
-    return result;
+    return configurationForPlan?.call(plan.withConfiguration(result)) ?? result;
   }
 
   Future<CommandResult> _setPlaying(PlaybackOwner owner, bool playing) {

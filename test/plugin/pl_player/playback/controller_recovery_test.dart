@@ -12,6 +12,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:get/get.dart';
 import 'package:hive_ce/hive.dart';
 import 'package:media_kit/media_kit.dart';
+import 'package:pili_aurora/common/assets.dart';
 import 'package:pili_aurora/plugin/pl_player/controller.dart';
 import 'package:pili_aurora/models/common/super_resolution_type.dart';
 import 'package:pili_aurora/utils/path_utils.dart';
@@ -248,6 +249,184 @@ void main() {
     expect(f.tester.takeException(), isNull);
     await dismissScreenshotToasts(f);
   });
+
+  for (final mode in [
+    SuperResolutionType.efficiency,
+    SuperResolutionType.quality,
+  ]) {
+    for (final query in [false, true]) {
+      for (final target in [
+        (name: '4K', width: 3840, height: 2160, allowed: false),
+        (name: '1080p', width: 1920, height: 1080, allowed: true),
+        (name: '竖屏1080p', width: 1080, height: 1920, allowed: true),
+      ]) {
+        _recoveryTest(
+          '切源前核对超分 ${mode.name} ${target.name} query=$query',
+          (f) async {
+            f.tester.view.display.size = const Size(2560, 1440);
+            addTearDown(f.tester.view.display.resetSize);
+            await f.load(
+              metadata: const PlaybackMetadataHint(
+                trust: .sourceHint,
+                width: 1920,
+                height: 1080,
+              ),
+            );
+            f.controller.shadersDirPath = path.join(
+              shaderRoot.path,
+              'synthetic',
+            );
+            await f.controller.setShader(mode);
+            final shaders = f
+                .controller
+                .currentPlaybackSnapshot
+                .configuration
+                .applied
+                .shaders;
+            expect(shaders, isNotEmpty);
+            await f.owner.setPlaybackSpeed(1.5);
+            await f.owner.setVolume(37);
+            final plan = f.controller.createPlaybackPlan(
+              contentKey: 'movie',
+              source: NetworkSource(
+                videoSource: 'https://example.test/movie-${target.name}.mp4',
+                audioSource: 'https://example.test/movie.m4a',
+              ),
+              configuration: f.controller.capturePlaybackConfiguration(
+                live: false,
+              ),
+              timelineKind: .onDemand,
+              seekPolicy: .allowed,
+              metadata: PlaybackMetadataHint(
+                trust: .sourceHint,
+                width: target.width,
+                height: target.height,
+              ),
+            );
+            final before = f.runtime.loads.length;
+            final result = query
+                ? await f.owner.query((_) async {
+                    f.controller.preparePlaybackPlan(
+                      owner: f.owner,
+                      plan: plan,
+                      live: false,
+                    );
+                    return plan.withConfiguration(
+                      f
+                          .controller
+                          .currentPlaybackSnapshot
+                          .configuration
+                          .desired,
+                    );
+                  }, start: .preserve)
+                : await f.controller.loadPlaybackPlan(
+                    owner: f.owner,
+                    plan: plan,
+                    start: .preserve,
+                    live: false,
+                  );
+            await f.tester.pump();
+            expect(result.outcome, LoadOutcome.ready);
+            final expected = target.allowed ? shaders : const <String>[];
+            final loaded = f.runtime.loads[before].configuration;
+            expect(
+              loaded.shaders,
+              expected,
+              reason: '首次打开新源前核对尺寸，不让 4K 首帧继承 1080p 超分',
+            );
+            expect(loaded.playbackSpeed, 1.5);
+            expect(loaded.volume, 37);
+            expect(f.runtime.loads.length, before + 1);
+            expect(
+              f
+                  .controller
+                  .currentPlaybackSnapshot
+                  .configuration
+                  .applied
+                  .shaders,
+              expected,
+            );
+            expect(
+              f.controller.superResolutionType.value,
+              target.allowed ? mode : SuperResolutionType.disable,
+            );
+          },
+        );
+      }
+    }
+  }
+
+  for (final duringOpen in [false, true]) {
+    _recoveryTest('4K ${duringOpen ? '打开' : '查询'}期间的旧超分配置不能绕过尺寸限制', (f) async {
+      f.tester.view.display.size = const Size(2560, 1440);
+      addTearDown(f.tester.view.display.resetSize);
+      await f.load(shaderEligible: true);
+      f.controller.shadersDirPath = path.join(shaderRoot.path, 'synthetic');
+      await f.controller.setShader(SuperResolutionType.efficiency);
+      final shaders = Assets.mpvAnime4KShaders
+          .map((name) => path.join(f.controller.shadersDirPath!, name))
+          .toList();
+      final plan = f.controller.createPlaybackPlan(
+        contentKey: 'movie',
+        source: NetworkSource(
+          videoSource: 'https://example.test/movie-4k.mp4',
+          audioSource: null,
+        ),
+        configuration: f.controller.capturePlaybackConfiguration(live: false),
+        timelineKind: .onDemand,
+        seekPolicy: .allowed,
+        metadata: const PlaybackMetadataHint(
+          trust: .sourceHint,
+          width: 3840,
+          height: 2160,
+        ),
+      );
+      final entered = Completer<void>();
+      final proceed = Completer<void>();
+      addTearDown(() {
+        if (!proceed.isCompleted) proceed.complete();
+      });
+      if (duringOpen) {
+        f.runtime.beforeLoad = (_) async {
+          entered.complete();
+          await proceed.future;
+        };
+      }
+      final before = f.runtime.loads.length;
+      final loading = duringOpen
+          ? f.controller.loadPlaybackPlan(
+              owner: f.owner,
+              plan: plan,
+              start: .preserve,
+              live: false,
+            )
+          : f.owner.query((_) async {
+              f.controller.preparePlaybackPlan(
+                owner: f.owner,
+                plan: plan,
+                live: false,
+              );
+              entered.complete();
+              await proceed.future;
+              return plan;
+            }, start: .preserve);
+      await f.tester.pump();
+      expect(entered.isCompleted, isTrue);
+      expect(
+        (await f.owner.setShader(shaders)).outcome,
+        CommandOutcome.accepted,
+      );
+      proceed.complete();
+      expect((await loading).outcome, LoadOutcome.ready);
+      await f.tester.pump();
+      expect(f.runtime.loads.length, before + 1);
+      expect(f.runtime.loads.last.configuration.shaders, isEmpty);
+      expect(
+        f.controller.currentPlaybackSnapshot.configuration.applied.shaders,
+        isEmpty,
+      );
+    });
+  }
 
   _recoveryTest('超分资源准备失败保留档位，同档位选择可以重试', (f) async {
     await f.tester.pumpWidget(
@@ -1576,6 +1755,7 @@ class _Fixture {
   Future<void> load({
     String key = 'movie',
     bool shaderEligible = false,
+    PlaybackMetadataHint? metadata,
     PlaybackStartPolicy start = PlaybackStartPolicy.play,
     bool local = false,
     List<String> videoCandidates = const [],
@@ -1585,9 +1765,15 @@ class _Fixture {
     runtime.hasAudio = mode != _Mode.videoOnly;
     final plan = PlaybackPlan(
       contentKey: key,
-      metadata: shaderEligible
-          ? const PlaybackMetadataHint(trust: .sourceHint, width: 1, height: 1)
-          : null,
+      metadata:
+          metadata ??
+          (shaderEligible
+              ? const PlaybackMetadataHint(
+                  trust: .sourceHint,
+                  width: 1,
+                  height: 1,
+                )
+              : null),
       source: PlaybackSourceSnapshot.fromDataSource(
         local
             ? FileSource(

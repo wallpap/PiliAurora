@@ -578,6 +578,13 @@ python tool/probes/windows/windows_renderer_release_probe.py
 创建数，例如单次首次加载未知尺寸的 4K 时设为 4，可检出先分配完整 4K、再限幅
 的多余纹理对。该计数不包含 libmpv 内部纹理或硬解表面。
 
+`sourceShaderPolicy: true` 启用应用使用的源尺寸超分策略。多个阶段设置相同
+`contentKey`，可回放同内容的画质切换，检查会话继承的 shader 是否在打开新源前受限。
+例如先加载 1080p 的 `mode: "efficiency"`，再以相同 `contentKey` 加载 4K，并给 4K
+阶段设置 `maxActiveShaders: 0`。省略策略开关可作为旧行为的干预对照，默认关闭。
+`shaderChecks` 检查各阶段实际原生 shader 列表中的 Anime4K 数量，不包含基础
+ChromaClamp；进程内存和纹理生命周期仍独立记录。
+
 阶段可添加 `windowTransitions`，在媒体连续播放期间测试全屏和恢复：
 
 ```json
