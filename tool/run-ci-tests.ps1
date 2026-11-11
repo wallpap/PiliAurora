@@ -27,6 +27,7 @@ $ciTests = @(
     "test/services/app_icon_test.dart",
     "test/services/webview_environment_test.dart",
     "test/services/webview_init_concurrency_test.dart",
+    "test/services/webview_idle_lifecycle_test.dart",
     "test/common/widgets/webview_ready_test.dart",
     "test/pages/bubble/controller_test.dart",
     "test/pages/emote/controller_test.dart",

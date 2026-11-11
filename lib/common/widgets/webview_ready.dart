@@ -13,7 +13,14 @@ class WebViewReady extends StatefulWidget {
 }
 
 class _WebViewReadyState extends State<WebViewReady> {
+  final _release = AppWebViewEnvironment.retain();
   late Future<void> _ready = _prepare();
+
+  @override
+  void dispose() {
+    _release();
+    super.dispose();
+  }
 
   Future<void> _prepare() async {
     await AppWebViewEnvironment.ensureInitialized();

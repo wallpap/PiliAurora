@@ -36,34 +36,36 @@ abstract final class LoginUtils {
   /// 返回 false 表示切号后失效；原生拒绝或异常通过 Future 返回。
   static Future<bool> setWebCookie([Account? account]) {
     final owner = account ?? Accounts.main;
-    return _queueWebCookies(() async {
-      if (!identical(owner, Accounts.main)) return false;
-      await AppWebViewEnvironment.ensureInitialized();
-      if (!identical(owner, Accounts.main)) return false;
-      final cookies = owner.cookieJar.toList();
-      final webManager = web.CookieManager.instance(
-        webViewEnvironment: AppWebViewEnvironment.instance,
-      );
-      final results = await Future.wait(
-        cookies.map(
-          (cookie) => webManager.setCookie(
-            url: web.WebUri(
-              '${Platform.isWindows ? 'https://' : ''}${cookie.domain}',
+    return _queueWebCookies(
+      () => AppWebViewEnvironment.using(() async {
+        if (!identical(owner, Accounts.main)) return false;
+        await AppWebViewEnvironment.ensureInitialized();
+        if (!identical(owner, Accounts.main)) return false;
+        final cookies = owner.cookieJar.toList();
+        final webManager = web.CookieManager.instance(
+          webViewEnvironment: AppWebViewEnvironment.instance,
+        );
+        final results = await Future.wait(
+          cookies.map(
+            (cookie) => webManager.setCookie(
+              url: web.WebUri(
+                '${Platform.isWindows ? 'https://' : ''}${cookie.domain}',
+              ),
+              name: cookie.name,
+              value: cookie.value,
+              path: cookie.path ?? '/',
+              domain: cookie.domain,
+              isSecure: cookie.secure,
+              isHttpOnly: cookie.httpOnly,
             ),
-            name: cookie.name,
-            value: cookie.value,
-            path: cookie.path ?? '/',
-            domain: cookie.domain,
-            isSecure: cookie.secure,
-            isHttpOnly: cookie.httpOnly,
           ),
-        ),
-      );
-      if (results.any((success) => !success)) {
-        throw const Error('网页 Cookie 同步失败，请重试');
-      }
-      return identical(owner, Accounts.main);
-    });
+        );
+        if (results.any((success) => !success)) {
+          throw const Error('网页 Cookie 同步失败，请重试');
+        }
+        return identical(owner, Accounts.main);
+      }),
+    );
   }
 
   static Future<void> onLoginMain() async {
@@ -131,15 +133,17 @@ abstract final class LoginUtils {
       ..isLogin.value = false;
 
     return Future.wait([
-      _queueWebCookies(() async {
-        if (!identical(owner, Accounts.main)) return;
-        await AppWebViewEnvironment.ensureInitialized();
-        if (!identical(owner, Accounts.main)) return;
-        final cleared = await web.CookieManager.instance(
-          webViewEnvironment: AppWebViewEnvironment.instance,
-        ).deleteAllCookies();
-        if (!cleared) throw const Error('网页 Cookie 清理失败，请重试');
-      }),
+      _queueWebCookies(
+        () => AppWebViewEnvironment.using(() async {
+          if (!identical(owner, Accounts.main)) return;
+          await AppWebViewEnvironment.ensureInitialized();
+          if (!identical(owner, Accounts.main)) return;
+          final cleared = await web.CookieManager.instance(
+            webViewEnvironment: AppWebViewEnvironment.instance,
+          ).deleteAllCookies();
+          if (!cleared) throw const Error('网页 Cookie 清理失败，请重试');
+        }),
+      ),
       GStorage.userInfo.delete('userInfoCache'),
     ]);
   }

@@ -12,6 +12,8 @@ CI 测试脚本在共享逻辑回归之外按主机补充平台用例：Windows 
 `common/widgets/webview_ready_test.dart` 检查启动登记不分配原生环境、首次使用去重、
 失败重试及离页后不挂载迟到网页；普通网页、验证码和 Cookie 操作共享同一环境屏障。
 
+Windows WebView 空闲回收回归：`fvm flutter test --no-pub test/services/webview_idle_lifecycle_test.dart`，覆盖页面与 Cookie 租约交接、快速重开和释放期间重开。
+
 ```powershell
 fvm flutter test test/plugin/pl_player/android/
 fvm flutter test test/services/diagnostics/ test/pages/about/diagnostics_page_test.dart

@@ -4,6 +4,8 @@
 
 `main.dart` 调用 `bootstrapApplication()`。Windows 启动只登记 WebView 数据目录；首次进入网页或验证码时才创建共享环境，普通网页在加载前同步当前账号 Cookie。登录、退出的显式 Cookie 操作等待环境就绪，并在等待后复核账号。非 Windows 沿用平台环境。
 
+网页、验证码和 Cookie 操作分别持有环境租约，最后一个使用者结束 5 秒后释放环境，保留数据目录。快速重开会取消回收；释放期间重开则等待释放完成后重建。
+
 ```mermaid
 sequenceDiagram
     participant OS as Android / Windows
