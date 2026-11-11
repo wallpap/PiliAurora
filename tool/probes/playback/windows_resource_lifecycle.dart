@@ -21,6 +21,8 @@ import 'package:pili_aurora/services/windows_video_output_limit.dart';
 import 'package:pili_aurora/utils/asset_utils.dart';
 import 'package:window_manager/window_manager.dart';
 
+import '../windows/process_heap_memory.dart';
+
 /// 离线测量生产会话切源、超分和关闭；不读取应用账号或清理缓存。
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -65,9 +67,16 @@ Future<void> main() async {
       ),
     ),
   );
+  final playerOptionOverrides =
+      (config['playerOptions'] as Map?)?.cast<String, String>() ??
+      const <String, String>{};
   final runtime = NativePlaybackRuntime(
     configuration: PlaybackRuntimeConfig(
-      playerOptions: {'ao': 'null', ...nativeVideoPlayerOptions()},
+      playerOptions: {
+        'ao': 'null',
+        ...nativeVideoPlayerOptions(),
+        ...playerOptionOverrides,
+      },
       hardwareAccelerationEnabled: true,
       hardwareDecoder: 'd3d11va',
     ),
@@ -96,6 +105,7 @@ Future<void> main() async {
   const native = MethodChannel('com.alexmercerind/media_kit_video');
   const gpu = MethodChannel('pili_aurora/windows_gpu');
   final process = ProcessMetrics();
+  final heap = ProcessHeapMemory();
   final watch = Stopwatch()..start();
   final rows = <Map<String, Object?>>[];
   final trace = <Map<String, Object?>>[];
@@ -130,6 +140,7 @@ Future<void> main() async {
       'phase': phase,
       'elapsedMs': watch.elapsedMilliseconds,
       'process': process.sample(),
+      if (!tracing) 'defaultHeap': heap.sample(),
       'gpu': graphics,
       'native': stats,
       'runtimeId': runtime.runtimeId,
@@ -185,6 +196,13 @@ Future<void> main() async {
   try {
     await gpu.invokeMethod<void>('start');
     await record('baseline');
+    if (config['baselineSamples'] == true) {
+      await Future<void>.delayed(const Duration(seconds: 3));
+      for (var sample = 0; sample < 3; sample++) {
+        await Future<void>.delayed(const Duration(seconds: 1));
+        await record('baseline.$sample');
+      }
+    }
     final traceIntervalMs = config['traceIntervalMs'] as int? ?? 0;
     if (traceIntervalMs > 0) {
       tracing = true;
@@ -341,6 +359,14 @@ Future<void> main() async {
     phase = 'released';
     await Future<void>.delayed(const Duration(seconds: 3));
     await record('released');
+    final idleSeconds = config['postReleaseSeconds'] as int? ?? 0;
+    if (idleSeconds > 0) {
+      await Future<void>.delayed(Duration(seconds: idleSeconds));
+      for (var sample = 0; sample < 3; sample++) {
+        await Future<void>.delayed(const Duration(seconds: 1));
+        await record('idle.$sample');
+      }
+    }
     final stats = rows.last['native'] as Map;
     final resources = stats['resources'] as Map;
     for (final resource in resources.values.cast<Map>()) {

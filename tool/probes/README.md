@@ -525,7 +525,38 @@ allocated与committed差额也不全是可释放碎片。停止诊断采集后
 `PILIAURORA_PLAYBACK_OUTPUT` 指定报告，`PILIAURORA_PLAYBACK_SECONDS` 默认20，
 `PILIAURORA_PLAYBACK_IDLE_SECONDS` 默认70。须同时检查 `validWorkload`、
 各round的 `nativeResourcesReleased/retentionTargetPassed` 和最终 `passed`。
+每轮推荐列表就绪后等待4秒，记录 `beforePlayback`，与返回后的静置阶段比较；
+阶段额外保存图片缓存和默认进程堆，round记录实际源尺寸与硬解器。启动即取的
+`baseline` 仍保留，不能把首屏图片首次填充的差值全部归给播放器。
 采样/插桩引擎的绝对占用不能代替普通Release验收；完成后重建正常 `lib/main.dart`。
+
+全应用策略对照仍使用这个入口：`PILIAURORA_PLAYBACK_BROWSE=1` 在每轮播放前浏览
+推荐、热门、分区、番剧、影视与直播，`PILIAURORA_PLAYBACK_SCROLL=1` 增加推荐列表
+往返滚动，并记录实际 FrameTiming。`PILIAURORA_PLAYBACK_CANDIDATE` 指定本地 JSON，
+首次保存选中的推荐项，后续进程复用该视频；文件含公开视频元数据，仅留在本地。
+`PILIAURORA_IMAGE_CACHE_MIB` 与 `PILIAURORA_SKIA_CACHE_MIB` 独立修改解码图片 LRU 和
+raster 上下文资源预算；并非全部图形内存的上限。`PILIAURORA_OPTIMIZE_IDLE_HEAPS=1`
+仅在静置后执行一次堆整理；对照也等待相同的3秒，禁止把该结果混同自然释放。
+`PILIAURORA_WEBVIEW_EAGER=1` 为提前创建浏览器环境的对照，
+`PILIAURORA_EXERCISE_WEBVIEW=1` 在浏览/播放后两次挂载真实本地网页，复用生产环境、
+WebViewReady 屏障与 Cookie 同步，读取 DOM 标题并测首次/再次打开耗时，不访问外部网页。
+`PILIAURORA_WEBVIEW_ONLY=1` 只跑网页初始化/关闭，用于先确认夹具，不能充当浏览/播放验收。
+本地 HTML 走 initialData；Windows 的 URL 请求入口不适合 data URI 夹具。
+
+`PILIAURORA_WEBVIEW_RETAIN=1` 持有整轮环境租约，作为网页关闭后仍驻留的对照。
+默认配置检查网页关闭、静置后共享环境已经释放；启用该检查时，静置时间须至少6秒。
+`PILIAURORA_PLAYBACK_LOCAL_4K` 指向本地 3840×2160、60 FPS 样片时，探针在真实详情页
+首次播放后通过生产加载接口切入该来源，检查实际尺寸和帧率，再正常返回释放。
+该负载覆盖完整应用中的本地4K60播放；线上 DASH、HDR 和其他编码格式需另行验证。
+
+`windows/app_memory_matrix.py --config <本地JSON>` 自动复制隔离数据种子、按固定随机
+顺序重复各环境参数组，并用只读 Win32 API 采集主进程和其子进程。配置字段包括
+`executable/dataSeed/output/cases/environment/repetitions/seed/timeoutSeconds`；可用
+`captureVm: true` 对 Profile 主 isolate 查询 `getMemoryUsage`，不执行 GC，不输出认证 URI。
+每个 case 是环境变量映射。[配置示例](windows/app_memory_matrix.example.json) 中的种子须是
+已准备的隔离目录，不能使用现用账号数据目录。输出目录须全新，每轮报告需同时通过负载、进度与释放检查。
+进程树私有工作集可以汇总；RSS 的共享页有重复，逐进程保留，不能把 RSS 相加解释为
+唯一物理占用。缓存对照需同时比较滚动和重开耗时，并用普通 Release 复核候选。
 
 两个自动入口在最终采样、日志flush和报告写入完成后，才卸载Widget树并等待新根绘制帧结束，
 让页面同步释放托盘等原生句柄，再销毁测试窗口。该收尾不参与内存阈值判断，报告中的
@@ -584,6 +615,12 @@ python tool/probes/windows/windows_renderer_release_probe.py
 阶段设置 `maxActiveShaders: 0`。省略策略开关可作为旧行为的干预对照，默认关闭。
 `shaderChecks` 检查各阶段实际原生 shader 列表中的 Anime4K 数量，不包含基础
 ChromaClamp；进程内存和纹理生命周期仍独立记录。
+
+稳态对照可设置 `baselineSamples: true`，在首帧应用预热后记录三个基线样本；
+`postReleaseSeconds` 指定原生释放后继续静置的秒数，再记录三个 `idle` 样本。
+`memoryChecks` 可比较 `baseline` 与 `idle`。`playerOptions` 允许独立覆盖 libmpv
+选项，用于硬解缓冲、互操作接口和 FBO 的单变量实验。阶段的 `defaultHeap` 仅查询
+默认进程堆，不覆盖 Dart 堆、其他私有堆或全部驱动资源；实验选项通过不代表适合默认启用。
 
 阶段可添加 `windowTransitions`，在媒体连续播放期间测试全屏和恢复：
 

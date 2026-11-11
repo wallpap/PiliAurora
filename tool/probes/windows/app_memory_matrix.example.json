@@ -1,0 +1,24 @@
+{
+  "executable": "build/windows/x64/runner/Release/PiliAurora.exe",
+  "dataSeed": "build/isolated-memory-seed",
+  "output": "build/app-memory-comparison",
+  "repetitions": 2,
+  "seed": 20261111,
+  "timeoutSeconds": 360,
+  "captureVm": false,
+  "environment": {
+    "PILIAURORA_PLAYBACK_SECONDS": "8",
+    "PILIAURORA_PLAYBACK_IDLE_SECONDS": "10",
+    "PILIAURORA_PLAYBACK_BROWSE": "1",
+    "PILIAURORA_PLAYBACK_SCROLL": "1",
+    "PILIAURORA_EXERCISE_WEBVIEW": "1",
+    "PILIAURORA_PLAYBACK_CANDIDATE": "build/app-memory-fixed-video.json"
+  },
+  "cases": {
+    "eager64": {"PILIAURORA_WEBVIEW_EAGER": "1"},
+    "lazy64": {},
+    "images16": {"PILIAURORA_IMAGE_CACHE_MIB": "16"},
+    "skia32": {"PILIAURORA_SKIA_CACHE_MIB": "32"},
+    "idleHeap": {"PILIAURORA_OPTIMIZE_IDLE_HEAPS": "1"}
+  }
+}
