@@ -4,6 +4,7 @@ import 'package:pili_aurora/common/widgets/app_popup_menu_item.dart';
 import 'package:pili_aurora/common/widgets/route_aware_mixin.dart'
     show routeObserver;
 import 'package:pili_aurora/common/widgets/selection_text.dart';
+import 'package:pili_aurora/common/widgets/webview_ready.dart';
 import 'package:pili_aurora/services/logger.dart';
 import 'package:pili_aurora/http/browser_ua.dart';
 import 'package:pili_aurora/services/webview_environment.dart';
@@ -273,256 +274,283 @@ class _WebviewPageState extends State<WebviewPage> with RouteAware {
       body: _isPop
           ? null
           : SafeArea(
-              child: InAppWebView(
-                webViewEnvironment: AppWebViewEnvironment.instance,
-                initialSettings: InAppWebViewSettings(
-                  clearCache: true,
-                  javaScriptEnabled: true,
-                  forceDark: ForceDark.AUTO,
-                  useHybridComposition: true,
-                  algorithmicDarkeningAllowed: true,
-                  useShouldOverrideUrlLoading: true,
-                  userAgent: userAgent,
-                  mixedContentMode: MixedContentMode.MIXED_CONTENT_ALWAYS_ALLOW,
-                ),
-                initialUrlRequest: URLRequest(
-                  url: WebUri.uri(Uri.tryParse(_currentUrl) ?? Uri()),
-                ),
-                onWebViewCreated: (InAppWebViewController controller) {
-                  if (!mounted || _isPop) return;
-                  _generation++;
-                  _webViewController = controller
-                    ..addJavaScriptHandler(
-                      handlerName: 'finishButtonClicked',
-                      callback: (args) {
-                        if (_currentController(controller, _generation)) {
-                          Get.back();
-                        }
-                      },
-                    )
-                    ..addJavaScriptHandler(
-                      handlerName: 'infoBarClicked',
-                      callback: (args) =>
-                          _runWebOperation(controller, (current) async {
-                            WebUri? uri = await controller.getUrl();
-                            if (current() && uri != null) {
-                              String? oid = uri.queryParameters['oid'];
-                              final aid = int.tryParse(oid ?? '');
-                              if (aid != null && aid > 0) {
-                                await PiliScheme.videoPush(aid, null);
-                              }
-                            }
-                          }),
+              child: WebViewReady(
+                prepare: () async {
+                  if (AppWebViewEnvironment.isConfigured &&
+                      !await LoginUtils.setWebCookie()) {
+                    throw StateError(
+                      'Web account changed during initialization',
                     );
-                },
-                onLoadStart: (controller, uri) {
-                  if (!mounted || !identical(controller, _webViewController)) {
-                    return;
-                  }
-                  _generation++;
-                },
-                onProgressChanged: (controller, progress) {
-                  if (_currentController(controller, _generation)) {
-                    _progress.value = progress.clamp(0, 100) / 100;
                   }
                 },
-                onTitleChanged: (controller, title) {
-                  if (_currentController(controller, _generation)) {
-                    _title.value = title ?? '';
-                  }
-                },
-                onCloseWindow: (controller) {
-                  if (_currentController(controller, _generation)) Get.back();
-                },
-                onLoadStop: (controller, uri) => _runWebOperation(controller, (
-                  current,
-                ) async {
-                  final url = uri.toString();
-                  if (url.startsWith('https://www.bilibili.com/h5/note-app')) {
-                    await controller.evaluateJavascript(
-                      source: """
+                builder: (_) => InAppWebView(
+                  webViewEnvironment: AppWebViewEnvironment.instance,
+                  initialSettings: InAppWebViewSettings(
+                    clearCache: true,
+                    javaScriptEnabled: true,
+                    forceDark: ForceDark.AUTO,
+                    useHybridComposition: true,
+                    algorithmicDarkeningAllowed: true,
+                    useShouldOverrideUrlLoading: true,
+                    userAgent: userAgent,
+                    mixedContentMode:
+                        MixedContentMode.MIXED_CONTENT_ALWAYS_ALLOW,
+                  ),
+                  initialUrlRequest: URLRequest(
+                    url: WebUri.uri(Uri.tryParse(_currentUrl) ?? Uri()),
+                  ),
+                  onWebViewCreated: (InAppWebViewController controller) {
+                    if (!mounted || _isPop) return;
+                    _generation++;
+                    _webViewController = controller
+                      ..addJavaScriptHandler(
+                        handlerName: 'finishButtonClicked',
+                        callback: (args) {
+                          if (_currentController(controller, _generation)) {
+                            Get.back();
+                          }
+                        },
+                      )
+                      ..addJavaScriptHandler(
+                        handlerName: 'infoBarClicked',
+                        callback: (args) =>
+                            _runWebOperation(controller, (current) async {
+                              WebUri? uri = await controller.getUrl();
+                              if (current() && uri != null) {
+                                String? oid = uri.queryParameters['oid'];
+                                final aid = int.tryParse(oid ?? '');
+                                if (aid != null && aid > 0) {
+                                  await PiliScheme.videoPush(aid, null);
+                                }
+                              }
+                            }),
+                      );
+                  },
+                  onLoadStart: (controller, uri) {
+                    if (!mounted ||
+                        !identical(controller, _webViewController)) {
+                      return;
+                    }
+                    _generation++;
+                  },
+                  onProgressChanged: (controller, progress) {
+                    if (_currentController(controller, _generation)) {
+                      _progress.value = progress.clamp(0, 100) / 100;
+                    }
+                  },
+                  onTitleChanged: (controller, title) {
+                    if (_currentController(controller, _generation)) {
+                      _title.value = title ?? '';
+                    }
+                  },
+                  onCloseWindow: (controller) {
+                    if (_currentController(controller, _generation)) Get.back();
+                  },
+                  onLoadStop: (controller, uri) => _runWebOperation(
+                    controller,
+                    (
+                      current,
+                    ) async {
+                      final url = uri.toString();
+                      if (url.startsWith(
+                        'https://www.bilibili.com/h5/note-app',
+                      )) {
+                        await controller.evaluateJavascript(
+                          source: """
 document.querySelector('.finish-btn').addEventListener('click', function() {
     window.flutter_inappwebview.callHandler('finishButtonClicked');
 });
 """,
-                    );
-                    if (!current()) return;
-                    await controller.evaluateJavascript(
-                      source: """
+                        );
+                        if (!current()) return;
+                        await controller.evaluateJavascript(
+                          source: """
 document.querySelector('.info-bar').addEventListener('click', function() {
     window.flutter_inappwebview.callHandler('infoBarClicked');
 });
 """,
-                    );
-                  } else if (url.startsWith('https://live.bilibili.com')) {
-                    await controller.evaluateJavascript(
-                      source: '''
+                        );
+                      } else if (url.startsWith('https://live.bilibili.com')) {
+                        await controller.evaluateJavascript(
+                          source: '''
 document.styleSheets[0].insertRule('div.open-app-btn.bili-btn-warp {display:none;}', 0);
 document.styleSheets[0].insertRule('#app__display-area > div.control-panel {display:none;}', 0);
                   ''',
-                    );
-                  }
-                  // _webViewController?.evaluateJavascript(
-                  //   source: '''
-                  //     document.querySelector('#internationalHeader').remove();
-                  //     document.querySelector('#message-navbar').remove();
-                  //   ''',
-                  // );
-                }),
-                onDownloadStartRequest: Platform.isAndroid
-                    ? (controller, request) {
-                        final generation = _generation;
-                        if (!_currentController(controller, generation)) return;
-                        showDialog(
-                          context: context,
-                          builder: (context) {
-                            String suggestedFilename = request.suggestedFilename
-                                .toString();
-                            final fileSize = CacheManager.formatSize(
-                              request.contentLength,
-                            );
-                            try {
-                              suggestedFilename = Uri.decodeComponent(
-                                suggestedFilename,
+                        );
+                      }
+                      // _webViewController?.evaluateJavascript(
+                      //   source: '''
+                      //     document.querySelector('#internationalHeader').remove();
+                      //     document.querySelector('#message-navbar').remove();
+                      //   ''',
+                      // );
+                    },
+                  ),
+                  onDownloadStartRequest: Platform.isAndroid
+                      ? (controller, request) {
+                          final generation = _generation;
+                          if (!_currentController(controller, generation)) {
+                            return;
+                          }
+                          showDialog(
+                            context: context,
+                            builder: (context) {
+                              String suggestedFilename = request
+                                  .suggestedFilename
+                                  .toString();
+                              final fileSize = CacheManager.formatSize(
+                                request.contentLength,
                               );
-                            } catch (e, stackTrace) {
-                              logger.w(
-                                '下载文件名解码失败',
-                                error: e.runtimeType,
-                                stackTrace: stackTrace,
-                              );
-                            }
-                            final url = request.url.toString();
-                            return AlertDialog(
-                              title: Text(
-                                '下载文件: $suggestedFilename ?',
-                                style: const TextStyle(fontSize: 18),
-                              ),
-                              content: SelectionText(url),
-                              actions: [
-                                TextButton(
-                                  onPressed: Get.back,
-                                  child: Text(
-                                    '取消',
-                                    style: TextStyle(
-                                      color: Theme.of(context)
-                                          .colorScheme
-                                          .outline,
+                              try {
+                                suggestedFilename = Uri.decodeComponent(
+                                  suggestedFilename,
+                                );
+                              } catch (e, stackTrace) {
+                                logger.w(
+                                  '下载文件名解码失败',
+                                  error: e.runtimeType,
+                                  stackTrace: stackTrace,
+                                );
+                              }
+                              final url = request.url.toString();
+                              return AlertDialog(
+                                title: Text(
+                                  '下载文件: $suggestedFilename ?',
+                                  style: const TextStyle(fontSize: 18),
+                                ),
+                                content: SelectionText(url),
+                                actions: [
+                                  TextButton(
+                                    onPressed: Get.back,
+                                    child: Text(
+                                      '取消',
+                                      style: TextStyle(
+                                        color: Theme.of(context)
+                                            .colorScheme
+                                            .outline,
+                                      ),
                                     ),
                                   ),
-                                ),
-                                TextButton(
-                                  onPressed: () async {
-                                    if (!_ownsController(
-                                          controller,
-                                          generation,
-                                        ) ||
-                                        ModalRoute.of(context)?.isCurrent !=
-                                            true) {
-                                      return;
-                                    }
-                                    Navigator.of(context).pop();
-                                    await PageUtils.launchURL(url);
-                                  },
-                                  child: Text('确定 ($fileSize)'),
-                                ),
-                              ],
-                            );
-                          },
-                        );
-                        _progress.value = 1;
-                      }
-                    : null,
-                shouldInterceptAjaxRequest: (controller, ajaxRequest) async {
-                  if (!_currentController(controller, _generation)) return null;
-                  String url = ajaxRequest.url.toString();
-                  if (url.startsWith('//api.bilibili.com/x/note/add') &&
-                      widget.title != null) {
-                    return ajaxRequest
-                      ..data = ajaxRequest.data.toString().replaceFirst(
-                        '&title=--&',
-                        '&title=${widget.title}&',
-                      );
-                  }
-                  return null;
-                },
-                shouldInterceptRequest: (controller, request) async {
-                  if (!_currentController(controller, _generation)) return null;
-                  String url = request.url.toString();
-                  if (url.startsWith(
-                    'https://passport.bilibili.com/x/passport-login/web',
-                  )) {
-                    _progress.value = 1;
-                    return WebResourceResponse();
-                  }
-                  return null;
-                },
-                shouldOverrideUrlLoading: (controller, navigationAction) async {
-                  final generation = _generation;
-                  bool current() => _currentController(controller, generation);
-                  if (!current()) return .CANCEL;
-                  try {
-                    final uri = navigationAction.request.url?.uriValue;
-                    if (_rewriteCopyrightReport &&
-                        uri?.host == 'www.bilibili.com' &&
-                        uri?.path == '/h5/community/copyright/init') {
-                      final queryParameters = Map<String, String>.of(
-                        uri!.queryParameters,
-                      )..remove('navhide');
-                      final pcUrl = uri.replace(
-                        path: '/pc/community/copyright/role',
-                        queryParameters: queryParameters,
-                      );
-                      _progress.value = 0;
-                      await controller.loadUrl(
-                        urlRequest: URLRequest(url: WebUri.uri(pcUrl)),
-                      );
-                      return .CANCEL;
-                    }
-                    if (!_inApp) {
-                      final hasMatch = await PiliScheme.routePush(
-                        navigationAction.request.url?.uriValue ?? Uri(),
-                        selfHandle: true,
-                        off: _off,
-                      );
-                      if (!current()) return .CANCEL;
-                      // if (kDebugMode) debugPrint('webview: [$url], [$hasMatch]');
-                      if (hasMatch) {
-                        _progress.value = 1;
-                        return .CANCEL;
-                      }
-                    }
-                    final url = navigationAction.request.url.toString();
-                    if (_prefixRegex.hasMatch(url)) {
-                      if (current() && context.mounted) {
-                        final snackBar = SnackBar(
-                          persist: false,
-                          showCloseIcon: true,
-                          content: const Text('当前网页将要打开外部链接，是否打开'),
-                          action: SnackBarAction(
-                            label: '打开',
-                            onPressed: () {
-                              if (current()) PageUtils.launchURL(url);
+                                  TextButton(
+                                    onPressed: () async {
+                                      if (!_ownsController(
+                                            controller,
+                                            generation,
+                                          ) ||
+                                          ModalRoute.of(context)?.isCurrent !=
+                                              true) {
+                                        return;
+                                      }
+                                      Navigator.of(context).pop();
+                                      await PageUtils.launchURL(url);
+                                    },
+                                    child: Text('确定 ($fileSize)'),
+                                  ),
+                                ],
+                              );
                             },
-                          ),
-                        );
-                        ScaffoldMessenger.of(context).showSnackBar(snackBar);
-                      }
-                      _progress.value = 1;
-                      return .CANCEL;
+                          );
+                          _progress.value = 1;
+                        }
+                      : null,
+                  shouldInterceptAjaxRequest: (controller, ajaxRequest) async {
+                    if (!_currentController(controller, _generation)) {
+                      return null;
                     }
+                    String url = ajaxRequest.url.toString();
+                    if (url.startsWith('//api.bilibili.com/x/note/add') &&
+                        widget.title != null) {
+                      return ajaxRequest
+                        ..data = ajaxRequest.data.toString().replaceFirst(
+                          '&title=--&',
+                          '&title=${widget.title}&',
+                        );
+                    }
+                    return null;
+                  },
+                  shouldInterceptRequest: (controller, request) async {
+                    if (!_currentController(controller, _generation)) {
+                      return null;
+                    }
+                    String url = request.url.toString();
+                    if (url.startsWith(
+                      'https://passport.bilibili.com/x/passport-login/web',
+                    )) {
+                      _progress.value = 1;
+                      return WebResourceResponse();
+                    }
+                    return null;
+                  },
+                  shouldOverrideUrlLoading:
+                      (controller, navigationAction) async {
+                        final generation = _generation;
+                        bool current() =>
+                            _currentController(controller, generation);
+                        if (!current()) return .CANCEL;
+                        try {
+                          final uri = navigationAction.request.url?.uriValue;
+                          if (_rewriteCopyrightReport &&
+                              uri?.host == 'www.bilibili.com' &&
+                              uri?.path == '/h5/community/copyright/init') {
+                            final queryParameters = Map<String, String>.of(
+                              uri!.queryParameters,
+                            )..remove('navhide');
+                            final pcUrl = uri.replace(
+                              path: '/pc/community/copyright/role',
+                              queryParameters: queryParameters,
+                            );
+                            _progress.value = 0;
+                            await controller.loadUrl(
+                              urlRequest: URLRequest(url: WebUri.uri(pcUrl)),
+                            );
+                            return .CANCEL;
+                          }
+                          if (!_inApp) {
+                            final hasMatch = await PiliScheme.routePush(
+                              navigationAction.request.url?.uriValue ?? Uri(),
+                              selfHandle: true,
+                              off: _off,
+                            );
+                            if (!current()) return .CANCEL;
+                            // if (kDebugMode) debugPrint('webview: [$url], [$hasMatch]');
+                            if (hasMatch) {
+                              _progress.value = 1;
+                              return .CANCEL;
+                            }
+                          }
+                          final url = navigationAction.request.url.toString();
+                          if (_prefixRegex.hasMatch(url)) {
+                            if (current() && context.mounted) {
+                              final snackBar = SnackBar(
+                                persist: false,
+                                showCloseIcon: true,
+                                content: const Text('当前网页将要打开外部链接，是否打开'),
+                                action: SnackBarAction(
+                                  label: '打开',
+                                  onPressed: () {
+                                    if (current()) PageUtils.launchURL(url);
+                                  },
+                                ),
+                              );
+                              ScaffoldMessenger.of(context)
+                                  .showSnackBar(snackBar);
+                            }
+                            _progress.value = 1;
+                            return .CANCEL;
+                          }
 
-                    return .ALLOW;
-                  } catch (error, stackTrace) {
-                    logger.w(
-                      '网页导航失败',
-                      error: error.runtimeType,
-                      stackTrace: stackTrace,
-                    );
-                    if (current()) SmartDialog.showToast('链接暂时无法打开，请重试');
-                    return .CANCEL;
-                  }
-                },
+                          return .ALLOW;
+                        } catch (error, stackTrace) {
+                          logger.w(
+                            '网页导航失败',
+                            error: error.runtimeType,
+                            stackTrace: stackTrace,
+                          );
+                          if (current()) SmartDialog.showToast('链接暂时无法打开，请重试');
+                          return .CANCEL;
+                        }
+                      },
+                ),
               ),
             ),
     );

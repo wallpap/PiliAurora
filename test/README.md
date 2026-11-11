@@ -8,6 +8,10 @@ CI 测试脚本在共享逻辑回归之外按主机补充平台用例：Windows 
 
 本地 Windows WebView 包的 `third_party/flutter_inappwebview_windows/test/webview_environment_channel_test.dart` 使用模拟通道检查多个 Environment 的独立创建与释放，防止实例 dispose 误发到静态工厂 id；可从仓库根目录单独运行，已接入 CI。网页纹理、Cookie 和原生图形资源仍由 Windows 设备验证。
 
+`services/webview_environment_test.dart`、`services/webview_init_concurrency_test.dart` 与
+`common/widgets/webview_ready_test.dart` 检查启动登记不分配原生环境、首次使用去重、
+失败重试及离页后不挂载迟到网页；普通网页、验证码和 Cookie 操作共享同一环境屏障。
+
 ```powershell
 fvm flutter test test/plugin/pl_player/android/
 fvm flutter test test/services/diagnostics/ test/pages/about/diagnostics_page_test.dart

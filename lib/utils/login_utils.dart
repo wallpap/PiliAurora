@@ -38,6 +38,8 @@ abstract final class LoginUtils {
     final owner = account ?? Accounts.main;
     return _queueWebCookies(() async {
       if (!identical(owner, Accounts.main)) return false;
+      await AppWebViewEnvironment.ensureInitialized();
+      if (!identical(owner, Accounts.main)) return false;
       final cookies = owner.cookieJar.toList();
       final webManager = web.CookieManager.instance(
         webViewEnvironment: AppWebViewEnvironment.instance,
@@ -130,6 +132,8 @@ abstract final class LoginUtils {
 
     return Future.wait([
       _queueWebCookies(() async {
+        if (!identical(owner, Accounts.main)) return;
+        await AppWebViewEnvironment.ensureInitialized();
         if (!identical(owner, Accounts.main)) return;
         final cleared = await web.CookieManager.instance(
           webViewEnvironment: AppWebViewEnvironment.instance,

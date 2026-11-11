@@ -24,7 +24,7 @@ import 'package:path/path.dart' as path;
 import 'package:screen_brightness_platform_interface/screen_brightness_platform_interface.dart';
 import 'package:window_manager/window_manager.dart' hide calcWindowPosition;
 
-/// 初始化平台能力；Windows WebView 必须在 `Request.setCookie()` 前就绪。
+/// 初始化平台能力；Windows 网页环境按首次使用创建。
 Future<void> initializePlatformServices() async {
   if (PlatformUtils.isMobile) {
     if (Platform.isAndroid) MaxScreenSize.init();
@@ -33,7 +33,7 @@ Future<void> initializePlatformServices() async {
       setupServiceLocator(),
     ]);
   } else if (Platform.isWindows) {
-    await AppWebViewEnvironment.initialize(
+    AppWebViewEnvironment.configure(
       userDataPath: path.join(appSupportDirPath, 'flutter_inappwebview'),
     );
   }

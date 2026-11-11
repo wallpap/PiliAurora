@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:pili_aurora/http/browser_ua.dart';
+import 'package:pili_aurora/common/widgets/webview_ready.dart';
 import 'package:pili_aurora/services/logger.dart';
 import 'package:pili_aurora/services/webview_environment.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
@@ -86,67 +87,69 @@ class _GeetestWebviewDialogState extends State<GeetestWebviewDialog> {
 
     return Stack(
       children: [
-        InAppWebView(
-          webViewEnvironment: AppWebViewEnvironment.instance,
-          initialSettings: InAppWebViewSettings(
-            clearCache: true,
-            javaScriptEnabled: true,
-            forceDark: ForceDark.OFF,
-            useHybridComposition: true,
-            algorithmicDarkeningAllowed: true,
-            useShouldOverrideUrlLoading: true,
-            userAgent: BrowserUa.mob,
-            mixedContentMode: .MIXED_CONTENT_ALWAYS_ALLOW,
+        WebViewReady(
+          builder: (_) => InAppWebView(
+            webViewEnvironment: AppWebViewEnvironment.instance,
+            initialSettings: InAppWebViewSettings(
+              clearCache: true,
+              javaScriptEnabled: true,
+              forceDark: ForceDark.OFF,
+              useHybridComposition: true,
+              algorithmicDarkeningAllowed: true,
+              useShouldOverrideUrlLoading: true,
+              userAgent: BrowserUa.mob,
+              mixedContentMode: .MIXED_CONTENT_ALWAYS_ALLOW,
 
-            incognito: true,
-            allowFileAccess: false,
-            allowsLinkPreview: false,
-            allowContentAccess: false,
-            useOnDownloadStart: false,
-            geolocationEnabled: false,
-            thirdPartyCookiesEnabled: false,
-            enterpriseAuthenticationAppLinkPolicyEnabled: false,
-            saveFormData: false,
-            safeBrowsingEnabled: false,
-            isFraudulentWebsiteWarningEnabled: false,
-            domStorageEnabled: false,
-            databaseEnabled: false,
-            cacheEnabled: false,
-            cacheMode: .LOAD_NO_CACHE,
+              incognito: true,
+              allowFileAccess: false,
+              allowsLinkPreview: false,
+              allowContentAccess: false,
+              useOnDownloadStart: false,
+              geolocationEnabled: false,
+              thirdPartyCookiesEnabled: false,
+              enterpriseAuthenticationAppLinkPolicyEnabled: false,
+              saveFormData: false,
+              safeBrowsingEnabled: false,
+              isFraudulentWebsiteWarningEnabled: false,
+              domStorageEnabled: false,
+              databaseEnabled: false,
+              cacheEnabled: false,
+              cacheMode: .LOAD_NO_CACHE,
 
-            horizontalScrollBarEnabled: false,
-            verticalScrollBarEnabled: false,
-            overScrollMode: .NEVER,
+              horizontalScrollBarEnabled: false,
+              verticalScrollBarEnabled: false,
+              overScrollMode: .NEVER,
 
-            pageZoom: 1,
-          ),
-          initialData: InAppWebViewInitialData(data: html),
-          onWebViewCreated: (ctr) {
-            ctr
-              ..addJavaScriptHandler(
-                handlerName: 'success',
-                callback: (args) {
-                  if (args.isNotEmpty) {
-                    if (args[0] case Map<String, dynamic> data) {
-                      _finish(data);
-                      return;
+              pageZoom: 1,
+            ),
+            initialData: InAppWebViewInitialData(data: html),
+            onWebViewCreated: (ctr) {
+              ctr
+                ..addJavaScriptHandler(
+                  handlerName: 'success',
+                  callback: (args) {
+                    if (args.isNotEmpty) {
+                      if (args[0] case Map<String, dynamic> data) {
+                        _finish(data);
+                        return;
+                      }
                     }
-                  }
-                  logger.scoped('geetest').w('验证码返回无效结果');
-                },
-              )
-              ..addJavaScriptHandler(
-                handlerName: 'error',
-                callback: (args) {
-                  logger.scoped('geetest').w('验证码组件报告错误');
-                  _close();
-                },
-              )
-              ..addJavaScriptHandler(
-                handlerName: 'close',
-                callback: (args) => _close(),
-              );
-          },
+                    logger.scoped('geetest').w('验证码返回无效结果');
+                  },
+                )
+                ..addJavaScriptHandler(
+                  handlerName: 'error',
+                  callback: (args) {
+                    logger.scoped('geetest').w('验证码组件报告错误');
+                    _close();
+                  },
+                )
+                ..addJavaScriptHandler(
+                  handlerName: 'close',
+                  callback: (args) => _close(),
+                );
+            },
+          ),
         ),
         Positioned(
           left: 8,

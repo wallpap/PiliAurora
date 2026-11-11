@@ -175,13 +175,13 @@ Future<void> _bootstrapApplication(
     logger.w('已显式禁用 TLS 证书验证，仅应用于受控调试；请在调试结束后恢复验证');
   }
 
-  // Windows Cookie 同步依赖 WebView 环境，因此先完成平台服务初始化。
+  // Windows 只登记网页数据目录，首次进入网页时再同步当前账号 Cookie。
   progress.phase = StartupPhase.platformServices;
   if (!playerWindow) await initializePlatformServices();
 
   progress.phase = StartupPhase.requests;
   Request();
-  Request.setCookie(syncWebView: !playerWindow);
+  Request.setCookie(syncWebView: !playerWindow && !Platform.isWindows);
   if (!playerWindow) {
     unawaited(
       RequestUtils.syncHistoryStatus().catchError((

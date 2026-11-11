@@ -2,7 +2,7 @@
 
 ## 应用启动
 
-`main.dart` 调用 `bootstrapApplication()`。主窗口的 Windows Cookie 同步会读取 WebView 环境，因此该环境要先于 `Request.setCookie()` 初始化。下面的时序描述主窗口启动。
+`main.dart` 调用 `bootstrapApplication()`。Windows 启动只登记 WebView 数据目录；首次进入网页或验证码时才创建共享环境，普通网页在加载前同步当前账号 Cookie。登录、退出的显式 Cookie 操作等待环境就绪，并在等待后复核账号。非 Windows 沿用平台环境。
 
 ```mermaid
 sequenceDiagram
@@ -31,8 +31,8 @@ sequenceDiagram
         Boot->>Boot: lazy 注册 AccountService、DownloadService
         Boot->>Net: 安装全局 HTTP overrides
         Boot->>Platform: 初始化平台服务
-        Note over Platform: Windows 创建 WebView 环境；Android 准备方向与服务定位
-        Boot->>Net: 创建 Request、同步 Cookie 与历史状态
+        Note over Platform: Windows 登记 WebView 目录；Android 准备方向与服务定位
+        Boot->>Net: 创建 Request、初始化账号与历史状态
         Boot->>Platform: 初始化系统 UI 或桌面窗口
         Boot->>Boot: 按设置读取动态颜色
         Boot->>App: 安装异常处理并创建根 Widget
