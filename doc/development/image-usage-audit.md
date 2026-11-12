@@ -1,6 +1,6 @@
 # 图片使用场景与解码路径调查
 
-日期：2026-11-12。范围：当前工作区源码、固定 Flutter 3.47.5、应用使用的本地图片相关依赖及 Android/Windows 自有原生入口。本文记录现状；拟实施方案见[图片加载与预览设计稿](image-pipeline-design.md)。发现绕行路径或大资源保留的可能性，不等于已经证实该路径发生内存泄漏。
+调查日期：2026-11-12。本文是重构实施前的源码快照，保留原始调用计数；2026-11-13 的实施状态见[图片加载与预览设计稿](image-pipeline-design.md)。调查范围为当时工作区源码、固定 Flutter 3.47.5、应用使用的本地图片相关依赖及 Android/Windows 自有原生入口。发现绕行路径或大资源保留的可能性，不等于已经证实该路径发生内存泄漏。
 
 ## 方法与覆盖范围
 
@@ -74,7 +74,7 @@ HTML 还有一个依赖内的潜在绕行入口：[CSS 列表标记图片](../..
 
 - 网络分支直接使用 `CachedImageProvider`，原图没有 `CachedImage` Widget 的默认 1MP 限制；加载中可使用另一个低质量 URL 与 ResizeImage 占位。
 - 本地分支使用自定义 `Image.file`，最终为 Flutter `FileImage`，目前未纳入网络帧准入。
-- [自定义 Image](../../lib/common/widgets/image_viewer/image.dart) 按解码尺寸形成内容尺寸；[Viewer](../../lib/common/widgets/image_viewer/viewer.dart) 对尺寸变化会调整/重置手势。引入不同采样层前须改为稳定原图坐标。
+- 实施前的自定义 Image 按解码尺寸形成内容尺寸；Viewer 对尺寸变化会调整/重置手势。该旧文件已移除，当前由 [ContentViewer](../../lib/common/widgets/image_viewer/content_viewer.dart) 和 [ContentImage](../../lib/common/widgets/image/content_image.dart) 提供稳定源几何；本条保留原问题的调查结论。
 - 表情包放大 dialog 属独立预览路径；所有放大入口均需纳入验收，不以 GalleryViewer 一处代表全部。
 - Live Photo 视频播放、原图下载/分享、上传文件与本地原件具有各自语义。显示所用像素、瓦片或 CDN 缩略图不能替代保存原件。
 

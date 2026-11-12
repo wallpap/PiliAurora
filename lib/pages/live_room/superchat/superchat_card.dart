@@ -263,6 +263,7 @@ Widget _build({
               alignment: .topRight,
               image: CachedImageProvider(
                 ImageUtils.safeThumbnailUrl(item.backgroundImage),
+                maxDecodePixels: 1 << 20,
               ),
             ),
     ),

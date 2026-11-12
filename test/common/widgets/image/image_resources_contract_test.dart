@@ -11,6 +11,24 @@ Future<void> _flush() async {
 
 void main() {
   test(
+    'admission after shutdown and queued shutdown always settles readiness',
+    () async {
+      final resources = ImageResources(maximumConcurrentDecodes: 1);
+      final running = resources.admit();
+      await running.ready;
+      final queued = resources.admit();
+      resources.dispose();
+      await queued.ready.timeout(const Duration(seconds: 1));
+      expect(queued.cancelled, isTrue);
+      final closed = resources.admit();
+      await closed.ready.timeout(const Duration(seconds: 1));
+      expect(closed.cancelled, isTrue);
+      running.release();
+      await resources.drained.timeout(const Duration(seconds: 1));
+    },
+  );
+
+  test(
     'cancelled native work retains its permit until actual completion',
     () async {
       final resources = ImageResources(maximumConcurrentDecodes: 2);
@@ -56,8 +74,8 @@ void main() {
       final gate = Completer<int>();
       final first = resources.schedule(() => gate.future, dispose: (_) {});
       var calls = 0;
-      final queued = resources.schedule(() async => ++calls, dispose: (_) {});
-      queued.cancel();
+      final queued = resources.schedule(() async => ++calls, dispose: (_) {})
+        ..cancel();
       expect(await queued.result, isNull);
       await queued.drained;
       gate.complete(1);
@@ -143,8 +161,9 @@ void main() {
         dispose: released.add,
       );
       await _flush();
-      resources.dispose();
-      resources.dispose();
+      resources
+        ..dispose()
+        ..dispose();
       expect(await queued.result, isNull);
       gate.complete(7);
       expect(await native.result, isNull);

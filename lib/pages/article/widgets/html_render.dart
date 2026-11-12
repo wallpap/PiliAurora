@@ -1,6 +1,7 @@
 import 'package:pili_aurora/common/assets.dart';
 import 'package:pili_aurora/services/logger.dart';
 import 'package:pili_aurora/common/widgets/image/cached_image.dart';
+import 'package:pili_aurora/common/widgets/image/content_image.dart';
 import 'package:pili_aurora/common/widgets/image_viewer/hero.dart';
 import 'package:pili_aurora/models/common/image_preview_type.dart';
 import 'package:pili_aurora/utils/extension/num_ext.dart';
@@ -58,14 +59,12 @@ Widget htmlRender({
             ),
             child: fromHero(
               tag: imgUrl,
-              child: CachedImage(
+              child: ContentImage.network(
+                ImageUtils.thumbnailUrl(imgUrl, 60),
                 width: width,
                 height: isEmote ? 22.0 : null,
                 memCacheWidth: width.cacheSize(context),
-                imageUrl: ImageUtils.thumbnailUrl(imgUrl, 60),
-                fadeInDuration: const Duration(milliseconds: 120),
-                fadeOutDuration: const Duration(milliseconds: 120),
-                placeholder: (context, url) => Image.asset(
+                placeholder: (context) => Image.asset(
                   Assets.themed(Assets.loading, Theme.of(context).brightness),
                 ),
               ),
@@ -129,15 +128,22 @@ Widget htmlRender({
       margin: Margins.zero,
     ),
   };
-  return element != null
-      ? Html.fromElement(
-          documentElement: element,
-          extensions: extensions,
-          style: style,
-        )
-      : Html(
-          data: html,
-          extensions: extensions,
-          style: style,
-        );
+  return HtmlImageSource(
+    builder: (context, url, errorBuilder) => CachedImage(
+      imageUrl: ImageUtils.safeThumbnailUrl(url),
+      memCacheWidth: maxWidth.cacheSize(context),
+      errorBuilder: errorBuilder,
+    ),
+    child: element != null
+        ? Html.fromElement(
+            documentElement: element,
+            extensions: extensions,
+            style: style,
+          )
+        : Html(
+            data: html,
+            extensions: extensions,
+            style: style,
+          ),
+  );
 }

@@ -1,7 +1,7 @@
 name: flutter_html
 publish_to: none
 description: A Flutter widget for rendering static HTML and CSS as Flutter widgets.
-version: 3.0.0+piliaurora.1
+version: 3.0.0+piliaurora.2
 homepage: https://github.com/Sub6Resources/flutter_html
 
 environment:

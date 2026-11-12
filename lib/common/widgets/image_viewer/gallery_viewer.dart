@@ -23,8 +23,8 @@ import 'package:pili_aurora/common/widgets/colored_box_transition.dart';
 import 'package:pili_aurora/common/widgets/dialog/simple_dialog_option.dart';
 import 'package:pili_aurora/common/widgets/gesture/image_horizontal_drag_gesture_recognizer.dart';
 import 'package:pili_aurora/common/widgets/image/cached_image.dart';
-import 'package:pili_aurora/common/widgets/image_viewer/image.dart';
-import 'package:pili_aurora/common/widgets/image_viewer/loading_indicator.dart';
+import 'package:pili_aurora/common/widgets/image/content_image.dart';
+import 'package:pili_aurora/common/widgets/image_viewer/content_viewer.dart';
 import 'package:pili_aurora/common/widgets/image_viewer/viewer.dart';
 import 'package:pili_aurora/common/widgets/scroll_physics.dart'
     show tabBarScrollPhysics;
@@ -423,10 +423,9 @@ class _GalleryViewerState extends State<GalleryViewer>
     final Widget child;
     switch (item.sourceType) {
       case SourceType.fileImage:
-        child = Image.file(
+        child = ContentViewer(
           key: _key,
-          File(item.url),
-          filterQuality: .low,
+          image: LocalImageProvider(File(item.url)),
           minScale: widget.minScale,
           maxScale: widget.maxScale,
           containerSize: _containerSize,
@@ -439,7 +438,7 @@ class _GalleryViewerState extends State<GalleryViewer>
         );
       case SourceType.networkImage:
         final isLongPic = item.isLongPic;
-        child = Image(
+        child = ContentViewer(
           key: _key,
           image: CachedImageProvider(_getActualUrl(item.url)),
           minScale: widget.minScale,
@@ -448,15 +447,12 @@ class _GalleryViewerState extends State<GalleryViewer>
           doubleTapGestureRecognizer: _doubleTapGestureRecognizer,
           horizontalDragGestureRecognizer: _horizontalDragGestureRecognizer,
           onChangePage: _onChangePage,
-          frameBuilder: (context, child, frame, wasSynchronouslyLoaded) {
-            if (wasSynchronouslyLoaded) {
-              return child;
-            }
-            if (frame == null) {
-              if (widget.quality == _quality) {
-                return child;
-              } else {
-                return Image(
+          placeholder: (context) => Stack(
+            fit: StackFit.expand,
+            children: [
+              if (widget.quality != _quality)
+                ContentImage(
+                  fit: BoxFit.scaleDown,
                   image: ResizeImage.resizeIfNeeded(
                     _containerSize.width.cacheSize(context),
                     null,
@@ -464,29 +460,20 @@ class _GalleryViewerState extends State<GalleryViewer>
                       ImageUtils.thumbnailUrl(item.url, widget.quality),
                     ),
                   ),
-                  minScale: widget.minScale,
-                  maxScale: widget.maxScale,
-                  containerSize: _containerSize,
-                  onDragStart: null,
-                  onDragUpdate: null,
-                  onDragEnd: null,
-                  doubleTapGestureRecognizer: _doubleTapGestureRecognizer,
-                  horizontalDragGestureRecognizer:
-                      _horizontalDragGestureRecognizer,
-                  onChangePage: _onChangePage,
-                );
-              }
-            }
-            return child;
-          },
-          loadingBuilder: loadingBuilder,
+                ),
+              const Center(
+                child: CircularProgressIndicator(
+                  color: Colors.white,
+                  strokeWidth: 1.5,
+                ),
+              ),
+            ],
+          ),
           onDragStart: _onDragStart,
           onDragUpdate: _onDragUpdate,
           onDragEnd: _onDragEnd,
         );
-        if (isLongPic) {
-          return child;
-        }
+        if (isLongPic) return _imageActivity(index, child);
       case SourceType.livePhoto:
         child = Obx(
           key: _key,
@@ -513,8 +500,20 @@ class _GalleryViewerState extends State<GalleryViewer>
               : const SizedBox.shrink(),
         );
     }
-    return Hero(tag: '${item.url}${widget.tag}', child: child);
+    return Hero(
+      tag: '${item.url}${widget.tag}',
+      child: item.sourceType == SourceType.livePhoto
+          ? child
+          : _imageActivity(index, child),
+    );
   }
+
+  Widget _imageActivity(int index, Widget child) => Obx(
+    () => ImageLoadingScope(
+      enabled: ImageLoadingScope.isEnabled(context),
+      child: TickerMode(enabled: _currIndex.value == index, child: child),
+    ),
+  );
 
   void _onTap() {
     ActionThrottle.run(
@@ -629,33 +628,6 @@ class _GalleryViewerState extends State<GalleryViewer>
               liveUrl: item.liveUrl!,
             ),
             child: const Text('保存视频', style: TextStyle(fontSize: 14)),
-          ),
-      ],
-    );
-  }
-
-  Widget loadingBuilder(
-    BuildContext context,
-    Widget child,
-    ImageChunkEvent? loadingProgress,
-  ) {
-    return Stack(
-      fit: .expand,
-      alignment: .center,
-      clipBehavior: .none,
-      children: [
-        child,
-        if (loadingProgress != null &&
-            loadingProgress.expectedTotalBytes != null &&
-            loadingProgress.cumulativeBytesLoaded !=
-                loadingProgress.expectedTotalBytes)
-          Center(
-            child: LoadingIndicator(
-              size: 39.4,
-              progress:
-                  loadingProgress.cumulativeBytesLoaded /
-                  loadingProgress.expectedTotalBytes!,
-            ),
           ),
       ],
     );

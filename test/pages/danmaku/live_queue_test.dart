@@ -7,6 +7,56 @@ import 'package:pili_aurora/pages/danmaku/live_queue.dart';
 import 'package:pili_aurora/pages/danmaku/window_renderer.dart';
 
 void main() {
+  for (final invalidation in ['deadline', 'clear', 'dispose']) {
+    test(
+      'domain predicate expires before late encoded input after $invalidation',
+      () async {
+        var now = 0;
+        final file = Completer<void>();
+        bool Function()? valid;
+        var decoders = 0;
+        var fallbackCalls = 0;
+        final queue =
+            LiveDanmakuQueue<void>(
+                nowUs: () => now,
+                loadImage: (_) async {
+                  fallbackCalls++;
+                  return null;
+                },
+                loadImageIfCurrent: (emote, isCurrent) async {
+                  valid = isCurrent;
+                  await file.future;
+                  if (!isCurrent()) return null;
+                  decoders++;
+                  return null;
+                },
+                admit: (_) => false,
+                wake: () {},
+              )
+              ..add(
+                const LiveDanmakuMessage(
+                  identity: 1,
+                  receivedAtUs: 0,
+                  text: '[x]',
+                  emotes: [LiveEmoteDescriptor('[x]', 'x', 12, 12)],
+                ),
+              )
+              ..process(running: true, fontSize: 20);
+        expect(valid!(), isTrue);
+        if (invalidation == 'deadline') now = 300001;
+        if (invalidation == 'clear') queue.clear();
+        if (invalidation == 'dispose') queue.dispose();
+        expect(valid!(), isFalse);
+        expect(queue.runningTasks, 1);
+        file.complete();
+        await Future<void>.delayed(Duration.zero);
+        expect(decoders, 0);
+        expect(fallbackCalls, 0);
+        expect(queue.runningTasks, 0);
+        queue.dispose();
+      },
+    );
+  }
   TestWidgetsFlutterBinding.ensureInitialized();
   test(
     'queue reservations share the renderer total and stop before decoding',

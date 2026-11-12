@@ -6,6 +6,7 @@ import 'package:pili_aurora/common/widgets/badge.dart';
 import 'package:pili_aurora/common/widgets/dialog/dialog.dart';
 import 'package:pili_aurora/common/widgets/dialog/simple_dialog_option.dart';
 import 'package:pili_aurora/common/widgets/image/network_img_layer.dart';
+import 'package:pili_aurora/common/widgets/image/cached_image.dart';
 import 'package:pili_aurora/common/widgets/progress_bar/video_progress_indicator.dart';
 import 'package:pili_aurora/common/widgets/select_mask.dart';
 import 'package:pili_aurora/models/common/badge_type.dart';
@@ -17,7 +18,6 @@ import 'package:pili_aurora/pages/download/downloading/view.dart';
 import 'package:pili_aurora/services/download/download_service.dart';
 import 'package:pili_aurora/utils/cache_manager.dart';
 import 'package:pili_aurora/utils/duration_utils.dart';
-import 'package:pili_aurora/utils/extension/num_ext.dart';
 import 'package:pili_aurora/utils/page_utils.dart';
 import 'package:pili_aurora/utils/path_utils.dart';
 import 'package:pili_aurora/utils/platform_utils.dart';
@@ -179,22 +179,21 @@ class DetailItem extends StatelessWidget {
                         );
                         final maxWidth = constraints.maxWidth;
                         final maxHeight = constraints.maxHeight;
-                        int? cacheWidth, cacheHeight;
-                        if (entry.pageData?.cacheWidth ?? false) {
-                          cacheWidth = maxWidth.cacheSize(context);
-                        } else {
-                          cacheHeight = maxHeight.cacheSize(context);
-                        }
                         return cover.existsSync()
                             ? ClipRRect(
                                 borderRadius: Style.mdRadius,
-                                child: Image.file(
-                                  cover,
+                                child: Image(
+                                  image: LocalImageProvider(
+                                    cover,
+                                    decodeTarget: ImageDecodeTarget.forDisplay(
+                                      Size(maxWidth, maxHeight),
+                                      MediaQuery.devicePixelRatioOf(context),
+                                      BoxFit.cover,
+                                    ),
+                                  ),
                                   width: maxWidth,
                                   height: maxHeight,
                                   fit: BoxFit.cover,
-                                  cacheWidth: cacheWidth,
-                                  cacheHeight: cacheHeight,
                                   colorBlendMode: NetworkImgLayer.reduce
                                       ? BlendMode.modulate
                                       : null,

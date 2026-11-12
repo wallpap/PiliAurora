@@ -5,8 +5,21 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pili_aurora/common/widgets/image/cached_image.dart';
 import 'package:pili_aurora/common/widgets/image/content_image.dart';
+import 'package:pili_aurora/common/widgets/image/src/content_demand.dart';
 
-class _Stream extends ImageStreamCompleter {}
+class _TopClip extends CustomClipper<Rect> {
+  const _TopClip();
+  @override
+  Rect getClip(Size size) => Rect.fromLTWH(0, 0, size.width, 40);
+  @override
+  Rect getApproximateClipRect(Size size) => getClip(size);
+  @override
+  bool shouldReclip(_TopClip oldClipper) => false;
+}
+
+class _Stream extends ImageStreamCompleter {
+  void publish(ImageInfo info) => setImage(info);
+}
 
 class _Provider extends ImageProvider<Object> {
   final key = Object();
@@ -70,7 +83,7 @@ void main() {
         ),
       ),
     );
-    provider.stream.setImage(ImageInfo(image: source));
+    provider.stream.publish(ImageInfo(image: source));
     await tester.pump();
     expect(
       tester.getSize(find.byKey(const ValueKey('content'))),
@@ -78,7 +91,7 @@ void main() {
     );
     scroll.jumpTo(1200);
     await tester.pump();
-    provider.stream.setImage(ImageInfo(image: detail));
+    provider.stream.publish(ImageInfo(image: detail));
     await tester.pump();
     expect(
       tester.getSize(find.byKey(const ValueKey('content'))),
@@ -110,7 +123,7 @@ void main() {
       ),
     );
     expect(provider.loads, 1);
-    provider.stream.setImage(ImageInfo(image: _image(16, 8)));
+    provider.stream.publish(ImageInfo(image: _image(16, 8)));
     await tester.pump();
     expect(
       find.byWidgetPredicate(
@@ -121,6 +134,67 @@ void main() {
     await tester.pumpWidget(const SizedBox.shrink());
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets(
+    'nested clipping maps nonuniform fill and offscreen demand independently',
+    (tester) async {
+      final provider = _Provider();
+      final controller = ScrollController();
+      final demands = <ContentDemand>[];
+      await tester.pumpWidget(
+        _host(
+          SizedBox(
+            width: 100,
+            height: 100,
+            child: SingleChildScrollView(
+              controller: controller,
+              child: Column(
+                children: [
+                  ClipRect(
+                    clipper: const _TopClip(),
+                    child: ContentImage(
+                      image: provider,
+                      sourceSize: const Size(400, 200),
+                      width: 100,
+                      height: 100,
+                      fit: BoxFit.fill,
+                      onDemandChanged: demands.add,
+                    ),
+                  ),
+                  const SizedBox(height: 600),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+      provider.stream.publish(ImageInfo(image: _image(40, 20)));
+      await tester.pump();
+      expect(
+        demands.last.viewport.sourceRect,
+        const Rect.fromLTWH(0, 0, 400, 80),
+      );
+      expect(demands.last.viewport.physicalScale, 1);
+      expect(demands.last.load, isTrue);
+      controller.jumpTo(200);
+      await tester.pump();
+      await tester.pump();
+      expect(demands.last.viewport.sourceRect, Rect.zero);
+      expect(demands.last.load, isFalse);
+      expect(demands.last.animate, isFalse);
+      controller.jumpTo(0);
+      await tester.pump();
+      await tester.pump();
+      expect(demands.last.load, isTrue);
+      expect(
+        demands.last.viewport.sourceRect,
+        const Rect.fromLTWH(0, 0, 400, 80),
+      );
+      expect(tester.getSize(find.byType(ContentImage)), const Size(100, 100));
+      await tester.pumpWidget(const SizedBox.shrink());
+      controller.dispose();
+    },
+  );
 
   testWidgets(
     'disabled loading creates no stream and preserves declared layout',
@@ -160,9 +234,9 @@ void main() {
       );
       await tester.pumpWidget(content(first));
       await tester.pumpWidget(content(second));
-      second.stream.setImage(ImageInfo(image: _image(16, 8)));
+      second.stream.publish(ImageInfo(image: _image(16, 8)));
       await tester.pump();
-      first.stream.setImage(ImageInfo(image: _image(32, 16)));
+      first.stream.publish(ImageInfo(image: _image(32, 16)));
       await tester.pump();
       final raw = tester.widget<RawImage>(
         find.byWidgetPredicate(

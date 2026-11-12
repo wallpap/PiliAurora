@@ -74,6 +74,7 @@ class LiveDanmakuQueue<T> {
   static const taskReservationBytes = 2 * maxCandidateImageBytes;
   LiveDanmakuQueue({
     required this.loadImage,
+    this.loadImageIfCurrent,
     required this.admit,
     required this.wake,
     this.nowUs = liveDanmakuNowUs,
@@ -88,6 +89,8 @@ class LiveDanmakuQueue<T> {
     this.canReserveBytes,
   });
   final Future<ui.Image?> Function(LiveEmoteDescriptor) loadImage;
+  final Future<ui.Image?> Function(LiveEmoteDescriptor, bool Function())?
+  loadImageIfCurrent;
   final bool Function(DanmakuContentItem<T>) admit;
   final void Function() wake;
   final int Function() nowUs;
@@ -242,7 +245,14 @@ class LiveDanmakuQueue<T> {
         if (c.done || c.ready || _disposed || nowUs() >= c.resourceDeadline) {
           break;
         }
-        final image = await loadImage(e);
+        bool isCurrent() =>
+            !c.done &&
+            !c.ready &&
+            !_disposed &&
+            nowUs() < c.resourceDeadline &&
+            nowUs() < c.message.receivedAtUs + maxAgeUs;
+        final image =
+            await (loadImageIfCurrent?.call(e, isCurrent) ?? loadImage(e));
         if (image == null) continue;
         final size = image.width * image.height * 4;
         if (c.done ||

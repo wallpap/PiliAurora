@@ -162,15 +162,8 @@ Future<ui.Image?> _getImg(String url) async {
   }
 }
 
-Future<ui.Image?> _loadImg(String path) async {
-  final codec = await ui.instantiateImageCodecFromBuffer(
-    await ImmutableBuffer.fromFilePath(path),
-  );
-  try {
-    return (await codec.getNextFrame()).image;
-  } finally {
-    codec.dispose();
-  }
+Future<ui.Image?> _loadImg(String path) {
+  return loadImageFrame(File(path), owner: VideoShotImage).result;
 }
 
 class _VideoShotImageState extends State<VideoShotImage> {

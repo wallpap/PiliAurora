@@ -10,6 +10,10 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/widgets.dart';
 import 'package:pili_aurora/services/diagnostics/diagnostics.dart';
+import 'package:pili_aurora/common/widgets/image/image_resources.dart';
+import 'package:pili_aurora/common/widgets/image/src/image_sampling.dart';
+
+export 'src/image_sampling.dart' show ImageDecodeTarget;
 
 /// 静态导出可在暂停动画时继续加载图片。
 class ImageLoadingScope extends InheritedWidget {
@@ -110,6 +114,7 @@ class CachedImageProvider extends ImageProvider<CachedImageProvider> {
     this.width,
     this.height,
     this.maxDecodePixels,
+    this.decodeTarget,
     this.scale = 1,
   }) : assert(width == null || width > 0),
        assert(height == null || height > 0),
@@ -121,6 +126,7 @@ class CachedImageProvider extends ImageProvider<CachedImageProvider> {
   final int? height;
   final int? maxDecodePixels;
   final double scale;
+  final ImageDecodeTarget? decodeTarget;
 
   // 同一张图在不同卡片尺寸下有不同的解码缓存，但应共享正在进行的下载。
   // 这里只保存进行中的任务；完成或失败后立即移除。
@@ -198,8 +204,17 @@ class CachedImageProvider extends ImageProvider<CachedImageProvider> {
         final codec = await decode(
           buffer,
           getTargetSize:
-              width != null || height != null || maxDecodePixels != null
-              ? _targetSize
+              width != null ||
+                  height != null ||
+                  maxDecodePixels != null ||
+                  decodeTarget != null
+              ? (sourceWidth, sourceHeight) {
+                  owner.sourceSize = Size(
+                    sourceWidth.toDouble(),
+                    sourceHeight.toDouble(),
+                  );
+                  return _targetSize(sourceWidth, sourceHeight);
+                }
               : null,
         );
         return codec;
@@ -218,6 +233,13 @@ class CachedImageProvider extends ImageProvider<CachedImageProvider> {
   }
 
   ui.TargetImageSize _targetSize(int sourceWidth, int sourceHeight) {
+    if (decodeTarget case final target?) {
+      return target.targetSize(
+        sourceWidth,
+        sourceHeight,
+        maximumPixels: maxDecodePixels,
+      );
+    }
     var ratio = 1.0;
     if (width != null) ratio = math.min(ratio, width! / sourceWidth);
     if (height != null) ratio = math.min(ratio, height! / sourceHeight);
@@ -238,16 +260,215 @@ class CachedImageProvider extends ImageProvider<CachedImageProvider> {
       width == other.width &&
       height == other.height &&
       maxDecodePixels == other.maxDecodePixels &&
+      decodeTarget == other.decodeTarget &&
       scale == other.scale;
 
   @override
-  int get hashCode =>
-      Object.hash(url, cacheManager, width, height, maxDecodePixels, scale);
+  int get hashCode => Object.hash(
+    url,
+    cacheManager,
+    width,
+    height,
+    maxDecodePixels,
+    scale,
+    decodeTarget,
+  );
+}
+
+class LocalImageProvider extends ImageProvider<LocalImageProvider> {
+  const LocalImageProvider(
+    this.file, {
+    this.width,
+    this.height,
+    this.maxDecodePixels,
+    this.scale = 1,
+    this.decodeTarget,
+  });
+
+  final File file;
+  final int? width;
+  final int? height;
+  final int? maxDecodePixels;
+  final double scale;
+  final ImageDecodeTarget? decodeTarget;
+
+  @override
+  Future<LocalImageProvider> obtainKey(ImageConfiguration configuration) =>
+      SynchronousFuture(this);
+
+  @override
+  ImageStreamCompleter loadImage(
+    LocalImageProvider key,
+    ImageDecoderCallback decode,
+  ) {
+    final owner = _CodecOwner();
+    final codec = owner.load(() async {
+      final buffer = await ui.ImmutableBuffer.fromFilePath(file.path);
+      return decode(
+        buffer,
+        getTargetSize:
+            width != null ||
+                height != null ||
+                maxDecodePixels != null ||
+                decodeTarget != null
+            ? (sourceWidth, sourceHeight) {
+                owner.sourceSize = Size(
+                  sourceWidth.toDouble(),
+                  sourceHeight.toDouble(),
+                );
+                return _targetSize(sourceWidth, sourceHeight);
+              }
+            : null,
+      );
+    });
+    return _ImageCompleter(
+      owner,
+      codec: codec.catchError((Object error, StackTrace stack) {
+        if (error is! _ImageDecodeCancelled) {
+          scheduleMicrotask(
+            () => PaintingBinding.instance.imageCache.evict(this),
+          );
+        }
+        Error.throwWithStackTrace(error, stack);
+      }),
+      scale: scale,
+      debugLabel: file.path,
+    );
+  }
+
+  ui.TargetImageSize _targetSize(int sourceWidth, int sourceHeight) =>
+      decodeTarget?.targetSize(
+        sourceWidth,
+        sourceHeight,
+        maximumPixels: maxDecodePixels,
+      ) ??
+      _frameTargetSize(
+        sourceWidth,
+        sourceHeight,
+        width: width,
+        height: height,
+        maxDecodePixels: maxDecodePixels,
+      );
+
+  @override
+  bool operator ==(Object other) =>
+      other is LocalImageProvider &&
+      file.path == other.file.path &&
+      width == other.width &&
+      height == other.height &&
+      maxDecodePixels == other.maxDecodePixels &&
+      scale == other.scale &&
+      decodeTarget == other.decodeTarget;
+  @override
+  int get hashCode => Object.hash(
+    file.path,
+    width,
+    height,
+    maxDecodePixels,
+    scale,
+    decodeTarget,
+  );
+}
+
+ImageWork<ui.Image> loadImageFrame(
+  File file, {
+  ImageDecoderCallback? decode,
+  int? width,
+  int? height,
+  int? maxDecodePixels,
+  ImageResources? resources,
+  Object? owner,
+  bool Function()? isCurrent,
+}) => (resources ?? ImageResources.shared).schedule(
+  () async {
+    if (isCurrent?.call() == false) throw const _ImageDecodeCancelled();
+    final buffer = await ui.ImmutableBuffer.fromFilePath(file.path);
+    if (isCurrent?.call() == false) {
+      buffer.dispose();
+      throw const _ImageDecodeCancelled();
+    }
+    final codec = await (decode ?? ui.instantiateImageCodecWithSize)(
+      buffer,
+      getTargetSize: width != null || height != null || maxDecodePixels != null
+          ? (sourceWidth, sourceHeight) => _frameTargetSize(
+              sourceWidth,
+              sourceHeight,
+              width: width,
+              height: height,
+              maxDecodePixels: maxDecodePixels,
+            )
+          : null,
+    );
+    try {
+      return (await codec.getNextFrame()).image;
+    } finally {
+      codec.dispose();
+    }
+  },
+  dispose: (image) => image.dispose(),
+  owner: owner,
+);
+
+ui.TargetImageSize _frameTargetSize(
+  int sourceWidth,
+  int sourceHeight, {
+  int? width,
+  int? height,
+  int? maxDecodePixels,
+}) {
+  var ratio = 1.0;
+  if (width != null) ratio = math.min(ratio, width / sourceWidth);
+  if (height != null) ratio = math.min(ratio, height / sourceHeight);
+  if (maxDecodePixels != null) {
+    ratio = math.min(
+      ratio,
+      math.sqrt(maxDecodePixels / (sourceWidth * sourceHeight)),
+    );
+  }
+  return ui.TargetImageSize(
+    width: math.max(1, (sourceWidth * ratio).floor()),
+    height: math.max(1, (sourceHeight * ratio).floor()),
+  );
+}
+
+Future<ui.Image?> loadNetworkImageFrame(
+  String url, {
+  BaseCacheManager? cacheManager,
+  ImageDecoderCallback? decode,
+  int? width,
+  int? height,
+  int? maxDecodePixels,
+  Object? owner,
+  bool Function()? isCurrent,
+}) async {
+  final file = await CachedImageProvider(
+    url,
+    cacheManager: cacheManager,
+  )._getFile();
+  if (isCurrent?.call() == false) return null;
+  try {
+    return await loadImageFrame(
+      file,
+      decode: decode,
+      width: width,
+      height: height,
+      maxDecodePixels: maxDecodePixels,
+      owner: owner,
+      isCurrent: isCurrent,
+    ).result;
+  } on _ImageDecodeCancelled {
+    return null;
+  }
 }
 
 /// 滚动或刷新可能早于文件读取完成；缓存和监听者都退出后，迟到的 codec
 /// 也必须释放。只移除监听时不能释放仍被 ImageCache 保活的动图。
-class _ImageCompleter extends ImageStreamCompleter {
+abstract interface class ImageSourceMetadata {
+  Size? get sourceSize;
+}
+
+class _ImageCompleter extends ImageStreamCompleter
+    implements ImageSourceMetadata {
   _ImageCompleter(
     this._owner, {
     required Future<ui.Codec> codec,
@@ -267,6 +488,8 @@ class _ImageCompleter extends ImageStreamCompleter {
   }
 
   final _CodecOwner _owner;
+  @override
+  Size? get sourceSize => _owner.sourceSize;
   final double scale;
   ui.Codec? _codec;
   ui.FrameInfo? _nextFrame;
@@ -459,6 +682,8 @@ class _ImageHandle implements ImageStreamCompleterHandle {
 }
 
 class _CodecOwner {
+  final _resources = ImageResources.shared;
+  Size? sourceSize;
   _ThrottledCodec? _codec;
   _DecodeAdmission? _admission;
   bool _disposed = false;
@@ -466,13 +691,13 @@ class _CodecOwner {
 
   Future<ui.Codec> load(Future<ui.Codec> Function() create) async {
     if (_disposed) throw const _ImageDecodeCancelled();
-    final admission = _admission = _DecodeBudget.admit();
+    final admission = _admission = _DecodeAdmission(_resources.admit());
     try {
       await admission.ready;
-      if (_disposed) throw const _ImageDecodeCancelled();
+      if (_disposed || admission.cancelled) throw const _ImageDecodeCancelled();
       final codec = await create();
-      final managed = _codec = _ThrottledCodec(codec, admission);
-      if (_disposed) {
+      final managed = _codec = _ThrottledCodec(codec, admission, _resources);
+      if (_disposed || admission.cancelled) {
         managed.dispose();
         throw const _ImageDecodeCancelled();
       }
@@ -499,13 +724,14 @@ class _CodecOwner {
 
 /// 延续原组件的动图帧率限制，避免短帧 GIF 持续占用 CPU。
 class _ThrottledCodec implements ui.Codec {
-  _ThrottledCodec(this._codec, this._decodeAdmission) {
+  _ThrottledCodec(this._codec, this._decodeAdmission, this._resources) {
     Diagnostics.instance.gauge('imageCodecs', ++_activeCodecs);
   }
 
   static int _activeCodecs = 0;
 
   final ui.Codec _codec;
+  final ImageResources _resources;
   bool _disposed = false;
   bool _nativeDisposed = false;
   bool _firstFrame = true;
@@ -528,11 +754,14 @@ class _ThrottledCodec implements ui.Codec {
   @override
   Future<ui.FrameInfo> getNextFrame() async {
     _decoding = true;
-    final admission = _decodeAdmission ??= _DecodeBudget.admit();
+    final admission = _decodeAdmission ??= _DecodeAdmission(_resources.admit());
     TraceOperation? operation;
     try {
       await admission.ready;
-      if (_disposed) throw const _ImageDecodeCancelled();
+      if (_disposed || admission.cancelled) {
+        if (admission.cancelled) dispose();
+        throw const _ImageDecodeCancelled();
+      }
       operation = Diagnostics.instance.begin('imageFrame', '解码图片帧');
       final frame = await _codec.getNextFrame();
       operation?.finish(
@@ -551,8 +780,9 @@ class _ThrottledCodec implements ui.Codec {
         await admission.ready;
         _admission = null;
       }
-      if (_disposed) {
+      if (_disposed || admission.cancelled) {
         frame.image.dispose();
+        if (admission.cancelled) dispose();
         throw const _ImageDecodeCancelled();
       }
       return frameCount > 1 &&
@@ -768,6 +998,7 @@ class CachedImage extends StatelessWidget {
     this.memCacheWidth,
     this.memCacheHeight,
     this.maxDecodePixels = 1 << 20,
+    this.decodeTarget,
     this.fit,
     this.alignment = Alignment.center,
     this.filterQuality = FilterQuality.low,
@@ -786,6 +1017,7 @@ class CachedImage extends StatelessWidget {
   final int? memCacheWidth;
   final int? memCacheHeight;
   final int? maxDecodePixels;
+  final ImageDecodeTarget? decodeTarget;
   final BoxFit? fit;
   final Alignment alignment;
   final FilterQuality filterQuality;
@@ -806,9 +1038,10 @@ class CachedImage extends StatelessWidget {
       image: CachedImageProvider(
         imageUrl,
         cacheManager: cacheManager,
-        width: memCacheWidth,
-        height: memCacheHeight,
+        width: decodeTarget == null ? memCacheWidth : null,
+        height: decodeTarget == null ? memCacheHeight : null,
         maxDecodePixels: maxDecodePixels,
+        decodeTarget: decodeTarget,
       ),
       width: width,
       height: height,
@@ -892,52 +1125,13 @@ class _FrameAdmission {
 }
 
 /// 从文件映射、codec 创建到首帧交付共用名额，避免队列持有整批原生解码器。
-abstract final class _DecodeBudget {
-  static const _limit = 2;
-  static int _active = 0;
-  static final _pending = Queue<_DecodeAdmission>();
-
-  static _DecodeAdmission admit() {
-    final admission = _DecodeAdmission();
-    _pending.add(admission);
-    _drain();
-    return admission;
-  }
-
-  static void _drain() {
-    while (_active < _limit && _pending.isNotEmpty) {
-      final admission = _pending.removeFirst();
-      _active++;
-      admission
-        .._active = true
-        .._ready.complete();
-    }
-  }
-}
-
 class _DecodeAdmission {
-  final _ready = Completer<void>();
-  bool _active = false;
-  bool _released = false;
-
-  Future<void> get ready => _ready.future;
-
-  void cancel() {
-    // 已启动的原生请求完成后才归还名额，避免取消期间突破并发上限。
-    if (!_active) release();
-  }
-
-  void release() {
-    if (_released) return;
-    _released = true;
-    if (_active) {
-      _DecodeBudget._active--;
-    } else {
-      _DecodeBudget._pending.remove(this);
-      _ready.complete();
-    }
-    _DecodeBudget._drain();
-  }
+  _DecodeAdmission(this._permit);
+  final ImageDecodePermit _permit;
+  Future<void> get ready => _permit.ready;
+  bool get cancelled => _permit.cancelled;
+  void cancel() => _permit.cancel();
+  void release() => _permit.release();
 }
 
 class _ImageDecodeCancelled implements Exception {

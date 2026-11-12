@@ -71,28 +71,36 @@ void main() {
       );
       expect(visible.evaluate().length, greaterThan(0));
       expect(visible.evaluate().length, lessThan(100));
-      final first = tester.widget<NetworkImgLayer>(visible.first);
-      await tester.tap(visible.first);
-      expect(chosen?.url, first.src);
       final last = find.byWidgetPredicate(
         (widget) => widget is NetworkImgLayer && widget.src == emotes.last.url,
       );
-      await tester.scrollUntilVisible(
-        last,
-        240,
-        scrollable: find
-            .byWidgetPredicate(
+      final packageGrid = find.byWidgetPredicate(
+        (widget) =>
+            widget is GridView &&
+            widget.childrenDelegate.estimatedChildCount == emotes.length,
+      );
+      final scrollable = find
+          .descendant(
+            of: packageGrid,
+            matching: find.byWidgetPredicate(
               (widget) =>
                   widget is Scrollable &&
                   widget.axisDirection == AxisDirection.down,
-            )
-            .first,
-        maxScrolls: 150,
-      );
+            ),
+          )
+          .first;
+      final position = tester.state<ScrollableState>(scrollable).position;
+      position.jumpTo(position.maxScrollExtent);
+      await tester.pump();
       expect(last, findsOneWidget);
       expect(visible.evaluate().length, lessThan(100));
+      final selectable = find
+          .ancestor(of: last, matching: find.byType(InkWell))
+          .hitTestable();
+      await tester.tap(selectable.first);
+      expect(chosen?.url, emotes.last.url);
       await tester.pumpWidget(const SizedBox.shrink());
-      await Get.delete<EmotePanelController>(force: true);
+      Get.delete<EmotePanelController>(force: true);
       expect(controller.isClosed, isTrue);
     },
   );
@@ -130,6 +138,6 @@ void main() {
     expect(chosen, same(emote));
     expect(chosenWidth, isNull);
     await tester.pumpWidget(const SizedBox.shrink());
-    await Get.delete<EmotePanelController>(force: true);
+    Get.delete<EmotePanelController>(force: true);
   });
 }

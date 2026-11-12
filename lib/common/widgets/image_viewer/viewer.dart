@@ -22,6 +22,7 @@ import 'package:pili_aurora/common/widgets/gesture/horizontal_drag_gesture_recog
 import 'package:pili_aurora/common/widgets/gesture/image_horizontal_drag_gesture_recognizer.dart';
 import 'package:pili_aurora/utils/extension/num_ext.dart';
 import 'package:pili_aurora/utils/rate_limiter.dart';
+import 'package:pili_aurora/common/widgets/image/src/content_demand.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/physics.dart' show FrictionSimulation;
@@ -48,6 +49,7 @@ class Viewer extends StatefulWidget {
     required this.horizontalDragGestureRecognizer,
     required this.onChangePage,
     required this.child,
+    this.onViewportChanged,
   });
 
   final double minScale;
@@ -56,6 +58,7 @@ class Viewer extends StatefulWidget {
   final Size containerSize;
   final Size childSize;
   final Widget child;
+  final ValueChanged<ContentViewport>? onViewportChanged;
 
   final ValueChanged<ScaleStartDetails>? onDragStart;
   final ValueChanged<ScaleUpdateDetails>? onDragUpdate;
@@ -165,7 +168,49 @@ class _ViewerState extends State<Viewer> with SingleTickerProviderStateMixin {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.containerSize != widget.containerSize ||
         oldWidget.childSize != widget.childSize) {
-      _initSize();
+      if (oldWidget.childSize.isEmpty ||
+          widget.childSize.isEmpty ||
+          oldWidget.childSize != widget.childSize) {
+        _initSize();
+      } else {
+        _stopFling();
+        _animationController.stop();
+        final oldSize = _imageSize;
+        final oldCenter = oldWidget.containerSize.center(Offset.zero);
+        final oldOrigin = Offset(
+          (oldWidget.containerSize.width - oldSize.width) / 2,
+          (oldWidget.containerSize.height - oldSize.height) / 2,
+        );
+        final scene = (_toScene(oldCenter) - oldOrigin);
+        final normalized = Offset(
+          scene.dx / oldSize.width,
+          scene.dy / oldSize.height,
+        );
+        _imageSize = applyBoxFit(
+          BoxFit.scaleDown,
+          widget.childSize,
+          widget.containerSize,
+        ).destination;
+        _scale = clampDouble(
+          _scale * oldSize.width / _imageSize.width,
+          widget.minScale,
+          widget.maxScale,
+        );
+        final newOrigin = Offset(
+          (widget.containerSize.width - _imageSize.width) / 2,
+          (widget.containerSize.height - _imageSize.height) / 2,
+        );
+        final newScene =
+            newOrigin +
+            Offset(
+              normalized.dx * _imageSize.width,
+              normalized.dy * _imageSize.height,
+            );
+        _position = _clampPosition(
+          widget.containerSize.center(Offset.zero) - newScene * _scale,
+          _scale,
+        );
+      }
     }
   }
 
@@ -442,6 +487,7 @@ class _ViewerState extends State<Viewer> with SingleTickerProviderStateMixin {
 
   @override
   Widget build(BuildContext context) {
+    _scheduleViewport();
     return Listener(
       behavior: .opaque,
       onPointerDown: _onPointerDown,
@@ -454,6 +500,35 @@ class _ViewerState extends State<Viewer> with SingleTickerProviderStateMixin {
         ),
       ),
     );
+  }
+
+  bool _viewportScheduled = false;
+
+  void _scheduleViewport() {
+    if (_viewportScheduled || widget.onViewportChanged == null) return;
+    _viewportScheduled = true;
+    SchedulerBinding.instance.addPostFrameCallback((_) {
+      _viewportScheduled = false;
+      if (!mounted || widget.childSize.isEmpty || _imageSize.isEmpty) return;
+      final origin = Offset(
+        (widget.containerSize.width - _imageSize.width) / 2,
+        (widget.containerSize.height - _imageSize.height) / 2,
+      );
+      final from = _toScene(Offset.zero) - origin;
+      final to =
+          _toScene(widget.containerSize.bottomRight(Offset.zero)) - origin;
+      final ratio = widget.childSize.width / _imageSize.width;
+      final visible = Rect.fromPoints(
+        from * ratio,
+        to * ratio,
+      ).intersect(Offset.zero & widget.childSize);
+      widget.onViewportChanged?.call(
+        ContentViewport(
+          visible,
+          _scale / ratio * MediaQuery.devicePixelRatioOf(context),
+        ),
+      );
+    });
   }
 
   void _onPointerDown(PointerDownEvent event) {

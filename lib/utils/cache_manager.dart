@@ -1,5 +1,7 @@
 import 'dart:io' show Directory, File;
 
+import 'package:pili_aurora/common/widgets/image/src/image_source_store.dart';
+import 'package:pili_aurora/services/diagnostics/diagnostics.dart';
 import 'package:pili_aurora/utils/platform_utils.dart';
 import 'package:pili_aurora/utils/storage_pref.dart';
 import 'package:cached_network_image_ce/cached_network_image.dart';
@@ -8,21 +10,38 @@ import 'package:path_provider/path_provider.dart';
 
 abstract final class CacheManager {
   static late final DefaultCacheManager manager;
+  static ImageSourceStore? _imageSources;
 
-  static Future<void> ensureInitialized({Directory? directory}) =>
-      DefaultCacheManager.init(
-        maxNrOfCacheLength: Pref.maxCacheSize.toInt(),
-        cacheDirectoryProvider: directory == null
-            ? getTemporaryDirectory
-            : () async => directory,
-      ).then((i) => manager = i);
+  static Directory get _previewDirectory => Directory(
+    path.join(path.dirname(manager.cacheDir), 'image_preview_v1'),
+  );
+
+  static ImageSourceStore get imageSources => _imageSources ??= (() {
+    final store = ImageSourceStore(_previewDirectory);
+    Diagnostics.instance.register('image.sources', () => store.statistics);
+    return store;
+  })();
+
+  static Future<void> ensureInitialized({Directory? directory}) async {
+    manager = await DefaultCacheManager.init(
+      maxNrOfCacheLength: Pref.maxCacheSize.toInt(),
+      cacheDirectoryProvider: directory == null
+          ? getTemporaryDirectory
+          : () async => directory,
+    );
+    await imageSources.ready;
+  }
 
   /// 读取失败保留异常；0 仅表示实际没有缓存文件。
   static Future<int> loadApplicationCache() async {
     final directory = PlatformUtils.isDesktop
         ? Directory(manager.cacheDir)
         : await getTemporaryDirectory();
-    return getTotalSizeOfFilesInDir(directory);
+    final total = await getTotalSizeOfFilesInDir(directory);
+    if (PlatformUtils.isDesktop && await _previewDirectory.exists()) {
+      return total + await getTotalSizeOfFilesInDir(_previewDirectory);
+    }
+    return total;
   }
 
   static Future<int> getTotalSizeOfFilesInDir(Directory directory) async {
@@ -53,6 +72,7 @@ abstract final class CacheManager {
 
   /// 全部步骤完成才确认成功；失败可能发生在部分缓存已删除之后。
   static Future<void> clearLibraryCache() async {
+    await _imageSources?.clear();
     await manager.emptyCache();
     final cacheDirectory = Directory(manager.cacheDir);
     // 底层清理会容忍孤立文件删除失败，显式排空残留才能确认清理结果。
@@ -62,7 +82,9 @@ abstract final class CacheManager {
     if (PlatformUtils.isDesktop) return;
     final tempDirectory = await getTemporaryDirectory();
     await for (final file in tempDirectory.list(followLinks: false)) {
-      if (file is Directory && path.equals(file.path, manager.cacheDir)) {
+      if (file is Directory &&
+          (path.equals(file.path, manager.cacheDir) ||
+              path.equals(file.path, _previewDirectory.path))) {
         continue;
       }
       await file.delete(recursive: true);

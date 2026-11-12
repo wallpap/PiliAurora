@@ -233,6 +233,9 @@ class ImageGridView extends StatelessWidget {
               children: [
                 NetworkImgLayer(
                   src: item.url,
+                  sourceSize: item.width > 1 && item.height > 1
+                      ? Size(item.width.toDouble(), item.height.toDouble())
+                      : null,
                   width: width,
                   height: height,
                   borderRadius: borderRadius,

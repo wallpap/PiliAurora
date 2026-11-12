@@ -8,6 +8,7 @@ import 'package:pili_aurora/common/widgets/dialog/simple_dialog_option.dart';
 import 'package:pili_aurora/common/widgets/emote_tooltip.dart';
 import 'package:pili_aurora/common/widgets/gesture/tap_gesture_recognizer.dart';
 import 'package:pili_aurora/common/widgets/image/cached_image.dart';
+import 'package:pili_aurora/common/widgets/image/content_image.dart';
 import 'package:pili_aurora/common/widgets/image/cached_network_svg_image.dart';
 import 'package:pili_aurora/common/widgets/image/network_img_layer.dart';
 import 'package:pili_aurora/common/widgets/image_grid/image_grid_view.dart';
@@ -261,14 +262,15 @@ class OpusContent extends StatelessWidget {
                     ? null
                     : width * pic.height! / pic.width!;
                 width ??= maxWidth;
-                Widget child = CachedImage(
+                Widget child = ContentImage.network(
+                  ImageUtils.thumbnailUrl(pic.url!, 60),
+                  sourceSize: pic.width != null && pic.height != null
+                      ? Size(pic.width!.toDouble(), pic.height!.toDouble())
+                      : null,
                   width: width,
                   height: height,
                   memCacheWidth: width.cacheSize(context),
-                  imageUrl: ImageUtils.thumbnailUrl(pic.url!, 60),
-                  fadeInDuration: const Duration(milliseconds: 120),
-                  fadeOutDuration: const Duration(milliseconds: 120),
-                  placeholder: (_, _) => Image.asset(
+                  placeholder: (_) => Image.asset(
                     Assets.themed(Assets.loading, Theme.of(context).brightness),
                   ),
                 );

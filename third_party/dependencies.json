@@ -110,7 +110,7 @@
     },
     {
       "name": "flutter_html",
-      "version": "3.0.0+piliaurora.1",
+      "version": "3.0.0+piliaurora.2",
       "upstream_version": "3.0.0",
       "path": "third_party/flutter_html",
       "source": {

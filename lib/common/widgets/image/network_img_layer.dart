@@ -6,6 +6,8 @@ import 'package:pili_aurora/utils/extension/num_ext.dart';
 import 'package:pili_aurora/utils/image_utils.dart';
 import 'package:pili_aurora/utils/storage_pref.dart';
 import 'package:material_ui/material_ui.dart';
+import 'package:cached_network_image_ce/cached_network_image.dart'
+    show BaseCacheManager;
 
 class NetworkImgLayer extends StatelessWidget {
   const NetworkImgLayer({
@@ -22,6 +24,8 @@ class NetworkImgLayer extends StatelessWidget {
     this.fit = .cover,
     this.alignment = .center,
     this.cacheWidth,
+    this.sourceSize,
+    this.cacheManager,
   });
 
   final String? src;
@@ -36,6 +40,8 @@ class NetworkImgLayer extends StatelessWidget {
   final BoxFit fit;
   final Alignment alignment;
   final bool? cacheWidth;
+  final Size? sourceSize;
+  final BaseCacheManager? cacheManager;
 
   static Color? reduceLuxColor = Pref.reduceLuxColor;
   static bool reduce = false;
@@ -65,24 +71,52 @@ class NetworkImgLayer extends StatelessWidget {
     required bool isAvatar,
   }) {
     int? memCacheWidth, memCacheHeight;
-    if (cacheWidth ?? width <= height) {
+    final decodeTarget =
+        width.isFinite && height.isFinite && width > 0 && height > 0
+        ? ImageDecodeTarget.forDisplay(
+            Size(width, height),
+            MediaQuery.devicePixelRatioOf(context),
+            fit,
+          )
+        : null;
+    if (sourceSize case final source?
+        when decodeTarget != null &&
+            source.width.isFinite &&
+            source.height.isFinite &&
+            source.width >= 1 &&
+            source.height >= 1) {
+      final target = decodeTarget.targetSize(
+        source.width.toInt(),
+        source.height.toInt(),
+      );
+      memCacheWidth = target.width;
+      memCacheHeight = target.height;
+    } else if (cacheWidth ?? width <= height) {
       memCacheWidth = width.cacheSize(context);
     } else {
       memCacheHeight = height.cacheSize(context);
     }
     return CachedImage(
-      imageUrl: ImageUtils.thumbnailUrlForSize(
-        src,
-        quality: quality,
-        width: memCacheWidth,
-        height: memCacheHeight,
-      ),
+      cacheManager: cacheManager,
+      imageUrl:
+          sourceSize == null &&
+              (fit == BoxFit.cover ||
+                  fit == BoxFit.fitHeight ||
+                  fit == BoxFit.fitWidth)
+          ? ImageUtils.thumbnailUrl(src, quality)
+          : ImageUtils.thumbnailUrlForSize(
+              src,
+              quality: quality,
+              width: memCacheWidth,
+              height: memCacheHeight,
+            ),
       width: width,
       height: height,
       memCacheWidth: memCacheWidth,
       memCacheHeight: memCacheHeight,
       // 限制列表长图的解码面积；原图查看器单独按原始分辨率加载。
       maxDecodePixels: 1 << 20,
+      decodeTarget: decodeTarget,
       fit: fit,
       alignment: alignment,
       fadeOutDuration: fadeOutDuration,

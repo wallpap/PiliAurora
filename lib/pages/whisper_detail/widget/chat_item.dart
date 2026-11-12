@@ -4,7 +4,7 @@ import 'package:pili_aurora/common/constants.dart';
 import 'package:pili_aurora/common/style.dart';
 import 'package:pili_aurora/common/widgets/emote_tooltip.dart';
 import 'package:pili_aurora/common/widgets/gesture/tap_gesture_recognizer.dart';
-import 'package:pili_aurora/common/widgets/image/cached_image.dart';
+import 'package:pili_aurora/common/widgets/image/content_image.dart';
 import 'package:pili_aurora/common/widgets/image/network_img_layer.dart';
 import 'package:pili_aurora/common/widgets/image_viewer/hero.dart';
 import 'package:pili_aurora/common/widgets/selection_text.dart';
@@ -500,10 +500,23 @@ class ChatItem extends StatelessWidget {
     final imgHeight = (content['height'] as num).toDouble();
     final width = math.min(220.0, imgWidth);
     final ratio = imgHeight / imgWidth;
-    Widget child = NetworkImgLayer(
-      width: width,
-      height: width * ratio,
-      src: url,
+    Widget child = Builder(
+      builder: (context) => ClipRRect(
+        borderRadius: Style.mdRadius,
+        child: ContentImage.network(
+          ImageUtils.thumbnailUrl(url),
+          sourceSize: Size(imgWidth, imgHeight),
+          width: width,
+          height: width * ratio,
+          memCacheWidth: width.cacheSize(context),
+          color: NetworkImgLayer.reduce ? NetworkImgLayer.reduceLuxColor : null,
+          colorBlendMode: NetworkImgLayer.reduce ? BlendMode.modulate : null,
+          placeholder: (_) =>
+              NetworkImgLayer(src: null, width: width, height: width * ratio),
+          errorBuilder: (_, _, _) =>
+              NetworkImgLayer(src: null, width: width, height: width * ratio),
+        ),
+      ),
     );
     if (ratio <= Style.imgMaxRatio) {
       child = fromHero(
@@ -675,11 +688,11 @@ class ChatItem extends StatelessWidget {
         final maxWidth = math.max(400.0, constraints.maxWidth);
         Widget child = ClipRRect(
           borderRadius: Style.mdRadius,
-          child: CachedImage(
+          child: ContentImage.network(
+            ImageUtils.thumbnailUrl(content['pic_url']),
             width: maxWidth,
             memCacheWidth: maxWidth.cacheSize(context),
-            imageUrl: ImageUtils.thumbnailUrl(content['pic_url']),
-            placeholder: (_, _) => const SizedBox.shrink(),
+            placeholder: (_) => const SizedBox.shrink(),
           ),
         );
         if (url != null && url.isNotEmpty) {

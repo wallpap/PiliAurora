@@ -22,7 +22,7 @@
 | 追踪启动、请求、播放、下载、消息 | [运行流程](development/runtime-flows.md) |
 | 修改账号、状态、分页或异步结果 | [状态管理](development/state-management.md)、[账号拦截器](../lib/utils/accounts/account_manager/README.md) |
 | 修改播放状态、原生输出与释放 | [播放状态模型](development/playback-model.md)、[Windows 视频输出](maintenance/windows-video-output.md) |
-| 重构图片加载、交互预览与资源释放 | [使用场景与解码路径调查](development/image-usage-audit.md)、[图片加载与预览设计稿（拟实施）](development/image-pipeline-design.md) |
+| 重构图片加载、交互预览与资源释放 | [使用场景与解码路径调查](development/image-usage-audit.md)、[图片加载与预览设计稿](development/image-pipeline-design.md)、[图片模块](../lib/common/widgets/image/README.md) |
 | 核对设置的生效时机 | [设置行为](development/settings-behavior.md) |
 | 修改桌面标题栏与提示浮层 | [桌面窗口与标题栏](development/architecture.md#桌面窗口与标题栏) |
 | 修改消息、私信、未读或分享 | [消息模块](../lib/services/messaging/README.md) |

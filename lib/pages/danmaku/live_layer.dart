@@ -65,6 +65,7 @@ class _LiveDanmakuLayerState<T> extends State<LiveDanmakuLayer<T>> {
     _scheduler = DanmakuFrameScheduler(onFrame: _refresh);
     _queue = LiveDanmakuQueue<T>(
       loadImage: _loadImage,
+      loadImageIfCurrent: _loadImageIfCurrent,
       nowUs: () => _now,
       admit: (item) {
         final renderer = _renderer!;
@@ -106,26 +107,23 @@ class _LiveDanmakuLayerState<T> extends State<LiveDanmakuLayer<T>> {
   }
 
   Future<ui.Image?> _loadImage(LiveEmoteDescriptor emote) {
-    final result = Completer<ui.Image?>();
-    final stream = CachedImageProvider(
-      ImageUtils.thumbnailUrl(emote.url),
-      maxDecodePixels: 1 << 16,
-    ).resolve(ImageConfiguration.empty);
-    late final ImageStreamListener listener;
-    listener = ImageStreamListener(
-      (info, _) {
-        final image = info.image.clone();
-        info.dispose();
-        stream.removeListener(listener);
-        result.complete(image);
-      },
-      onError: (Object _, StackTrace? _) {
-        stream.removeListener(listener);
-        result.complete(null);
-      },
-    );
-    stream.addListener(listener);
-    return result.future;
+    return _loadImageIfCurrent(emote, () => !_disposed);
+  }
+
+  Future<ui.Image?> _loadImageIfCurrent(
+    LiveEmoteDescriptor emote,
+    bool Function() isCurrent,
+  ) async {
+    try {
+      return await loadNetworkImageFrame(
+        ImageUtils.thumbnailUrl(emote.url),
+        maxDecodePixels: 1 << 16,
+        owner: this,
+        isCurrent: isCurrent,
+      );
+    } catch (_) {
+      return null;
+    }
   }
 
   @override

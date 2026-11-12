@@ -4,6 +4,25 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_html/flutter_html.dart';
 
+class HtmlImageSource extends InheritedWidget {
+  const HtmlImageSource(
+      {super.key, required this.builder, required super.child});
+
+  final Widget Function(BuildContext, String, ImageErrorWidgetBuilder) builder;
+
+  static Widget image(
+      BuildContext context, String url, ImageErrorWidgetBuilder errorBuilder) {
+    final source =
+        context.dependOnInheritedWidgetOfExactType<HtmlImageSource>();
+    return source?.builder(context, url, errorBuilder) ??
+        Image.network(url, errorBuilder: errorBuilder);
+  }
+
+  @override
+  bool updateShouldNotify(HtmlImageSource oldWidget) =>
+      builder != oldWidget.builder;
+}
+
 class CssBoxWidget extends StatelessWidget {
   const CssBoxWidget({
     super.key,
@@ -124,22 +143,25 @@ class CssBoxWidget extends StatelessWidget {
       if (style.listStyleImage != null) {
         return WidgetSpan(
           alignment: PlaceholderAlignment.middle,
-          child: Image.network(
-            style.listStyleImage!.uriText,
-            errorBuilder: (_, __, ___) {
-              if (style.marker?.content.replacementContent?.isNotEmpty ??
-                  false) {
-                return Text.rich(
-                  TextSpan(
-                    text: style.marker!.content.replacementContent!,
-                    style: style.marker!.style?.generateTextStyle(),
-                  ),
-                );
-              }
+          child: Builder(
+              builder: (context) => HtmlImageSource.image(
+                    context,
+                    style.listStyleImage!.uriText,
+                    (_, __, ___) {
+                      if (style
+                              .marker?.content.replacementContent?.isNotEmpty ??
+                          false) {
+                        return Text.rich(
+                          TextSpan(
+                            text: style.marker!.content.replacementContent!,
+                            style: style.marker!.style?.generateTextStyle(),
+                          ),
+                        );
+                      }
 
-              return Container();
-            },
-          ),
+                      return Container();
+                    },
+                  )),
         );
       }
 

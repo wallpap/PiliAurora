@@ -13,6 +13,7 @@ import 'package:pili_aurora/pages/emote/controller.dart';
 import 'package:pili_aurora/pages/emote/manage.dart';
 import 'package:get/get.dart';
 import 'package:material_ui/material_ui.dart';
+import 'package:flutter/rendering.dart' show ScrollCacheExtent;
 
 class EmotePanel extends StatefulWidget {
   final Function(Emote emote, double? width, double? height) onChoose;
@@ -153,65 +154,96 @@ class _EmotePanelState extends State<EmotePanel>
     ThemeData theme,
     List<RecentEmote> entries,
     double size,
-  ) => SingleChildScrollView(
-    physics: platformClampingPhysics,
-    padding: const EdgeInsets.only(left: 12, right: 12, bottom: 12),
-    child: Wrap(
-      spacing: 8,
-      runSpacing: 8,
-      crossAxisAlignment: WrapCrossAlignment.center,
-      children: entries.map((entry) {
-        final item = entry.emote;
-        final isTextEmote = entry.width == null;
-        Widget child = Padding(
-          padding: const EdgeInsets.all(6),
-          child: isTextEmote
-              ? SizedBox(
-                  height: size - 12,
-                  child: FittedBox(
-                    fit: BoxFit.scaleDown,
-                    child: Text(item.text ?? '', maxLines: 1),
-                  ),
-                )
-              : SizedBox(
-                  width: size - 12,
-                  height: size - 12,
-                  child: Center(
-                    child: NetworkImgLayer(
-                      src: item.url,
-                      width: entry.width!,
-                      height: entry.width!,
-                      type: ImageType.emote,
-                      fit: BoxFit.contain,
-                    ),
-                  ),
-                ),
-        );
-        if (!isTextEmote) {
-          child = emoteTooltipBuilder(
-            enable: true,
-            size: 70,
-            colorScheme: theme.colorScheme,
-            url: item.url,
-            emote: item.text,
-            triggerMode: kTriggerMode,
-            child: child,
+  ) {
+    if (entries.every((entry) => entry.width != null)) {
+      return LayoutBuilder(
+        builder: (context, constraints) {
+          final count = ((constraints.maxWidth - 16) / (size + 8))
+              .floor()
+              .clamp(1, 100);
+          return GridView.builder(
+            physics: platformClampingPhysics,
+            padding: const EdgeInsets.only(left: 12, right: 12, bottom: 12),
+            scrollCacheExtent: ScrollCacheExtent.pixels(size + 8),
+            addAutomaticKeepAlives: false,
+            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: count,
+              mainAxisExtent: size,
+              mainAxisSpacing: 8,
+              crossAxisSpacing: 8,
+            ),
+            itemCount: entries.length,
+            itemBuilder: (context, index) => Center(
+              child: _buildEmote(theme, entries[index], size),
+            ),
           );
-        }
-        return Material(
-          type: MaterialType.transparency,
-          child: InkWell(
-            borderRadius: const BorderRadius.all(Radius.circular(6)),
-            onTap: () {
-              widget.onChoose(item, entry.width, null);
-              _emotePanelController.recordEmote(item, entry.width);
-            },
-            child: child,
-          ),
-        );
-      }).toList(),
-    ),
-  );
+        },
+      );
+    }
+    return SingleChildScrollView(
+      physics: platformClampingPhysics,
+      padding: const EdgeInsets.only(left: 12, right: 12, bottom: 12),
+      child: Wrap(
+        spacing: 8,
+        runSpacing: 8,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        children: entries
+            .map((entry) => _buildEmote(theme, entry, size))
+            .toList(),
+      ),
+    );
+  }
+
+  Widget _buildEmote(ThemeData theme, RecentEmote entry, double size) {
+    final item = entry.emote;
+    final isTextEmote = entry.width == null;
+    Widget child = Padding(
+      padding: const EdgeInsets.all(6),
+      child: isTextEmote
+          ? SizedBox(
+              height: size - 12,
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text(item.text ?? '', maxLines: 1),
+              ),
+            )
+          : SizedBox(
+              width: size - 12,
+              height: size - 12,
+              child: Center(
+                child: NetworkImgLayer(
+                  src: item.url,
+                  width: entry.width!,
+                  height: entry.width!,
+                  type: ImageType.emote,
+                  fit: BoxFit.contain,
+                ),
+              ),
+            ),
+    );
+    if (!isTextEmote) {
+      child = emoteTooltipBuilder(
+        enable: true,
+        size: 70,
+        colorScheme: theme.colorScheme,
+        url: item.url,
+        emote: item.text,
+        triggerMode: kTriggerMode,
+        child: child,
+      );
+    }
+    return Material(
+      type: MaterialType.transparency,
+      child: InkWell(
+        borderRadius: const BorderRadius.all(Radius.circular(6)),
+        onTap: () {
+          widget.onChoose(item, entry.width, null);
+          _emotePanelController.recordEmote(item, entry.width);
+        },
+        child: child,
+      ),
+    );
+  }
 
   Widget _errorWidget([String? errMsg]) => Center(
     child: TextButton.icon(

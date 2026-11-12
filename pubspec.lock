@@ -613,7 +613,7 @@ packages:
       path: "third_party/flutter_html"
       relative: true
     source: path
-    version: "3.0.0+piliaurora.1"
+    version: "3.0.0+piliaurora.2"
   flutter_inappwebview:
     dependency: "direct main"
     description:

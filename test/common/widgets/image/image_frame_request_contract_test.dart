@@ -6,6 +6,7 @@ import 'package:cached_network_image_ce/cached_network_image.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pili_aurora/common/widgets/image/cached_image.dart';
+import 'package:pili_aurora/common/widgets/image/image_resources.dart';
 
 class _Frame implements ui.FrameInfo {
   _Frame(this.image);
@@ -16,7 +17,7 @@ class _Frame implements ui.FrameInfo {
 }
 
 class _Codec implements ui.Codec {
-  _Codec(this.source);
+  _Codec(this.source, {this.frameCount = 12});
   final ui.Image source;
   final started = Completer<void>();
   Completer<void>? gate;
@@ -24,7 +25,7 @@ class _Codec implements ui.Codec {
   int requests = 0;
   int disposals = 0;
   @override
-  int get frameCount => 12;
+  final int frameCount;
   @override
   int get repetitionCount => -1;
   @override
@@ -42,6 +43,9 @@ class _Codec implements ui.Codec {
 class _FileCache implements BaseCacheManager {
   _FileCache(this.file);
   final File file;
+  final started = Completer<void>();
+  Completer<void>? gate;
+  int loads = 0;
   @override
   Stream<FileResponse> getFileStream(
     String url, {
@@ -49,6 +53,9 @@ class _FileCache implements BaseCacheManager {
     Map<String, String>? headers,
     bool? withProgress,
   }) async* {
+    loads++;
+    if (!started.isCompleted) started.complete();
+    await gate?.future;
     yield FileInfo(file, FileSource.Cache, DateTime(2100), url);
   }
 
@@ -77,6 +84,127 @@ void main() {
       ..clearLiveImages();
     source.dispose();
     await directory.delete(recursive: true);
+  });
+
+  for (final phase in ['codec creation', 'native frame']) {
+    test(
+      'shutdown during $phase revokes delivery and drains actual work',
+      () async {
+        final resources = ImageResources(maximumConcurrentDecodes: 1);
+        final codec = _Codec(source, frameCount: 1);
+        final creating = Completer<void>();
+        final createGate = Completer<void>();
+        if (phase == 'native frame') codec.gate = Completer<void>();
+        final provider = LocalImageProvider(file);
+        final stream = ImageResources.runWith(
+          resources,
+          () => provider.loadImage(provider, (buffer, {getTargetSize}) async {
+            buffer.dispose();
+            creating.complete();
+            if (phase == 'codec creation') await createGate.future;
+            return codec;
+          }),
+        );
+        var delivered = 0;
+        final listener = ImageStreamListener(
+          (info, _) {
+            delivered++;
+            info.dispose();
+          },
+          onError: (Object error, StackTrace? stack) =>
+              fail('cancelled: $error'),
+        );
+        stream.addListener(listener);
+        await creating.future.timeout(const Duration(seconds: 2));
+        if (phase == 'native frame') {
+          await codec.started.future.timeout(const Duration(seconds: 2));
+        }
+        resources.dispose();
+        expect(codec.disposals, 0);
+        if (phase == 'codec creation') {
+          createGate.complete();
+        } else {
+          codec.gate!.complete();
+        }
+        await resources.drained.timeout(const Duration(seconds: 2));
+        await Future<void>.delayed(Duration.zero);
+        expect(delivered, 0);
+        expect(codec.disposals, 1);
+        if (phase == 'native frame') {
+          expect(codec.output!.debugDisposed, isTrue);
+        }
+        stream.removeListener(listener);
+      },
+    );
+  }
+
+  test(
+    'late encoded files and expired queued work never create a decoder',
+    () async {
+      for (final lateFile in [true, false]) {
+        final resources = ImageResources(maximumConcurrentDecodes: 1);
+        final blocker = resources.admit();
+        await blocker.ready;
+        var current = true;
+        var decoders = 0;
+        final cache = _FileCache(file);
+        if (lateFile) cache.gate = Completer<void>();
+        final future = ImageResources.runWith(
+          resources,
+          () => loadNetworkImageFrame(
+            'https://example.test/expired-$lateFile',
+            cacheManager: cache,
+            isCurrent: () => current,
+            decode: (buffer, {getTargetSize}) async {
+              decoders++;
+              buffer.dispose();
+              return _Codec(source);
+            },
+          ),
+        );
+        await cache.started.future.timeout(const Duration(seconds: 2));
+        if (!lateFile) {
+          await Future<void>.delayed(const Duration(milliseconds: 10));
+        }
+        current = false;
+        cache.gate?.complete();
+        blocker.release();
+        expect(await future.timeout(const Duration(seconds: 2)), isNull);
+        expect(decoders, 0);
+        resources.dispose();
+        await resources.drained;
+      }
+    },
+  );
+
+  test('simultaneous one-shot consumers merge encoded loading and each own frame zero', () async {
+    final cache = _FileCache(file)..gate = Completer<void>();
+    final codecs = <_Codec>[];
+    Future<ui.Image?> request() => loadNetworkImageFrame(
+      'https://example.test/shared-frame',
+      cacheManager: cache,
+      decode: (buffer, {getTargetSize}) async {
+        buffer.dispose();
+        final codec = _Codec(source);
+        codecs.add(codec);
+        return codec;
+      },
+    );
+    final first = request();
+    final second = request();
+    await cache.started.future;
+    cache.gate!.complete();
+    final images = await Future.wait([first, second]);
+    expect(cache.loads, 1);
+    expect(codecs, hasLength(2));
+    expect(
+      codecs.every((codec) => codec.requests == 1 && codec.disposals == 1),
+      isTrue,
+    );
+    expect(images[0]!.isCloneOf(images[1]!), isTrue);
+    for (final image in images) {
+      image!.dispose();
+    }
   });
 
   test(
@@ -114,8 +242,9 @@ void main() {
         },
       );
       await codec.started.future;
-      request.cancel();
-      request.cancel();
+      request
+        ..cancel()
+        ..cancel();
       expect(codec.disposals, 0);
       codec.gate!.complete();
       expect(await request.result, isNull);
@@ -130,7 +259,7 @@ void main() {
     () async {
       final codecs = List.generate(
         3,
-        (_) => _Codec(source)..gate = Completer<void>(),
+        (_) => _Codec(source, frameCount: 1)..gate = Completer<void>(),
       );
       final created = List.generate(3, (_) => Completer<void>());
       Future<ui.Codec> decode(int index, ui.ImmutableBuffer buffer) async {
@@ -188,7 +317,7 @@ void main() {
       expect(provider, sameKey);
       expect(provider.hashCode, sameKey.hashCode);
       ui.TargetImageSize? target;
-      final codec = _Codec(source);
+      final codec = _Codec(source, frameCount: 1);
       final delivered = Completer<void>();
       final stream = provider.loadImage(provider, (
         buffer, {
@@ -217,7 +346,7 @@ void main() {
       final cause = StateError('synthetic codec failure');
       final request = loadImageFrame(
         file,
-        decode: (buffer, {getTargetSize}) async {
+        decode: (buffer, {getTargetSize}) {
           buffer.dispose();
           throw cause;
         },

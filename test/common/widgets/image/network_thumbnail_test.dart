@@ -15,7 +15,7 @@ void main() {
   });
 
   testWidgets(
-    'cards request bounded animation sources at physical dimensions',
+    'cards preserve animation sources until the decoder knows their aspect ratio',
     (
       tester,
     ) async {
@@ -39,7 +39,11 @@ void main() {
       );
 
       expect(image.memCacheHeight, 329);
-      expect(image.imageUrl, contains('@3187w_329h_'));
+      expect(
+        image.imageUrl,
+        'https://i0.hdslb.com/bfs/new_dyn/animation.gif@80q.webp',
+      );
+      expect(image.decodeTarget, isNotNull);
       expect(image.imageUrl, endsWith('q.webp'));
       expect(image.maxDecodePixels, 1 << 20);
     },
@@ -64,6 +68,35 @@ void main() {
     );
     expect(large, contains('@1024w_1024h_'));
   });
+
+  testWidgets(
+    'degenerate display or source geometry creates no invalid decode target',
+    (tester) async {
+      for (final source in [
+        const Size(1600, 400),
+        const Size(double.infinity, 400),
+        const Size(.5, .5),
+      ]) {
+        await tester.pumpWidget(
+          MediaQuery(
+            data: const MediaQueryData(),
+            child: Builder(
+              builder: (context) {
+                final layer = NetworkImgLayer(
+                  src: 'https://example.test/cover.png',
+                  width: 0,
+                  height: 0,
+                  sourceSize: source,
+                ).build(context) as ClipRRect;
+                expect((layer.child! as CachedImage).decodeTarget, isNull);
+                return const SizedBox();
+              },
+            ),
+          ),
+        );
+      }
+    },
+  );
 
   test('original quality and other hosts keep their existing URLs', () {
     for (final src in [

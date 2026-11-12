@@ -155,11 +155,13 @@ abstract class CommonRichTextPubPageState<T extends CommonRichTextPubPage>
             child: ConstrainedBox(
               constraints: const BoxConstraints(minWidth: 42),
               child: switch (image) {
-                FilePicModel e => Image.file(
-                  File(e.path),
+                FilePicModel e => Image(
+                  image: LocalImageProvider(
+                    File(e.path),
+                    height: height.cacheSize(context),
+                  ),
                   height: height,
                   filterQuality: .low,
-                  cacheHeight: height.cacheSize(context),
                 ),
                 OpusPicModel e => CachedImage(
                   imageUrl: ImageUtils.thumbnailUrl(e.url!),

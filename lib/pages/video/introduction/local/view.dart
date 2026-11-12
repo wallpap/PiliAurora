@@ -3,12 +3,12 @@ import 'dart:io';
 import 'package:pili_aurora/common/style.dart';
 import 'package:pili_aurora/common/widgets/badge.dart';
 import 'package:pili_aurora/common/widgets/image/network_img_layer.dart';
+import 'package:pili_aurora/common/widgets/image/cached_image.dart';
 import 'package:pili_aurora/models/common/badge_type.dart';
 import 'package:pili_aurora/models/common/video/video_quality.dart';
 import 'package:pili_aurora/models/remote/download/bili_download_entry_info.dart';
 import 'package:pili_aurora/pages/video/introduction/local/controller.dart';
 import 'package:pili_aurora/utils/duration_utils.dart';
-import 'package:pili_aurora/utils/extension/num_ext.dart';
 import 'package:pili_aurora/utils/path_utils.dart';
 import 'package:get/get.dart';
 import 'package:material_ui/material_ui.dart';
@@ -55,7 +55,6 @@ class _LocalIntroPanelState extends State<LocalIntroPanel>
   ) {
     final outline = theme.colorScheme.outline;
     final cover = File(path.join(entry.entryDirPath, PathUtils.coverName));
-    final cacheWidth = entry.pageData?.cacheWidth ?? false;
     return Padding(
       padding: const EdgeInsets.only(bottom: 2),
       child: SizedBox(
@@ -83,17 +82,18 @@ class _LocalIntroPanelState extends State<LocalIntroPanel>
                       cover.existsSync()
                           ? ClipRRect(
                               borderRadius: Style.mdRadius,
-                              child: Image.file(
-                                cover,
+                              child: Image(
+                                image: LocalImageProvider(
+                                  cover,
+                                  decodeTarget: ImageDecodeTarget.forDisplay(
+                                    const Size(160, 100),
+                                    MediaQuery.devicePixelRatioOf(context),
+                                    BoxFit.cover,
+                                  ),
+                                ),
                                 width: 160,
                                 height: 100,
                                 fit: BoxFit.cover,
-                                cacheWidth: cacheWidth
-                                    ? 160.cacheSize(context)
-                                    : null,
-                                cacheHeight: cacheWidth
-                                    ? null
-                                    : 100.cacheSize(context),
                                 colorBlendMode: NetworkImgLayer.reduce
                                     ? BlendMode.modulate
                                     : null,

@@ -1,6 +1,19 @@
 # 图片加载与预览设计稿
 
-日期：2026-11-12。修订：第三版，依据[五类场景与解码路径调查](image-usage-audit.md)修订。状态：拟实施设计，尚未替换生产图片路径。本文规定下一轮重构的 interface、所有权与验收条件。区域解码后端尚未选定，实验中的 libvips 不属于生产依赖。
+设计日期：2026-11-12。修订：第三版，依据[五类场景与解码路径调查](image-usage-audit.md)修订。实施更新：2026-11-13。生命周期、场景需求与稳定坐标已接入生产调用；区域协议仅经受控后端验证，生产后端和内容选择装配尚未启用。本文保留完整目标及验收条件，下面的实施状态区分已完成和待完成范围。实验中的 libvips 不属于生产依赖。
+
+## 本轮实施状态
+
+- **已接入：** 共享解码准入覆盖 Provider 首帧/后续动画帧、网络/本地一次性第 0 帧；取消与关闭等待真实工作结束后归还名额。普通图片沿用原缓存，不增加来源预探测 codec。
+- **已接入：** 封面按真实 decoder 宽高比和 BoxFit 推导目标，尺寸向上归档；本地附件/封面、雪碧图、弹幕、直接 DecorationImage、HTML CSS 图片标记进入完整帧路径。通知封面使用现有插件 512×512 降采样配置，原生实际成本待设备核验。
+- **已接入：** 普通图片表情使用惰性网格，文字/混合历史保留可变宽度布局；正文、私信与 Gallery 使用 ContentImage。滚动裁剪需求、邻页加载/当前页动画、隐藏路由许可分开，Viewer 使用稳定源坐标，采样换帧不重置手势，窗口变化保留焦点。
+- **已实现协议：** 不可变来源快照与独立任务租约、安全清理及统计；受控 RegionContentSession 的有界基础层、可见细节、重叠读边界、共享 64MiB 输出预留/保留/待绘制退役计费、取消排空与失败门控。两个会话和真实 ui.Image 用例验证共享预算与旧细节绘制安全。
+- **尚未启用：** `productionRegionBackend` 保持 null；ContentImage 不自动选择区域表示，未引入生产 native 区域依赖，也未实现跨 surface 同 tile 去重。协议测试不证明真实格式的原生工作区、接缝、EXIF、设备性能或完整区域架构已经完成。当前超大图仍可能完整解码，其冷启动峰值尚未解决。
+- **待性能验收：** 弹幕一次性消费不再依赖 Flutter 的静态帧缓存；同时请求合并编码文件下载，每个消费者仍各建 codec。未新增第二套全局像素 LRU，重复静态表情的解码次数/耗时须在真实设备与旧版本对照，不能宣称所有常用路径性能无回退。
+
+实际接口与所有权见[图片模块说明](../../lib/common/widgets/image/README.md)，测试范围见[测试契约](../../test/common/widgets/image/CONTRACTS.md)。后续阶段必须完成真实后端、平台画质和性能验收后才能启用区域能力。
+
+2026-11-13 最终统一自动化回归 207 项全部通过（固定 Flutter 3.47.5，23 秒），覆盖图片核心、真实入口、表情/弹幕/雪碧图及受影响外围功能；不作为设备性能结论。
 
 ## 设计决定
 
@@ -204,7 +217,7 @@ Android 通知封面单独配置合理的物理目标尺寸，核对插件 Bitma
 
 ## Viewer 的稳定坐标
 
-当前 `image_viewer/image.dart` 从已解码图尺寸计算 `childSize`，而 `Viewer.didUpdateWidget` 在尺寸变化时重置手势。引入 LOD 前必须先解除这项耦合。
+实施前的自定义 Image 从已解码图尺寸计算 `childSize`，而 `Viewer.didUpdateWidget` 在尺寸变化时重置手势。现已由 [ContentViewer](../../lib/common/widgets/image_viewer/content_viewer.dart) 和 [ContentImage](../../lib/common/widgets/image/content_image.dart) 使用稳定源尺寸，旧自定义 Image 已移除。
 
 场景尺寸固定为内容方向归一化后的 `sourceSize`。占位、完整帧和各层瓦片绘制到同一场景；解码像素只影响采样，不改变场景几何。保留现有长图初始定位、最大缩放与翻页/退出拖拽规则。
 
@@ -214,7 +227,7 @@ Android 通知封面单独配置合理的物理目标尺寸，核对插件 Bitma
 
 ## 文件安排与实施顺序
 
-以下路径为拟新增位置。共享 implementation 和不依赖交互的内容 surface 集中在 `lib/common/widgets/image/`，预览交互集中在 `image_viewer/`；不把页面状态放进全局 module。
+以下为目标文件组织；本轮实际文件见图片模块说明。共享 implementation 和不依赖交互的内容 surface 集中在 `lib/common/widgets/image/`，预览交互集中在 `image_viewer/`；不把页面状态放进全局 module。
 
 | 位置 | 职责 |
 | --- | --- |
@@ -260,7 +273,7 @@ Android 通知封面单独配置合理的物理目标尺寸，核对插件 Bitma
 
 复用 `test/common/widgets/image/` 下 `image_lifecycle_test.dart`、`image_cache_lifecycle_test.dart`、`image_resume_inflight_test.dart`、`decode_budget_cancel_test.dart` 与 retained-layer 回归，以及 `test/plugin/pl_player/preview_image_cache_test.dart`、`test/pages/live_room/emote_danmaku_test.dart`。新测试覆盖新 interface 承诺，避免重复复制一套旧 implementation 测试。生产区域后端还需真实像素与打包验证，受控 adapter 不替代设备验证。
 
-当前源码参考：[图片加载](../../lib/common/widgets/image/cached_image.dart)、[缓存配置](../../lib/common/widgets/scale_app.dart)、[预览入口](../../lib/common/widgets/image_viewer/gallery_viewer.dart)、[预览图像状态](../../lib/common/widgets/image_viewer/image.dart)、[手势](../../lib/common/widgets/image_viewer/viewer.dart)、[缓存清理](../../lib/utils/cache_manager.dart)。构建命令见[构建与测试](build-and-test.md)。合成实验与设备原始资料继续保存在本地 `doc/dev/`，不作为已经实现的产品说明。
+当前源码参考：[图片加载](../../lib/common/widgets/image/cached_image.dart)、[缓存配置](../../lib/common/widgets/scale_app.dart)、[预览入口](../../lib/common/widgets/image_viewer/gallery_viewer.dart)、[预览适配](../../lib/common/widgets/image_viewer/content_viewer.dart)、[内容状态](../../lib/common/widgets/image/content_image.dart)、[手势](../../lib/common/widgets/image_viewer/viewer.dart)、[缓存清理](../../lib/utils/cache_manager.dart)。构建命令见[构建与测试](build-and-test.md)。合成实验与设备原始资料继续保存在本地 `doc/dev/`，不作为已经实现的产品说明。
 
 ## 架构判断的依据与适用范围
 
