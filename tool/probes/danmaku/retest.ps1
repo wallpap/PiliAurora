@@ -51,12 +51,8 @@ try {
     }
     # 设备采集串行执行，减少另一端解码与GPU负载对Windows采样的干扰。
     if ($windows) {
-        $engine = Join-Path $output 'windows-engine'
-        & python third_party/flutter_engine/package.py unpack --target windows-x64 --output $engine
-        if ($LASTEXITCODE -ne 0) { throw 'Windows 预编译引擎校验失败。' }
-        $library = Join-Path $engine 'flutter_windows.dll'
         foreach ($variant in @('plain', 'video')) {
-            $options = @('-PresentMonPath', $PresentMonPath, '-Mode', 'release', '-EngineLibrary', $library,
+            $options = @('-PresentMonPath', $PresentMonPath,
                 '-OutputDirectory', (Join-Path $output "windows-$variant"))
             if ($variant -eq 'video') {
                 if (-not $Media60) { continue }
@@ -65,7 +61,7 @@ try {
             & pwsh -NoProfile -File tool/probes/windows/measure_danmaku.ps1 @options
             $results.Add(@{ step = "windows-$variant"; passed = ($LASTEXITCODE -eq 0) })
         }
-        & pwsh -NoProfile -File tool/build.ps1 -Platform windows -Mode release -EngineLibrary $library -SkipPubGet
+        & pwsh -NoProfile -File tool/build.ps1 -Platform windows -SkipPubGet
         $results.Add(@{ step = 'restore-windows'; passed = ($LASTEXITCODE -eq 0) })
     }
     if ($android) {

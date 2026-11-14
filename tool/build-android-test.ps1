@@ -43,6 +43,8 @@ try {
     $output = Join-Path $outputDirectory "PiliAurora-dev-arm64-v8a-release.apk"
     Copy-Item -LiteralPath $source `
         -Destination $output -Force
+    Copy-Item -LiteralPath ([IO.Path]::ChangeExtension($source, '.json')) `
+        -Destination ([IO.Path]::ChangeExtension($output, '.json')) -Force
     Write-Host "测试包：$output"
     Write-Host "包名：io.github.wallpap.piliaurora.dev（PiliAurora dev）"
     Write-Host "SHA256：$((Get-FileHash -LiteralPath $output -Algorithm SHA256).Hash)"

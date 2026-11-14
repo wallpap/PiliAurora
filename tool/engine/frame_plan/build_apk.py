@@ -80,8 +80,7 @@ def main():
     pinned_engine = (sdk / "bin/internal/engine.version").read_text().strip()
     if pinned_engine != ENGINE_REVISION:
         raise ValueError(f"SDK engine mismatch: {pinned_engine}")
-    if sdk == (repo / ".fvm/flutter_sdk").resolve():
-        raise ValueError("Use an isolated SDK checkout")
+    # 只替换 APK 内的引擎，不改写 SDK 缓存；默认入口可安全复用固定 FVM SDK。
     flutter = sdk / ("bin/flutter.bat" if os.name == "nt" else "bin/flutter")
     log_path = output.with_suffix(".build.log")
     manifest_path = output.with_suffix(".json")

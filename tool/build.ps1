@@ -3,7 +3,7 @@ param(
     [ValidateSet("android", "windows")]
     [string]$Platform = "windows",
     [ValidateSet("debug", "profile", "release")]
-    [string]$Mode = "debug",
+    [string]$Mode = "release",
     [ValidateSet("armeabi-v7a", "arm64-v8a", "x86_64")]
     [string]$Abi,
     [Alias('WindowsEngineLibrary')]
@@ -25,6 +25,34 @@ Set-Location $Workspace
 
 if ($Abi -and $Platform -ne "android") {
     throw "-Abi 仅适用于 Android 构建。"
+}
+if ($Mode -eq 'profile' -and -not $EngineLibrary) {
+    throw 'Profile 需要同模式的引擎产物；日常验收请使用默认 Release，调试使用 -Mode debug。'
+}
+if ($Platform -ne 'android' -and ($FlutterSdk -or $AndroidSdk -or $DevRelease -or $SourceApk -or $Output)) {
+    throw 'SDK、dev 包、复用 APK 和输出参数仅适用于 Android 装配。'
+}
+if ($DevRelease -and ($Mode -ne 'release' -or ($Abi -and $Abi -ne 'arm64-v8a'))) {
+    throw '-DevRelease 要求 arm64-v8a Release。'
+}
+if (-not $EngineLibrary) {
+    if ($FlutterSdk -or $SourceApk) { throw '-FlutterSdk 和 -SourceApk 用于验证维护中的 Android 引擎。' }
+    if ($Output -and ($Mode -ne 'release' -or -not $Abi)) { throw '-Output 要求 Release 且指定单个 -Abi。' }
+}
+
+# 普通构建也使用 pubspec 的版本，保持程序属性、关于页与更新检查一致。
+$versionMatch = [regex]::Match((Get-Content -Raw -LiteralPath (Join-Path $Workspace 'pubspec.yaml')), '(?m)^version:\s*([^\s+]+)(?:\+(\d+))?\s*$')
+if (-not $versionMatch.Success) { throw 'pubspec.yaml 缺少有效版本。' }
+$commitHash = if (Test-Path -LiteralPath (Join-Path $Workspace '.git')) { (git rev-parse HEAD).Trim() } else { 'N/A' }
+$buildMetadata = [ordered]@{
+    'pili.name' = $versionMatch.Groups[1].Value
+    'pili.code' = if ($versionMatch.Groups[2].Success) { $versionMatch.Groups[2].Value } else { '1' }
+    'pili.hash' = $commitHash
+    'pili.time' = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
+}
+$providedKeys = @($DartDefine | ForEach-Object { $_.Split('=')[0] })
+foreach ($key in $buildMetadata.Keys) {
+    if ($key -notin $providedKeys) { $DartDefine += "$key=$($buildMetadata[$key])" }
 }
 
 $engineProfile = 'standard'
@@ -50,9 +78,6 @@ if ($EngineLibrary) {
     }
     $engineProfile = 'windowsDwmPaced'
     $windowsEnginePath = (Resolve-Path -LiteralPath $EngineLibrary).Path
-}
-if ($FlutterSdk -or $AndroidSdk -or $DevRelease -or $SourceApk -or $Output) {
-    throw '隔离 SDK、dev 包、复用 APK 和输出参数用于 Android 自编构建。'
 }
 foreach ($define in $DartDefine) {
     if ($define.Split('=')[0] -in @('PILIAURORA_PRESENTATION_PROFILE', 'PILIAURORA_ENGINE_IDENTITY', 'PILIAURORA_CONTENT_COMPOSITION')) {
@@ -171,12 +196,61 @@ if (-not $SkipPatch) {
 # 解析及补丁步骤结束后检查最终锁文件，禁止重新引入 Git 来源。
 Invoke-Fvm @("exec", "dart", "--packages=.dart_tool/package_config.json", "tool/check_dependencies.dart")
 
+$selectedFlutterRoot = Resolve-FvmFlutterRoot
+# Release 与发布 CI 共用已验收的引擎；缺少或失配时直接失败，避免悄悄换回原版。
+if ($Mode -eq 'release' -and -not $EngineLibrary) {
+    $packageScript = Join-Path $Workspace 'third_party/flutter_engine/package.py'
+    if ($Platform -eq 'android') {
+        if (-not $AndroidSdk) { $AndroidSdk = $env:ANDROID_HOME }
+        if (-not $AndroidSdk) { $AndroidSdk = $env:ANDROID_SDK_ROOT }
+        if (-not $AndroidSdk -and (Test-Path 'android/local.properties')) {
+            $sdkLine = Get-Content 'android/local.properties' | Where-Object { $_ -match '^sdk\.dir=' } | Select-Object -First 1
+            if ($sdkLine) { $AndroidSdk = $sdkLine.Substring(8).Replace('\\', '\').Replace('\:', ':') }
+        }
+        if (-not $AndroidSdk) { throw '未找到 Android SDK；设置 ANDROID_HOME 或传入 -AndroidSdk。' }
+        $abis = if ($Abi) { @($Abi) } elseif ($DevRelease -or $env:PILIAURORA_TEST_RELEASE -eq 'true') { @('arm64-v8a') } else { @('armeabi-v7a', 'arm64-v8a', 'x86_64') }
+        foreach ($buildAbi in $abis) {
+            $arch = @{ 'armeabi-v7a' = 'arm'; 'arm64-v8a' = 'arm64'; 'x86_64' = 'x64' }[$buildAbi]
+            $engineDirectory = Join-Path $Workspace "build/prebuilt-engine/android-$arch"
+            & python $packageScript unpack --target "android-$arch" --output $engineDirectory | Out-Null
+            if ($LASTEXITCODE -ne 0) { throw "Android 引擎校验失败：$buildAbi" }
+            $customMode = if ($DevRelease -or $env:PILIAURORA_TEST_RELEASE -eq 'true') { 'dev-release' } else { 'release' }
+            $apkOutput = if ($Output) { $Output } elseif ($customMode -eq 'dev-release') { "build/android-test/PiliAurora-dev-$buildAbi-release.apk" } else { "build/release-apks/PiliAurora-android-$buildAbi-release.apk" }
+            $apkArguments = @((Join-Path $PSScriptRoot 'engine/frame_plan/build_apk.py'),
+                '--flutter-sdk', $selectedFlutterRoot, '--android-sdk', $AndroidSdk,
+                '--engine-library', (Join-Path $engineDirectory 'libflutter.so'),
+                '--mode', $customMode, '--abi', $buildAbi, '--target', $Target,
+                '--output', $apkOutput, '--skip-patch', '--skip-pub-get')
+            foreach ($define in $DartDefine) { $apkArguments += "--dart-define=$define" }
+            & python @apkArguments
+            if ($LASTEXITCODE -ne 0) { throw "Android APK 装配失败：$buildAbi" }
+            # 单架构入口保留 Flutter 的稳定输出，供独立测试包脚本使用。
+            if ($abis.Count -eq 1) {
+                $flutterApk = Join-Path $Workspace 'build/app/outputs/flutter-apk/app-release.apk'
+                if ([IO.Path]::GetFullPath($apkOutput) -ne $flutterApk) {
+                    Copy-Item -LiteralPath $apkOutput -Destination $flutterApk -Force
+                    Copy-Item -LiteralPath ([IO.Path]::ChangeExtension($apkOutput, '.json')) -Destination ([IO.Path]::ChangeExtension($flutterApk, '.json')) -Force
+                }
+            }
+        }
+        exit 0
+    }
+    $engineDirectory = Join-Path $Workspace 'build/prebuilt-engine/windows-x64'
+    & python $packageScript unpack --target windows-x64 --output $engineDirectory | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw 'Windows 引擎校验失败。' }
+    $engineProfile = 'windowsDwmPaced'
+    $windowsEnginePath = Join-Path $engineDirectory 'flutter_windows.dll'
+}
+
 $identityArguments = @((Join-Path $PSScriptRoot 'engine/engine_identity.py'), '--profile', $engineProfile,
-    '--mode', $Mode, '--flutter-sdk', (Resolve-FvmFlutterRoot))
+    '--mode', $Mode, '--flutter-sdk', $selectedFlutterRoot)
 if ($windowsEnginePath) { $identityArguments += @('--library', $windowsEnginePath) }
 $configurationJson = & python @identityArguments
 if ($LASTEXITCODE -ne 0) { throw '构建引擎身份校验失败。' }
 $presentationConfiguration = $configurationJson | ConvertFrom-Json
+if ($Platform -eq 'windows' -and $Mode -eq 'release' -and $windowsEnginePath) {
+    $configurationJson | Set-Content -LiteralPath (Join-Path $Workspace 'build/windows-engine-config.json') -Encoding utf8NoBOM
+}
 
 $buildTarget = if ($Platform -eq "android") { "apk" } else { "windows" }
 $buildArguments = @("exec", "flutter", "build", $buildTarget, "--$Mode")
