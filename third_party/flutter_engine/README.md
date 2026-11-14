@@ -1,6 +1,6 @@
 # Flutter Release 预编译引擎
 
-正式发布构建使用 Git 跟踪的 `prebuilt/` 压缩包，CI 解压并校验后装配应用，省去引擎源码编译。普通 FVM 开发构建继续使用 SDK 自带引擎。
+本地 `tool/build.ps1` 默认 Release 与发布 CI 均使用 Git 跟踪的 `prebuilt/` 压缩包，校验后装配应用，无需编译引擎或指定库路径。普通命令和输出见[构建与测试](../../doc/development/build-and-test.md#构建)，采用的修复和策略见[默认构建与策略](../../doc/development/build-defaults.md)。Debug 使用 SDK 自带引擎；Profile 维护需要同模式的原生构建产物。
 
 | 目录 | 平台 | 呈现配置 |
 | --- | --- | --- |

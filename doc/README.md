@@ -27,13 +27,14 @@
 | 修改桌面标题栏与提示浮层 | [桌面窗口与标题栏](development/architecture.md#桌面窗口与标题栏) |
 | 修改消息、私信、未读或分享 | [消息模块](../lib/services/messaging/README.md) |
 | 运行检查、构建或制作发布包 | [构建与测试](development/build-and-test.md)、[测试目录](../test/README.md)、[工具入口](../tool/README.md) |
+| 核对默认引擎、缓存与已采用修复 | [默认构建与策略](development/build-defaults.md) |
 | 更新依赖或定制引擎 | [第三方依赖](../third_party/README.md)、[引擎差异](development/engine-patches/README.md)、[引擎工具](../tool/engine/README.md) |
 | 排查设备、性能与内存问题 | [维护与排障](maintenance/troubleshooting.md)、[探针](../tool/probes/README.md)、[实验](../tool/experiments/README.md) |
 
 ## 发布与历史
 
 - [GitHub Releases](https://github.com/wallpap/PiliAurora/releases)、[v1.6.9 更新说明](releases/v1.6.9.md)、[历史版本说明](releases/)。
-- [历史排障经验](diagnostic-notes/README.md)保留可复用的排查方法，设备结果须按记录条件使用；原始资料保存在本地 `doc/dev/`。
+- [历史排障经验](diagnostic-notes/README.md)保留可复用的排查方法；当前采用项见[默认构建与策略](development/build-defaults.md)。本地 `doc/dev/` 保存报告和原始证据，文件清单与报告导航按[归档入口](../tool/experiments/README.md#实验资料归档)生成。
 - 依赖调整记录见[迁移验收](../third_party/VALIDATION.md)和[精简记录](../third_party/SIMPLIFICATION.md)。
 
 ## 维护文档

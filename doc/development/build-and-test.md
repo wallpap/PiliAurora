@@ -32,41 +32,30 @@ fvm flutter pub get
 
 ## 构建
 
-仓库脚本统一准备一次依赖，复用已应用的 Flutter 和 `material_ui` 补丁，再调用对应平台的构建工具：
+仓库入口默认构建 Release，自动准备依赖、应用框架补丁并装配已校验的预编译引擎。本地与发布 CI 使用同一套引擎和呈现策略，采用项及设备验收边界见[默认构建与策略](build-defaults.md)。
 
 ```powershell
-pwsh -File tool/build.ps1 -Platform windows -Mode debug
-pwsh -File tool/build.ps1 -Platform android -Mode debug
+pwsh -NoProfile -File tool/build.ps1 -Platform windows
+pwsh -NoProfile -File tool/build.ps1 -Platform android
 ```
 
-将 `-Mode debug` 改为 `-Mode release` 可构建发布版。默认输出显示准备步骤汇总和构建进度，`-Verbose` 显示详细输出。已准备的环境可按需使用 `-SkipPubGet` 和 `-SkipPatch`，参数条件与依赖来源检查见 [`tool/README.md`](../../tool/README.md)。
+Windows 输出到 `build/windows/x64/runner/Release/`。Android 默认在 `build/release-apks/` 生成三个分 ABI APK，各自携带对应引擎身份；用 `-Abi arm64-v8a`、`armeabi-v7a` 或 `x86_64` 只构建一个架构。Android SDK 从 `-AndroidSdk`、`ANDROID_HOME`、`ANDROID_SDK_ROOT` 或 `android/local.properties` 依次定位，构建工具版本为 `37.0.0`，Release 签名配置见 `android/key.properties`。
 
-Android 默认生成包含所有 ABI 的通用 APK。可使用 `-Abi arm64-v8a`、`-Abi armeabi-v7a` 或 `-Abi x86_64` 只打包指定架构；省略参数时保留通用 APK 行为。
+`-Verbose` 显示依赖与补丁详情。依赖和补丁已准备时可传 `-SkipPubGet`、`-SkipPatch`；依赖来源检查仍执行。构建自动生成呈现配置并核对引擎模式、架构、固定提交、补丁、二进制摘要及原生回归状态，校验失败则终止。
 
-Android 帧计划测试包使用[隔离引擎构建入口](../../tool/engine/frame_plan/README.md)。`tool/build-android-test.ps1` 使用 FVM 预编译引擎；需要帧计划的 dev 包时，先编译同一运行模式的自定义引擎，再用 `build_apk.py --mode dev-release` 装配，沿用本机 Release 签名。两种 dev 构建均输出到 `build/android-test/`；帧计划产物另有身份 JSON，记录模式、包名、APK、引擎和补丁摘要。隔离 SDK、引擎检出及二进制留在本地，源码补丁与重建步骤随仓库维护。
+普通构建自动从 `pubspec.yaml` 读取版本名和构建号，并将提交与构建时间传入应用，保持程序属性、关于页和更新检查一致。发布元数据通过 `-DartDefine` 传入时优先使用调用方的值。
 
-两端自编引擎共用[身份与呈现配置协议](../../tool/engine/README.md)，由 `tool/build.ps1` 分派装配。Android 可传 `-EngineLibrary`、`-FlutterSdk`、`-AndroidSdk` 和 `-Abi` 选择对应架构的 Profile/Release；arm64 独立 Release 测试包再传 `-DevRelease`。
+需要断点或热重载时显式传 `-Mode debug`，使用 FVM SDK 的 Debug 引擎；引擎相关的画面、资源与性能验收使用默认 Release。Profile 引擎维护及原生重建见[引擎工具](../../tool/engine/README.md)，日常构建无需指定引擎路径。
 
-Windows 帧节奏自编引擎使用[固定补丁与隔离构建入口](../../tool/engine/windows_frame_pacing/README.md)。先构建并通过原生回归，再显式装配同模式的 Profile/Release 引擎：
-
-```powershell
-pwsh -NoProfile -File tool/build.ps1 -Platform windows -Mode profile -WindowsEngineLibrary <engine-root>/flutter/engine/src/out/piliaurora_windows_profile/flutter_windows.dll
-```
-
-脚本核对框架／引擎固定提交、模式、x64 架构、当前补丁／overlay、DLL 摘要及原生回归状态，并在应用输出目录保留 `engine-identity.json`。省略 `-WindowsEngineLibrary` 使用 FVM 引擎并清除旧身份文件；正式发布与 CI 使用 [Git 跟踪的 Release 预编译引擎](../../third_party/flutter_engine/README.md)。
+独立包名的 Android 测试包使用 `tool/build-android-test.ps1`，同样自动装配 arm64 Release 引擎，可与正式应用并存。输入、输出和参数见[工具入口](../../tool/README.md#平台构建)。
 
 ## 发布构建与附件
 
 ### 本地构建与发布工作流
 
-本地发布验证分别执行：
+本地发布验证使用上节默认构建命令。
 
-```powershell
-pwsh -File tool/build.ps1 -Platform android -Mode release
-pwsh -File tool/build.ps1 -Platform windows -Mode release
-```
-
-Android 通用 APK 位于 `build/app/outputs/flutter-apk/app-release.apk`，Windows 运行目录位于 `build/windows/x64/runner/Release/`。GitHub Release 由 `.github/workflows/build.yml` 手动触发并传入 `vX.Y.Z`，通过 `build_android` 和 `build_win_x64` 选择平台；预发布须启用 `prerelease`，需要先验证附件时可同时启用 `draft_release`。Android 使用对应架构的定制引擎生成三个分 ABI APK，Windows 使用定制引擎生成 x64 便携包和安装程序。引擎产物及身份文件随 Git 保存，CI 校验后直接装配，维护步骤见[预编译引擎](../../third_party/flutter_engine/README.md)。版本名与构建号取自 `pubspec.yaml`，工作流会用 tag 和提交数重写本次构建的版本和 `pili_release.json`。
+Android APK 位于 `build/release-apks/PiliAurora-android-<ABI>-release.apk`，每包旁有身份 JSON 和构建日志；单架构构建也将最终签署的 APK 与身份同步到 `build/app/outputs/flutter-apk/app-release.apk` 及同名 JSON。Windows 运行目录位于 `build/windows/x64/runner/Release/`，编译期引擎配置自动写入 `build/windows-engine-config.json`，供打包前置校验使用。GitHub Release 由 `.github/workflows/build.yml` 手动触发并传入 `vX.Y.Z`，通过 `build_android` 和 `build_win_x64` 选择平台；预发布须启用 `prerelease`，需要先验证附件时可同时启用 `draft_release`。Android 使用对应架构的定制引擎生成三个分 ABI APK，Windows 使用定制引擎生成 x64 便携包和安装程序。引擎产物及身份文件随 Git 保存，CI 校验后直接装配，维护步骤见[预编译引擎](../../third_party/flutter_engine/README.md)。版本名与构建号取自 `pubspec.yaml`，工作流会用 tag 和提交数重写本次构建的版本和 `pili_release.json`。
 
 ### Windows 打包与覆盖安装
 

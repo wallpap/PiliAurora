@@ -1,37 +1,32 @@
-# 呈现引擎构建协议
+# 引擎身份与维护
 
-应用统一使用 `tool/build.ps1` 装配引擎，普通 FVM 构建采用 `standard`。自编配置为 Android 的 `androidFramePlan` 和 Windows 的 `windowsDwmPaced`；平台补丁、编译和原生回归仍各自维护。
+应用统一使用 `tool/build.ps1`，默认 Release 自动装配仓库内已通过原生回归的引擎。Windows 使用 `windowsDwmPaced`，Android 使用 `androidFramePlan`；普通命令见[构建与测试](../../doc/development/build-and-test.md#构建)，当前修复与策略见[默认构建与策略](../../doc/development/build-defaults.md)。
 
 ## 身份与配置
 
-`engine_identity.py` 校验编译阶段产生的 `engine-identity.json`：`schemaVersion`、`profile`、`frameworkCommit`、`engineCommit`、`patchSha256`、`overlaySha256`、`binarySha256`、`mode`、`architecture`、`nativeTestsPassed`。二进制架构另按 ELF/PE 头检查，补丁与 overlay 摘要按当前仓库重算。
+`engine_identity.py` 校验编译阶段产生的 `engine-identity.json`：模式、架构、固定框架和引擎提交、补丁、overlay、二进制摘要及原生回归状态。架构另按 ELF/PE 头检查，补丁与 overlay 按当前仓库重算。源码材料固定使用 LF 换行。
 
-补丁与 overlay 源文件固定使用 LF 换行，保证 Windows 与 WSL 检出的构建材料摘要一致。
+装配入口生成 `PILIAURORA_PRESENTATION_PROFILE` 与 `PILIAURORA_ENGINE_IDENTITY`，摘要绑定整份引擎身份。应用根据身份配置和平台支持条件选择呈现策略。调用者不能覆盖这两个定义或 `PILIAURORA_CONTENT_COMPOSITION`。原生回归未通过、材料不匹配或二进制变化时停止构建。
 
-装配入口生成 `PILIAURORA_PRESENTATION_PROFILE` 与 `PILIAURORA_ENGINE_IDENTITY`，摘要绑定整份引擎身份。应用启动读取配置，弹幕调度根据配置及当前平台支持条件选择策略。自编装配要求原生回归通过；`--skip-tests` 产生的身份可用于继续开发，装配前须重新编译并完成回归。
+Windows 运行目录保留引擎和应用产物摘要；Release 编译期配置写入 `build/windows-engine-config.json`，打包前置入口核对它与最终 DLL 一致。Android 各 ABI 的 APK 在 `assets/piliaurora-engine-identity.json` 保留身份，包旁 JSON 另登记应用来源、参数和 APK 摘要。独立测试包使用相同验收流程。
 
-Windows 输出目录保留身份和应用产物摘要。Android APK 内的 `assets/piliaurora-engine-identity.json` 保留引擎身份，APK 旁的 JSON 另在 `application` 中登记应用来源、编译参数和 APK 摘要。APK 复用会核对当前 Dart 来源与本地依赖源码、入口、引擎身份、参数和 APK 摘要。标准构建核对包内引擎与 FVM 产物，再移除该输出的旧自编身份。
+Debug 使用 FVM 调试引擎与 `standard` 配置，构建后核对输出并移除该输出的旧引擎身份。直接执行 `fvm flutter build` 会绕过项目装配流程；涉及引擎修复的验收使用统一入口。
 
-## 装配
+## 修改引擎
+
+1. 按 [Android](frame_plan/README.md) 或 [Windows](windows_frame_pacing/README.md) 修改补丁或 overlay，在独立引擎检出中编译。
+2. 完成对应架构、模式的原生回归；`--skip-tests` 的产物须补齐回归后重新生成身份。
+3. 按[预编译产物维护](../../third_party/flutter_engine/README.md#更新产物)更新 Release 包和身份，运行普通构建及目标设备验收。
+4. 更新[默认构建与策略](../../doc/development/build-defaults.md)中的采用项和验证边界。
+
+`build.ps1` 的 `-EngineLibrary`（兼容 `-WindowsEngineLibrary`）供维护时验证尚未入库的同模式产物。Android 此时同时提供 `-FlutterSdk`、`-AndroidSdk`，支持 `-Abi`、`-DevRelease`、`-Output` 和 `-SourceApk`。Profile 无仓库预编译产物，必须提供对应库；Release 日常构建自动选库。
+
+APK 复用核对入口、应用与本地依赖源码、ticker、引擎身份、编译参数和 APK 摘要。缺少身份或参数登记的旧包须重建。APK 装配不改写 SDK 引擎缓存，构建结束恢复 `android/local.properties` 和 `.dart_tool/package_config.json`。
+
+两端构建、装配与身份回归使用统一测试分组：
 
 ```powershell
-pwsh -NoProfile -File tool/build.ps1 -Platform windows -Mode profile -EngineLibrary <flutter_windows.dll>
-pwsh -NoProfile -File tool/build.ps1 -Platform android -Mode profile -EngineLibrary <libflutter.so> -FlutterSdk <隔离SDK> -AndroidSdk <AndroidSDK>
-pwsh -NoProfile -File tool/build.ps1 -Platform android -Mode release -DevRelease -EngineLibrary <libflutter.so> -FlutterSdk <隔离SDK> -AndroidSdk <AndroidSDK>
+uv run --locked python tool/run_python_tests.py --suite engine --suite windows-engine --suite android-engine --jobs 3
 ```
 
-Windows 兼容原来的 `-WindowsEngineLibrary` 参数。Android 自编装配支持三种 ABI 的正式 Release、Profile，以及 arm64 独立 dev Release 包。`-Target`、`-DartDefine` 传递应用入口与自定义参数；Android 的 `-SourceApk` 复用已验证 APK，`-Output` 指定输出。呈现配置参数由构建入口保留。
-
-编译与原生测试见 [Android](frame_plan/README.md)、[Windows](windows_frame_pacing/README.md)。设备采集入口见 [平台探针](../probes/README.md)。
-
-```powershell
-python -m unittest discover -s tool/engine -p '*_test.py' -v
-python -m unittest discover -s tool/engine/windows_frame_pacing -p '*_test.py' -v
-python -m unittest discover -s tool/engine/frame_plan -p '*_test.py' -v
-```
-
-## 正式 Release 与多架构装配
-
-Android 引擎编译入口支持 `--architecture arm`、`arm64`、`x64`，分别对应 `armeabi-v7a`、`arm64-v8a`、`x86_64`。每个架构使用独立输出目录、二进制摘要和原生回归结果。编译阶段使用的 `--skip-tests` 会将身份中的原生回归状态记为未通过，正式装配前需要完成对应架构的原生回归。
-
-APK 装配入口使用 `--mode release --abi <ABI>` 构建正式包名，沿用 Release 签名；`--mode dev-release` 继续构建 `.dev` 测试包。统一入口对应 `tool/build.ps1 -Platform android -Mode release -Abi <ABI> -EngineLibrary <libflutter.so> -FlutterSdk <隔离SDK> -AndroidSdk <AndroidSDK>`。每份 APK 绑定当前架构的引擎身份，装配后校验包内引擎摘要与 ABI。
+采集命令和设备副作用见[平台探针](../probes/README.md)。Windows 内存诊断引擎位于 [windows_memory/](windows_memory/README.md)，仅用于归属和回收实验，不参与默认 Release。

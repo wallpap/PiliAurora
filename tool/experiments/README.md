@@ -1,5 +1,21 @@
 # 按需实验
 
+当前采用的修复、引擎和默认预算见[默认构建与策略](../../doc/development/build-defaults.md)。应用构建走[普通入口](../../doc/development/build-and-test.md#构建)，本目录保留对照工具和历史测量。
+
+## 实验资料归档
+
+本地 `doc/dev/` 保存完整报告、原始数据、截图与失败路线；可再生的编译产物和采集临时输出留在 `build/`。整理后保留原路径，避免破坏报告间引用。重新生成文件清单和按目录分组的 Markdown 导航：
+
+```powershell
+uv run --locked python tool/experiments/catalog.py
+```
+
+输出为忽略的 `doc/dev/catalog/files.csv` 和 `README.md`，包含相对路径、分类、大小和 UTC 修改时间；不读取日志正文，排除自身输出与 Python 字节缓存。该索引只用于检索，文件时间不表示验收时间。
+
+复核实验时先核对报告记录的源码、引擎身份、设备、输入与测量口径，再判断结果是否适用于当前版本。采用项更新[默认构建与策略](../../doc/development/build-defaults.md)，可复用方法进入[历史排障经验](../../doc/diagnostic-notes/README.md)，完整证据继续留在本地。旧报告中的命令和默认值按当时版本理解，失败结果与更正保留。
+
+## 运行实验
+
 在仓库根目录通过 FVM 运行，使用与正式测试相同的项目依赖：
 
 ```powershell

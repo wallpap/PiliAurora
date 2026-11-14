@@ -1,6 +1,6 @@
 # 引擎与框架源码差异
 
-项目当前维护的引擎改动由对应构建脚本应用：
+日常 Release 自动装配已包含补丁的[预编译引擎](../../../third_party/flutter_engine/README.md)，无需手工应用引擎补丁。当前采用项与诊断实验的边界见[默认构建与策略](../build-defaults.md)；以下补丁由各平台引擎构建脚本应用：
 
 - [Windows 帧节奏补丁](windows-frame-pacing.patch)：DirectComposition 呈现、帧调度及外部 D3D 纹理导入恢复，见[构建说明](../../../tool/engine/windows_frame_pacing/README.md)。
 - [Windows ANGLE 图片上传补丁](../../../tool/engine/windows_frame_pacing/angle-image-upload.patch)：固定 ANGLE 独立检出内的 AMD staging 默认策略，由同一 Windows 构建入口应用并纳入引擎身份。

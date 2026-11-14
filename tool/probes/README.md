@@ -218,15 +218,15 @@ pwsh -NoProfile -File tool/probes/windows/measure_danmaku.ps1 -PresentMonPath E:
 python tool/probes/windows/danmaku_frame_pacing_analysis.py build/my-run/probe.json build/my-run/presentmon.csv --output build/my-run
 ```
 
-采集入口默认构建 Profile 探针，使用独立 ETW session 按进程 ID 采集 PresentMon
+采集入口默认构建 Release 探针并自动装配仓库引擎，使用独立 ETW session 按进程 ID 采集 PresentMon
 v1 QPC CSV，等待数据写入后自动执行同帧关联与汇总。默认目录为
 `doc/dev/diagnostics/windows-danmaku-validation/时间戳/`；`-OutputDirectory` 可指定尚未存在的目录。
-`-SkipBuild` 要求 Profile 目录当前就是此探针。PresentMon 使用官方独立命令行工具
+`-SkipBuild` 要求对应模式目录当前就是此探针，入口核对应用目标、程序摘要与引擎身份。PresentMon 使用官方独立命令行工具
 （已验证 2.5.1），无需安装服务；采集失败时查看目录内的 stdout/stderr。
-`-EngineLibrary <flutter_windows.dll>` 可对照[固定自编引擎](../engine/windows_frame_pacing/README.md)，
+维护引擎时，`-EngineLibrary <flutter_windows.dll>` 可对照尚未入库的[同模式产物](../engine/windows_frame_pacing/README.md)，
 入口核对身份文件、所选构建模式、x64 架构和摘要，并将身份文件保存在采集目录。
 
-`-Mode release` 使用 Release 应用与同模式引擎，可直接验证正式预编译引擎。
+`-Mode profile` 用于维护期采集，须同时提供同模式的引擎产物。
 两端的完整复测流程见[弹幕实机复测](danmaku/README.md)。
 
 探针窗口临时置顶，并确认实际可见；测量时避免其他置顶窗口遮挡它。
@@ -702,8 +702,8 @@ $env:PILIAURORA_PLAYER_PROBE_CONFIG = 'E:/probe/config.json'
 与 Flutter 纹理读回、进度、音频时钟和实际消费回执交叉核对。素材应为持续运动、不会自然
 出现全黑或透明画面的本地视频，并提供真实时长；空音频输出只验证音频时钟，不验证扬声器。
 
-先构建并复制完整运行目录至独立位置，保留 DLL 与 data。引擎对照须用与故障相同的
-`-WindowsEngineLibrary` 参数装配，记录输出中的 `engine-identity.json`：
+先构建并复制完整运行目录至独立位置，保留 DLL、data 和 `engine-identity.json`。默认构建
+自动使用修复版引擎；复现历史故障须另行保留当时 DLL 与身份，按同一条件对照：
 
 ```powershell
 pwsh -NoProfile -File tool/build.ps1 -Platform windows -Mode release -Target tool/probes/playback/windows_eof_black_screen.dart -SkipPubGet

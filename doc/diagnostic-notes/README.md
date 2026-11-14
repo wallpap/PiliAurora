@@ -2,6 +2,8 @@
 
 以下经验来自 2026 年 10 月至 11 月的调查，结论只适用于当时的版本、设备和负载。当前流程见[维护与排障](../maintenance/troubleshooting.md)，原始资料留在本地 `doc/dev/`。
 
+当前采用的修复、引擎、预算及剩余验收项见[默认构建与策略](../development/build-defaults.md)。本地材料通过[归档工具](../../tool/experiments/README.md#实验资料归档)生成文件清单和报告导航；历史测量只在条件一致时用于对照。
+
 ## 播放与直播
 
 - Windows 外部 AAC 音轨读取终止后，缓存可能继续播放很久，视频和整体 buffering 仍正常。2026-10-29 的受控 RST 对照中，缓存内 seek 未恢复音频，`audio-reload` 重新请求后音频时钟恢复。应同时记录音视频时钟、选轨、网络和缓存，覆盖长缓存耗尽场景。探针为 `tool/probes/playback/native_audio_stream_recovery.py`，实验使用空音频输出。

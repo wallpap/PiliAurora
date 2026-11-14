@@ -14,7 +14,7 @@
 | [`packaging/`](packaging/README.md) | Windows 打包前置、程序文件清单及覆盖安装回归。 |
 | [`probes/`](probes/README.md) | Android、Windows、播放链路和事件循环的隔离回归探针。 |
 | [`experiments/`](experiments/README.md) | 按业务领域组织的按需对照与性能测量。 |
-| [`engine/`](engine/README.md) | 两端自编引擎的共同身份、配置生成和装配协议。 |
+| [`engine/`](engine/README.md) | 默认引擎的身份、配置生成、装配协议及原生维护入口。 |
 | [`engine/frame_plan/`](engine/frame_plan/README.md) | Android 帧计划的固定引擎补丁、隔离构建与设备验证。 |
 | [`engine/windows_frame_pacing/`](engine/windows_frame_pacing/README.md) | Windows 帧节奏的固定引擎补丁、隔离构建与呈现对照。 |
 | [`engine/windows_memory/`](engine/windows_memory/README.md) | Windows 专用内存诊断引擎与资源观测。 |
@@ -51,22 +51,9 @@ pwsh -NoProfile -File tool/run-native-probes.ps1
 
 Windows 构建使用[标准上游 mpv 预编译包](../third_party/media_kit_libs_windows_video/UPSTREAM.md)，构建脚本自动校验和解压。工具链要求见[构建与测试](../doc/development/build-and-test.md)。
 
-项目使用 `.fvmrc` 指定的 Flutter 版本。安装 Android SDK 或 Visual Studio 后，在仓库根目录运行：
+项目使用 `.fvmrc` 固定 Flutter，`build.ps1` 默认构建 Release，自动选择仓库预编译引擎。日常命令、输出、Debug 调试及签名要求统一见[构建与测试](../doc/development/build-and-test.md#构建)，引擎与应用默认策略见[默认构建与策略](../doc/development/build-defaults.md)。
 
-```powershell
-pwsh -File tool/build.ps1 -Platform windows -Mode debug
-pwsh -File tool/build.ps1 -Platform android -Mode debug
-```
-
-Android 默认构建包含所有受支持的 ABI。可通过 `-Abi` 只构建一种架构，减少 APK 中的原生库体积：
-
-```powershell
-pwsh -File tool/build.ps1 -Platform android -Mode release -Abi arm64-v8a
-```
-
-支持 `armeabi-v7a`、`arm64-v8a` 和 `x86_64`。省略 `-Abi` 时保持通用 APK；指定 Windows 平台和 `-Abi` 会报错。
-
-Windows Profile/Release 可通过 `-WindowsEngineLibrary <flutter_windows.dll>` 显式装配[固定帧节奏引擎](engine/windows_frame_pacing/README.md)。DLL 旁须有构建脚本生成的 `engine-identity.json`，应用构建核对模式、x64 架构、固定提交、当前补丁、DLL 摘要及原生回归通过状态；输出目录保留身份文件。省略参数的本地构建使用 FVM 引擎并清除旧身份文件；发布 CI 使用[预编译引擎](../third_party/flutter_engine/README.md)，装配与附件流程见[发布与打包](../doc/development/build-and-test.md#发布构建与附件)。
+Android 不传 `-Abi` 时生成三个分架构 APK；传入 `-Abi arm64-v8a`、`armeabi-v7a` 或 `x86_64` 时只生成对应架构。Windows 不接受 `-Abi`。
 
 真机性能测试可构建独立包名的 arm64-v8a release 包：
 
@@ -74,7 +61,7 @@ Windows Profile/Release 可通过 `-WindowsEngineLibrary <flutter_windows.dll>` 
 pwsh -NoProfile -File tool/build-android-test.ps1
 ```
 
-脚本通过 `PILIAURORA_TEST_RELEASE=true` 启用现有 `dev` 包名和应用名，并限制打包 ABI 为 arm64-v8a。包名为 `io.github.wallpap.piliaurora.dev`，应用名为 `PiliAurora dev`，可与正式应用并存，账号与私有数据独立。沿用本机 release 签名配置，输出到 `build/android-test/PiliAurora-dev-arm64-v8a-release.apk` 并显示 SHA256。支持 `-SkipPubGet`、`-SkipPatch` 和 `-Verbose`；构建参数通过子进程传递，结束后恢复原有环境变量。
+脚本通过 `PILIAURORA_TEST_RELEASE=true` 启用现有 `dev` 包名和应用名，自动装配默认 arm64-v8a Release 引擎。包名为 `io.github.wallpap.piliaurora.dev`，应用名为 `PiliAurora dev`，可与正式应用并存，账号与私有数据独立。沿用本机 release 签名配置，输出到 `build/android-test/PiliAurora-dev-arm64-v8a-release.apk`，保留同名身份 JSON 并显示 SHA256。支持 `-SkipPubGet`、`-SkipPatch` 和 `-Verbose`；构建参数通过子进程传递，结束后恢复原有环境变量。
 
 构建脚本统一执行一次 `pub get --enforce-lockfile`，随后检查并补齐补丁、验收依赖来源，最后通过 `--no-pub` 构建。已应用的补丁会复用；切换到 Windows 时会移除项目的 Android 专用补丁。补丁目标按 `.dart_tool/package_config.json` 的实际解析结果定位。
 

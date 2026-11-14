@@ -1,6 +1,6 @@
 # Android 帧计划构建
 
-该目录维护 Flutter 3.47.5 的隔离引擎补丁与 Profile、dev Release 测试包入口。应用仍使用 `lib/main.dart`、现有缩放 Binding、播放器和弹幕组件。Android 当前配置为 Skia/OpenGL。
+该目录维护 Flutter 3.47.5 Android 引擎补丁、原生重建与 APK 装配。默认 Release 和独立测试包通过[普通构建入口](../../../doc/development/build-and-test.md#构建)自动使用帧计划引擎。应用仍使用 `lib/main.dart`、现有缩放 Binding、播放器和弹幕组件。Android 当前配置为 Skia/OpenGL。
 
 固定材料：
 
@@ -23,7 +23,7 @@ Raster 比较图层 damage 与纹理的未消费状态，省略内容未变化�
 
 ## 准备隔离引擎
 
-在独立 Flutter 引擎检出中固定上述提交，按根 DEPS 同步 Android 依赖，并运行 `gclient runhooks`。本机使用 WSL Ubuntu，关闭 Fuchsia、Windows、Web 和 JDK 下载。保留项目 FVM SDK，另复制同版本 SDK 用于应用编译。
+在独立 Flutter 引擎检出中固定上述提交，按根 DEPS 同步 Android 依赖，并运行 `gclient runhooks`。本机使用 WSL Ubuntu，关闭 Fuchsia、Windows、Web 和 JDK 下载。引擎源码编译使用独立检出；APK 装配可以复用项目固定的 FVM SDK，不改写 SDK 引擎缓存。
 
 ```powershell
 python tool/engine/frame_plan/apply.py <引擎检出> --framework-sdk <隔离Flutter-SDK>
@@ -47,13 +47,7 @@ python tool/engine/frame_plan/build_apk.py --flutter-sdk <隔离Flutter-SDK> --e
 
 默认输出 `build/android-frame-plan/PiliAurora-frame-plan-arm64-profile.apk`，包名 `io.github.wallpap.piliaurora.profile`，使用本机标准 debug keystore。脚本执行现有依赖验收与补丁流程，构建 arm64 Profile，替换自编引擎，校验签名和包内库摘要，并生成身份 JSON。`--skip-build --source-apk <已构建APK>` 可复用 AOT 产物，重新装配前核对来源 APK 的身份 JSON、目标入口、当前应用与本地依赖源码、ticker、呈现配置、自定义 Dart 编译参数与 APK 摘要。复用时传入与来源构建一致的 `--dart-define`；缺少编译参数登记的旧身份文件需重新构建。呈现配置与身份摘要由脚本生成。输入包含 preload 探针时会报错。
 
-构建包含帧计划的 dev Release 包时，先用 `build_engine.py --mode release` 构建并完成原生回归，再执行：
-
-```powershell
-python tool/engine/frame_plan/build_apk.py --mode dev-release --flutter-sdk <隔离Flutter-SDK> --engine-library <out/android_release_arm64/lib.stripped/libflutter.so> --android-sdk <Android-SDK>
-```
-
-输出为 `build/android-test/PiliAurora-dev-arm64-v8a-release.apk`，包名 `io.github.wallpap.piliaurora.dev`。此模式通过项目现有 `PILIAURORA_TEST_RELEASE` 配置构建 Release AOT，并使用 `android/key.properties` 中的 Release 签名重新签署装配产物。签名助手在本机读取配置，密码通过子进程环境传递，日志不记录配置值。引擎与应用须使用相同运行模式。
+独立 dev Release 包使用 `tool/build-android-test.ps1`，自动采用仓库内 arm64 引擎、现有 `.dev` 包名和 Release 签名。签名助手在本机读取配置，密码通过子进程环境传递，日志不记录配置值。
 
 ## 验证
 
@@ -83,6 +77,6 @@ build/frame-plan-validation/plan_test
 
 Android 引擎编译入口支持 `--architecture arm`、`arm64`、`x64`，分别对应 `armeabi-v7a`、`arm64-v8a`、`x86_64`。每个架构使用独立输出目录、二进制摘要和原生回归结果。编译阶段使用的 `--skip-tests` 会将身份中的原生回归状态记为未通过，正式装配前需要完成对应架构的原生回归。
 
-APK 装配入口使用 `--mode release --abi <ABI>` 构建正式包名，沿用 Release 签名；`--mode dev-release` 继续构建 `.dev` 测试包。统一入口对应 `tool/build.ps1 -Platform android -Mode release -Abi <ABI> -EngineLibrary <libflutter.so> -FlutterSdk <隔离SDK> -AndroidSdk <AndroidSDK>`。每份 APK 绑定当前架构的引擎身份，装配后校验包内引擎摘要与 ABI。
+APK 装配入口使用 `--mode release --abi <ABI>` 构建正式包名，沿用 Release 签名；`--mode dev-release` 继续构建 `.dev` 测试包。日常构建使用统一入口的 `-Abi <ABI>` 选择架构，自动装配仓库预编译引擎。每份 APK 绑定当前架构的引擎身份，装配后校验包内引擎摘要与 ABI。
 
 缺少 ARM32 设备时，可在 Linux 使用 `--architecture arm --qemu <qemu-arm> --android-rootfs <Android系统库目录>` 执行同一份 `flutter_shell_native_unittests`。系统库目录包含原始 Android 镜像的 `system/bin/linker` 和 `system/lib/`。此路径执行目标架构的原生回归，身份文件另记录 QEMU、Android linker 与 libc 摘要；图形输出与实际呈现效果仍需设备验证。

@@ -14,7 +14,7 @@
 uv run --locked python tool/packaging/prepare_windows_package.py --runtime build/windows/x64/runner/Release
 ```
 
-这是 fastforge 的打包前置入口，要求已有 Release 运行目录和 `build/windows-engine-config.json`。脚本修改指定运行目录，安装已验证的引擎后生成 `piliaurora-runtime.sha256`；清单要求存在 `PiliAurora.exe`，拒绝符号链接、目录联接及无法表示的文件名。便携包和安装包使用同一份清单。
+这是 fastforge 的打包前置入口。默认 Windows 构建自动生成 Release 运行目录和 `build/windows-engine-config.json`，随后即可执行本命令。脚本修改指定运行目录，安装已验证的引擎后生成 `piliaurora-runtime.sha256`；清单要求存在 `PiliAurora.exe`，拒绝符号链接、目录联接及无法表示的文件名。便携包和安装包使用同一份清单。
 
 ## 回归
 

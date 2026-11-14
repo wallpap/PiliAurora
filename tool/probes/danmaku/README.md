@@ -73,13 +73,11 @@ gfxinfo可能没有Flutter Surface的帧记录，报告保留实际数量。
 ## Windows 本机
 
 准备官方PresentMon独立命令行工具，测试时保持探针窗口可见，避免其他置顶窗口遮挡。
-默认Profile；验证正式引擎时使用Release：
+默认构建 Release，自动使用与普通应用相同的仓库引擎：
 
 ```powershell
-python third_party/flutter_engine/package.py unpack --target windows-x64 --output build/danmaku-engine/windows
 pwsh -NoProfile -File tool/probes/windows/measure_danmaku.ps1 `
-  -PresentMonPath <PresentMon.exe> -Mode release `
-  -EngineLibrary build/danmaku-engine/windows/flutter_windows.dll `
+  -PresentMonPath <PresentMon.exe> `
   -Media <60FPS本地视频>
 ```
 
@@ -90,14 +88,13 @@ Windows生产策略跟随屏幕刷新率。入口自动构建、启动可见窗�
 
 ## 恢复普通构建入口
 
-Windows探针结束后使用同一个引擎重建普通入口：
+Windows 探针结束后重建默认入口：
 
 ```powershell
-pwsh -NoProfile -File tool/build.ps1 -Platform windows -Mode release `
-  -EngineLibrary build/danmaku-engine/windows/flutter_windows.dll -SkipPubGet
+pwsh -NoProfile -File tool/build.ps1 -Platform windows -SkipPubGet
 ```
 
-Android可通过帧计划构建入口的 `--mode dev-release --target lib/main.dart` 生成普通dev包，
+Android 用 `tool/build-android-test.ps1` 生成普通 dev 包，
 随后用 `--restore-apk` 交给采集入口恢复。构建与采集入口不执行Git写操作、不清空logcat或应用数据。
 
 ## 调度回归
@@ -115,9 +112,9 @@ Android点播使用生产worker媒体时钟采样；两者均未覆盖完整业�
 `tool/probes/windows/danmaku_density.dart` 在独立窗口静音播放本地视频，以protobuf范围驱动生产协调器和渲染器。它记录 Flutter FrameTiming、各权重视口内可见分布、可见面积时长、准备前沿、工作集及进程峰值RSS，并在10秒时导出本地PNG。普通弹幕默认不合并。探针时钟以 `play` 时刻为锚，独立于业务播放器的原生时钟；报告不含PresentMon最终呈现数据，端到端帧节奏需另外采集。
 
 ```powershell
-pwsh -NoProfile -File tool/build.ps1 -Platform windows -Mode profile `
+pwsh -NoProfile -File tool/build.ps1 -Platform windows `
   -Target tool/probes/windows/danmaku_density.dart -SkipPubGet
-& build/windows/x64/runner/Profile/PiliAurora.exe `
+& build/windows/x64/runner/Release/PiliAurora.exe `
   '<本地输出目录>' '<video.m4s>' '<danmaku.pb>' 33000 12 8
 ```
 

@@ -42,7 +42,7 @@ Windows 外部 D3D 纹理收到空描述符或空句柄时释放 EGL 导入并�
 
 临时恢复快速上传：启动前为进程设置 `ANGLE_FEATURE_OVERRIDES_ENABLED=setDataFasterThanImageUpload` 并重启；撤销设置再重启恢复 AMD 默认策略。ANGLE 的禁用覆盖优先于启用覆盖，同名禁用项须先移除。应用不会改写环境变量，其他同进程 ANGLE 实例也可能读取覆盖，对照时需记录播放器行为。
 
-普通 FVM 引擎没有此策略，验证时使用当前预编译引擎或显式装配定制引擎。
+默认 Release 已包含此策略；使用默认构建进行设备验收。
 
 ## 编译
 
@@ -71,14 +71,10 @@ python tool/engine/windows_frame_pacing/build_engine.py --root <engine-root> --f
 pwsh -NoProfile -File tool/probes/windows/measure_danmaku.ps1 -PresentMonPath <presentmon.exe> -EngineLibrary <engine-root>/flutter/engine/src/out/piliaurora_windows_profile/flutter_windows.dll
 ```
 
-入口通过统一构建脚本生成探针，核对 Profile/x64、应用配置和引擎身份。`-SkipBuild` 复用相同身份的输出，`-Media <本地视频>` 增加视频合成负载。独立采集目录保存原始数据、引擎身份、同帧关联和 ±1/±2/±3 汇总，流程见[平台探针](../../probes/README.md#windows-弹幕帧节奏探针)。
+入口默认通过统一构建脚本生成 Release 探针，自动装配仓库引擎，核对运行模式、x64 架构、应用配置和引擎身份。`-SkipBuild` 复用相同身份的输出，`-Media <本地视频>` 增加视频合成负载。独立采集目录保存原始数据、引擎身份、同帧关联和 ±1/±2/±3 汇总，流程见[平台探针](../../probes/README.md#windows-弹幕帧节奏探针)。
 
 ## 应用构建
 
-```powershell
-pwsh -NoProfile -File tool/build.ps1 -Platform windows -Mode profile -WindowsEngineLibrary <engine-root>/flutter/engine/src/out/piliaurora_windows_profile/flutter_windows.dll
-```
+应用通过[默认构建入口](../../../doc/development/build-and-test.md#构建)自动装配仓库 Release 引擎，核对模式、固定提交、当前补丁、DLL 摘要和原生回归，并在输出保留 `engine-identity.json`。
 
-构建核对模式、固定提交、当前补丁、DLL 摘要和原生回归，编译普通入口后装配引擎，并在输出保留 `engine-identity.json`。Release 须先以 `--mode release` 编译引擎，再将应用 `-Mode` 改为 `release`。
-
-省略 `-WindowsEngineLibrary` 时使用 FVM 引擎，清除应用输出中的旧身份，不改写 FVM 缓存。发布与 CI 使用 [Git 跟踪的 Release 预编译引擎](../../../third_party/flutter_engine/README.md)。
+修改引擎源码后，完成原生回归，再按[预编译产物维护](../../../third_party/flutter_engine/README.md#更新产物)更新仓库包。Profile 对照探针使用上节的显式产物参数，应用和引擎模式必须一致。
