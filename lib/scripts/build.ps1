@@ -1,6 +1,7 @@
 param(
     [string]$Arg = '',
-    [string]$Version = ''
+    [string]$Version = '',
+    [switch]$MetadataOnly
 )
 
 try {
@@ -14,9 +15,15 @@ try {
         throw "invalid version: $Version"
     }
 
-    $versionCode = [int](git rev-list --count HEAD).Trim()
-
-    $commitHash = (git rev-parse HEAD).Trim()
+    $shallow = git rev-parse --is-shallow-repository
+    if ($LASTEXITCODE -ne 0) { throw '版本生成需要 Git 工作区。' }
+    if ($shallow.Trim() -eq 'true') { throw '版本生成需要完整 Git 历史，请先运行 git fetch --unshallow。' }
+    $count = git rev-list --count HEAD
+    if ($LASTEXITCODE -ne 0) { throw '无法读取 Git 提交数。' }
+    $versionCode = [int]$count.Trim()
+    $commitHash = git rev-parse HEAD
+    if ($LASTEXITCODE -ne 0) { throw '无法读取 Git 提交。' }
+    $commitHash = $commitHash.Trim()
 
     $updatedContent = foreach ($line in (Get-Content -Path 'pubspec.yaml' -Encoding UTF8)) {
         if ($line -match "^\s*version:\s*($versionPattern)(?:\+\d+)?\s*`$") {
@@ -35,8 +42,6 @@ try {
         throw 'version not found'
     }
 
-    $updatedContent | Set-Content -Path 'pubspec.yaml' -Encoding UTF8
-
     $buildTime = [int]([DateTimeOffset]::Now.ToUnixTimeSeconds())
 
     $data = @{
@@ -46,9 +51,14 @@ try {
         'pili.time' = $buildTime
     }
 
-    $data | ConvertTo-Json -Compress | Out-File 'pili_release.json' -Encoding UTF8
+    # 本地构建只读取元数据，通过 Flutter 参数设置版本，避免改写工作区。
+    if ($MetadataOnly) { return $data }
 
-    Add-Content -Path $env:GITHUB_ENV -Value "version=$versionName+$versionCode"
+    $updatedContent | Set-Content -Path 'pubspec.yaml' -Encoding UTF8
+    $data | ConvertTo-Json -Compress | Out-File 'pili_release.json' -Encoding UTF8
+    if ($env:GITHUB_ENV) {
+        Add-Content -Path $env:GITHUB_ENV -Value "version=$versionName+$versionCode"
+    }
 }
 catch {
     Write-Error "Prebuild Error: $($_.Exception.Message)"

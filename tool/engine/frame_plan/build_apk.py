@@ -51,6 +51,10 @@ def main():
     parser.add_argument("--skip-patch", action="store_true")
     parser.add_argument("--skip-pub-get", action="store_true")
     args = parser.parse_args()
+    metadata = dict(define.split('=', 1) for define in args.dart_define if '=' in define)
+    version_arguments = [f"--build-{option}={metadata[key]}"
+                         for key, option in (('pili.name', 'name'), ('pili.code', 'number'))
+                         if key in metadata]
     if args.mode == "dev-release" and args.abi != "arm64-v8a":
         parser.error("dev-release requires arm64-v8a; use release for other ABIs")
     if args.skip_build != (args.source_apk is not None):
@@ -125,6 +129,7 @@ def main():
                      "tool/check_dependencies.dart"])
                 run([flutter, "build", "apk", f"--{mode}", "--no-pub", f"--target-platform={target_platform}",
                      f"--target={args.target}",
+                     *version_arguments,
                      *[f"--dart-define={value}" for value in generated_defines],
                      *[f"--dart-define={value}" for value in args.dart_define]])
             verified_engine = engine_identity.validate_engine(library, profile="androidFramePlan", mode=mode, sdk=sdk, architecture=architecture)

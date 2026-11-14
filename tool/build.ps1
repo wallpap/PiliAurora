@@ -40,19 +40,18 @@ if (-not $EngineLibrary) {
     if ($Output -and ($Mode -ne 'release' -or -not $Abi)) { throw '-Output 要求 Release 且指定单个 -Abi。' }
 }
 
-# 普通构建也使用 pubspec 的版本，保持程序属性、关于页与更新检查一致。
+# 与发布 CI 共用版本生成规则；pubspec 只提供版本名，构建号来自完整 Git 历史。
 $versionMatch = [regex]::Match((Get-Content -Raw -LiteralPath (Join-Path $Workspace 'pubspec.yaml')), '(?m)^version:\s*([^\s+]+)(?:\+(\d+))?\s*$')
 if (-not $versionMatch.Success) { throw 'pubspec.yaml 缺少有效版本。' }
-$commitHash = if (Test-Path -LiteralPath (Join-Path $Workspace '.git')) { (git rev-parse HEAD).Trim() } else { 'N/A' }
-$buildMetadata = [ordered]@{
-    'pili.name' = $versionMatch.Groups[1].Value
-    'pili.code' = if ($versionMatch.Groups[2].Success) { $versionMatch.Groups[2].Value } else { '1' }
-    'pili.hash' = $commitHash
-    'pili.time' = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
-}
+$buildMetadata = & (Join-Path $Workspace 'lib/scripts/build.ps1') -Version $versionMatch.Groups[1].Value -MetadataOnly
 $providedKeys = @($DartDefine | ForEach-Object { $_.Split('=')[0] })
 foreach ($key in $buildMetadata.Keys) {
     if ($key -notin $providedKeys) { $DartDefine += "$key=$($buildMetadata[$key])" }
+}
+$effectiveMetadata = @{}
+foreach ($define in $DartDefine) {
+    $parts = $define.Split('=', 2)
+    if ($parts.Length -eq 2) { $effectiveMetadata[$parts[0]] = $parts[1] }
 }
 
 $engineProfile = 'standard'
@@ -276,6 +275,7 @@ if ($Abi) {
     $buildArguments += "--target-platform=$targetPlatform"
 }
 $buildArguments += @('--no-pub', "--target=$Target")
+$buildArguments += @("--build-name=$($effectiveMetadata['pili.name'])", "--build-number=$($effectiveMetadata['pili.code'])")
 foreach ($define in @($presentationConfiguration.dartDefines) + $DartDefine) {
     $buildArguments += "--dart-define=$define"
 }

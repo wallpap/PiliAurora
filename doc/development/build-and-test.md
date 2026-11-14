@@ -43,7 +43,7 @@ Windows 输出到 `build/windows/x64/runner/Release/`。Android 默认在 `build
 
 `-Verbose` 显示依赖与补丁详情。依赖和补丁已准备时可传 `-SkipPubGet`、`-SkipPatch`；依赖来源检查仍执行。构建自动生成呈现配置并核对引擎模式、架构、固定提交、补丁、二进制摘要及原生回归状态，校验失败则终止。
 
-普通构建自动从 `pubspec.yaml` 读取版本名和构建号，并将提交与构建时间传入应用，保持程序属性、关于页和更新检查一致。发布元数据通过 `-DartDefine` 传入时优先使用调用方的值。
+本地与 CI 共用 `lib/scripts/build.ps1` 生成版本元数据：版本名取自 `pubspec.yaml`（当前为 `2.0.0`），构建号取自 `git rev-list --count HEAD`，每次新增提交后自动增长。入口将同一版本、提交和时间传入 Flutter 与应用，保持程序属性、关于页和更新检查一致。本地通过构建参数传递，不改写 `pubspec.yaml`；发布元数据通过 `-DartDefine` 传入时优先使用调用方的值。构建需要完整 Git 历史，浅克隆先运行 `git fetch --unshallow`；CI 已配置 `fetch-depth: 0`。
 
 需要断点或热重载时显式传 `-Mode debug`，使用 FVM SDK 的 Debug 引擎；引擎相关的画面、资源与性能验收使用默认 Release。Profile 引擎维护及原生重建见[引擎工具](../../tool/engine/README.md)，日常构建无需指定引擎路径。
 
@@ -55,7 +55,7 @@ Windows 输出到 `build/windows/x64/runner/Release/`。Android 默认在 `build
 
 本地发布验证使用上节默认构建命令。
 
-Android APK 位于 `build/release-apks/PiliAurora-android-<ABI>-release.apk`，每包旁有身份 JSON 和构建日志；单架构构建也将最终签署的 APK 与身份同步到 `build/app/outputs/flutter-apk/app-release.apk` 及同名 JSON。Windows 运行目录位于 `build/windows/x64/runner/Release/`，编译期引擎配置自动写入 `build/windows-engine-config.json`，供打包前置校验使用。GitHub Release 由 `.github/workflows/build.yml` 手动触发并传入 `vX.Y.Z`，通过 `build_android` 和 `build_win_x64` 选择平台；预发布须启用 `prerelease`，需要先验证附件时可同时启用 `draft_release`。Android 使用对应架构的定制引擎生成三个分 ABI APK，Windows 使用定制引擎生成 x64 便携包和安装程序。引擎产物及身份文件随 Git 保存，CI 校验后直接装配，维护步骤见[预编译引擎](../../third_party/flutter_engine/README.md)。版本名与构建号取自 `pubspec.yaml`，工作流会用 tag 和提交数重写本次构建的版本和 `pili_release.json`。
+Android APK 位于 `build/release-apks/PiliAurora-android-<ABI>-release.apk`，每包旁有身份 JSON 和构建日志；单架构构建也将最终签署的 APK 与身份同步到 `build/app/outputs/flutter-apk/app-release.apk` 及同名 JSON。Windows 运行目录位于 `build/windows/x64/runner/Release/`，编译期引擎配置自动写入 `build/windows-engine-config.json`，供打包前置校验使用。GitHub Release 由 `.github/workflows/build.yml` 手动触发并传入 `vX.Y.Z`，通过 `build_android` 和 `build_win_x64` 选择平台；预发布须启用 `prerelease`，需要先验证附件时可同时启用 `draft_release`。Android 使用对应架构的定制引擎生成三个分 ABI APK，Windows 使用定制引擎生成 x64 便携包和安装程序。引擎产物及身份文件随 Git 保存，CI 校验后直接装配，维护步骤见[预编译引擎](../../third_party/flutter_engine/README.md)。发布工作流以 tag 指定版本名，用提交数生成构建号，并写入本次构建的 `pubspec.yaml` 和 `pili_release.json`。
 
 ### Windows 打包与覆盖安装
 

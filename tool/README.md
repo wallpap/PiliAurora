@@ -23,7 +23,7 @@
 
 默认自动化测试位于 [`test/`](../test/README.md)，测试选择方式见[构建与测试说明](../doc/development/build-and-test.md)。
 
-`lib/scripts/patch.ps1` 及其相邻补丁由构建入口使用；`lib/scripts/material/` 对应 material_ui，外层补丁对应 Flutter SDK。`lib/scripts/build.ps1` 是发布工作流写入版本与 `pili_release.json` 的前置步骤，日常构建仍用 `tool/build.ps1`。
+`lib/scripts/patch.ps1` 及其相邻补丁由构建入口使用；`lib/scripts/material/` 对应 material_ui，外层补丁对应 Flutter SDK。`lib/scripts/build.ps1` 为本地与 CI 共用的版本生成步骤，构建号取完整 Git 提交数；发布时写入版本和 `pili_release.json`，日常构建由 `tool/build.ps1` 以只读元数据模式调用，再通过 Flutter 参数传入版本。
 
 ## 本地 CI 测试
 
