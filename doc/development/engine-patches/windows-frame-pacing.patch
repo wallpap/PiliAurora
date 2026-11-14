@@ -11,6 +11,180 @@ index 521c24398ef..e65c38674a0 100644
  
  
  def _ExtractImportantEnvironment(output_of_set):
+diff --git a/engine/src/flutter/shell/platform/common/flutter_platform_node_delegate.cc b/engine/src/flutter/shell/platform/common/flutter_platform_node_delegate.cc
+index 9e4e8a4a2b1..5c91d7092a1 100644
+--- a/engine/src/flutter/shell/platform/common/flutter_platform_node_delegate.cc
++++ b/engine/src/flutter/shell/platform/common/flutter_platform_node_delegate.cc
+@@ -86,9 +86,15 @@ int FlutterPlatformNodeDelegate::GetChildCount() const {
+ 
+ gfx::NativeViewAccessible FlutterPlatformNodeDelegate::ChildAtIndex(int index) {
+   auto bridge_ptr = bridge_.lock();
+-  BASE_DCHECK(bridge_ptr);
+-  AccessibilityNodeId child = ax_node_->GetUnignoredChildAtIndex(index)->id();
+-  return bridge_ptr->GetNativeAccessibleFromId(child);
++  if (!bridge_ptr || index < 0) {
++    return nullptr;
++  }
++  // 计数准入后树可能已改变，必须检查实际查找结果。
++  ui::AXNode* child = ax_node_->GetUnignoredChildAtIndex(index);
++  if (!child) {
++    return nullptr;
++  }
++  return bridge_ptr->GetNativeAccessibleFromId(child->id());
+ }
+ 
+ gfx::Rect FlutterPlatformNodeDelegate::GetBoundsRect(
+diff --git a/engine/src/flutter/shell/platform/windows/BUILD.gn b/engine/src/flutter/shell/platform/windows/BUILD.gn
+index a6af78f4f44..89944d779aa 100644
+--- a/engine/src/flutter/shell/platform/windows/BUILD.gn
++++ b/engine/src/flutter/shell/platform/windows/BUILD.gn
+@@ -216,6 +216,7 @@ test_fixtures("flutter_windows_fixtures") {
+ }
+ 
+ executable("flutter_windows_unittests") {
++  include_dirs = [ "//flutter/third_party/angle/src" ]
+   testonly = true
+ 
+   # Common Windows test sources.
+@@ -228,6 +229,7 @@ executable("flutter_windows_unittests") {
+     "direct_manipulation_unittests.cc",
+     "display_manager_unittests.cc",
+     "dpi_utils_unittests.cc",
++    "egl/image_upload_unittests.cc",
+     "flutter_project_bundle_unittests.cc",
+     "flutter_window_unittests.cc",
+     "flutter_windows_engine_unittests.cc",
+@@ -286,6 +288,7 @@ executable("flutter_windows_unittests") {
+ 
+   deps = [
+     ":flutter_windows_fixtures",
++    "//flutter/third_party/angle/src/libANGLE/renderer/d3d:angle_d3d11_backend",
+     ":flutter_windows_headers",
+     ":flutter_windows_source",
+     "//flutter/impeller/renderer/backend/gles",
+diff --git a/engine/src/flutter/shell/platform/windows/accessibility_bridge_windows_unittests.cc b/engine/src/flutter/shell/platform/windows/accessibility_bridge_windows_unittests.cc
+index 3f7ff3d21a3..9f40635911b 100644
+--- a/engine/src/flutter/shell/platform/windows/accessibility_bridge_windows_unittests.cc
++++ b/engine/src/flutter/shell/platform/windows/accessibility_bridge_windows_unittests.cc
+@@ -120,6 +120,8 @@ std::unique_ptr<FlutterWindowsEngine> GetTestEngine() {
+   auto engine = std::make_unique<FlutterWindowsEngine>(project);
+ 
+   EngineModifier modifier(engine.get());
++  // 此夹具已模拟框架启动，只测平台无障碍；Release也不加载虚构AOT路径。
++  modifier.embedder_api().RunsAOTCompiledDartCode = [] { return false; };
+   modifier.embedder_api().UpdateSemanticsEnabled =
+       [](FLUTTER_API_SYMBOL(FlutterEngine) engine, bool enabled) {
+         return kSuccess;
+@@ -128,7 +130,7 @@ std::unique_ptr<FlutterWindowsEngine> GetTestEngine() {
+   MockEmbedderApiForKeyboard(modifier,
+                              std::make_shared<MockKeyResponseController>());
+ 
+-  engine->Run();
++  EXPECT_TRUE(engine->Run());
+   return engine;
+ }
+ 
+@@ -243,8 +245,100 @@ void ExpectWinEventFromAXEventOnFocusNode(int32_t node_id,
+             focus_id);
+ }
+ 
++// 只替换准入计数；子节点查找和COM对象仍走真实生产实现。
++class StaleChildCountDelegate : public FlutterPlatformNodeDelegateWindows {
++ public:
++  using FlutterPlatformNodeDelegateWindows::FlutterPlatformNodeDelegateWindows;
++
++  int GetChildCount() const override { return 1; }
++};
++
++class AccessibilityChildLookupTest : public ::testing::Test {
++ protected:
++  void SetUp() override {
++    engine_ = GetTestEngine();
++    view_ = std::make_unique<FlutterWindowsViewSpy>(
++        engine_.get(), std::make_unique<NiceMock<MockWindowBindingHandler>>());
++    EngineModifier modifier{engine_.get()};
++    modifier.SetImplicitView(view_.get());
++    view_->OnUpdateSemanticsEnabled(true);
++    bridge_ = view_->accessibility_bridge().lock();
++    PopulateAXTree(bridge_);
++  }
++
++  std::unique_ptr<FlutterWindowsEngine> engine_;
++  std::unique_ptr<FlutterWindowsViewSpy> view_;
++  std::shared_ptr<AccessibilityBridgeWindows> bridge_;
++};
++
+ }  // namespace
+ 
++TEST_F(AccessibilityChildLookupTest, PreservesValidChildAndSelfQueries) {
++  auto root = bridge_->GetFlutterPlatformNodeDelegateFromID(0).lock();
++  auto child = bridge_->GetFlutterPlatformNodeDelegateFromID(1).lock();
++  ASSERT_GE(root->GetChildCount(), 1);
++  EXPECT_EQ(root->ChildAtIndex(0), child->GetNativeViewAccessible());
++
++  VARIANT id{};
++  id.vt = VT_I4;
++  id.lVal = 1;
++  IDispatch* result = nullptr;
++  ASSERT_EQ(S_OK, root->GetNativeViewAccessible()->get_accChild(id, &result));
++  EXPECT_EQ(result, static_cast<IDispatch*>(child->GetNativeViewAccessible()));
++  ASSERT_NE(result, nullptr);
++  result->Release();
++
++  id.lVal = CHILDID_SELF;
++  result = nullptr;
++  ASSERT_EQ(S_OK, root->GetNativeViewAccessible()->get_accChild(id, &result));
++  EXPECT_EQ(result, static_cast<IDispatch*>(root->GetNativeViewAccessible()));
++  ASSERT_NE(result, nullptr);
++  result->Release();
++}
++
++TEST_F(AccessibilityChildLookupTest, ReturnsNullForOutOfRangeIndices) {
++  auto root = bridge_->GetFlutterPlatformNodeDelegateFromID(0).lock();
++  EXPECT_EQ(root->ChildAtIndex(-1), nullptr);
++  EXPECT_EQ(root->ChildAtIndex(root->GetChildCount()), nullptr);
++
++  VARIANT id{};
++  id.vt = VT_I4;
++  id.lVal = root->GetChildCount() + 1;
++  IDispatch* result = root->GetNativeViewAccessible();
++  EXPECT_EQ(E_INVALIDARG,
++            root->GetNativeViewAccessible()->get_accChild(id, &result));
++  EXPECT_EQ(result, nullptr);
++}
++
++TEST_F(AccessibilityChildLookupTest, RejectsMissingChildWithStaleCount) {
++  auto delegate =
++      std::make_unique<StaleChildCountDelegate>(bridge_, view_.get());
++  delegate->Init(bridge_, AXNodeFromID(bridge_, 1));
++  ASSERT_EQ(delegate->FlutterPlatformNodeDelegate::GetChildCount(), 0);
++  ASSERT_EQ(delegate->GetChildCount(), 1);
++
++  // 重现转储中的child_id=1：计数准入成功，但实际树没有第一个child。
++  VARIANT id{};
++  id.vt = VT_I4;
++  id.lVal = 1;
++  IDispatch* result = delegate->GetNativeViewAccessible();
++  EXPECT_EQ(E_INVALIDARG,
++            delegate->GetNativeViewAccessible()->get_accChild(id, &result));
++  EXPECT_EQ(result, nullptr);
++}
++
++TEST_F(AccessibilityChildLookupTest, ReturnsNullAfterOwnerBridgeExpires) {
++  auto detached_bridge = std::make_shared<AccessibilityBridgeWindowsSpy>(
++      engine_.get(), view_.get());
++  PopulateAXTree(detached_bridge);
++  auto delegate =
++      detached_bridge->GetFlutterPlatformNodeDelegateFromID(0).lock();
++  ASSERT_FALSE(delegate->GetOwnerBridge().expired());
++  detached_bridge.reset();
++  ASSERT_TRUE(delegate->GetOwnerBridge().expired());
++  EXPECT_EQ(delegate->ChildAtIndex(0), nullptr);
++}
++
+ TEST(AccessibilityBridgeWindows, GetParent) {
+   auto engine = GetTestEngine();
+   FlutterWindowsViewSpy view{
 diff --git a/engine/src/flutter/shell/platform/windows/egl/manager.cc b/engine/src/flutter/shell/platform/windows/egl/manager.cc
 index 64fb765bf54..3d95953cfff 100644
 --- a/engine/src/flutter/shell/platform/windows/egl/manager.cc

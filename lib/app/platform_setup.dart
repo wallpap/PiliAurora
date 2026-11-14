@@ -74,6 +74,22 @@ Future<void> initializePlatformWindow() async {
       await ScreenBrightnessPlatform.instance.setAutoReset(false);
     }
   } else if (PlatformUtils.isDesktop) {
+    if (Platform.isWindows) {
+      try {
+        // 限制 raster scratch 的高水位；图片/IO 纹理与视频输出另有所有者。
+        await SystemChannels.skia.invokeMethod<void>(
+          'Skia.setResourceCacheMaxBytes',
+          64 << 20,
+        );
+      } catch (error, stackTrace) {
+        // 缓存预算是优化项，通道不可用时沿用引擎预算并继续创建窗口。
+        logger.w(
+          '设置绘制资源缓存预算失败',
+          error: error.runtimeType,
+          stackTrace: stackTrace,
+        );
+      }
+    }
     FocusManager.instance.addEarlyKeyEventHandler(handleAppKeyEvent);
 
     await windowManager.ensureInitialized();

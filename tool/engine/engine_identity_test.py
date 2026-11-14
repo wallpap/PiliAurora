@@ -182,6 +182,24 @@ class EngineIdentityTest(unittest.TestCase):
         self.assertFalse(protocol.patch_matches(actual + "+extra\n", registered))
         self.assertFalse(protocol.patch_matches(actual.replace("123..456", "123..789"), registered))
 
+    def test_windows_identity_binds_angle_policy_and_native_regression(self):
+        profile = "windowsDwmPaced"
+        architecture, directory, overlays = protocol.PROFILES[profile]
+        self.assertIn("angle-image-upload.patch", overlays)
+        self.assertIn("image_upload_unittests.cc", overlays)
+        for name in overlays:
+            (self.root / name).write_bytes((directory / name).read_bytes())
+        profiles = {**protocol.PROFILES, profile: (architecture, self.root, overlays)}
+        with patch.object(protocol, "PROFILES", profiles):
+            original = protocol.materials(profile)
+            for name in overlays:
+                source = self.root / name
+                before = source.read_bytes()
+                source.write_bytes(before + b"\n")
+                self.assertNotEqual(protocol.materials(profile)["overlaySha256"],
+                                    original["overlaySha256"])
+                source.write_bytes(before)
+
 
 if __name__ == "__main__":
     unittest.main()

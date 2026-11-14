@@ -5,9 +5,9 @@
   "profile": "windowsDwmPaced",
   "frameworkCommit": "6a19cca56475dbfba1478ee68d7bd0c2ef891da1",
   "engineCommit": "af7e796e161ae0bb1ff0758c71a7105418bd9ded",
-  "patchSha256": "69db60775d8715b056216e9b6492e97e8194c6ba68c84579326ca4e56db0ec95",
-  "overlaySha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
-  "binarySha256": "5085092222092abf3ae0bfe3e31b7303901f28439c08fa359e951d16525ca395",
+  "patchSha256": "bd9d315ba277c5e9ed79105ba6713487cc6a90b94254dc1195299e379c6acd47",
+  "overlaySha256": "4c15c7c70a49b61f9060b335615a6541c184ca3eb9765ca140f219b7733992e1",
+  "binarySha256": "a7ad20cf9d25db2c802751b1ad0d83e1df3606eab4c2785bf35b4631116fffef",
   "mode": "release",
   "architecture": "x64",
   "nativeTestsPassed": true

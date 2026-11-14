@@ -26,17 +26,29 @@ void main() {
     FocusManager.instance.removeEarlyKeyEventHandler(handleAppKeyEvent);
     final messenger =
         TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
-    for (final channel in [window, background, screen]) {
+    for (final channel in [window, background, screen, SystemChannels.skia]) {
       messenger.setMockMethodCallHandler(channel, null);
     }
   });
 
-  testWidgets('桌面窗口等待显示与聚焦；异步显示失败沿初始化 Future 返回', (tester) async {
-    for (final fails in [false, true]) {
+  testWidgets('窗口等待显示与聚焦、传递显示失败，绘制预算失败仍可启动', (tester) async {
+    for (final (fails, budgetFailure) in [
+      (false, null),
+      (true, null),
+      (false, PlatformException(code: 'budget_unavailable')),
+      (false, MissingPluginException()),
+    ]) {
       final showing = Completer<Object?>();
       final methods = <String>[];
       Object? titleBarArguments;
       tester.binding.defaultBinaryMessenger
+        ..setMockMethodCallHandler(SystemChannels.skia, (call) async {
+          expect(call.method, 'Skia.setResourceCacheMaxBytes');
+          expect(call.arguments, 64 << 20);
+          methods.add('rasterBudget');
+          if (budgetFailure != null) throw budgetFailure;
+          return true;
+        })
         ..setMockMethodCallHandler(background, (_) async => null)
         ..setMockMethodCallHandler(
           screen,
@@ -77,6 +89,7 @@ void main() {
         'windowButtonVisibility': false,
       });
       expect(methods, contains('show'));
+      expect(methods.first, 'rasterBudget');
       expect(completed, isFalse);
       expect(methods, isNot(contains('focus')));
       if (fails) {
@@ -97,5 +110,7 @@ void main() {
       }
       expect(tester.takeException(), isNull);
     }
+    // 预算失败会触发诊断通知的节流定时器。
+    await tester.pump(const Duration(milliseconds: 250));
   }, skip: !Platform.isWindows);
 }

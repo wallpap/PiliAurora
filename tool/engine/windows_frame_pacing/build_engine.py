@@ -20,6 +20,27 @@ import engine_identity
 ENGINE = engine_identity.ENGINE_COMMIT
 
 PATCH = engine_identity.PATCHES['windowsDwmPaced']
+ANGLE_COMMIT = '84027aca9b71c9ba335bd000dad1107b8810a511'
+ANGLE_PATCH = Path(__file__).with_name('angle-image-upload.patch')
+
+
+def apply_angle_patch(checkout, env):
+    # ANGLE 是独立 Git 依赖，必须单独校验，不能由父检出的 diff 代替。
+    angle = checkout / 'engine/src/flutter/third_party/angle'
+    revision = run(['git', 'rev-parse', 'HEAD'], cwd=angle, env=env,
+                   capture=True).stdout.strip()
+    if revision != ANGLE_COMMIT:
+        raise ValueError('ANGLE 检出提交不匹配。')
+    applies = run(['git', 'apply', '--check', ANGLE_PATCH.resolve()],
+                  cwd=angle, env=env, capture=True, check=False)
+    if applies.returncode == 0:
+        run(['git', 'apply', ANGLE_PATCH.resolve()], cwd=angle, env=env)
+    elif run(['git', 'apply', '--reverse', '--check', ANGLE_PATCH.resolve()],
+             cwd=angle, env=env, capture=True, check=False).returncode != 0:
+        raise ValueError('ANGLE 图片上传补丁冲突；已有修改已保留。')
+    diff = run(['git', 'diff', '--binary'], cwd=angle, env=env, capture=True).stdout
+    if not engine_identity.patch_matches(diff, ANGLE_PATCH.read_text(encoding='utf-8')):
+        raise ValueError('ANGLE 含登记补丁之外的修改，无法登记准确的构建身份。')
 
 
 def run(command, *, cwd, env, capture=False, check=True):
@@ -82,6 +103,9 @@ def prepare(root, sdk, env, jobs, skip_sync):
     diff = run(['git', 'diff', '--binary'], cwd=checkout, env=env, capture=True).stdout
     if not engine_identity.patch_matches(diff, PATCH.read_text(encoding='utf-8')):
         raise ValueError('引擎还包含补丁之外的修改，无法登记准确的构建身份。')
+    apply_angle_patch(checkout, env)
+    shutil.copy2(Path(__file__).with_name('image_upload_unittests.cc'),
+                 checkout / 'engine/src/flutter/shell/platform/windows/egl/image_upload_unittests.cc')
     return checkout, depot
 
 
@@ -140,7 +164,9 @@ def main():
     run([checkout / 'third_party/ninja/ninja.exe', '-C', output, '-j', args.jobs, *targets], cwd=src, env=env)
     if not args.skip_tests:
         run([output / 'flutter_windows_unittests.exe',
-             '--gtest_filter=FlutterWindowsEngineTest.*Vsync*:FlutterWindowsViewTest.*VSync*:TaskRunnerTest.*'],
+             '--gtest_filter=FlutterWindowsEngineTest.*Vsync*:FlutterWindowsViewTest.*VSync*:'
+             'TaskRunnerTest.*:AccessibilityChildLookupTest.*:AccessibilityBridgeWindows.*:'
+             'WindowsImageUploadTest.*'],
             cwd=output, env=env)
     library = output / 'flutter_windows.dll'
     identity = engine_identity.create_identity(

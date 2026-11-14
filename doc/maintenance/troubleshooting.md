@@ -202,6 +202,8 @@ HTTP 请求失败由诊断拦截器统一记录，账号层负责用户提示。
 
 ## Windows 内存观测
 
+当前 Windows 定制引擎对 AMD 默认采用 ANGLE `Image11` staging 图片上传，减少图片浏览后的上传内存保留。此策略不改变来源画质、解码尺寸或缓存预算，也不保证超大图解码峰值降低。排查回归时可按[引擎说明](../../tool/engine/windows_frame_pacing/README.md)在启动前显式恢复快速上传，使用相同图片、显示尺寸和静置时间对照。普通 FVM 引擎不包含该修改；先核对运行目录的 `engine-identity.json`，不能仅凭应用版本认定已生效。其他 AMD 驱动仍需验证。
+
 `process.privateBytes` 是进程私有提交，`rssBytes` 包含共享驻留页。系统支持时另记录 `privateWorkingSetBytes`（私有驻留）和 `sharedCommitBytes`；旧系统不支持的字段留空，继续保留原计数器。比较任务管理器与诊断数值时先核对口径，不能把私有提交、全部驻留与私有驻留混为同一指标。
 
 Windows runner 清单启用 SegmentHeap，支持版本从 Windows 10 2004 起；这只选择进程 Win32
@@ -228,7 +230,14 @@ Windows runner 清单启用 SegmentHeap，支持版本从 Windows 10 2004 起；
 像素的唯一活量。GC finalizer 仅提供尽力观测，不证明原生或 GPU 已释放；启用前创建的
 对象不在覆盖内。分组创建栈需构建时设置 `PILIAURORA_GRAPHICS_STACKS=true`。
 
+开启性能记录后，诊断模块自动每 5 秒汇总资源归属，并对照播放、全屏、离页后
+5／30／90 秒的已有采样。复现后继续记录约 90 秒再导出，包内 `memory-summary.json`
+按进程和会话提供阶段、基线、峰值、残留差与覆盖范围。两次播放重叠或退出后重开会标记
+干扰，差值不能直接认定泄漏。输出账本、容量上限和复算见
+[轻量内存归属](../../lib/services/diagnostics/README.md)。
+
 `graphicsMemory` 的上下文与资源详情需要专用实验引擎，普通 FVM 引擎返回 unsupported。
+默认只读取上下文汇总；专用排查构建可用 `PILIAURORA_GRAPHICS_DETAILS=true` 开启资源明细。
 分析时保留该状态，不能将未支持、未覆盖或遗漏的资源当作零占用。
 
 需要真实分配/释放调用栈时，使用[内存探针及 ETW 入口](../../tool/probes/README.md#windows-内存观测与-etw)。普通性能记录不需要管理员权限；ETW 使用独立命名会话和测试程序，并在结束后撤销临时堆跟踪配置。

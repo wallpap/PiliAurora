@@ -3,6 +3,7 @@
 项目当前维护的引擎改动由对应构建脚本应用：
 
 - [Windows 帧节奏补丁](windows-frame-pacing.patch)：DirectComposition 呈现和帧调度，见[构建说明](../../../tool/engine/windows_frame_pacing/README.md)。
+- [Windows ANGLE 图片上传补丁](../../../tool/engine/windows_frame_pacing/angle-image-upload.patch)：固定 ANGLE 独立检出内的 AMD staging 默认策略，由同一 Windows 构建入口应用并纳入引擎身份。
 - [Android 帧计划补丁](android-frame-plan.patch)：FrameTimeline、纹理更新和 EGL 呈现，见[构建说明](../../../tool/engine/frame_plan/README.md)。
 - [Windows 内存诊断补丁](windows-memory.patch)和[空闲回收补丁](windows-idle-trim.patch)：图形及 CPU 内存诊断和空闲回收实验，见[构建说明](../../../tool/engine/windows_memory/README.md)。
 

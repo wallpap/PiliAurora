@@ -24,7 +24,8 @@ PATCHES = {
 PROFILES = {
     "androidFramePlan": ("arm64", ROOT / "frame_plan", (
         "frame_presentation_plan.h", "frame_presentation_plan_unittests.cc")),
-    "windowsDwmPaced": ("x64", ROOT / "windows_frame_pacing", ()),
+    "windowsDwmPaced": ("x64", ROOT / "windows_frame_pacing", (
+        "angle-image-upload.patch", "image_upload_unittests.cc")),
 }
 RESERVED_DEFINES = {
     "PILIAURORA_PRESENTATION_PROFILE", "PILIAURORA_ENGINE_IDENTITY",

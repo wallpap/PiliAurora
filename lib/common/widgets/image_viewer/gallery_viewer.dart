@@ -296,6 +296,7 @@ class _GalleryViewerState extends State<GalleryViewer>
       ..onDoubleTapDown = null
       ..onDoubleTap = null
       ..dispose();
+    _horizontalDragGestureRecognizer.dispose();
     _longPressGestureRecognizer.dispose();
     if (widget.quality != _quality) {
       for (final item in widget.sources) {

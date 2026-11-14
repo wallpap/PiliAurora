@@ -66,6 +66,7 @@ jobs:
           python -m unittest discover -s tool/probes/android -p '*_test.py' -v
           python -m unittest discover -s tool/probes/windows -p '*_test.py' -v
           python -m unittest discover -s tool/engine -p '*_test.py' -v
+          python -m unittest discover -s tool/engine/windows_frame_pacing -p '*_test.py' -v
           python tool/probes/windows/windows_frame_sampling_probe.py
           python tool/probes/windows/windows_angle_rollback_probe.py
           python tool/probes/windows/windows_renderer_release_probe.py

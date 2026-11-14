@@ -1,0 +1,16 @@
+diff --git a/src/libANGLE/renderer/d3d/d3d11/renderer11_utils.cpp b/src/libANGLE/renderer/d3d/d3d11/renderer11_utils.cpp
+index 85579e7..ccd071a 100644
+--- a/src/libANGLE/renderer/d3d/d3d11/renderer11_utils.cpp
++++ b/src/libANGLE/renderer/d3d/d3d11/renderer11_utils.cpp
+@@ -2563,8 +2563,10 @@ void InitializeFeatures(const Renderer11DeviceCaps &deviceCaps,
+                                 capsVersion < angle::VersionTriple(16, 4815, 0));
+ 
+     // Haswell/Ivybridge drivers occasionally corrupt (small?) (vertex?) texture data uploads.
++    // PiliAurora: AMD 图片浏览后的上传内存保留较高，使用现有 Image11 staging 路径。
++    // 按实际 D3D11 适配器判断，显式 feature overrides 仍可覆盖此默认值。
+     ANGLE_FEATURE_CONDITION(features, setDataFasterThanImageUpload,
+-                            !(isIvyBridge || isBroadwell || isHaswell));
++                            !(isAMD || isIvyBridge || isBroadwell || isHaswell));
+ 
+     ANGLE_FEATURE_CONDITION(features, disableB5G6R5Support,
+                             (isIntel && capsVersion >= angle::VersionTriple(15, 0, 0) &&

@@ -26,6 +26,7 @@ Windows 兼容原来的 `-WindowsEngineLibrary` 参数。Android 自编装配支
 
 ```powershell
 python -m unittest discover -s tool/engine -p '*_test.py' -v
+python -m unittest discover -s tool/engine/windows_frame_pacing -p '*_test.py' -v
 python -m unittest discover -s tool/engine/frame_plan -p '*_test.py' -v
 ```
 

@@ -66,6 +66,10 @@ flowchart LR
 
 ## 桌面窗口与标题栏
 
+Windows 主窗口和独立播放窗口在窗口初始化时将 Skia raster 资源缓存预算设为 64 MiB，以约束绘制目标和可回收 scratch 的高水位；设置失败时继续使用引擎预算。这不限制 IO 图片纹理、视频输出或进程总内存。图片缓存继续由框架 binding 单独管理；不在退出播放时强制清理图形设备或运行 GC。
+
+Windows 定制引擎的 ANGLE 对实际 AMD D3D11 适配器默认使用 `Image11` staging 图片上传，降低浏览后的上传内存保留；其他厂商沿用上游策略。策略在引擎初始化时生效，主窗口和独立播放窗口共用，图片质量和解码规则保持独立。它只影响引擎内 ANGLE，播放器独立 ANGLE 沿用其配置；构建材料、设备验证范围及临时回退见[引擎说明](../../tool/engine/windows_frame_pacing/README.md)。
+
 `lib/app/platform_setup.dart` 隐藏系统标题栏和系统窗口按钮。主窗口由 `app.dart` 在路由外装配 `DesktopWindowFrame`（`desktop_title_bar.dart`），启动失败页复用同一组件；独立播放窗口继续使用播放器自己的窗口控件。
 
 `DesktopTitleBar` 随 Flutter 主题和应用图标设置更新，提供拖动、双击最大化、最小化、最大化／还原和关闭入口。关闭按钮调用普通窗口关闭事件，沿用主窗口已有的托盘驻留与播放器释放流程。最大化状态由窗口事件更新，初始化查询通过修订号隔离迟到结果，组件释放时移除监听。
