@@ -1,8 +1,6 @@
 # 图片重构的测试契约
 
-本轮依据[第三版设计稿](../../../../doc/development/image-pipeline-design.md)先提交预期测试，再提交实现。测试不依赖用户日志或真实网络。首次提交允许因新入口尚不存在而失败；实现提交须使这些预期与已有图片回归通过，不能通过 skip、删断言或改低画质预期取得通过。
-
-2026-11-12 的实现前验证：普通表情用例实测一次建立 600 张图片，未满足少于 100 个活动/邻域条目的预期；文字表情选择用例通过。五个新契约文件因尚无对应生产入口而加载失败，符合本次测试先行的红灯状态。新文件的 Dart 语法/格式检查已完成，后续实现提交须记录转绿结果。
+[设计稿](../../../../doc/development/image-pipeline-design.md)对应的行为契约如下。测试使用本地夹具与真实 `ui.Image`，不依赖用户日志或网络；受控 decoder 验证请求和释放协议，原生像素与设备性能另行验证。
 
 ## 自动化契约
 
@@ -21,31 +19,27 @@
 | `native_content_image_test.dart` | 网络/本地 Gallery 接线、隐藏关闭和恢复、GIF 签名分流不启动 worker、动画/方向/超容量回退、超大 WebP 中间层边界、错误后依赖变化不转完整帧 |
 | `native_fidelity_test.dart` | 真实 Flutter 显示像素、透明边界、有损 WebP 非零裁剪、ICC 与基础/细节交接 |
 
-本地受控 decoder 返回真实 `ui.Image` 并记录请求/释放，避免用伪像素对象证明 native 释放。缓存、已交付显示 clone 和框架引用各有自己的生命周期。注入受控 decoder 只验证协议，不证明真实格式峰值或 GPU 回收。
+调度通过 `result/cancel/drained` 检查真实完成与取消；帧入口为 `loadImageFrame`、`LocalImageProvider`，采样和快照位于内部 `image/src/`，ContentImage 通过 ImageProvider 注入来源。缓存根、显示 clone 与框架引用分别持有，测试入口保持在模块边界内。
 
-本轮测试用以下小型 seam 固定可测契约：共享资源调度返回 `result/cancel/drained`；帧入口为 `loadImageFrame` 和 `LocalImageProvider`；显示采样及快照仓库放在内部 `image/src/`；内容 Widget 允许通过 ImageProvider 注入真实/受控来源。实现可以细分内部文件，不把测试所用内部 seam 扩散到业务页面。
-
-2026-11-13 实施阶段增加了关闭中的真实 codec/frame、文件晚到/排队期限、source acquire/release/clear 竞态及独立任务租约回归。普通 Provider 用例的假 codec 改为单帧，动画单帧消费者仍为 12 帧，避免夹具将首帧交付错误地绑定到动画时钟。表情末尾验证直接使用当前包的真实 ScrollPosition，随后点击末项，保留少于 100 和选择语义断言。
-
-2026-11-13 最终统一回归：207 项全部通过，耗时 23 秒。覆盖本目录完整图片契约/生命周期/真实入口/Viewer/区域协议，普通表情、弹幕队列、播放器雪碧图及受影响缓存、文章、音频和图片操作回归。固定 Flutter 3.47.5；本地详细日志为 `build/image-pipeline-final-tests.log`。这是受控环境自动化结果，未包含下述 Windows/Android 设备性能验收。
+2026-11-13 的统一回归覆盖图片核心、真实入口、Viewer、区域协议、普通表情、弹幕、雪碧图及外围缓存、文章、音频和图片操作：207 项通过，Flutter 3.47.5，耗时 23 秒，日志为 `build/image-pipeline-final-tests.log`。
 
 ```powershell
 fvm flutter test --no-pub test/common/widgets/image/ test/pages/emote/ test/pages/danmaku/live_queue_test.dart test/utils/image_source_cache_test.dart test/utils/cache_results_test.dart test/pages/article/ test/services/audio_handler_lifecycle_test.dart test/utils/image_actions_test.dart test/utils/image_save_results_test.dart test/pages/whisper_detail/image_send_results_test.dart test/plugin/pl_player/preview_image_cache_test.dart test/pages/live_room/emote_danmaku_test.dart --reporter expanded
 ```
 
-本轮改动范围的 `fvm flutter analyze --no-pub --no-fatal-infos` 为 0 error、0 warning，保留 12 条 `avoid_slow_async_io` 提示；文件状态检查保持异步，避免为消除风格提示引入 UI 线程同步 I/O。38 个 Dart 文件格式检查、flutter_html 修改文件的独立分析、依赖维护验收和文档相对文件链接检查均通过。尚未运行平台构建和真实设备性能验收。
+该阶段 `fvm flutter analyze --no-pub --no-fatal-infos` 为 0 error、0 warning，保留 12 条 `avoid_slow_async_io`；38 个 Dart 文件格式检查、flutter_html 独立分析、依赖及相对链接检查通过。文件访问保持异步。以上是当日结果，平台构建与后续修改的覆盖见下文。
 
 ## 必须保留的已有回归
 
-复用本目录生命周期、动画恢复、ImageCache、首帧交付、decoder callback、ResizeImage、裁剪 URL 与 retained layer 用例；另运行播放器 `preview_image_cache_test.dart`、直播 `emote_danmaku_test.dart`、普通表情控制器及受影响页面用例。
+按变更复用生命周期、动画恢复、ImageCache、首帧、decoder callback、ResizeImage、裁剪 URL 和 retained layer 用例，以及播放器 `preview_image_cache_test.dart`、直播 `emote_danmaku_test.dart`、普通表情控制器和受影响页面。
 
-直接 Provider、CSS 列表标记、本地封面/附件、雪碧图及弹幕接入后须增加对应真实入口回归。新入口协议通过不能替代实际调用点接线；实现阶段可补充集成测试，但不得降低上述预期。
+直接 Provider、CSS 列表标记、本地封面/附件、雪碧图及弹幕需覆盖真实接线。表情回归以真实 ScrollPosition 到达末尾并点击末项，保持 600 个候选中少于 100 个活动/邻域条目及选择语义。单帧 Provider 与 12 帧动画消费者分别建夹具，首帧交付不绑定动画时钟。
 
 ## 区域后端和设备验收
 
-2026-11-14 正式接入 Windows Gallery 的 WIC JPEG/PNG 与 libwebp 静态 WebP 区域后端。随包 worker 使用有界二进制管道，关闭等待进程排空；普通正文与其他平台保留完整帧路径。动画、EXIF 方向和不支持格式明确回退，原生解码错误保留错误状态。通用区域协议继续以受控后端覆盖基础层、视口合并、同版本/坐标复用、批次交接和预算；真实后端另以生成夹具验证。
+2026-11-14 Windows Gallery 已接入 WIC 静态 JPEG/PNG 与 libwebp 静态 WebP。受控后端测试预算、层级和交接协议，真实 worker 测试像素、接线、来源释放及进程排空。
 
-Windows 下先生成公开的确定性夹具并构建正式 worker，再运行原生和 Flutter 回归：
+Windows 先生成确定性夹具并构建 worker：
 
 ```powershell
 python -m pip install Pillow==13.0.0
@@ -54,13 +48,22 @@ python -m unittest discover -s tool/probes/windows -p image_region_probe_test.py
 fvm flutter test --no-pub test/common/widgets/image --concurrency 2
 ```
 
-默认产物位于 `build/probes/image-region/`；`REGION_TEST_WORKER` 与 `REGION_FIXTURES` 可覆盖测试路径。缺少 Windows worker 时，原生 Flutter 用例明确跳过，不代表真实后端通过。当前像素回归覆盖 12 项、36 个显示区域，最大通道差为 3；原生探针覆盖透明有损 WebP 裁剪、非法边界和动画/方向排除。libwebp 固定来源及修复说明见[上游登记](../../../../third_party/libwebp/UPSTREAM.md)。
+产物位于 `build/probes/image-region/`，可通过 `REGION_TEST_WORKER` 和 `REGION_FIXTURES` 覆盖。缺少 Windows worker 时原生 Flutter 用例会跳过，须单独记录，不能计入通过覆盖。固定 libwebp 来源和裁剪修复见[上游登记](../../../../third_party/libwebp/UPSTREAM.md)。
 
-2026-11-14 区域后端回归：本目录 145 项全部通过，包含 8192×6144 WebP 的全局缩放容量回退；真实 worker 异常退出后触发继承依赖更新，错误状态仍保留。AVIF 等缺少 WIC codec 的格式交还完整帧，测试与独立 Flutter 参照比较；当前 Windows 引擎不支持该 AVIF 夹具，因此保留同样的格式错误，不宣称新增 AVIF 支持。新增 adapter/Widget 文件的定向分析无问题；整个图片目录为 0 error、0 warning，保留来源快照及其测试中已有的 9 条异步文件 I/O 提示。随后增加 GIF 等非候选格式的签名提前分流，最后仅重跑 `native_content_image_test.dart` 与 `native_backend_extension_test.dart`，8 项通过；3 个受影响文件的定向分析无问题。此前标准及固定 patched engine 的 Windows Release 构建通过；最后签名分流改动未重建 Release 或复测性能。
+| 验证阶段 | 已有结果与范围 |
+| --- | --- |
+| 图片目录 | 145 项通过，包含 8192×6144 WebP 容量回退，以及 worker 异常后依赖更新仍保持错误状态 |
+| Flutter 像素 | 12 项、36 个显示区域，最大通道差 3，包含透明边界与有损 WebP 裁剪 |
+| 原生探针 | 透明有损 WebP 非零原点裁剪、非法区域和动画/方向排除共 3 项通过 |
+| 静态检查 | adapter/Widget 定向分析通过；图片目录 0 error、0 warning，保留 9 条已有异步 I/O 提示 |
+| Windows 构建 | 标准及固定 patched engine Release 构建通过 |
+| 最后签名分流 | `native_content_image_test.dart` 与 `native_backend_extension_test.dart` 共 8 项通过，3 文件定向分析通过；此改动后未重建 Release 或复测性能 |
 
-本机压力组的峰值与延迟取舍见[图片模块验证边界](../../../../lib/common/widgets/image/README.md#验证边界)。完整设备矩阵尚未完成；按用户要求保留已有结果并收敛测试，以下作为后续设备验证范围，不使用固定 skip 用例冒充覆盖：
+缺少 WIC codec 的格式回退完整帧，并与独立 Flutter 解码参照比较。当前 Windows 引擎也不支持测试 AVIF 夹具，回退保留同样的格式错误。
 
-- 一般分辨率、高分辨率、GIF、长图、超高分辨率、低分辨率；补充动画 WebP、EXIF 方向、透明边界和瓦片接缝。
-- 文章/私信点击前阅读、网格点击后预览、本地图片、切页/缩放/滚动/窗口变化、离页与重复循环。
-- 原生通知封面降采样及 Bitmap 缓存、快捷方式、视频输出交接、生成截图、离屏导出矩形完整性。
-- 同源/物理视口/滤镜/缓存条件对照，冷/热首屏、p95 帧耗时、真实峰值、退出后资源与磁盘；未经验证的 native/GPU 成本保留未知。
+本机压力峰值与延迟见[图片模块验证边界](../../../../lib/common/widgets/image/README.md#验证边界)。后续设备验证覆盖：
+
+- 一般/高/超高/低分辨率、GIF、长图、动画 WebP、EXIF 方向、透明边界与接缝。
+- 文章和私信阅读、网格预览、本地文件、翻页缩放拖动、窗口变化、离页和重复循环。
+- 通知封面与 Bitmap 缓存、快捷方式、视频交接、截图及离屏导出的矩形完整性。
+- 固定来源、物理视口、滤镜和缓存条件，比较冷热首屏、帧时间、真实峰值、退出资源与磁盘；未测 native/GPU 成本保留未知。
