@@ -59,6 +59,12 @@ class _ContentViewerState extends State<ContentViewer> {
     sourceSize: widget.sourceSize,
     fit: BoxFit.scaleDown,
     placeholder: widget.placeholder,
+    errorBuilder: (_, _, _) => const Center(
+      child: Text(
+        '图片加载失败',
+        style: TextStyle(color: Color(0xffffffff), fontSize: 14),
+      ),
+    ),
     viewport: _viewport,
     builder: (context, pixels, source) {
       final isLongPic =

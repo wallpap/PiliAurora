@@ -41,6 +41,38 @@ void main() {
       ..clearLiveImages(),
   );
 
+  testWidgets('failed image shows a message in the viewer', (tester) async {
+    final provider = _Provider();
+    final doubleTap = DoubleTapGestureRecognizer();
+    final horizontal = ImageHorizontalDragGestureRecognizer();
+    addTearDown(doubleTap.dispose);
+    addTearDown(horizontal.dispose);
+    await tester.pumpWidget(
+      Directionality(
+        textDirection: TextDirection.ltr,
+        child: MediaQuery(
+          data: const MediaQueryData(),
+          child: ContentViewer(
+            image: provider,
+            containerSize: const Size(400, 400),
+            minScale: 1,
+            maxScale: 8,
+            doubleTapGestureRecognizer: doubleTap,
+            horizontalDragGestureRecognizer: horizontal,
+          ),
+        ),
+      ),
+    );
+    provider.stream.reportError(
+      exception: StateError('fixture decode failed'),
+    );
+    await tester.pump();
+    expect(find.text('图片加载失败'), findsOneWidget);
+    expect(tester.getSize(find.text('图片加载失败')).isEmpty, isFalse);
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
+
   testWidgets(
     'sampling changes retain the viewport and resize retains its focus and density',
     (tester) async {
