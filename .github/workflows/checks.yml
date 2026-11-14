@@ -61,17 +61,8 @@ jobs:
         with:
           python-version-file: .python-version
 
-      - name: Test capture and engine identity
-        run: |
-          python -m unittest discover -s tool/probes/android -p '*_test.py' -v
-          python -m unittest discover -s tool/probes/windows -p '*_test.py' -v
-          python -m unittest discover -s tool/engine -p '*_test.py' -v
-          python -m unittest discover -s tool/engine/windows_frame_pacing -p '*_test.py' -v
-          python tool/probes/windows/windows_frame_sampling_probe.py
-          python tool/probes/windows/windows_angle_rollback_probe.py
-          python tool/probes/windows/windows_renderer_release_probe.py
-          python -m unittest discover -s tool/engine/frame_plan -p '*_test.py' -v
-          python -m unittest discover -s tool/packaging -p '*_test.py' -v
+      - name: Test tools and native host probes
+        run: python tool/run_python_tests.py --native --jobs 4
 
   windows:
     name: Windows host checks

@@ -8,6 +8,8 @@ fvm flutter test tool/experiments/
 
 此目录不进入默认 `fvm flutter test` 的 `test/` 扫描。可将单个文件路径传给命令，独立运行对应实验。
 
+离线分析器的逻辑回归可并行执行：`uv run --locked python tool/run_python_tests.py --suite android-analysis --suite danmaku-analysis --jobs 2`。该命令不运行设备实验或性能测量。
+
 | 文件 | 内容 |
 | --- | --- |
 | `danmaku/raster_cache_capacity_test.dart` | 对照 16/24/32 MiB 缓存容量在唯一内容、重复内容和预热扫描中的命中、光栅化与淘汰；检查预算和预期命中关系。 |
@@ -29,6 +31,7 @@ fvm flutter test tool/experiments/
 | `danmaku/native_video_frame_phase_test.dart` | 对照 Android 与隔离时序模型、mpv 同步和纹理相位，输出锁定状态检查。 |
 | `windows/process_metrics_test.dart` | 在 Windows 上检查进程内存与 CPU 采样；其他平台会明确标记跳过。 |
 | `diagnostics/redactor_benchmark.dart` | 对照普通日志、签名链接、长键名与重复 buvid 的脱敏耗时，可选读取本地 JSONL 诊断文件；只输出聚合统计。 |
+| `diagnostics/memory_attribution_benchmark.dart` | 回放本地诊断目录，测量归属计算耗时与载荷大小；命令和范围见[诊断模块](../../lib/services/diagnostics/README.md#验证)。 |
 
 测量使用 Flutter 测试宿主，pump 时间反映本机 CPU 侧重建和缓存状态；GPU 帧耗时在目标设备测量。主测试集保留 `test/pages/danmaku/frame_rate_ticker_test.dart` 和 `native_video_frame_sync_test.dart` 的核心调度与相位回归，扩大矩阵只在实验目录按需运行。
 

@@ -42,9 +42,9 @@ fvm flutter test --no-pub test/common/widgets/image/ test/pages/emote/ test/page
 Windows 先生成确定性夹具并构建 worker：
 
 ```powershell
-python -m pip install Pillow==13.0.0
-python tool/probes/windows/image_region_probe.py
-python -m unittest discover -s tool/probes/windows -p image_region_probe_test.py -v
+uv sync --locked
+uv run --locked python tool/probes/windows/image_region_probe.py
+uv run --locked python -m unittest discover -s tool/probes/windows -p image_region_probe_test.py -v
 fvm flutter test --no-pub test/common/widgets/image --concurrency 2
 ```
 

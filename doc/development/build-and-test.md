@@ -105,7 +105,7 @@ Android libmpv 的三个原生 JAR 另缓存 `build/media_kit_libs_android_video
 ```powershell
 fvm flutter analyze --no-pub lib/plugin/pl_player lib/pages/danmaku test tool
 pwsh -NoProfile -File tool/run-native-probes.ps1
-uv run --locked python -m unittest discover -s tool/probes/android -p '*_test.py' -v
+uv run --locked python tool/run_python_tests.py --suite android
 ```
 
 依赖已准备后，可用统一入口运行 GitHub Actions 当前选择的测试文件：
@@ -114,7 +114,9 @@ uv run --locked python -m unittest discover -s tool/probes/android -p '*_test.py
 pwsh -NoProfile -File tool/run-ci-tests.ps1
 ```
 
-`tool/run-ci-tests.ps1` 默认调用 `fvm flutter test --no-pub`，两端共用会话、消息、设置和弹幕等逻辑回归。Windows 主机另运行桌面主题、浅深色窗口背景交接、小窗启动和原生全屏布局测试；Linux 主机另运行 `test/plugin/pl_player/android/` 中选定的模拟平台通道测试。共享文件内少量依赖 Windows 的用例保留主机跳过条件。脚本不会运行 `pub get`、修改 Flutter SDK、应用补丁或构建应用。运行前需准备好依赖；依赖来源检查和补丁由 GitHub Actions 的独立步骤执行。
+`tool/run-ci-tests.ps1` 默认调用 `fvm flutter test --no-pub`，可用 `-Concurrency 4` 指定并行测试文件数，省略时采用 Flutter 默认值。两端共用会话、消息、设置和弹幕等回归；Windows 另测桌面与原生全屏交接，Linux 另测选定的 Android 模拟通道。依赖、补丁和来源检查需预先准备，脚本只运行测试。
+
+Python 回归使用 `uv run --locked python tool/run_python_tests.py --jobs 4`，`--suite` 选择分组，`--native` 追加三项 C++ 主机探针。组间进程隔离并汇总退出码，Linux CI 复用同一入口。分组与平台条件见[工具说明](../../tool/README.md#python-回归与并行执行)。
 
 定位单个功能时，可将相关测试文件或目录传给 `fvm flutter test`。测试按业务领域放在 `test/` 下，目录索引见 [`test/README.md`](../../test/README.md)。
 

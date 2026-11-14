@@ -8,19 +8,22 @@
 | `windows/` | 窗口回调、尺寸通道、纹理首帧和输出确认探针。 |
 | `playback/` | 媒体加载烟测、跳转命令、会话验收与 Windows 画质／超分资源回收。 |
 | `event_loop/` | 事件循环生命周期、ABI 检查与配套 C++ mock。 |
+| [`danmaku/`](danmaku/README.md) | 两端弹幕实机复测、采集与普通入口恢复。 |
 
 运行前查看脚本参数和源码，确认目标平台、输入文件及输出目录。工具结果只覆盖它实际检查的内容；应用行为还要按[构建与测试说明](../../doc/development/build-and-test.md)在目标平台验证。
 
 Python 探针使用 uv 环境，首次运行前请按[工具入口中的 Python 环境说明](../README.md#python-工具环境)初始化；以下命令均从仓库根目录运行。
 
+Android/Windows Python 回归可用 `uv run --locked python tool/run_python_tests.py --suite android --suite windows --jobs 2` 并行运行；平台、编译器和夹具条件沿用各用例的检查。性能与设备采集单独执行。
+
 ## Windows 图片区域解码
 
-`windows/image_region_probe.py` 通过 Visual Studio CMake 独立构建正式图片 worker，并用 Pillow 13.0.0 生成 JPEG、PNG、WebP、透明、ICC、动画及 EXIF 方向夹具，不使用私有图片。产物保存在 `build/probes/image-region/`。
+`windows/image_region_probe.py` 通过 Visual Studio CMake 独立构建正式图片 worker，并用锁定环境中的 Pillow 13.0.0 生成 JPEG、PNG、WebP、透明、ICC、动画及 EXIF 方向夹具。产物保存在 `build/probes/image-region/`。
 
 ```powershell
-python -m pip install Pillow==13.0.0
-python tool/probes/windows/image_region_probe.py
-python -m unittest discover -s tool/probes/windows -p image_region_probe_test.py -v
+uv sync --locked
+uv run --locked python tool/probes/windows/image_region_probe.py
+uv run --locked python -m unittest discover -s tool/probes/windows -p image_region_probe_test.py -v
 fvm flutter test --no-pub test/common/widgets/image --concurrency 2
 ```
 

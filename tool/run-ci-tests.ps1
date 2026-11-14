@@ -1,7 +1,9 @@
 [CmdletBinding()]
 param(
     [ValidateSet("fvm", "path")]
-    [string]$FlutterTool = "fvm"
+    [string]$FlutterTool = "fvm",
+    [ValidateRange(1, 256)]
+    [int]$Concurrency
 )
 
 $ErrorActionPreference = "Stop"
@@ -268,12 +270,16 @@ elseif ($IsLinux) {
 }
 
 Write-Host "Running the CI test suite ($($ciTests.Count) paths)..."
+$testArguments = @('test', '--no-pub')
+if ($PSBoundParameters.ContainsKey('Concurrency')) {
+    $testArguments += @('--concurrency', $Concurrency)
+}
 if ($FlutterTool -eq "fvm") {
-    & fvm flutter test --no-pub @ciTests
+    & fvm flutter @testArguments @ciTests
     $command = "fvm flutter test --no-pub"
 }
 else {
-    & flutter test --no-pub @ciTests
+    & flutter @testArguments @ciTests
     $command = "flutter test --no-pub"
 }
 
