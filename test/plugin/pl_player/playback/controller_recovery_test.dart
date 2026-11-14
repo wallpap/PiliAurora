@@ -70,6 +70,50 @@ void main() {
     await dismissed;
   }
 
+  _recoveryTest('缓存条：加载就绪时补发已经完成的预读，不等待下一次缓存事件', (f) async {
+    await f.load();
+    expect(f.runtime.player.state.buffer, const Duration(seconds: 90));
+    expect(f.controller.buffered.value, 90);
+  });
+
+  _recoveryTest('缓存条：重载期间收到的缓存更新在进度交接后立即显示', (f) async {
+    await f.load();
+    f.runtime.beforeLoad = (_) async {
+      f.runtime.player.state.buffer = const Duration(seconds: 90);
+      f.runtime.player.playback.bufferEvents.add(const Duration(seconds: 90));
+      expect(f.controller.buffered.value, lessThan(90));
+    };
+    await f.load();
+    expect(f.controller.buffered.value, 90);
+    f.runtime.player.state.buffer = const Duration(seconds: 100);
+    f.runtime.player.playback.bufferEvents.add(const Duration(seconds: 100));
+    expect(f.controller.buffered.value, 100);
+  });
+
+  _recoveryTest('缓存条：seek 期间的新边界在完成后显示，回退不能保留旧的最大进度', (f) async {
+    await f.load();
+    f.runtime.onSeek = (target) async {
+      f.runtime.player.state
+        ..position = target
+        ..buffer = target + const Duration(seconds: 16);
+      f.runtime.player.playback.bufferEvents.add(f.runtime.player.state.buffer);
+      f.runtime.emitActual();
+      return const PlaybackRuntimeCommandResult();
+    };
+    await f.tester.runAsync(
+      () => f.controller.seek(const Duration(seconds: 200)),
+    );
+    await f.tester.pump();
+    expect(f.controller.position.value, 200);
+    expect(f.controller.buffered.value, 216);
+    await f.tester.runAsync(
+      () => f.controller.seek(const Duration(seconds: 30)),
+    );
+    await f.tester.pump();
+    expect(f.controller.position.value, 30);
+    expect(f.controller.buffered.value, 46);
+  });
+
   Future<ui.Image> screenshotImage(_Fixture f) async {
     final recorder = ui.PictureRecorder();
     Canvas(recorder).drawColor(Colors.white, BlendMode.src);
@@ -1884,6 +1928,7 @@ class _Runtime extends NativePlaybackRuntime {
   Duration get position => player.state.position;
   final loads = <PlaybackPlan>[];
   Future<void> Function(PlaybackPlan)? beforeLoad;
+  Future<PlaybackRuntimeCommandResult> Function(Duration)? onSeek;
   Future<PlaybackRuntimeLoadResult?> Function(
     PlaybackPlan,
     PlaybackExecutionContext,
@@ -1991,6 +2036,12 @@ class _Runtime extends NativePlaybackRuntime {
   void sampleMediaClock() {}
 
   @override
+  Future<PlaybackRuntimeCommandResult> seek(
+    Duration value,
+    PlaybackExecutionContext context,
+  ) => onSeek?.call(value) ?? super.seek(value, context);
+
+  @override
   Future<PlaybackRuntimeCommandResult> setPlaying(
     bool value,
     PlaybackExecutionContext context,
@@ -2051,6 +2102,7 @@ class _Runtime extends NativePlaybackRuntime {
     await player.playback.playingEvents.close();
     await player.playback.bufferingEvents.close();
     await player.playback.completedEvents.close();
+    await player.playback.bufferEvents.close();
   }
 }
 
@@ -2096,6 +2148,7 @@ class _Streams implements PlayerStream {
   final playingEvents = StreamController<bool>.broadcast(sync: true);
   final bufferingEvents = StreamController<bool>.broadcast(sync: true);
   final completedEvents = StreamController<bool>.broadcast(sync: true);
+  final bufferEvents = StreamController<Duration>.broadcast(sync: true);
   @override
   Stream<PlayerLog> get log => logs.stream;
   @override
@@ -2109,7 +2162,7 @@ class _Streams implements PlayerStream {
   @override
   Stream<Duration> get duration => const Stream.empty();
   @override
-  Stream<Duration> get buffer => const Stream.empty();
+  Stream<Duration> get buffer => bufferEvents.stream;
   @override
   Stream<VideoParams> get videoParams => const Stream.empty();
   @override

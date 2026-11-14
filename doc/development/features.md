@@ -47,6 +47,8 @@
 
 视频全屏时 `VideoDetailOffstage` 保留面板状态并停止隐藏面板动画及解码。输出限幅只减少表面与纹理开销，源视频仍按原分辨率解码。帧率和资源测量见[维护与排障](../maintenance/troubleshooting.md#复现和测量)。
 
+点播预读策略在 `lib/plugin/pl_player/models/video_buffer_policy.dart`，由 `Pref.initBuffer` 捕获到媒体计划；默认均衡，按时长与字节预算限制前向缓存，后向预算独立保留。Windows 固定 libmpv 支持字节补读阈值，Android 固定库只传时长阈值。跳转沿用原生缓存复用和淘汰，不主动清空；控制器在进度交接后补发当前缓存边界，不能用历史最大值阻止回退。用户设置见[视频缓存](../guides/playback.md#视频缓存)，真实原生验证见[缓存探针](../../tool/probes/README.md#点播缓存与跳转探针)。
+
 ## 弹幕合并与调度
 
 点播与直播共用 `danmaku/window_renderer.dart`，分别由 `window_coordinator.dart` 和 `live_queue.dart` 提供候选，挂载为 `view.dart` 与 `live_layer.dart`。媒体时钟、资源归属与来源更新协议见[架构](architecture.md#弹幕显示与来源)。

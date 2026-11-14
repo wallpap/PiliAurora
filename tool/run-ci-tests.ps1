@@ -214,6 +214,7 @@ $ciTests = @(
     "test/plugin/pl_player/playback/audio_recovery_test.dart",
     "test/plugin/pl_player/playback/network_recovery_test.dart",
     "test/plugin/pl_player/playback/progress_projection_test.dart",
+    "test/plugin/pl_player/video_buffer_policy_test.dart",
     "test/plugin/pl_player/player_loading_test.dart",
     "test/plugin/pl_player/playback/player_architecture_acceptance_test.dart",
     "test/plugin/pl_player/playback/playback_operation_scheduler_test.dart",

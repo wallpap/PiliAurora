@@ -263,6 +263,8 @@ Windows 保活页面内存回归：先执行 `pwsh -File lib/scripts/patch.ps1 w
 使用[离线资源探针](../tool/probes/README.md#windows-播放器资源回收探针)按目标设备对照：
 首次 4K 加载通过累计纹理创建上限检查多余扩容，全屏往返另行采样窗口呈现开销。
 
+`plugin/pl_player/video_buffer_policy_test.dart` 检查点播预读预算、双阈值、倍速及平台兼容；`pages/video/playback_lifecycle_test.dart` 检查策略捕获后稳定、下一次加载读取新偏好和直播隔离；`pages/setting/content_video_results_test.dart` 检查默认策略、选择保存和实际预算展示。`controller_recovery_test.dart` 另检查加载／重载／seek 期间缓存事件被暂缓后立即补发，以及跳转后缓存边界允许回退。真实缓存复用与淘汰由[原生探针](../tool/probes/README.md#点播缓存与跳转探针)验证。
+
 `plugin/pl_player/playback/controller_recovery_test.dart` 将真实播放器控制器、会话与网络/音轨恢复器接到模拟原生输入，检查合流、分轨、只听音频、纯视频和本地媒体在断流、缓存耗尽、静音、暂停、跳转、切源、完成及关闭时的恢复协调；恢复预算矩阵见 `playback_session_test.dart`。
 
 EOF 回归覆盖 keep-open 播放结束通知的文件归属、重复合并与 seek 后再次结束，以及网络点播提前 EOF 的续播位置、暂停意图和三次恢复预算。正常片尾容许两秒的时间戳尾差；未知时长与直播沿用完成事件。设备探针 `tool/probes/playback/session_device_acceptance.dart` 另检查真实片尾通知。

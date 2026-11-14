@@ -8,7 +8,7 @@
 | 自动播放、自动全屏、自动退出全屏 | 页面和播放动作读取最新偏好；预加载保持暂停意图 | `pages/video/view.dart`、`pl_player/controller.dart` |
 | 后台播放、点播弹幕开关 | 设置页同时更新当前播放器状态 | `setting/models/play_settings.dart` |
 | 不保存播放器内的临时调整 | 播放器中的播放顺序、画中画、后台播放等调整继续在当前会话生效，开启时不写入默认偏好；弹幕和字幕独立保存 | `pl_player/controller.dart` |
-| 缓冲大小、缓冲时长 | 下一次媒体加载生效；点播前后向各受大小上限约束，独立音视频分别缓冲。时长按倍速转换，直播使用独立策略 | `storage_pref.dart`、`capturePlaybackConfiguration` |
+| 视频缓存策略、缓冲大小、缓冲时长 | 下一次媒体加载生效；默认均衡，前向预算按策略为基准 ×1／×4／×8，后向始终为基准。独立音视频分别受限；时长按倍速转换，直播使用独立策略。详情见[视频缓存](../guides/playback.md#视频缓存) | `video_buffer_policy.dart`、`storage_pref.dart`、`capturePlaybackConfiguration` |
 | 视频同步、音频时钟平滑 | 捕获到媒体计划，下一次媒体加载生效 | `capturePlaybackConfiguration` |
 | Android 音频输出后端 | 选择 OpenSL ES、AAudio、AudioTrack 的尝试顺序；重新创建播放器时生效 | `PlaybackRuntimeConfig` |
 | Android 纹理缩放 | 输出尺寸策略读取当前设置，随后准备媒体输出时应用 | `native_playback_runtime.dart` |

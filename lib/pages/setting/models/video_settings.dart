@@ -16,6 +16,7 @@ import 'package:pili_aurora/pages/setting/widgets/select_dialog.dart';
 import 'package:pili_aurora/pages/setting/widgets/setting_input_dialog.dart';
 import 'package:pili_aurora/plugin/pl_player/models/audio_output_type.dart';
 import 'package:pili_aurora/plugin/pl_player/models/hwdec_type.dart';
+import 'package:pili_aurora/plugin/pl_player/models/video_buffer_policy.dart';
 import 'package:pili_aurora/utils/storage.dart';
 import 'package:pili_aurora/utils/storage_key.dart';
 import 'package:pili_aurora/utils/storage_pref.dart';
@@ -194,10 +195,17 @@ List<SettingsModel> get videoSettings => [
           onTap: _showAudioOutputDialog,
         ),
       NormalModel(
+        title: '视频缓存策略',
+        leading: const Icon(Icons.downloading_outlined),
+        getSubtitle: () =>
+            '${Pref.videoBufferPolicy.label}：${Pref.videoBufferPolicy.description}；点播下次加载生效',
+        onTap: _showVideoBufferPolicyDialog,
+      ),
+      NormalModel(
         title: '缓冲大小',
         leading: const Icon(Icons.storage_outlined),
         getSubtitle: () =>
-            '点播前向、后向各 ${Pref.bufferSize} MiB，直播前向 ${Pref.bufferSize * 2} MiB；分离音视频分别受此上限约束，下次加载生效',
+            '基准 ${Pref.bufferSize} MiB；当前策略点播前向 ${Pref.bufferSize * Pref.videoBufferPolicy.forwardMultiplier} MiB、后向 ${Pref.bufferSize} MiB，直播前向 ${Pref.bufferSize * 2} MiB；分离音视频各自受限，下次加载生效',
         onTap: _showBufferSizeDialog,
       ),
       NormalModel(
@@ -604,6 +612,28 @@ Future<void> _showDecimalDialog(
     },
   ),
 );
+
+Future<void> _showVideoBufferPolicyDialog(
+  BuildContext context,
+  VoidCallback setState,
+) async {
+  final result = await showDialog<VideoBufferPolicy>(
+    context: context,
+    builder: (_) => SelectDialog<VideoBufferPolicy>(
+      title: '视频缓存策略',
+      value: Pref.videoBufferPolicy,
+      values: [
+        for (final policy in VideoBufferPolicy.values) (policy, policy.label),
+      ],
+      subtitleBuilder: (_, index) => Text(
+        '${VideoBufferPolicy.values[index].description}；前向上限为基准大小的 ${VideoBufferPolicy.values[index].forwardMultiplier} 倍',
+      ),
+    ),
+  );
+  if (result == null) return;
+  await GStorage.setting.put(SettingBoxKey.videoBufferPolicy, result.name);
+  setState();
+}
 
 Future<void> _showBufferSizeDialog(
   BuildContext context,

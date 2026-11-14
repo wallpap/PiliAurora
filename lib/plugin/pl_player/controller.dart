@@ -2066,6 +2066,10 @@ class PlPlayerController
       return;
     }
     final seconds = value.inSeconds;
+    // 加载或 seek 期间可能已完成整段预读且不再发事件，交接后补发当前有效缓存。
+    // 使用原生最新值，允许跳转或淘汰后的缓存边界回退。
+    final player = _videoPlayerController;
+    if (player != null) buffered.value = player.state.buffer.inSeconds;
     if (position.value != seconds) {
       position.value = seconds;
       makeHeartBeat(seconds);

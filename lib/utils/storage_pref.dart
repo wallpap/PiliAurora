@@ -31,6 +31,7 @@ import 'package:pili_aurora/models/user/info.dart';
 import 'package:pili_aurora/pages/setting/pages/fullscreen_sc_size.dart'
     show kFullScreenSCWidth;
 import 'package:pili_aurora/plugin/pl_player/models/audio_output_type.dart';
+import 'package:pili_aurora/plugin/pl_player/models/video_buffer_policy.dart';
 import 'package:pili_aurora/plugin/pl_player/models/bottom_progress_behavior.dart';
 import 'package:pili_aurora/plugin/pl_player/models/fullscreen_mode.dart';
 import 'package:pili_aurora/plugin/pl_player/models/hwdec_type.dart';
@@ -947,16 +948,17 @@ abstract final class Pref {
   static double get bufferSec =>
       _setting.get(SettingBoxKey.bufferSec, defaultValue: 16.0);
 
+  static VideoBufferPolicy get videoBufferPolicy => VideoBufferPolicy.fromName(
+    _setting.get(SettingBoxKey.videoBufferPolicy),
+  );
+
   static Map<String, String> initBuffer([double playbackSpeed = 1.0]) {
-    final bufSec = Pref.bufferSec * playbackSpeed;
-    final bufSiz = (Pref.bufferSize * 0x100000).toStringAsFixed(0);
-    return {
-      'cache': 'yes',
-      'cache-secs': bufSec.toStringAsFixed(3),
-      'demuxer-hysteresis-secs': (bufSec / 1.5).toStringAsFixed(3),
-      'demuxer-max-bytes': bufSiz,
-      'demuxer-max-back-bytes': bufSiz,
-    };
+    return videoBufferPolicy.options(
+      baseMiB: bufferSize,
+      seconds: bufferSec,
+      speed: playbackSpeed,
+      byteHysteresisSupported: Platform.isWindows,
+    );
   }
 
   static Map<String, String> initLiveBuffer() {

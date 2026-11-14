@@ -10,6 +10,8 @@ import 'package:pili_aurora/pages/setting/models/video_settings.dart';
 import 'package:pili_aurora/utils/storage.dart';
 import 'package:pili_aurora/pages/setting/widgets/setting_save.dart';
 import 'package:pili_aurora/utils/storage_key.dart';
+import 'package:pili_aurora/utils/storage_pref.dart';
+import 'package:pili_aurora/plugin/pl_player/models/video_buffer_policy.dart';
 
 import '../../support/memory_box.dart';
 
@@ -80,6 +82,26 @@ void main() {
       await finish(tester);
     });
   }
+
+  testWidgets('视频缓存策略默认均衡，选择后持久化并显示实际上限', (tester) async {
+    expect(Pref.videoBufferPolicy, VideoBufferPolicy.balanced);
+    final items = videoSettings.expand((item) => item.searchableItems).toList();
+    final item = items.firstWhere((item) => item.effectiveTitle == '视频缓存策略');
+    await mount(tester, item.widget);
+    await tester.tap(find.text('视频缓存策略'));
+    await tester.pumpAndSettle();
+    expect(find.text('省内存'), findsOneWidget);
+    expect(find.text('均衡'), findsOneWidget);
+    await tester.tap(find.text('流畅优先'));
+    await tester.pumpAndSettle();
+    expect(settings.data[SettingBoxKey.videoBufferPolicy], 'smooth');
+    expect(Pref.videoBufferPolicy, VideoBufferPolicy.smooth);
+    expect(Pref.initBuffer()['demuxer-max-bytes'], '${32 * 1024 * 1024}');
+    final size = items.firstWhere((item) => item.effectiveTitle == '缓冲大小');
+    await mount(tester, size.widget);
+    expect(find.textContaining('点播前向 32.0 MiB、后向 4.0 MiB'), findsOneWidget);
+    await finish(tester);
+  });
 
   testWidgets('自定义音量均衡保存失败保留参数，重试后落盘', (tester) async {
     await mount(

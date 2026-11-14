@@ -113,7 +113,7 @@ void main() {
     expect(next.mediaOptions['video-sync'], 'audio');
     expect(next.mediaOptions['autosync'], '30');
     expect(next.mediaOptions['cache-secs'], '24.000');
-    expect(next.mediaOptions['demuxer-max-bytes'], '${8 * 1024 * 1024}');
+    expect(next.mediaOptions['demuxer-max-bytes'], '${32 * 1024 * 1024}');
     expect(first.mediaOptions['video-sync'], 'display-resample');
     controller.closePlayback();
     await GStorage.setting.deleteAll([
@@ -122,6 +122,26 @@ void main() {
       SettingBoxKey.bufferSec,
       SettingBoxKey.bufferSize,
     ]);
+  });
+
+  test('缓存策略只影响下一次点播配置，直播保留独立预算', () async {
+    final controller = page();
+    final player = controller.plPlayerController;
+    final first = player.capturePlaybackConfiguration(live: false);
+    final live = player.capturePlaybackConfiguration(live: true);
+    await GStorage.setting.put(SettingBoxKey.videoBufferPolicy, 'smooth');
+    final next = player.capturePlaybackConfiguration(live: false);
+    expect(first.mediaOptions['demuxer-max-bytes'], '${16 * 1024 * 1024}');
+    expect(next.mediaOptions['demuxer-max-bytes'], '${32 * 1024 * 1024}');
+    expect(next.mediaOptions['demuxer-max-back-bytes'], '${4 * 1024 * 1024}');
+    expect(
+      player.capturePlaybackConfiguration(live: true).mediaOptions,
+      live.mediaOptions,
+    );
+    expect(live.mediaOptions['demuxer-max-bytes'], '${8 * 1024 * 1024}');
+    expect(live.mediaOptions['demuxer-max-back-bytes'], '0');
+    controller.closePlayback();
+    await GStorage.setting.delete(SettingBoxKey.videoBufferPolicy);
   });
 
   test('补充画质请求也绑定原媒体，迟到补充不能污染当前数据', () async {

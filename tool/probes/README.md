@@ -79,6 +79,21 @@ uv run --locked python tool/probes/playback/native_media_smoke.py --library buil
 
 该探针的暂停跳转断言要求落点距目标小于 500ms。Android 普通音视频沿用关键帧跳转策略，应提供关键帧间隔不超过 500ms 的样片；稀疏关键帧样片用于单独验证跳转策略，不适用这个精度断言。独立音轨的精确跳转验证使用上文 `--seek-target` 入口。
 
+## 点播缓存与跳转探针
+
+`playback/cache_policy_options.dart` 从生产策略导出默认基准配置，`playback/native_cache_policy.py` 使用真实 libmpv 和临时 loopback HTTP Range 服务，检查持续播放的最低缓存领先量、前后向字节预算、缓存内短回退复用、淘汰位置重新读取及未缓存的远距离前跳。输入必须是足够长、码率足够高的视频，能在采样期内淘汰开头并保留未缓存的远端位置；前置条件不满足时直接失败。
+
+例如使用 PATH 中的 FFmpeg 生成 30 秒、24 Mb/s 的本地 H.264 合成素材，再导出均衡配置：
+
+```powershell
+New-Item -ItemType Directory -Force build/cache-policy | Out-Null
+ffmpeg -hide_banner -loglevel error -f lavfi -i testsrc2=size=320x180:rate=30 -t 30 -an -c:v libx264 -preset ultrafast -b:v 24M -minrate 24M -maxrate 24M -bufsize 24M -x264-params 'nal-hrd=cbr:force-cfr=1:keyint=30' -movflags +faststart -y build/cache-policy/cbr24m.mp4
+fvm dart --packages=.dart_tool/package_config.json tool/probes/playback/cache_policy_options.dart balanced > build/cache-policy/balanced.json
+uv run --locked python tool/probes/playback/native_cache_policy.py --library build/windows/x64/runner/Release/libmpv-2.dll --source build/cache-policy/cbr24m.mp4 --options build/cache-policy/balanced.json --output build/cache-policy/report.json --seconds 8.7 --min-headroom 3
+```
+
+策略参数可用 `memory`、`balanced`、`smooth`。报告记录采样、原生版本、缓存字节与 HTTP 请求，返回 0 表示所有断言通过。探针使用标准库、软件解码、`vo=null`／`ao=null`，不访问账号或外网，不验证限速／网络抖动、GPU、实际声音和应用缓存条。Flutter 交接回归见[测试说明](../../test/README.md#播放会话与平台输出)。
+
 ## Windows 分片独立音轨回退回归
 
 `playback/native_backward_seek.py` 使用仓库内的微型分片 AV1/AAC 合成样片，从 16 秒续播后回退到 8.133 秒，检查原生落点、音画时间差、解码错误及音频时间戳重置。探针无需网络、FFmpeg、GPU 或声卡，使用真实 libmpv 与软件解码；Windows PR 和发布构建通过 `python tool/verify_libmpv.py --backward-seek` 自动执行三轮。校验入口需在 PATH 中提供 CMake，用于解压下载并校验过的上游包。
