@@ -14,11 +14,11 @@
 
 PiliAurora is a third-party Bilibili client for Android and Windows x64, built with Flutter and based on [PiliPlus 2.1.5](https://github.com/bggRGjQaUbCoE/PiliPlus/tree/2.1.5). It supports videos, series, live streams, activity feeds, direct messages, and offline downloads, with separate Windows playback windows, danmaku merging, and content filters. Danmaku are timed comments displayed over the video.
 
-[Download](https://github.com/wallpap/PiliAurora/releases/latest) · [2.0.0 release notes](doc/releases/v2.0.0.md) · [User guides](doc/README.md#使用指南) · [Report an issue](https://github.com/wallpap/PiliAurora/issues)
+[Download](https://github.com/wallpap/PiliAurora/releases/latest) · [2.0.1 release notes](doc/releases/v2.0.1.md) · [User guides](doc/README.md#使用指南) · [Report an issue](https://github.com/wallpap/PiliAurora/issues)
 
 ## Supported platforms and downloads
 
-Choose the package for your device from [GitHub Releases](https://github.com/wallpap/PiliAurora/releases/latest). Changes for 2.0.0 are described in the [release notes](doc/releases/v2.0.0.md); the Releases page lists the versions available to download.
+Choose the package for your device from [GitHub Releases](https://github.com/wallpap/PiliAurora/releases/latest). Changes for 2.0.1 are described in the [release notes](doc/releases/v2.0.1.md); the Releases page lists the versions available to download.
 
 | Device | Package |
 | --- | --- |

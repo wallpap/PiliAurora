@@ -143,6 +143,48 @@ $hash = if ($profile -eq 'standard') { '' } else { (Get-FileHash $library).Hash.
         self.assertEqual((self.root / 'pubspec.yaml').read_text().strip(), 'version: 2.0.0+1')
         self.assertIn('version=2.0.0+1', (self.root / 'github.env').read_text())
 
+    def test_ci_versions_match_on_both_platforms_with_or_without_tag(self):
+        for tag, expected in (('', '2.0.0'), ('v2.1.0-rc.1', '2.1.0-rc.1')):
+            versions = []
+            for platform in ('android', 'windows'):
+                with self.subTest(tag=tag, platform=platform):
+                    (self.root / 'pubspec.yaml').write_text('version: 2.0.0+555\n')
+                    env_file = self.root / f'{platform}.env'
+                    env_file.write_text('')
+                    result = subprocess.run(
+                        ['pwsh', '-NoProfile', '-File', 'lib/scripts/build.ps1',
+                         platform, '-Version', tag], cwd=self.root,
+                        env={**os.environ, 'GITHUB_ENV': str(env_file)},
+                        capture_output=True, text=True, encoding='utf-8', timeout=60)
+                    self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+                    metadata = json.loads((self.root / 'pili_release.json').read_text(encoding='utf-8-sig'))
+                    versions.append((metadata['pili.name'], metadata['pili.code'], metadata['pili.hash']))
+                    self.assertEqual((self.root / 'pubspec.yaml').read_text().strip(), f'version: {expected}+1')
+                    self.assertEqual(env_file.read_text().strip(), f'version={expected}+1')
+            self.assertEqual(versions[0], versions[1])
+
+    def test_ci_rejects_versions_the_update_checker_cannot_parse(self):
+        for version in ('v02.0.0', 'v2.0.0-rc.01', 'v2.0.0;bad'):
+            with self.subTest(version=version):
+                result = subprocess.run(
+                    ['pwsh', '-NoProfile', '-File', 'lib/scripts/build.ps1', '-Version', version],
+                    cwd=self.root, capture_output=True, text=True, encoding='utf-8', timeout=60)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertEqual((self.root / 'pubspec.yaml').read_text(), 'version: 2.0.0+555\n')
+                self.assertFalse((self.root / 'pili_release.json').exists())
+
+    def test_ci_exports_matching_release_notes_when_present(self):
+        notes = self.root / 'doc/releases/v2.0.1.md'
+        notes.parent.mkdir(parents=True)
+        notes.write_text('Release notes', encoding='utf-8')
+        env_file = self.root / 'github.env'
+        result = subprocess.run(
+            ['pwsh', '-NoProfile', '-File', 'lib/scripts/build.ps1', '-Version', '2.0.1'],
+            cwd=self.root, env={**os.environ, 'GITHUB_ENV': str(env_file)},
+            capture_output=True, text=True, encoding='utf-8', timeout=60)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn('release_notes=doc/releases/v2.0.1.md', env_file.read_text())
+
     def test_dev_release_uses_arm64_and_retains_final_signed_flutter_output(self):
         result = self.run_build('-Platform', 'android', PILIAURORA_TEST_RELEASE='true')
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)

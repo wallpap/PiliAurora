@@ -10,7 +10,8 @@ try {
     if ($requestedVersion.StartsWith('v')) {
         $requestedVersion = $requestedVersion.Substring(1)
     }
-    $versionPattern = '\d+\.\d+\.\d+(?:-[0-9A-Za-z]+(?:[.-][0-9A-Za-z]+)*)?'
+    # 与更新检测使用相同的语义版本规则，避免生成无法识别的版本。
+    $versionPattern = '(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?'
     if ($requestedVersion -and $requestedVersion -notmatch "^$versionPattern`$") {
         throw "invalid version: $Version"
     }
@@ -28,9 +29,6 @@ try {
     $updatedContent = foreach ($line in (Get-Content -Path 'pubspec.yaml' -Encoding UTF8)) {
         if ($line -match "^\s*version:\s*($versionPattern)(?:\+\d+)?\s*`$") {
             $versionName = if ($requestedVersion) { $requestedVersion } else { $matches[1] }
-            if ($Arg -eq 'android' -and -not $requestedVersion) {
-                $versionName += '-' + $commitHash.Substring(0, 9)
-            }
             "version: $versionName+$versionCode"
         }
         else {
@@ -40,6 +38,10 @@ try {
 
     if ($null -eq $versionName) {
         throw 'version not found'
+    }
+    if ($versionName -match '-' -and
+        @($versionName.Split('-', 2)[1].Split('.') | Where-Object { $_ -match '^0\d+$' }).Count -gt 0) {
+        throw "invalid version: $versionName"
     }
 
     $buildTime = [int]([DateTimeOffset]::Now.ToUnixTimeSeconds())
@@ -58,6 +60,10 @@ try {
     $data | ConvertTo-Json -Compress | Out-File 'pili_release.json' -Encoding UTF8
     if ($env:GITHUB_ENV) {
         Add-Content -Path $env:GITHUB_ENV -Value "version=$versionName+$versionCode"
+        $releaseNotes = "doc/releases/v$versionName.md"
+        if (Test-Path -LiteralPath $releaseNotes -PathType Leaf) {
+            Add-Content -Path $env:GITHUB_ENV -Value "release_notes=$releaseNotes"
+        }
     }
 }
 catch {

@@ -15,6 +15,12 @@ on:
                 default: true
                 type: boolean
 
+            skip_ci_tests:
+                description: "Skip host CI and Windows installer tests for this build"
+                required: false
+                default: false
+                type: boolean
+
             tag:
                 description: "Release tag; empty only uploads workflow artifacts"
                 required: false
@@ -79,6 +85,7 @@ jobs:
               run: dart --packages=.dart_tool/package_config.json tool/check_dependencies.dart
 
             - name: Run Linux host CI tests
+              if: ${{ !inputs.skip_ci_tests }}
               shell: pwsh
               run: pwsh -NoProfile -File tool/run-ci-tests.ps1 -FlutterTool path
 
@@ -114,12 +121,9 @@ jobs:
 
             - name: Write version and build info
               shell: pwsh
-              run: lib/scripts/build.ps1 android -Version '${{ inputs.tag }}'
-
-            - name: Export Android version
-              id: android_version
-              shell: bash
-              run: printf 'version=%s\n' "$version" >> "$GITHUB_OUTPUT"
+              env:
+                  RELEASE_VERSION: ${{ inputs.tag }}
+              run: lib/scripts/build.ps1 -Version $env:RELEASE_VERSION
 
             # 插件将原生 JAR 下载到项目 build 目录，不在 Gradle 用户缓存内。
             - name: Cache Android libmpv archives
@@ -150,6 +154,7 @@ jobs:
               with:
                   tag_name: ${{ inputs.tag }}
                   name: ${{ inputs.tag }}
+                  body_path: ${{ env.release_notes }}
                   draft: ${{ inputs.draft_release }}
                   prerelease: ${{ inputs.prerelease }}
                   files: PiliAurora_android_*.apk
@@ -159,7 +164,7 @@ jobs:
               with:
                   archive: false
                   if-no-files-found: error
-                  name: PiliAurora_android_${{ steps.android_version.outputs.version }}_arm64-v8a
+                  name: PiliAurora_android_${{ env.version }}_arm64-v8a
                   path: PiliAurora_android_*_arm64-v8a.apk
 
             - name: Upload armeabi-v7a APK
@@ -167,7 +172,7 @@ jobs:
               with:
                   archive: false
                   if-no-files-found: error
-                  name: PiliAurora_android_${{ steps.android_version.outputs.version }}_armeabi-v7a
+                  name: PiliAurora_android_${{ env.version }}_armeabi-v7a
                   path: PiliAurora_android_*_armeabi-v7a.apk
 
             - name: Upload x86_64 APK
@@ -175,7 +180,7 @@ jobs:
               with:
                   archive: false
                   if-no-files-found: error
-                  name: PiliAurora_android_${{ steps.android_version.outputs.version }}_x86_64
+                  name: PiliAurora_android_${{ env.version }}_x86_64
                   path: PiliAurora_android_*_x86_64.apk
 
     windows:
@@ -224,7 +229,9 @@ jobs:
 
             - name: Write version and build info
               shell: pwsh
-              run: lib/scripts/build.ps1 -Version '${{ inputs.tag }}'
+              env:
+                RELEASE_VERSION: ${{ inputs.tag }}
+              run: lib/scripts/build.ps1 -Version $env:RELEASE_VERSION
 
             - name: Apply Flutter patches
               shell: pwsh
@@ -234,6 +241,7 @@ jobs:
               run: dart --packages=.dart_tool/package_config.json tool/check_dependencies.dart
 
             - name: Run Windows host CI tests
+              if: ${{ !inputs.skip_ci_tests }}
               shell: pwsh
               run: pwsh -NoProfile -File tool/run-ci-tests.ps1 -FlutterTool path
 
@@ -247,6 +255,7 @@ jobs:
               run: python tool/verify_libmpv.py --backward-seek
 
             - name: Test Windows upgrade installation
+              if: ${{ !inputs.skip_ci_tests }}
               shell: pwsh
               run: |
                 $env:PATH = "$env:INNO_SETUP_PATH;$env:PATH"
@@ -313,6 +322,7 @@ jobs:
               with:
                 tag_name: ${{ inputs.tag }}
                 name: ${{ inputs.tag }}
+                body_path: ${{ env.release_notes }}
                 draft: ${{ inputs.draft_release }}
                 prerelease: ${{ inputs.prerelease }}
                 files: |

@@ -40,6 +40,33 @@ void main() {
     expect(latest.isNewerThan('1.7.0-beta.1'), isFalse);
   });
 
+  test('统一版本和 CI 附件同时适用于 Windows 与 Android', () {
+    final latest = AppRelease.latestStable([
+      release(
+        'v2.0.0',
+        assets: [
+          'PiliAurora_android_2.0.0+452_arm64-v8a.apk',
+          'PiliAurora_windows_2.0.0+452_x64_setup.exe',
+          'PiliAurora_windows_2.0.0+452_x64_portable.zip',
+        ],
+      ),
+    ])!;
+    expect(latest.isNewerThan('2.0.0+451'), isFalse);
+    expect(latest.isNewerThan('1.9.9+451'), isTrue);
+    expect(
+      latest.downloadUrl(platform: 'android', supportedAbis: ['arm64-v8a']),
+      endsWith('_arm64-v8a.apk'),
+    );
+    expect(
+      latest.downloadUrl(platform: 'windows', extension: 'exe'),
+      endsWith('_x64_setup.exe'),
+    );
+    expect(
+      latest.downloadUrl(platform: 'windows', extension: 'zip'),
+      endsWith('_x64_portable.zip'),
+    );
+  });
+
   test('空发布列表、接口错误和未知本机版本分别处理', () {
     expect(AppRelease.latestStable([]), isNull);
     expect(AppRelease.latestStable([release('nightly')]), isNull);
