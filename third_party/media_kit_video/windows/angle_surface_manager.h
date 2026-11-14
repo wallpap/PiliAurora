@@ -52,7 +52,7 @@ class ANGLESurfaceManager {
 
   void Draw(std::function<void()> callback);
 
-  void Read();
+  bool Read(bool wait_for_completion = false);
 
   void MakeCurrent(bool value);
 

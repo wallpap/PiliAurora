@@ -1,6 +1,6 @@
 # media_kit_video 本地版本
 
-- 本地版本：`1.2.5+piliaurora.16`；来源包版本：`1.2.5`。
+- 本地版本：`1.2.5+piliaurora.18`；来源包版本：`1.2.5`。
 - 来源仓库：https://github.com/My-Responsitories/media-kit.git
 - 来源提交：`73771ec38176be2d984a3049c28177bce23b54a0`。
 - 来源子目录：`media_kit_video`。
@@ -17,6 +17,15 @@ ANGLE 上下文/Surface、D3D 纹理及软件缓冲区），并暴露 `VideoOutp
 更新流程见 `../README.md`，来源登记见 `../dependencies.json`。
 
 本地维护修正：补齐字幕文档模板的闭合标签，不改变生产行为。
+
+2026-11-13：`piliaurora.18` 在 Windows 旧文件卸载屏障之后、下一次加载之前，使用
+`MPV_RENDER_PARAM_SKIP_RENDERING` 消费延迟 reconfig/reset，释放旧图及硬解映射引用。
+新 load 的首个有效共享纹理复制使用 D3D11 EVENT 查询确认完成，最多等待 100ms；
+失败时不发布帧或消费身份，后续帧继续异步提交。逐帧等待曾在本机复测造成丢帧，已排除。
+主机探针覆盖复制失败、查询错误与超时、代次隔离和释放；设备验证范围与限制记录在
+项目本地诊断报告中。本机 AMD 同一 AOT 的 4K60 AV1 两次加载对照，两轮峰值由
+683–685 MiB 降至 610–611 MiB，均零丢帧；生产会话暂停、加载取代、切源、shader、
+失败恢复和 EOF 验收通过。其他 GPU、HDR 和扬声器音频仍需分别验证。
 
 2026-11-12：`piliaurora.17` 为 Windows 原生资源计数补充输出归属账本，关联匿名 ownerId、
 runtimeId 和 loadId，最多保留 8 个存活输出，超出时明确记录 omittedOwners；全局总量继续统计。

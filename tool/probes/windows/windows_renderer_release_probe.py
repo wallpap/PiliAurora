@@ -32,6 +32,9 @@ inline std::atomic<int> pending_receipts{0}, unsafe_releases{0}, context_creates
 inline bool fail_surface_create = false, fail_resize = false;
 inline thread_local bool copy_required = false;
 inline std::atomic<int> unsafe_publications{0};
+inline bool fail_shared_copy = false;
+inline std::atomic<int> frame_publications{0};
+inline thread_local std::vector<bool> copy_completion_waits;
 inline void CheckBarrier() { if(pending_receipts.load()) ++unsafe_releases; }
 class ANGLESurfaceManager {
   int32_t width_, height_;
@@ -52,7 +55,12 @@ class ANGLESurfaceManager {
   int32_t height() const { return height_; }
   void* handle() const { return reinterpret_cast<void*>(1); }
   void MakeCurrent(bool) {}
-  void Read() { copy_required = false; }
+  bool Read(bool wait_for_completion = false) {
+    copy_completion_waits.push_back(wait_for_completion);
+    if(fail_shared_copy) return false;
+    copy_required = false;
+    return true;
+  }
   void Draw(std::function<void()> callback) { copy_required = true; callback(); }
 };
 inline void* eglGetProcAddress(const char*) { return nullptr; }
@@ -63,7 +71,8 @@ struct mpv_opengl_init_params { void* (*get_proc_address)(void*, const char*); v
 struct mpv_opengl_fbo { int fbo, width, height, internal_format; };
 enum {MPV_RENDER_PARAM_INVALID, MPV_RENDER_PARAM_API_TYPE, MPV_RENDER_PARAM_OPENGL_INIT_PARAMS,
       MPV_RENDER_PARAM_OPENGL_FBO, MPV_RENDER_PARAM_SW_SIZE, MPV_RENDER_PARAM_SW_FORMAT,
-      MPV_RENDER_PARAM_SW_STRIDE, MPV_RENDER_PARAM_SW_POINTER, MPV_RENDER_UPDATE_FRAME};
+      MPV_RENDER_PARAM_SW_STRIDE, MPV_RENDER_PARAM_SW_POINTER, MPV_RENDER_UPDATE_FRAME,
+      MPV_RENDER_PARAM_SKIP_RENDERING};
 #define MPV_RENDER_API_TYPE_OPENGL "opengl"
 #define MPV_RENDER_API_TYPE_SW "sw"
 inline int mpv_set_option_string(mpv_handle*, const char*, const char*) { return 0; }
@@ -77,7 +86,14 @@ inline void mpv_render_context_free(mpv_render_context* context) {
 inline uint64_t render_update_flags = MPV_RENDER_UPDATE_FRAME;
 inline uint64_t mpv_render_context_update(mpv_render_context*) { return render_update_flags; }
 inline std::function<void()> render_hook;
-inline int mpv_render_context_render(mpv_render_context*, mpv_render_param*) {
+inline int retired_render_count = 0, retire_render_status = 0;
+inline int mpv_render_context_render(mpv_render_context*, mpv_render_param* params) {
+  for(auto* param=params; param->type!=MPV_RENDER_PARAM_INVALID; ++param) {
+    if(param->type==MPV_RENDER_PARAM_SKIP_RENDERING && *static_cast<const int*>(param->data)) {
+      ++retired_render_count;
+      return retire_render_status;
+    }
+  }
   if(render_hook) render_hook();
   return 0;
 }
@@ -105,6 +121,7 @@ struct TextureRegistrar {
     ++pending_receipts; receipts.emplace(id, std::move(callback));
   }
   bool MarkTextureFrameAvailable(int64_t) {
+    ++frame_publications;
     if(copy_required) ++unsafe_publications;
     return true;
   }
@@ -202,6 +219,50 @@ static void Settled(Fixture& f) {
 }
 int main() {
   try {
+    {
+      Fixture f;
+      f.pool.Post([&] {
+        const int publications = frame_publications;
+        fail_shared_copy = true;
+        const bool rendered = f.output->Render();
+        fail_shared_copy = false;
+        Require(!rendered && frame_publications == publications,
+                "incomplete shared texture copy was published");
+        Require(f.output->Render(), "completed shared copy did not recover");
+      }).get();
+      std::cout << "PASS incomplete shared copies do not publish and recover on the next frame\n";
+    }
+    {
+      Fixture f;
+      const OutputOperationToken first{1, 1, 1, 0}, second{1, 2, 2, 0};
+      f.pool.Post([] { copy_completion_waits.clear(); }).get();
+      const int retired_before = retired_render_count;
+      auto prepare = [&](OutputOperationToken token) {
+        f.output->BeginOutputForLoad(token, [](bool okay) { Require(okay, "load token rejected"); });
+        f.output->PrepareForLoad(token, "video", 640, 360,
+            [](bool okay, auto, auto) { Require(okay, "load output not prepared"); });
+        f.Drain();
+        f.pool.Post([&] { f.output->Render(); f.output->Render(); }).get();
+      };
+      prepare(first);
+      Require(retired_render_count == retired_before, "first load retired an absent file");
+      prepare(second);
+      Require(retired_render_count == retired_before + 1, "replacement did not consume old reconfig");
+      f.pool.Post([] {
+        Require(std::count(copy_completion_waits.begin(), copy_completion_waits.end(), true) == 2,
+                "copy completion must be awaited once per load, not once per frame");
+      }).get();
+      f.output->BeginOutputForLoad(second, [](bool okay) { Require(okay, "idempotent token rejected"); });
+      f.output->BeginOutputForLoad(first, [](bool okay) { Require(!okay, "stale token accepted"); });
+      f.Drain();
+      Require(retired_render_count == retired_before + 1, "duplicate/stale token retired current video");
+      retire_render_status = -1;
+      f.output->BeginOutputForLoad({1, 3, 3, 0}, [](bool okay) { Require(!okay, "failed retirement accepted"); });
+      f.Drain();
+      retire_render_status = 0;
+      Require(f.output->IsCurrentToken(second), "failed retirement advanced the output generation");
+      std::cout << "PASS load retirement and first-copy completion preserve generation boundaries\n";
+    }
     {
       Fixture f;
       const OutputOperationToken token{1, 1, 1, 0};

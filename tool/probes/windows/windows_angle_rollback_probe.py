@@ -28,6 +28,8 @@ PLATFORM = r'''
 using HANDLE = void*;
 using UINT = unsigned;
 using HRESULT = long;
+using ULONGLONG = uint64_t;
+constexpr HRESULT S_OK = 0, S_FALSE = 1;
 using EGLint = int;
 using EGLDisplay = void*;
 using EGLContext = void*;
@@ -43,6 +45,8 @@ static std::string fault;
 static bool legacy = false;
 static std::atomic<int> mutexes{0}, next_id{10}, display_calls{0}, concurrent_display_calls{0};
 static thread_local int texture_index = 0;
+static thread_local int held_mutexes = 0, query_polls = 0;
+static thread_local ULONGLONG tick = 0;
 static int current_destroys = 0, live_terminations = 0;
 static std::mutex platform_mutex;
 static int display_slot = 0;
@@ -55,13 +59,17 @@ inline HANDLE CreateMutex(void*, int, void*) {
   ++mutexes; return reinterpret_cast<void*>(1);
 }
 inline void CloseHandle(HANDLE h) { if(h) --mutexes; }
-inline void ReleaseMutex(HANDLE) {}
-inline void WaitForSingleObject(HANDLE, int) {}
+inline void ReleaseMutex(HANDLE) { --held_mutexes; }
+inline void WaitForSingleObject(HANDLE, int) { ++held_mutexes; }
+inline ULONGLONG GetTickCount64() { return tick; }
+inline void SwitchToThread() { tick += 10; }
 enum D3D_FEATURE_LEVEL {D3D_FEATURE_LEVEL_11_0, D3D_FEATURE_LEVEL_10_1,
   D3D_FEATURE_LEVEL_10_0, D3D_FEATURE_LEVEL_9_3};
 enum D3D_DRIVER_TYPE {D3D_DRIVER_TYPE_UNKNOWN, D3D_DRIVER_TYPE_HARDWARE};
 enum {D3D11_SDK_VERSION, DXGI_FORMAT_B8G8R8A8_UNORM, D3D11_USAGE_DEFAULT,
   D3D11_BIND_RENDER_TARGET, D3D11_BIND_SHADER_RESOURCE, D3D11_RESOURCE_MISC_SHARED};
+enum {D3D11_QUERY_EVENT, D3D11_ASYNC_GETDATA_DONOTFLUSH};
+struct D3D11_QUERY_DESC { int Query, MiscFlags; };
 struct D3D11_TEXTURE2D_DESC {
   int Width, Height, Format, MipLevels, ArraySize;
   struct {int Count, Quality;} SampleDesc;
@@ -78,6 +86,13 @@ struct FakeCom {
   HRESULT QueryInterface(int, void** result);
   HRESULT EnumAdapters(int, FakeCom** result);
   HRESULT CreateTexture2D(D3D11_TEXTURE2D_DESC*, void*, FakeCom** result);
+  HRESULT CreateQuery(const D3D11_QUERY_DESC*, FakeCom** result);
+  void End(FakeCom*) { query_polls = 0; }
+  HRESULT GetData(FakeCom*, void*, int, int) {
+    ++query_polls;
+    if(Fail("query_error")) return -1;
+    return Fail("query_timeout") || query_polls < 3 ? S_FALSE : S_OK;
+  }
   HRESULT GetSharedHandle(HANDLE* result) {
     if(Fail(kind + "_handle")) return -1;
     *result = this; return 0;
@@ -103,7 +118,12 @@ inline HRESULT FakeCom::CreateTexture2D(D3D11_TEXTURE2D_DESC*, void*, FakeCom** 
   if(Fail(name)) return -1;
   *result = NewCom(name); return 0;
 }
+inline HRESULT FakeCom::CreateQuery(const D3D11_QUERY_DESC*, FakeCom** result) {
+  if(Fail("query_create")) return -1;
+  *result = NewCom("query"); return S_OK;
+}
 using ID3D11Device = FakeCom;
+using ID3D11Query = FakeCom;
 using ID3D11DeviceContext = FakeCom;
 using ID3D11Texture2D = FakeCom;
 using IDXGIFactory = FakeCom;
@@ -264,6 +284,17 @@ int main() {
     live.SetSize(960, 540);
     live.SetSize(1280, 720);
     Check(contexts.size()==1 && surfaces.size()==1, "resize reuses context");
+    const auto com_before_copy = LiveCom();
+    for(const auto& point : {"success", "query_create", "query_error", "query_timeout"}) {
+      fault = point;
+      Check(live.Read(true) == (fault == "success"), fault + " copy completion result");
+      Check(held_mutexes == 0, fault + " copy completion releases mutex");
+      Check(LiveCom() == com_before_copy, fault + " copy query releases COM reference");
+    }
+    fault.clear();
+    query_polls = 0;
+    Check(live.Read() && query_polls == 0, "ordinary copies remain asynchronous");
+    Check(live.Read(true), "first copy recovers after completion failure");
 #ifdef MEDIA_KIT_VIDEO_NATIVE_MEMORY_STATS_H_
     const auto stats = media_kit_memory::Registry::Instance().Read();
     const auto textures = stats.resources[static_cast<size_t>(media_kit_memory::Resource::texture)];

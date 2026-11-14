@@ -69,14 +69,40 @@ void ANGLESurfaceManager::Draw(std::function<void()> callback) {
   ::ReleaseMutex(mutex_);
 }
 
-void ANGLESurfaceManager::Read() {
+bool ANGLESurfaceManager::Read(bool wait_for_completion) {
   ::WaitForSingleObject(mutex_, INFINITE);
-  if (d3d_11_device_context_ != nullptr) {
-    d3d_11_device_context_->CopyResource(d3d_11_texture_2D_.Get(),
-                                         internal_d3d_11_texture_2D_.Get());
-    d3d_11_device_context_->Flush();
+  if (d3d_11_device_context_ == nullptr) {
+    ::ReleaseMutex(mutex_);
+    return false;
+  }
+  Microsoft::WRL::ComPtr<ID3D11Query> complete;
+  if (wait_for_completion) {
+    const D3D11_QUERY_DESC description{D3D11_QUERY_EVENT, 0};
+    if (FAILED(d3d_11_device_->CreateQuery(&description, &complete))) {
+      ::ReleaseMutex(mutex_);
+      return false;
+    }
+  }
+  d3d_11_device_context_->CopyResource(d3d_11_texture_2D_.Get(),
+                                     internal_d3d_11_texture_2D_.Get());
+  if (complete) d3d_11_device_context_->End(complete.Get());
+  d3d_11_device_context_->Flush();
+  bool copied = true;
+  if (complete) {
+    // Flush 只提交复制。新来源首次交给另一设备导入前，等待真正完成；
+    // 后续帧保留异步提交，避免逐帧 CPU/GPU 等待扩大播放停顿。
+    const ULONGLONG deadline = GetTickCount64() + 100;
+    HRESULT status;
+    do {
+      status = d3d_11_device_context_->GetData(
+          complete.Get(), nullptr, 0, D3D11_ASYNC_GETDATA_DONOTFLUSH);
+      if (status != S_FALSE || GetTickCount64() >= deadline) break;
+      SwitchToThread();
+    } while (true);
+    copied = status == S_OK;
   }
   ::ReleaseMutex(mutex_);
+  return copied;
 }
 
 void ANGLESurfaceManager::MakeCurrent(bool value) {

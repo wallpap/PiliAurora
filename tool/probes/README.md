@@ -567,6 +567,10 @@ WebViewReady 屏障与 Cookie 同步，读取 DOM 标题并测首次/再次打�
 
 以下入口编译生产 ANGLE 与 VideoOutput 类，通过外部资源计数替身检查构造失败回滚、共享 EGLDisplay 的跨线程释放、持续渲染期间的卸载任务调度，以及 resize、重建、销毁交错时的纹理注销回执：
 
+同时检查加载交接仅消费一次旧 reconfig、首帧复制完成后才发布、查询创建失败／错误／
+超时均释放查询与互斥锁，以及普通帧保持异步复制。替身不模拟实际 GPU，峰值、画面、
+掉帧及跨设备共享行为须另用生产会话和资源回收设备探针验收。
+
 ```powershell
 python tool/probes/windows/windows_angle_rollback_probe.py
 python tool/probes/windows/windows_renderer_release_probe.py

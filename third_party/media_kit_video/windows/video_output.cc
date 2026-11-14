@@ -360,13 +360,16 @@ bool VideoOutput::Render() {
     if (render_status < 0) return false;
     // 共享纹理复制在输出线程提交后再通知 Flutter，避免 Raster 回调
     // 持有引擎图形上下文时等待正在 glFinish 的绘制线程。
-    if (surface_manager_ != nullptr) surface_manager_->Read();
     const bool current_file_frame =
         output_prepared_ && active_token_.has_value() &&
         !active_token_invalidated_ && frame_seen_token_.has_value() &&
         *frame_seen_token_ == *active_token_;
     const bool first_current_file_frame =
         current_file_frame && rendered_frame_token_ != active_token_;
+    if (surface_manager_ != nullptr &&
+        !surface_manager_->Read(first_current_file_frame)) {
+      return false;
+    }
     if (current_file_frame) rendered_frame_token_ = *active_token_;
     if (current_file_frame && frame_updated && sampling_enabled_ &&
         sampling_admission_ == "blocked" && !resize_in_progress_)
@@ -479,7 +482,27 @@ void VideoOutput::BeginOutputForLoad(OutputOperationToken token,
                    active_token_.has_value() && *active_token_ == token;
       } else if (token.CanReplace(*high_water_token_)) {
         if (render_context_ != nullptr) {
-          mpv_render_context_update(render_context_);
+          // 调用方已确认旧文件卸载。update 不消费延迟 reconfig/reset，
+          // 在新解码器分配前排空它们，归还旧图和硬解映射引用。
+          int status = 0;
+          auto retire = [&]() {
+            mpv_render_context_update(render_context_);
+            int skip = 1;
+            mpv_render_param params[] = {
+                {MPV_RENDER_PARAM_SKIP_RENDERING, &skip},
+                {MPV_RENDER_PARAM_INVALID, nullptr},
+            };
+            status = mpv_render_context_render(render_context_, params);
+          };
+          if (surface_manager_) {
+            surface_manager_->Draw(retire);
+          } else {
+            retire();
+          }
+          if (status < 0) {
+            on_complete(false);
+            return;
+          }
         }
         sampling_enabled_ = false;
         sampling_sequence_ = 0;
