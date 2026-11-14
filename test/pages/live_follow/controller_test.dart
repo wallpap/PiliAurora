@@ -78,12 +78,14 @@ void main() {
       interceptor,
     );
   });
-  setUp(() {
+  setUp(() async {
     requests.clear();
     account = login(123);
     Accounts.accountMode[AccountType.main.index] = account;
     container = ProviderContainer();
     subscription = container.listen(liveFollowProvider, (_, _) {});
+    // 首包进入夹具后才开始用例，使退出时能完成请求，不污染下一个用例。
+    await dispatched(1);
   });
   tearDown(() {
     subscription.close();

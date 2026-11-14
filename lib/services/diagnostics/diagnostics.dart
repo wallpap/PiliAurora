@@ -213,8 +213,22 @@ class Diagnostics extends ChangeNotifier with WidgetsBindingObserver {
   };
   int get intervalMs => _intervalMs;
   String? get session => _session;
+  static int _compareRecordTimes(
+    Map<String, Object?> a,
+    Map<String, Object?> b,
+  ) {
+    final aText = a['time'] is String ? a['time'] as String : '';
+    final bText = b['time'] is String ? b['time'] as String : '';
+    final aTime = DateTime.tryParse(aText);
+    final bTime = DateTime.tryParse(bText);
+    if (aTime == null) return bTime == null ? aText.compareTo(bText) : -1;
+    if (bTime == null) return 1;
+    return aTime.compareTo(bTime);
+  }
+
   static int _compareRecords(Map<String, Object?> a, Map<String, Object?> b) {
-    final time = '${a['time']}'.compareTo('${b['time']}');
+    // ISO 时间会省略为零的微秒，按字符串比较可能把较旧记录排在前面。
+    final time = _compareRecordTimes(a, b);
     if (time != 0) return time;
     final run = '${a['runId']}'.compareTo('${b['runId']}');
     if (run != 0) return run;
@@ -304,9 +318,7 @@ class Diagnostics extends ChangeNotifier with WidgetsBindingObserver {
                 },
               },
           ]..sort((a, b) {
-            final order = (a['time'] as String? ?? '').compareTo(
-              b['time'] as String? ?? '',
-            );
+            final order = _compareRecordTimes(a, b);
             if (order != 0) return order;
             return (a['sequence'] as int? ?? 0).compareTo(
               b['sequence'] as int? ?? 0,

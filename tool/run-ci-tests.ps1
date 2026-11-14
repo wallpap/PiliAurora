@@ -275,17 +275,51 @@ $testArguments = @('test', '--no-pub')
 if ($PSBoundParameters.ContainsKey('Concurrency')) {
     $testArguments += @('--concurrency', $Concurrency)
 }
-if ($FlutterTool -eq "fvm") {
-    & fvm flutter @testArguments @ciTests
-    $command = "fvm flutter test --no-pub"
+
+$batches = [System.Collections.Generic.List[object]]::new()
+if ($IsWindows) {
+    # Flutter/FVM 的 Windows 入口是批处理，预留空间给 SDK 路径及其他参数。
+    $maxBatchCharacters = 6000
+    $batch = [System.Collections.Generic.List[string]]::new()
+    $batchCharacters = 0
+    foreach ($path in $ciTests) {
+        $pathCharacters = $path.Length + 3
+        if ($pathCharacters -gt $maxBatchCharacters) {
+            throw "CI test path exceeds the Windows command budget: $path"
+        }
+        if ($batch.Count -gt 0 -and $batchCharacters + $pathCharacters -gt $maxBatchCharacters) {
+            $batches.Add($batch.ToArray())
+            $batch.Clear()
+            $batchCharacters = 0
+        }
+        $batch.Add($path)
+        $batchCharacters += $pathCharacters
+    }
+    if ($batch.Count -gt 0) {
+        $batches.Add($batch.ToArray())
+    }
 }
 else {
-    & flutter @testArguments @ciTests
-    $command = "flutter test --no-pub"
+    $batches.Add([string[]]$ciTests)
 }
 
-if ($LASTEXITCODE -ne 0) {
-    throw "Command failed with exit code $LASTEXITCODE`: $command"
+$failedBatches = [System.Collections.Generic.List[string]]::new()
+for ($index = 0; $index -lt $batches.Count; $index++) {
+    $batch = [string[]]$batches[$index]
+    Write-Host "Running CI test batch $($index + 1)/$($batches.Count) ($($batch.Count) paths)..."
+    if ($FlutterTool -eq "fvm") {
+        & fvm flutter @testArguments @batch
+    }
+    else {
+        & flutter @testArguments @batch
+    }
+    if ($LASTEXITCODE -ne 0) {
+        $failedBatches.Add("$($index + 1) (exit $LASTEXITCODE)")
+    }
+}
+
+if ($failedBatches.Count -gt 0) {
+    throw "CI test batches failed: $($failedBatches -join ', ')"
 }
 
 Write-Host "Local CI tests completed successfully."

@@ -939,6 +939,63 @@ void main() {
     },
   );
 
+  test('restored logs sort correctly across a whole millisecond', () async {
+    final records = [
+      {
+        'time': '2026-11-14T09:24:45.123Z',
+        'runId': 'fixture',
+        'sequence': 1,
+        'channel': 'runtime',
+        'message': 'older',
+      },
+      {
+        'time': '2026-11-14T09:24:45.123001Z',
+        'runId': 'fixture',
+        'sequence': 2,
+        'channel': 'runtime',
+        'message': 'newer',
+      },
+      {
+        'time': '2026-11-14T09:24:45.123001Z',
+        'runId': 'fixture',
+        'sequence': 3,
+        'channel': 'runtime',
+        'message': 'newest',
+      },
+      {
+        'time': '2026-11-14T17:24:45.123002+08:00',
+        'runId': 'fixture',
+        'sequence': 4,
+        'channel': 'runtime',
+        'message': 'other timezone',
+      },
+      {
+        'time': 'invalid',
+        'runId': 'fixture',
+        'sequence': 5,
+        'channel': 'runtime',
+        'message': 'unknown time',
+      },
+    ];
+    await File('${directory.path}/runtime.jsonl').writeAsString(
+      '${records.map(jsonEncode).join('\n')}\n',
+    );
+    final restored = Diagnostics(processReader: () => {});
+    try {
+      await restored.initialize(directory: directory);
+      expect(restored.recentLogs.map((record) => record['message']), [
+        'other timezone',
+        'newest',
+        'newer',
+        'older',
+        'unknown time',
+      ]);
+    } finally {
+      restored.dispose();
+      await restored.flush();
+    }
+  });
+
   test(
     'export contains readable sanitized logs and performance records',
     () async {
