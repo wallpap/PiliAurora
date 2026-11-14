@@ -13,7 +13,7 @@
 
 ## 开发
 
-首次开发先完成[环境配置和 debug 构建](development/build-and-test.md)，已有环境直接按任务查阅。Agent 遵循根目录 [AGENTS.md](../AGENTS.md)。
+首次开发先完成[环境配置与构建](development/build-and-test.md)，已有环境直接按任务查阅。Agent 遵循根目录 [AGENTS.md](../AGENTS.md)。
 
 | 任务 | 文档 |
 | --- | --- |
@@ -33,7 +33,7 @@
 
 ## 发布与历史
 
-- [GitHub Releases](https://github.com/wallpap/PiliAurora/releases)、[v1.6.9 更新说明](releases/v1.6.9.md)、[历史版本说明](releases/)。
+- [GitHub Releases](https://github.com/wallpap/PiliAurora/releases)、[2.0.0 更新说明](releases/v2.0.0.md)、[v1.6.9 更新说明](releases/v1.6.9.md)、[历史版本说明](releases/)。
 - [历史排障经验](diagnostic-notes/README.md)保留可复用的排查方法；当前采用项见[默认构建与策略](development/build-defaults.md)。本地 `doc/dev/` 保存报告和原始证据，文件清单与报告导航按[归档入口](../tool/experiments/README.md#实验资料归档)生成。
 - 依赖调整记录见[迁移验收](../third_party/VALIDATION.md)和[精简记录](../third_party/SIMPLIFICATION.md)。
 

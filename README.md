@@ -12,33 +12,61 @@
 [![GitHub Release](https://img.shields.io/github/v/release/wallpap/PiliAurora?display_name=tag)](https://github.com/wallpap/PiliAurora/releases/latest)
 [![License](https://img.shields.io/github/license/wallpap/PiliAurora)](LICENSE)
 
-PiliAurora 是面向 Android 和 Windows x64 的 Bilibili 第三方客户端，基于 [PiliPlus 2.1.5](https://github.com/bggRGjQaUbCoE/PiliPlus/tree/2.1.5)，使用 Flutter 开发。
+PiliAurora 是面向 Android 和 Windows x64 的 Bilibili 第三方客户端，基于 [PiliPlus 2.1.5](https://github.com/bggRGjQaUbCoE/PiliPlus/tree/2.1.5)，使用 Flutter 开发。支持视频、番剧、直播、动态、私信和离线下载，提供 Windows 独立播放窗口、弹幕合并与内容过滤。
 
-项目保留上游的浏览、播放、互动和多账号功能，并针对播放资源占用、Windows 弹幕渲染和视频输出做了调整，同时提供视频与直播独立窗口、弹幕合并和帧率调节、原生表情包管理等功能。
-
-[下载](https://github.com/wallpap/PiliAurora/releases/latest) · [v1.6.9 更新说明](doc/releases/v1.6.9.md) · [问题反馈](https://github.com/wallpap/PiliAurora/issues) · [许可证](LICENSE)
+[下载安装](https://github.com/wallpap/PiliAurora/releases/latest) · [2.0.0 更新说明](doc/releases/v2.0.0.md) · [使用指南](doc/README.md#使用指南) · [问题反馈](https://github.com/wallpap/PiliAurora/issues)
 
 ## 适配平台与下载
 
-| 平台 | 发布包 |
+在 [GitHub Releases](https://github.com/wallpap/PiliAurora/releases/latest) 选择对应设备的安装包。2.0.0 的改动见[版本说明](doc/releases/v2.0.0.md)，已发布版本以 Releases 页面为准。
+
+| 设备 | 选择的文件 |
 | --- | --- |
-| Android | `arm64-v8a`、`armeabi-v7a`、`x86_64` 分 ABI APK |
-| Windows x64 | 便携包、安装程序 |
+| Android ARM64，常见的新款手机和平板 | `arm64-v8a.apk` |
+| Android 32 位 ARM 设备 | `armeabi-v7a.apk` |
+| Android x86_64 设备或对应模拟器 | `x86_64.apk` |
+| Windows x64，需要安装和快捷方式 | `x64_setup.exe` |
+| Windows x64，直接解压使用 | `x64_portable.zip`，完整解压后启动 `PiliAurora.exe` |
 
-从 [GitHub Releases](https://github.com/wallpap/PiliAurora/releases/latest) 下载对应平台的安装包。
+应用的“检查更新”比较正式发布的版本号，通过浏览器下载安装包；预发布版本从 Releases 页面手动下载。
 
-应用的“检查更新”会比较正式发布的版本号，并通过浏览器下载对应平台的安装包。预发布版本需要从 Releases 页面手动下载。
-Windows 安装版更新时，先退出主窗口与独立播放窗口，再将 EXE 安装到原目录；安装器会记住上次的安装位置。
-便携版更新时，将 ZIP 完整解压到新目录并启动其中的 `PiliAurora.exe`。账号和设置保存在 Windows 用户数据目录，更新程序文件时无需迁移。
-更新后可在“关于”核对版本；任务栏固定项若仍指向旧目录，可取消后从新版窗口重新固定。
+Windows 安装版更新时，先退出主窗口和独立播放窗口，再安装到原目录。便携版将 ZIP 完整解压到新目录；账号和设置保存在 Windows 用户数据目录。更新后在“关于”核对版本，任务栏固定项若指向旧目录，可取消后从新版窗口重新固定。
 
-## 项目文档
+PiliAurora 使用独立的应用标识和数据目录，可以与 PiliPlus 并存；两者的账号状态、设置、缓存和离线文件各自保存。目前提供 Android 和 Windows x64 发布包。
 
-使用说明、开发指南和版本记录见[文档索引](doc/README.md)。
+## 可以做什么
 
-- 使用：[播放与弹幕](doc/guides/playback.md)、[内容过滤与互动](doc/guides/content.md)、[账号与备份](doc/guides/data-security.md)。
-- 开发：[构建与测试](doc/development/build-and-test.md)、[功能地图](doc/development/features.md)、[架构](doc/development/architecture.md)。
-- 排障：[维护指南](doc/maintenance/troubleshooting.md)、[Windows 视频输出](doc/maintenance/windows-video-output.md)、[历史排障经验](doc/diagnostic-notes/README.md)。
+| 用途 | 功能 |
+| --- | --- |
+| 浏览内容 | 推荐、热门、排行榜、搜索、视频、番剧、专栏、音频、直播和动态 |
+| 看视频与直播 | 清晰度、音质、倍速、字幕、分集、播放记录、硬件解码与直播线路选择 |
+| Windows 多窗口 | 将视频或直播弹出为独立小窗，主窗口继续浏览；支持置顶、缩放、排列与各窗口音量 |
+| 调整弹幕 | 合并相同或相似内容、按重复数放大字号、调整轨道间距和高能进度条颜色；Windows 自动跟随屏幕，Android 可选跟随屏幕或 60／90／120 FPS |
+| 互动与消息 | 评论、关注、粉丝、通知、文字与图片私信、分享卡片、直播表情和原生表情包管理 |
+| 管理内容 | 多账号、收藏夹、历史、稍后再看、番剧订阅、离线下载与下载音质选择 |
+| 过滤与备份 | 黑名单和合作作者屏蔽、评论等级过滤、空降助手、账号与设置导入导出、WebDAV 设置备份；另支持 DLNA 投屏和 WebView |
+
+功能受 Bilibili 接口、账号权限、平台和具体媒体资源影响。性能随设备、驱动、编码、清晰度、弹幕设置和窗口数量变化。
+
+## 常用设置与操作
+
+| 想要的效果 | 操作与生效时机 |
+| --- | --- |
+| 一边看一边浏览 | Windows 播放器顶部“播放窗口”菜单选择“弹出为独立小窗”；小窗准备好后接管播放与声音，可再打开其他小窗 |
+| 减少重复弹幕 | 在播放设置或播放器弹幕面板开启“弹幕合并”，即时生效；默认关闭，匹配规则见[播放指南](doc/guides/playback.md#弹幕合并与帧率) |
+| 调整视频预读 | “设置 → 播放设置 → 视频缓存策略”选择省内存、均衡或流畅优先，默认均衡，下次加载点播媒体时生效；直播使用独立策略 |
+| 屏蔽不想看的作者 | “设置 → 账号与隐私”中的增强黑名单屏蔽与合作作者检查默认开启；合作作者检查会增加请求和加载时间，可单独关闭 |
+| 按等级过滤评论 | “设置 → 内容与互动 → 内容过滤”选择最低评论用户等级，刷新评论区后生效；默认不屏蔽，缺少资料的评论保留 |
+| 备份或换设备 | 使用[账号与设置备份](doc/guides/data-security.md)；本机凭证与 WebDAV 密码按字段加密，备份无需额外密码，导出文件仍需妥善保存 |
+
+2.0.0 修复了 Windows 重载后可能黑屏、部分大图加载失败，以及切换账号或离开页面后旧请求仍影响当前操作的问题。保存、发送或修改资料时，如果提示“结果待确认”，先刷新对应页面核对结果，再决定是否重试。详细变化与设备验证范围见[2.0.0 发布说明](doc/releases/v2.0.0.md)。
+
+## 使用指南
+
+- [播放与弹幕](doc/guides/playback.md)：独立窗口、音量、缓存、合并与帧率、空降助手。
+- [内容过滤与互动](doc/guides/content.md)：黑名单、评论等级、弹幕点赞、评论菜单与表情包。
+- [账号与设置备份](doc/guides/data-security.md)：导入导出、WebDAV、跨设备恢复与本机数据。
+- [维护与排障](doc/maintenance/troubleshooting.md)：常见故障与诊断记录。
 
 ## 界面预览
 
@@ -74,90 +102,13 @@ Windows 安装版更新时，先退出主窗口与独立播放窗口，再将 EX
   <img src="assets/display/android-danmaku-filter-settings.jpg" alt="Android 弹幕屏蔽与合并设置" width="230">
 </p>
 
-## 相较于 PiliPlus 2.1.5 的改进
+## 开发与贡献
 
-### Windows 多窗口播放
-
-视频和直播可以弹出为多个独立窗口，一边看视频或直播，一边在主窗口继续浏览。播放窗口支持置顶、拖动、缩放、网格和层叠排列，记住上次的位置与大小；各窗口可分别调节音量，也可切换声音来源。使用方式见[Windows 独立播放窗口](doc/guides/playback.md#windows-播放窗口)。
-
-### 播放与弹幕资源管理
-
-Windows 播放优先使用 D3D11 硬件解码和共享纹理输出，视频输出尺寸按显示区域限制，减少渲染表面和纹理开销。快速切源复用播放器资源，图片解码限制并发，隐藏页签卸载图片并保留滚动位置，减少后台页面占用。
-
-Android 和 Windows 的视频与直播弹幕共用显示实现，分别按媒体时间和累计显示运行时间推进，复用文字布局、轨迹和栅格图片，减少逐帧重复计算；匹配与合并放到后台处理，缓存和活动工作集都有容量限制。直播复用后台消息解析 worker，并限制聊天历史和未读积压，控制长时间播放时的资源累积。
-
-### 弹幕合并与帧率调节
-
-视频弹幕可合并 20 秒内相同或相似的内容，并按重复数量放大字号。Windows 弹幕自动跟随屏幕刷新节奏；Android 可跟随屏幕，或选择 60、90、120 FPS，调整后即时生效。旧版保存的 30 FPS 设置按“跟随屏幕”生效。轨道间距按实际文字高度分配，高能进度条也可自定义颜色。设置说明见[弹幕合并与帧率设置](doc/guides/playback.md#弹幕合并与帧率)。
-
-### 播放稳定性修复
-
-视频和直播统一管理播放会话，切换内容时隔离旧请求与回调。Android 在解码前准备视频 Surface，Windows 独立窗口在稳定纹理出现后再交接。读取中断时根据媒体和缓冲状态尝试恢复，可按需启用备用 CDN；硬件解码失败时会尝试其他路径。
-
-Windows 切换超分时会短暂重载媒体，点播恢复原播放位置，并保留暂停或播放状态。进入全屏前先更新播放器布局，减少过渡闪动。
-
-Android 另有按屏幕分辨率缩放输出的实验选项，默认关闭。输出尺寸限制减少的是渲染开销，源视频仍按原分辨率解码；实际资源占用和流畅度随设备、驱动、编码、清晰度、弹幕设置及窗口数量变化。
-
-### 消息与私信重构
-
-主页和消息入口共享未读状态，回复、@、点赞、系统通知和私信跟随主账号。切换账号后丢弃旧账号的在途响应，会话操作同步共享状态，聊天历史去重，过期分页结果失效。
-
-私信支持文本、图片和分享卡片。卡片与附言共用发送锁，分别反馈结果；发送结果待确认时保留草稿，并提示核对聊天记录。
-
-### 内容过滤
-
-“设置 → 账号与隐私”中的“增强黑名单屏蔽”默认开启，在推荐、热门、搜索、动态和直播等列表中过滤已拉黑作者。“检查合作视频作者”也默认开启，列表已标识的合作视频中，任一作者被拉黑即屏蔽整条视频。合作作者查询会增加请求量和加载时间，可单独关闭。适用范围见[信息流黑名单屏蔽](doc/guides/content.md#黑名单屏蔽)。
-
-首页推荐按视口容量补充内容，普通卡片先显示，合作视频卡片核验通过后逐张显示；分页失败时保留已有内容并提供重试。
-
-“设置 → 内容与互动 → 内容过滤”中的“最低评论用户等级”可按 Lv1～Lv6 过滤评论及回复，默认不屏蔽。修改后刷新评论区生效；缺少用户资料的评论保留。适用范围见[评论等级过滤](doc/guides/content.md#评论等级过滤)。
-
-### 账号与备份
-
-本机账号凭证及 WebDAV 密码按字段加密，普通设置保持可读。登录信息与设置备份无需额外密码，支持跨设备恢复和旧版明文备份导入。使用方法见[账号与设置备份](doc/guides/data-security.md)。
-
-### 日常功能补充
-
-- 原生表情包管理，支持分类添加、移除、内容预览和单个表情放大，并记录最近使用的表情。
-- 评论长按菜单支持拉黑用户，新增粉丝列表支持直接关注和取消关注。
-- 下载可选择音质，分集之间继承字幕状态，支持清理失效番剧订阅。
-- 直播弹幕支持表情，表情包页签和收藏文件夹支持鼠标滚轮操作。
-- 番剧页面补充切季入口，并增加更多番剧相关内容。
-
-## 与上游的关系
-
-PiliAurora 从 PiliPlus 2.1.5 开始独立维护，当前发布 Android 和 Windows x64 版本；上游基线列出的平台还包括 iOS、Pad 和 Linux。PiliAurora 使用独立的应用标识和数据目录，可以与 PiliPlus 并存，账号状态、设置、缓存和离线文件各自保存。
-
-## 功能概览
-
-- 内容浏览：首页推荐、热门、排行榜、视频、番剧、文章、音频、直播和搜索。
-- 播放：清晰度和音质选择、播放速度、硬件解码设置、弹幕、字幕、分集切换和播放记录。分集间可继承字幕状态，高能进度条支持自定义颜色。
-- 互动：评论、动态、关注、粉丝、消息通知、私信和直播聊天，直播弹幕支持表情。
-- 评论支持按用户等级过滤，长按菜单可拉黑用户；表情包可按分类添加、移除和预览，详见[评论与表情包](doc/guides/content.md#弹幕点赞)。
-- 账号与内容管理：多账号、收藏夹、观看历史、稍后再看、番剧订阅和离线下载。支持清理失效番剧订阅、选择下载音质。
-- 扩展能力：DLNA 投屏、WebDAV 设置备份、SponsorBlock 和 WebView。
-
-功能受 Bilibili 接口、账号权限、平台和具体媒体资源影响。
-
-## 从源码构建
-
-项目使用 [.fvmrc](.fvmrc) 固定 Flutter 版本。Android 构建需要 Android SDK 和 JDK 25；Windows 构建需要启用了“使用 C++ 的桌面开发”工作负载的 Visual Studio。Windows 使用固定版本的 [标准上游 mpv 预编译包](third_party/media_kit_libs_windows_video/UPSTREAM.md)，本地构建和 GitHub Windows CI 都会下载、校验并解压。环境要求与验证命令见[构建与测试](doc/development/build-and-test.md)。
-
-```powershell
-git clone https://github.com/wallpap/PiliAurora.git
-cd PiliAurora
-fvm install
-pwsh -File tool/build.ps1 -Platform windows -Mode debug
-pwsh -File tool/build.ps1 -Platform android -Mode debug
-```
-
-## 参与贡献
-
-欢迎通过 GitHub Issues 报告问题或提交 Pull Request。修改播放器、弹幕或平台代码前，请阅读[维护与排障](doc/maintenance/troubleshooting.md)和[构建与测试](doc/development/build-and-test.md)；修改第三方依赖时，请按[依赖维护说明](third_party/README.md)登记来源和许可证。
+从源码运行或参与开发，请从[构建与测试](doc/development/build-and-test.md)开始；模块入口见[功能地图](doc/development/features.md)。开发者和 agent 的 2.0.0 迁移要点见[发布说明](doc/releases/v2.0.0.md#开发者)。完整导航见[项目文档](doc/README.md)。
 
 ## 赞助支持
 
-PiliAurora 完全免费开源，赞助完全自愿。如果你喜欢这个项目，并且有余力，欢迎通过支付宝或微信支付支持开发与维护。感谢你的支持！
+PiliAurora 免费开源。你可以自愿通过支付宝或微信支付支持开发与维护。
 
 <p align="center">
   <img src="assets/sponsor/alipay.jpg" alt="支付宝收款码" width="240">

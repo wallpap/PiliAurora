@@ -12,32 +12,63 @@
 [![GitHub Release](https://img.shields.io/github/v/release/wallpap/PiliAurora?display_name=tag)](https://github.com/wallpap/PiliAurora/releases/latest)
 [![License](https://img.shields.io/github/license/wallpap/PiliAurora)](LICENSE)
 
-PiliAurora is a third-party Bilibili client for Android and Windows x64, built with Flutter and based on [PiliPlus 2.1.5](https://github.com/bggRGjQaUbCoE/PiliPlus/tree/2.1.5).
+PiliAurora is a third-party Bilibili client for Android and Windows x64, built with Flutter and based on [PiliPlus 2.1.5](https://github.com/bggRGjQaUbCoE/PiliPlus/tree/2.1.5). It supports videos, series, live streams, activity feeds, direct messages, and offline downloads, with separate Windows playback windows, danmaku merging, and content filters. Danmaku are timed comments displayed over the video.
 
-The project retains upstream browsing, playback, social features, and multi-account support. It also adjusts playback resource usage, Windows danmaku rendering, and video output, and adds separate video and live-stream windows, danmaku merging and frame-rate controls, and native sticker management. Danmaku are timed comments displayed over the video.
-
-[Download](https://github.com/wallpap/PiliAurora/releases/latest) · [v1.6.9 release notes](doc/releases/v1.6.9.md) · [Report an issue](https://github.com/wallpap/PiliAurora/issues) · [License](LICENSE)
+[Download](https://github.com/wallpap/PiliAurora/releases/latest) · [2.0.0 release notes](doc/releases/v2.0.0.md) · [User guides](doc/README.md#使用指南) · [Report an issue](https://github.com/wallpap/PiliAurora/issues)
 
 ## Supported platforms and downloads
 
-| Platform | Packages |
+Choose the package for your device from [GitHub Releases](https://github.com/wallpap/PiliAurora/releases/latest). Changes for 2.0.0 are described in the [release notes](doc/releases/v2.0.0.md); the Releases page lists the versions available to download.
+
+| Device | Package |
 | --- | --- |
-| Android | Separate APKs for `arm64-v8a`, `armeabi-v7a`, and `x86_64` |
-| Windows x64 | Portable archive and installer |
+| Android ARM64, including many recent phones and tablets | `arm64-v8a.apk` |
+| Android 32-bit ARM | `armeabi-v7a.apk` |
+| Android x86_64 device or matching emulator | `x86_64.apk` |
+| Windows x64, with installation and shortcuts | `x64_setup.exe` |
+| Windows x64, portable | Extract the complete `x64_portable.zip` and run `PiliAurora.exe` |
 
-Download the package for your platform from [GitHub Releases](https://github.com/wallpap/PiliAurora/releases/latest).
+The in-app update check compares stable release version numbers and opens your browser to download an installer. Download prereleases manually from the Releases page.
 
-The in-app update check skips prereleases. Download prerelease builds manually from the Releases page.
+For a Windows installer update, close the main window and playback windows, then install to the existing directory. For a portable update, extract the ZIP into a new directory. Accounts and settings remain in the Windows user data directory. Check the version in About after updating. If a pinned taskbar shortcut points to the old folder, unpin it and pin the updated app.
 
-For a Windows installer update, close the main window and playback windows, then install to the existing directory. For a portable update, extract the ZIP into a new directory and run `PiliAurora.exe`. Accounts and settings remain in the Windows user data directory. If a pinned taskbar shortcut still points to the old folder, unpin it and pin the updated app.
+PiliAurora uses its own application identifier and data directory and can be installed alongside PiliPlus. Accounts, settings, caches, and offline files are stored separately. Release packages are available for Android and Windows x64.
 
-## Documentation
+## Features
 
-User guides, developer guides, and release notes are listed in the [documentation index](doc/README.md). The linked guides are currently in Chinese.
+| Use | Features |
+| --- | --- |
+| Browse | Recommendations, trending content, rankings, search, videos, series, articles, audio, live streams, and activity feeds |
+| Watch | Video and audio quality, playback speed, subtitles, episodes, history, hardware decoding, and live-stream source selection |
+| Windows playback windows | Pop out videos and live streams while browsing; move, resize, arrange, pin, and adjust each window's volume |
+| Danmaku | Merge similar comments, enlarge repeated text, adjust track spacing and density-bar colors; follow the display on Windows, or follow the display or select 60/90/120 FPS on Android |
+| Interact | Comments, following, followers, notifications, text and image messages, share cards, live-stream emotes, and sticker management |
+| Organize | Multiple accounts, favorites, history, watch later, series subscriptions, offline downloads, and download audio quality |
+| Filter and back up | Blacklist and collaboration-author filters, commenter levels, SponsorBlock, account and settings import/export, and WebDAV settings backups; DLNA casting and WebView are also supported |
 
-- Usage: [Playback and danmaku](doc/guides/playback.md), [Content and interactions](doc/guides/content.md), [Accounts and backups](doc/guides/data-security.md).
-- Development: [Build and test](doc/development/build-and-test.md), [Feature map](doc/development/features.md), [Architecture](doc/development/architecture.md).
-- Troubleshooting: [Maintenance guide](doc/maintenance/troubleshooting.md), [Windows video output](doc/maintenance/windows-video-output.md), [Past investigations](doc/diagnostic-notes/README.md).
+Availability depends on Bilibili APIs, account permissions, platform, and the media. Performance varies with hardware, drivers, codec, quality, danmaku settings, and the number of windows.
+
+## Common tasks
+
+| Goal | How |
+| --- | --- |
+| Watch while browsing | On Windows, select the pop-out option in the player's playback-window menu. The new window takes over playback and sound when ready; you can open additional windows |
+| Reduce repeated danmaku | Enable merging in playback settings or the player's danmaku panel. It takes effect immediately and is off by default; see the [matching rules](doc/guides/playback.md#弹幕合并与帧率) |
+| Adjust video buffering | Select memory-saving, balanced, or smooth playback under video cache settings. Balanced is the default; changes apply on the next on-demand media load. Live streams use a separate policy |
+| Hide blocked authors | Enhanced blacklist filtering and collaboration-author checks are on by default under account and privacy settings. Collaboration checks add requests and loading time and can be disabled separately |
+| Filter comments by level | Set the minimum commenter level under content filtering, then refresh the comments. It is off by default; comments without user data remain visible |
+| Back up or move devices | Follow the [backup guide](doc/guides/data-security.md). Local credentials and the WebDAV password are encrypted; backups require no extra password, so keep exported files private |
+
+Version 2.0.0 fixes Windows playback going black after some reloads, failures with some large images, and old requests affecting actions after account or page changes. When an action's result is uncertain, refresh the relevant page to check before retrying. See the [release notes](doc/releases/v2.0.0.md) for changes and device-validation limits.
+
+## User guides
+
+The detailed guides and release notes are in Chinese.
+
+- [Playback and danmaku](doc/guides/playback.md): windows, volume, buffering, merging, frame rates, and SponsorBlock.
+- [Content and interactions](doc/guides/content.md): blacklist filtering, commenter levels, likes, menus, and stickers.
+- [Accounts and backups](doc/guides/data-security.md): import, export, WebDAV, migration, and local data.
+- [Troubleshooting](doc/maintenance/troubleshooting.md): common failures and diagnostics.
 
 ## Screenshots
 
@@ -73,89 +104,13 @@ Pop out videos or live streams into separate windows while continuing to browse 
   <img src="assets/display/android-danmaku-filter-settings.jpg" alt="Android danmaku filtering and merging settings" width="230">
 </p>
 
-## Improvements over PiliPlus 2.1.5
+## Development and contributions
 
-### Multiple playback windows on Windows
-
-Open videos and live streams in separate windows while continuing to browse in the main window. Playback windows support always-on-top mode, moving and resizing, grid and cascade arrangements, and saved positions and sizes. Adjust each window's volume independently or switch the audio source. See [Windows playback windows](doc/guides/playback.md#windows-播放窗口).
-
-### Playback and danmaku resource management
-
-Windows playback prefers D3D11 hardware decoding and shared-texture output. Video output dimensions are limited to the display area to reduce rendering surface and texture overhead. Player resources are reused during rapid source changes. Image decoding uses bounded concurrency, and hidden tabs unload images while preserving their scroll positions.
-
-On Android and Windows, video and live-stream danmaku share a display implementation. Video danmaku follow media time, while live-stream danmaku follow accumulated display running time. Text layouts, trajectories, and raster images are reused to reduce repeated work per frame. Matching and merging run in the background, with limits on caches and active working sets. Live streams reuse a background message-parsing worker and limit chat history and unread backlogs to control resource accumulation during long sessions.
-
-### Danmaku merging and frame-rate controls
-
-Video danmaku can merge identical or similar comments within 20 seconds and enlarge text based on the number of duplicates. Windows danmaku automatically follow the display refresh rate. On Android, danmaku can follow the display or target 60, 90, or 120 FPS; changes take effect immediately. Saved 30 FPS settings now use the display refresh rate. Track spacing accounts for actual text height, and the comment-density progress bar supports custom colors. See [Danmaku merging and frame-rate settings](doc/guides/playback.md#弹幕合并与帧率).
-
-### Playback stability fixes
-
-Videos and live streams share playback-session management that isolates old requests and callbacks when switching content. Android prepares the video Surface before decoding, and separate Windows playback windows wait for a stable texture before handing over output. Interrupted reads trigger recovery attempts based on media and buffer state. A fallback CDN can be enabled when needed, and hardware-decoding failures trigger attempts with alternative paths.
-
-On Windows, changing super-resolution briefly reloads the media. On-demand videos resume at the previous position and retain their paused or playing state. The player updates its layout before entering fullscreen to reduce transition flicker.
-
-Android also has an experimental option to scale output to the screen resolution, disabled by default. Output-size limits reduce rendering overhead; the source video is still decoded at its original resolution. Resource usage and smoothness vary with the device, drivers, codec, video quality, danmaku settings, and number of windows.
-
-### Reworked notifications and direct messages
-
-The home page and message entry points share unread state. Replies, mentions, likes, system notifications, and direct messages follow the primary account. Switching accounts discards pending responses from the previous account. Conversation actions update shared state, chat history is deduplicated, and stale pagination results are discarded.
-
-Direct messages support text, images, and share cards. Cards and accompanying text share a send lock and report their results separately. Drafts are retained when delivery is awaiting confirmation, with a prompt to check the conversation history.
-
-### Content filtering
-
-Enhanced blacklist filtering is enabled by default under Settings → Account and privacy. It filters blocked authors from recommendations, popular content, search, feeds, and live-stream lists. Cooperative-author checks are also enabled by default: videos marked as collaborations are hidden if any author is blocked. These checks add requests and loading time and can be disabled separately. See [Blacklist filtering](doc/guides/content.md#黑名单屏蔽) for coverage.
-
-The recommendation feed loads enough items for the viewport. Ordinary cards appear first, and collaboration cards appear individually after their author checks pass. If pagination fails, existing items remain visible and loading can be retried.
-
-The minimum commenter level setting under Settings → Content and interactions → Content filtering filters comments and replies by levels Lv1 through Lv6. It is off by default and takes effect after refreshing the comments. Comments without user data remain visible. See [Comment level filtering](doc/guides/content.md#评论等级过滤) for coverage.
-
-### Accounts and backups
-
-Local account credentials and the WebDAV password are encrypted. Login and settings backups require no additional password and can be restored on another device. Other settings remain readable JSON, and older plaintext backups can still be imported. Encrypted backups require a version that supports the format. See [Account credentials and backups](doc/guides/data-security.md).
-
-### Everyday additions
-
-- Native sticker management with categories, adding and removing packs, content previews, enlarged individual stickers, and recently used stickers.
-- User blocking from the comment long-press menu, plus a followers list with follow and unfollow actions.
-- Audio-quality selection for downloads, subtitle preferences carried between episodes, and cleanup of unavailable series subscriptions.
-- Emotes in live-stream danmaku and mouse-wheel support for sticker tabs and favorite folders.
-
-## Relationship to upstream
-
-PiliAurora has been maintained independently since PiliPlus 2.1.5 and currently releases Android and Windows x64 builds. The upstream baseline also lists iOS, tablet, and Linux support. PiliAurora uses its own application identifier and data directory, so it can be installed alongside PiliPlus. Accounts, settings, caches, and offline files are stored separately.
-
-## Feature overview
-
-- Browsing: recommendations, trending content, rankings, videos, series, articles, audio, live streams, and search.
-- Playback: video and audio quality, playback speed, hardware-decoding settings, danmaku, subtitles, episode switching, and playback history. Subtitle preferences carry between episodes, and the comment-density progress bar supports custom colors.
-- Social features: comments, activity feeds, following, followers, notifications, direct messages, and live chat with emotes.
-- Comment and sticker tools: filter comments by user level, block users from the long-press menu, and add, remove, or preview sticker packs by category. See [Comments and stickers](doc/guides/content.md#弹幕点赞).
-- Account and content management: multiple accounts, favorites, watch history, watch later, series subscriptions, and offline downloads, including unavailable-subscription cleanup and download audio-quality selection.
-- Extras: DLNA casting, WebDAV settings backup, SponsorBlock, and WebView.
-
-Feature availability depends on Bilibili APIs, account permissions, the platform, and the media being played.
-
-## Build from source
-
-The Flutter version is pinned in [.fvmrc](.fvmrc). Android builds require the Android SDK and JDK 25. Windows builds require Visual Studio with the **Desktop development with C++** workload. Windows uses pinned [upstream mpv packages](third_party/media_kit_libs_windows_video/UPSTREAM.md), which local builds and Windows CI download, verify and extract. See [Build and test](doc/development/build-and-test.md) for environment requirements and validation commands.
-
-```powershell
-git clone https://github.com/wallpap/PiliAurora.git
-cd PiliAurora
-fvm install
-pwsh -File tool/build.ps1 -Platform windows -Mode debug
-pwsh -File tool/build.ps1 -Platform android -Mode debug
-```
-
-## Contributing
-
-Bug reports through GitHub Issues and pull requests are welcome. Before changing playback, danmaku, or platform code, read [Maintenance and troubleshooting](doc/maintenance/troubleshooting.md) and [Build and test](doc/development/build-and-test.md). When changing third-party dependencies, record their sources and licenses following the [dependency maintenance guide](third_party/README.md).
+To build from source or contribute, start with [Build and test](doc/development/build-and-test.md). Use the [feature map](doc/development/features.md) to find modules and the [2.0.0 release notes](doc/releases/v2.0.0.md#开发者) for developer and agent migration notes. The [documentation index](doc/README.md) links the remaining guides.
 
 ## Support the project
 
-PiliAurora is free and open source, and sponsorship is entirely optional. If you enjoy the project and can afford to contribute, you can support its development and maintenance through Alipay or WeChat Pay. Thank you for your support!
+PiliAurora is free and open source. You can optionally support development and maintenance through Alipay or WeChat Pay.
 
 <p align="center">
   <img src="assets/sponsor/alipay.jpg" alt="Alipay payment QR code" width="240">
