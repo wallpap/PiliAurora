@@ -145,6 +145,10 @@ flowchart LR
 | 播放器状态 | `PlaybackSession`、`PlaybackOwner`、`NativePlaybackRuntime` 与 `PlPlayerController` | 会话快照是规范状态；owner 表达页面控制权，运行时拥有原生资源，控制器负责 UI 投影和业务适配。 |
 | 消息状态 | `MessagingSession`、业务句柄与 Riverpod provider | 根 Widget 提供 `ProviderScope`；切换主账号时释放旧 Session，订阅重建。消息列表、聊天缓存和未读快照保存在内存中。 |
 
+## 图片加载与交互预览
+
+图片模块统一管理来源快照、解码准入和内容需求；`ContentViewer` 将手势变成稳定源坐标的视口，`ContentImage` 持有显示会话。Windows Gallery 的静态 JPEG/PNG/WebP 使用随包 CPU worker，经有界管道交付普通 `ui.Image`；来源租约等待 worker 真实退出。普通正文、动画与其他平台保留完整帧路径。预算、能力回退和验证边界见[图片模块](../../lib/common/widgets/image/README.md)。
+
 ## 弹幕显示与来源
 
 `NativePlaybackRuntime` 持有只读 `PlaybackFrameSource`，按输出 token、平台采样代次、阶段和批次序号隔离高频视频采样。Android 请求采样经监听注册与新 buffer 关联确认；纹理消费继续独立用于首帧和播放健康。暂停、缓冲、seek 和输出重配关闭相位准入，恢复条件成立且取得新帧确认后开启新代次。

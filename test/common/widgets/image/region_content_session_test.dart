@@ -98,6 +98,23 @@ Future<void> _until(bool Function() predicate) async {
   fail('region operation did not settle');
 }
 
+class _BrokenDrainDecoder extends _Decoder
+    implements DrainingRegionImageDecoder {
+  final closed = Completer<void>();
+  @override
+  Future<void> get drained => closed.future;
+  @override
+  void dispose() {
+    super.dispose();
+    closed.completeError(StateError('injected-close'));
+  }
+}
+
+class _WideDecoder extends _Decoder {
+  @override
+  Size get sourceSize => const Size(8192, 8192);
+}
+
 ContentDemand _demand(Rect rectangle, [double scale = 1]) =>
     ContentDemand(viewport: ContentViewport(rectangle, scale));
 
@@ -132,9 +149,54 @@ void main() {
   });
 
   test(
-    'production region selection stays gated until a real backend is validated',
-    () {
-      expect(productionRegionBackend, isNull);
+    'worker close error still releases images, budgets and source',
+    () async {
+      final resources = ImageResources(maximumRegionBytes: 24 << 10);
+      final decoder = _BrokenDrainDecoder();
+      final lease = await store.acquire(original);
+      final session = RegionContentSession(
+        source: lease,
+        backend: _Backend(decoder),
+        resources: resources,
+        maximumBytes: 24 << 10,
+        maximumBaseBytes: 4 << 10,
+        tileSize: 32,
+      )..update(_demand(const Rect.fromLTWH(0, 0, 32, 32)));
+      await _until(() => session.value.images.length == 2);
+      session.dispose();
+      await expectLater(session.drained, throwsStateError);
+      expect(resources.regionBytes, 0);
+      expect(decoder.outputs.every((image) => image.debugDisposed), isTrue);
+      expect(store.statistics['leases'], 0);
+      expect(lease.file.existsSync(), isFalse);
+      resources.dispose();
+      await resources.drained;
+    },
+  );
+
+  test(
+    'oversized merged viewport signals fallback instead of staying blurry',
+    () async {
+      final resources = ImageResources(maximumRegionBytes: 128 << 20);
+      final decoder = _WideDecoder();
+      final session = RegionContentSession(
+        source: await store.acquire(original),
+        backend: _Backend(decoder),
+        resources: resources,
+        maximumBytes: 48 << 20,
+        maximumBaseBytes: 4 << 20,
+        coalesceViewport: true,
+      )..update(_demand(const Rect.fromLTWH(0, 0, 5000, 5000), .6));
+      await _until(() => session.value.images.isNotEmpty);
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+      final error = session.value.error;
+      session.dispose();
+      await session.drained;
+      resources.dispose();
+      await resources.drained;
+      expect(error, isA<UnsupportedError>());
+      expect(decoder.requests, isEmpty);
+      expect(store.statistics['leases'], 0);
     },
   );
 
@@ -234,12 +296,12 @@ void main() {
       final before = resources.regionBytes;
       session.dispose();
       await store.clear();
-      expect(await lease.file.exists(), isTrue);
+      expect(lease.file.existsSync(), isTrue);
       expect(resources.regionBytes, before);
       expect(decoder.disposals, 0);
       decoder.regionGate!.complete();
       await session.drained;
-      expect(await lease.file.exists(), isFalse);
+      expect(lease.file.existsSync(), isFalse);
       expect(decoder.outputs.every((image) => image.debugDisposed), isTrue);
       expect(resources.regionBytes, 0);
       resources.dispose();

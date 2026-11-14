@@ -8,7 +8,7 @@ enum ImageWorkPriority { visible, prefetch }
 class ImageResources {
   ImageResources({
     this.maximumConcurrentDecodes = 2,
-    this.maximumRegionBytes = 64 << 20,
+    this.maximumRegionBytes = 128 << 20,
   }) : assert(maximumConcurrentDecodes > 0),
        assert(maximumRegionBytes > 0);
 

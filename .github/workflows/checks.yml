@@ -108,3 +108,12 @@ jobs:
 
       - name: Verify native fragmented audio backward seek
         run: python tool/verify_libmpv.py --backward-seek
+
+      - name: Build Windows region decoder and generated fixtures
+        run: |
+          python -m pip install Pillow==13.0.0
+          python tool/probes/windows/image_region_probe.py
+          python -m unittest discover -s tool/probes/windows -p image_region_probe_test.py -v
+
+      - name: Test native image pixels and lifecycle
+        run: flutter test --no-pub test/common/widgets/image --concurrency 2

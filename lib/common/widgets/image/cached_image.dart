@@ -132,6 +132,8 @@ class CachedImageProvider extends ImageProvider<CachedImageProvider> {
   // 这里只保存进行中的任务；完成或失败后立即移除。
   static final _pendingFiles = <(BaseCacheManager, String), Future<File>>{};
 
+  Future<File> getSourceFile() => _getFile();
+
   Future<File> _getFile() {
     final manager = cacheManager ?? DefaultCacheManager.instance!;
     final key = (manager, url);

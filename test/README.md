@@ -218,6 +218,8 @@ fvm flutter test test/services/diagnostics/ test/pages/about/diagnostics_page_te
 
 ## 图片与页面保活
 
+图片采样、来源租约、区域协议及 Windows worker 接线/像素回归见[图片测试契约](common/widgets/image/CONTRACTS.md)。原生测试先运行 `python tool/probes/windows/image_region_probe.py` 生成公开夹具并构建 worker；Windows CI 已接入该步骤，其他主机的明确跳过不作为原生覆盖。
+
 `common/widgets/image/` 覆盖图片恢复时的单次取帧、原生取消后的解码名额归还、动画时长与有限循环、CDN 缩略尺寸及淡入过渡。`pages/home/controller_lifecycle_test.dart` 检查 Get 删除时的诊断源与 Ticker 释放；`router/get_route_lifecycle_test.dart` 检查真实出栈后路由引用清理及永久依赖保留。这些回归已接入 `tool/run-ci-tests.ps1`。
 
 Windows 保活页面内存回归：先执行 `pwsh -File lib/scripts/patch.ps1 windows -SkipPubGet`，再运行 `fvm flutter test --no-pub test/common/widgets/inactive_sliver_cache_test.dart test/common/widgets/inactive_sliver_semantics_test.dart test/common/widgets/image/retained_layer_release_test.dart`。语义回归用弱引用核对已销毁卡片确实可回收，同时检查 State、数据、ScrollPosition、偏移、Focus 与语义恢复。绘制回归覆盖真实 Picture/source 释放、像素恢复与外部 Texture 保护；真实进程 Private/RSS 阈值由独立 Release 探针验证。

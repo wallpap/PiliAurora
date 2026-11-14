@@ -81,6 +81,9 @@ endif()
 
 
 # === Installation ===
+add_subdirectory("image_worker")
+add_dependencies(${BINARY_NAME} piliaurora_image_worker)
+
 # Support files are copied into place next to the executable, so that it can
 # run in place. This is done instead of making a separate bundle (as on Linux)
 # so that building and running from within Visual Studio will work.

@@ -9,10 +9,13 @@ import 'package:pili_aurora/common/widgets/image/image_resources.dart';
 import 'package:pili_aurora/common/widgets/image/src/content_demand.dart';
 import 'package:pili_aurora/common/widgets/image/src/image_source_store.dart';
 
-const RegionImageBackend? productionRegionBackend = null;
-
 abstract interface class RegionImageBackend {
   Future<RegionImageDecoder> open(ImageSourceLease source);
+}
+
+// 预先准备的后端在 open 尚未执行时也持有资源，由会话负责归还。
+abstract interface class OwnedRegionImageBackend implements RegionImageBackend {
+  Future<void> close();
 }
 
 abstract interface class RegionImageDecoder {
@@ -39,6 +42,11 @@ class RegionRequest {
       (read.width / math.pow(2, level)).ceil() *
       (read.height / math.pow(2, level)).ceil() *
       4;
+}
+
+abstract interface class DrainingRegionImageDecoder
+    implements RegionImageDecoder {
+  Future<void> get drained;
 }
 
 class RegionImage {
@@ -85,6 +93,7 @@ class RegionContentSession extends ChangeNotifier implements ContentSession {
     this.maximumBytes = 16 << 20,
     this.maximumBaseBytes = 4 << 20,
     this.tileSize = 512,
+    this.coalesceViewport = false,
   }) : _resources = resources ?? ImageResources.shared {
     if (maximumBaseBytes < 4 ||
         maximumBytes < maximumBaseBytes ||
@@ -100,6 +109,8 @@ class RegionContentSession extends ChangeNotifier implements ContentSession {
   final int maximumBytes;
   final int maximumBaseBytes;
   final int tileSize;
+  final bool coalesceViewport;
+  ContentViewport? get viewport => _demand?.viewport;
   final _details = <(int, int, int), RegionImage>{};
   final _allocations = <RegionImage, ImageMemoryReservation>{};
   final _retired = <RegionImage>{};
@@ -176,6 +187,10 @@ class RegionContentSession extends ChangeNotifier implements ContentSession {
       _discardDetails();
       return false;
     }
+    if (!demand.viewport.physicalScale.isFinite ||
+        demand.viewport.physicalScale <= 0) {
+      return false;
+    }
     if (_decoder == null) {
       if (_opening) return false;
       _opening = true;
@@ -205,12 +220,27 @@ class RegionContentSession extends ChangeNotifier implements ContentSession {
       return !_failed;
     }
     if (_base == null) {
-      final allocation = _resources.reserveRegionBytes(maximumBaseBytes);
+      // 当前尺度下可容纳完整基础层时，一次解码即可提供足够采样。
+      // 已放大的超大来源仍保留小基础层，再单独请求可见区域。
+      final level = math.max(
+        0,
+        (math.log(1 / math.min(1.0, demand.viewport.physicalScale)) / math.ln2)
+            .floor(),
+      );
+      final factor = math.pow(2, level);
+      final desiredBytes =
+          (_decoder!.sourceSize.width / factor).ceil() *
+          (_decoder!.sourceSize.height / factor).ceil() *
+          4;
+      final baseBytes = desiredBytes <= maximumBaseBytes
+          ? desiredBytes
+          : math.min(maximumBaseBytes, 4 << 20);
+      final allocation = _resources.reserveRegionBytes(baseBytes);
       if (allocation == null) return false;
-      _reservedBytes = maximumBaseBytes;
+      _reservedBytes = baseBytes;
       try {
         final base = await _run<RegionImage>(
-          () => _decoder!.decodeBase(maximumBaseBytes ~/ 4),
+          () => _decoder!.decodeBase(baseBytes ~/ 4),
           (image) => image.dispose(),
         );
         _reservedBytes = 0;
@@ -218,7 +248,7 @@ class RegionContentSession extends ChangeNotifier implements ContentSession {
           allocation.dispose();
           return false;
         }
-        if (base.bytes > maximumBaseBytes ||
+        if (base.bytes > baseBytes ||
             base.core != (Offset.zero & _decoder!.sourceSize) ||
             base.sourceRect != base.core) {
           base.dispose();
@@ -235,7 +265,22 @@ class RegionContentSession extends ChangeNotifier implements ContentSession {
       }
       return !_failed;
     }
+    final requiredScale = math.min(1.0, demand.viewport.physicalScale);
+    if (_base!.image.width / _base!.sourceRect.width >= requiredScale &&
+        _base!.image.height / _base!.sourceRect.height >= requiredScale) {
+      if (_details.isNotEmpty) _discardDetails();
+      return false;
+    }
     final desired = _requests(demand.viewport);
+    if (coalesceViewport &&
+        desired.values.any(
+          (request) =>
+              request.maximumBytes > (40 << 20) ||
+              request.maximumBytes + _base!.bytes > maximumBytes,
+        )) {
+      _fail(UnsupportedError('当前视口超过已验证的单区域容量，需要原路径接管'));
+      return false;
+    }
     final visible = demand.viewport.sourceRect;
     final retired = <RegionImage>[];
     for (final key in _details.keys.toList()) {
@@ -322,6 +367,29 @@ class RegionContentSession extends ChangeNotifier implements ContentSession {
       0,
       (math.log(1 / math.min(1.0, scale)) / math.ln2).floor(),
     );
+    if (coalesceViewport) {
+      final factor = (1 << level).toDouble();
+      final step = factor * 64;
+      final core = Rect.fromLTRB(
+        (visible.left / step).floor() * step,
+        (visible.top / step).floor() * step,
+        (visible.right / step).ceil() * step,
+        (visible.bottom / step).ceil() * step,
+      ).intersect(bounds);
+      final align = factor * 2;
+      final read = Rect.fromLTRB(
+        ((core.left - align) / align).floor() * align,
+        ((core.top - align) / align).floor() * align,
+        ((core.right + align) / align).ceil() * align,
+        ((core.bottom + align) / align).ceil() * align,
+      ).intersect(bounds);
+      final key = (
+        level,
+        (core.left * bounds.height + core.top).toInt(),
+        (core.right * bounds.height + core.bottom).toInt(),
+      );
+      return {key: RegionRequest(level: level, core: core, read: read)};
+    }
     final step = tileSize * math.pow(2, level).toDouble();
     final overlap = math.pow(2, level).toDouble();
     final requests = <(int, int, int), RegionRequest>{};
@@ -455,18 +523,36 @@ class RegionContentSession extends ChangeNotifier implements ContentSession {
 
   Future<void> _close() async {
     try {
-      await _operation;
-      _decoder?.dispose();
-      _decoder = null;
-      if (_base case final image?) _retire(image);
-      _base = null;
-      for (final image in _details.values) {
-        _retire(image);
+      try {
+        await _operation;
+      } finally {
+        try {
+          try {
+            final decoder = _decoder;
+            decoder?.dispose();
+            if (decoder is DrainingRegionImageDecoder) await decoder.drained;
+          } finally {
+            if (_backend case final OwnedRegionImageBackend backend) {
+              await backend.close();
+            }
+          }
+        } finally {
+          // worker 退出报错仍须退役已发布图片、归还预算并释放来源。
+          _decoder = null;
+          if (_base case final image?) _retire(image);
+          _base = null;
+          for (final image in _details.values) {
+            _retire(image);
+          }
+          _details.clear();
+          _reservedBytes = 0;
+          try {
+            await _retirement?.future;
+          } finally {
+            await _source.dispose();
+          }
+        }
       }
-      _details.clear();
-      _reservedBytes = 0;
-      await _retirement?.future;
-      await _source.dispose();
       _drained.complete();
     } catch (error, stack) {
       _drained.completeError(error, stack);
@@ -475,8 +561,17 @@ class RegionContentSession extends ChangeNotifier implements ContentSession {
 }
 
 class RegionImageSurface extends StatefulWidget {
-  const RegionImageSurface({super.key, required this.session});
+  const RegionImageSurface({
+    super.key,
+    required this.session,
+    this.filterQuality = FilterQuality.low,
+    this.color,
+    this.colorBlendMode,
+  });
   final RegionContentSession session;
+  final FilterQuality filterQuality;
+  final Color? color;
+  final BlendMode? colorBlendMode;
 
   @override
   State<RegionImageSurface> createState() => _RegionImageSurfaceState();
@@ -506,13 +601,27 @@ class _RegionImageSurfaceState extends State<RegionImageSurface> {
   }
 
   @override
-  Widget build(BuildContext context) =>
-      CustomPaint(painter: _RegionPainter(widget.session));
+  Widget build(BuildContext context) => CustomPaint(
+    painter: _RegionPainter(
+      widget.session,
+      widget.filterQuality,
+      widget.color,
+      widget.colorBlendMode,
+    ),
+  );
 }
 
 class _RegionPainter extends CustomPainter {
-  _RegionPainter(this.session) : super(repaint: session);
+  _RegionPainter(
+    this.session,
+    this.filterQuality,
+    this.color,
+    this.colorBlendMode,
+  ) : super(repaint: session);
   final RegionContentSession session;
+  final FilterQuality filterQuality;
+  final Color? color;
+  final BlendMode? colorBlendMode;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -522,10 +631,21 @@ class _RegionPainter extends CustomPainter {
     canvas
       ..save()
       ..scale(size.width / source.width, size.height / source.height);
-    for (final layer in state.images) {
+    for (var index = 0; index < state.images.length; index++) {
+      final layer = state.images[index];
       canvas
         ..save()
-        ..clipRect(layer.core)
+        ..clipRect(layer.core, doAntiAlias: false);
+      // 同一来源的细节替换基础层；半透明像素不能多次 source-over 合成。
+      // 用互斥绘制区域避免为整张图另建离屏合成 surface。
+      for (var above = index + 1; above < state.images.length; above++) {
+        canvas.clipRect(
+          state.images[above].core,
+          clipOp: ui.ClipOp.difference,
+          doAntiAlias: false,
+        );
+      }
+      canvas
         ..drawImageRect(
           layer.image,
           Rect.fromLTWH(
@@ -535,7 +655,11 @@ class _RegionPainter extends CustomPainter {
             layer.image.height.toDouble(),
           ),
           layer.sourceRect,
-          Paint()..filterQuality = FilterQuality.low,
+          Paint()
+            ..filterQuality = filterQuality
+            ..colorFilter = color == null
+                ? null
+                : ColorFilter.mode(color!, colorBlendMode ?? BlendMode.srcIn),
         )
         ..restore();
     }
@@ -544,5 +668,8 @@ class _RegionPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(_RegionPainter oldDelegate) =>
-      oldDelegate.session != session;
+      oldDelegate.session != session ||
+      oldDelegate.filterQuality != filterQuality ||
+      oldDelegate.color != color ||
+      oldDelegate.colorBlendMode != colorBlendMode;
 }

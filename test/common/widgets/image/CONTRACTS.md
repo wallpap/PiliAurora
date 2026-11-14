@@ -16,7 +16,10 @@
 | `../../../pages/emote/image_demand_test.dart` | 600 个普通图片表情只建立可见及有限邻域、滚动末尾仍有界、选择回调与文字表情语义保留 |
 | `image_entry_integration_test.dart` | 真实 PNG 的未知比例网络 cover、本地 cover、外层 ResizeImage 元信息、失败本地键重试；生产 HTML CSS 标记使用应用图片入口 |
 | `content_viewer_integration_test.dart` | 换采样保持视口、窗口调整保持焦点/密度，滚轮、捏合、平移、双击和惯性统一发出需求 |
-| `region_content_session_test.dart` | 生产门控、同版本有界基础/细节、层级及重叠、跨会话预算、取消在途租约、失败不完整回退、绘制退役和 detach/reattach 排空 |
+| `region_content_session_test.dart`、`region_extension_test.dart` | 同版本有界基础/细节、层级及重叠、跨会话预算、取消在途租约、失败不完整回退、绘制退役和 detach/reattach 排空 |
+| `native_backend_extension_test.dart`、`native_demand_base_test.dart` | 真实 worker 的输出准入、需求基础层、关闭排空与来源释放 |
+| `native_content_image_test.dart` | 网络/本地 Gallery 接线、隐藏关闭和恢复、GIF 签名分流不启动 worker、动画/方向/超容量回退、超大 WebP 中间层边界、错误后依赖变化不转完整帧 |
+| `native_fidelity_test.dart` | 真实 Flutter 显示像素、透明边界、有损 WebP 非零裁剪、ICC 与基础/细节交接 |
 
 本地受控 decoder 返回真实 `ui.Image` 并记录请求/释放，避免用伪像素对象证明 native 释放。缓存、已交付显示 clone 和框架引用各有自己的生命周期。注入受控 decoder 只验证协议，不证明真实格式峰值或 GPU 回收。
 
@@ -40,9 +43,22 @@ fvm flutter test --no-pub test/common/widgets/image/ test/pages/emote/ test/page
 
 ## 区域后端和设备验收
 
-设计尚未选定生产区域后端，先实现并验证内容/资源生命周期并保持能力门控。区域协议实现后补充受控后端测试：基础层覆盖、视口合并、同版本/坐标复用、旧批次交接、基础/细节/在途输出统一预算、取消和失败不转为超大整图解码。没有真实后端时不能将受控适配器作为已支持原生区域解码交付。
+2026-11-14 正式接入 Windows Gallery 的 WIC JPEG/PNG 与 libwebp 静态 WebP 区域后端。随包 worker 使用有界二进制管道，关闭等待进程排空；普通正文与其他平台保留完整帧路径。动画、EXIF 方向和不支持格式明确回退，原生解码错误保留错误状态。通用区域协议继续以受控后端覆盖基础层、视口合并、同版本/坐标复用、批次交接和预算；真实后端另以生成夹具验证。
 
-Windows/Android 必须再验证以下矩阵，作为启用区域能力的门槛，不使用固定 skip 用例冒充覆盖：
+Windows 下先生成公开的确定性夹具并构建正式 worker，再运行原生和 Flutter 回归：
+
+```powershell
+python -m pip install Pillow==13.0.0
+python tool/probes/windows/image_region_probe.py
+python -m unittest discover -s tool/probes/windows -p image_region_probe_test.py -v
+fvm flutter test --no-pub test/common/widgets/image --concurrency 2
+```
+
+默认产物位于 `build/probes/image-region/`；`REGION_TEST_WORKER` 与 `REGION_FIXTURES` 可覆盖测试路径。缺少 Windows worker 时，原生 Flutter 用例明确跳过，不代表真实后端通过。当前像素回归覆盖 12 项、36 个显示区域，最大通道差为 3；原生探针覆盖透明有损 WebP 裁剪、非法边界和动画/方向排除。libwebp 固定来源及修复说明见[上游登记](../../../../third_party/libwebp/UPSTREAM.md)。
+
+2026-11-14 区域后端回归：本目录 145 项全部通过，包含 8192×6144 WebP 的全局缩放容量回退；真实 worker 异常退出后触发继承依赖更新，错误状态仍保留。AVIF 等缺少 WIC codec 的格式交还完整帧，测试与独立 Flutter 参照比较；当前 Windows 引擎不支持该 AVIF 夹具，因此保留同样的格式错误，不宣称新增 AVIF 支持。新增 adapter/Widget 文件的定向分析无问题；整个图片目录为 0 error、0 warning，保留来源快照及其测试中已有的 9 条异步文件 I/O 提示。随后增加 GIF 等非候选格式的签名提前分流，最后仅重跑 `native_content_image_test.dart` 与 `native_backend_extension_test.dart`，8 项通过；3 个受影响文件的定向分析无问题。此前标准及固定 patched engine 的 Windows Release 构建通过；最后签名分流改动未重建 Release 或复测性能。
+
+本机压力组的峰值与延迟取舍见[图片模块验证边界](../../../../lib/common/widgets/image/README.md#验证边界)。完整设备矩阵尚未完成；按用户要求保留已有结果并收敛测试，以下作为后续设备验证范围，不使用固定 skip 用例冒充覆盖：
 
 - 一般分辨率、高分辨率、GIF、长图、超高分辨率、低分辨率；补充动画 WebP、EXIF 方向、透明边界和瓦片接缝。
 - 文章/私信点击前阅读、网格点击后预览、本地图片、切页/缩放/滚动/窗口变化、离页与重复循环。

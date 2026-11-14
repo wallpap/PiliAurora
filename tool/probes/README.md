@@ -13,6 +13,19 @@
 
 Python 探针使用 uv 环境，首次运行前请按[工具入口中的 Python 环境说明](../README.md#python-工具环境)初始化；以下命令均从仓库根目录运行。
 
+## Windows 图片区域解码
+
+`windows/image_region_probe.py` 通过 Visual Studio CMake 独立构建正式图片 worker，并用 Pillow 13.0.0 生成 JPEG、PNG、WebP、透明、ICC、动画及 EXIF 方向夹具，不使用私有图片。产物保存在 `build/probes/image-region/`。
+
+```powershell
+python -m pip install Pillow==13.0.0
+python tool/probes/windows/image_region_probe.py
+python -m unittest discover -s tool/probes/windows -p image_region_probe_test.py -v
+fvm flutter test --no-pub test/common/widgets/image --concurrency 2
+```
+
+原生三项回归检查透明有损 WebP 的非零原点裁剪、非法区域退出和动画/方向排除。Flutter 测试另验证显示像素与生产接线；缺少 Windows worker 时会明确跳过，详见[图片测试契约](../../test/common/widgets/image/CONTRACTS.md#区域后端和设备验收)。
+
 ## mpv 软件渲染参数 ABI
 
 `windows/software_render_abi_test.py` 提取 Windows、Linux 生产源码中的步长声明，使用 C++17 编译器检查 `MPV_RENDER_PARAM_SW_STRIDE` 的 `size_t*` 契约，并读回多个宽度的步长。不创建 GL 或播放器；缺少 `c++` / `g++` 时跳过，真实输出仍需设备验证。该文件由 Linux CI 的 Windows 探针单元测试发现入口执行。
