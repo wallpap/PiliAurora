@@ -187,6 +187,7 @@ class EngineIdentityTest(unittest.TestCase):
         architecture, directory, overlays = protocol.PROFILES[profile]
         self.assertIn("angle-image-upload.patch", overlays)
         self.assertIn("image_upload_unittests.cc", overlays)
+        self.assertIn("external_texture_d3d_unittests.cc", overlays)
         for name in overlays:
             (self.root / name).write_bytes((directory / name).read_bytes())
         profiles = {**protocol.PROFILES, profile: (architecture, self.root, overlays)}

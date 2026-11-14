@@ -4,11 +4,11 @@ index 521c24398ef..e65c38674a0 100644
 +++ b/engine/src/build/toolchain/win/setup_toolchain.py
 @@ -22,7 +22,7 @@ sys.path.append(os.path.join(os.path.dirname(__file__), os.pardir, os.pardir))
  import gn_helpers
- 
+
  SCRIPT_DIR = os.path.dirname(__file__)
 -SDK_VERSION = '10.0.22621.0'
 +SDK_VERSION = os.environ.get('WINDOWSSDKVERSION', '10.0.22621.0').rstrip('\\/')
- 
+
  
  def _ExtractImportantEnvironment(output_of_set):
 diff --git a/engine/src/flutter/shell/platform/common/flutter_platform_node_delegate.cc b/engine/src/flutter/shell/platform/common/flutter_platform_node_delegate.cc
@@ -16,7 +16,7 @@ index 9e4e8a4a2b1..5c91d7092a1 100644
 --- a/engine/src/flutter/shell/platform/common/flutter_platform_node_delegate.cc
 +++ b/engine/src/flutter/shell/platform/common/flutter_platform_node_delegate.cc
 @@ -86,9 +86,15 @@ int FlutterPlatformNodeDelegate::GetChildCount() const {
- 
+
  gfx::NativeViewAccessible FlutterPlatformNodeDelegate::ChildAtIndex(int index) {
    auto bridge_ptr = bridge_.lock();
 -  BASE_DCHECK(bridge_ptr);
@@ -32,30 +32,31 @@ index 9e4e8a4a2b1..5c91d7092a1 100644
 +  }
 +  return bridge_ptr->GetNativeAccessibleFromId(child->id());
  }
- 
+
  gfx::Rect FlutterPlatformNodeDelegate::GetBoundsRect(
 diff --git a/engine/src/flutter/shell/platform/windows/BUILD.gn b/engine/src/flutter/shell/platform/windows/BUILD.gn
-index a6af78f4f44..89944d779aa 100644
+index a6af78f4f44..73556c30fe5 100644
 --- a/engine/src/flutter/shell/platform/windows/BUILD.gn
 +++ b/engine/src/flutter/shell/platform/windows/BUILD.gn
 @@ -216,6 +216,7 @@ test_fixtures("flutter_windows_fixtures") {
  }
- 
+
  executable("flutter_windows_unittests") {
 +  include_dirs = [ "//flutter/third_party/angle/src" ]
    testonly = true
- 
+
    # Common Windows test sources.
-@@ -228,6 +229,7 @@ executable("flutter_windows_unittests") {
+@@ -228,6 +229,8 @@ executable("flutter_windows_unittests") {
      "direct_manipulation_unittests.cc",
      "display_manager_unittests.cc",
      "dpi_utils_unittests.cc",
 +    "egl/image_upload_unittests.cc",
++    "external_texture_d3d_unittests.cc",
      "flutter_project_bundle_unittests.cc",
      "flutter_window_unittests.cc",
      "flutter_windows_engine_unittests.cc",
-@@ -286,6 +288,7 @@ executable("flutter_windows_unittests") {
- 
+@@ -286,6 +289,7 @@ executable("flutter_windows_unittests") {
+
    deps = [
      ":flutter_windows_fixtures",
 +    "//flutter/third_party/angle/src/libANGLE/renderer/d3d:angle_d3d11_backend",
@@ -68,7 +69,7 @@ index 3f7ff3d21a3..9f40635911b 100644
 +++ b/engine/src/flutter/shell/platform/windows/accessibility_bridge_windows_unittests.cc
 @@ -120,6 +120,8 @@ std::unique_ptr<FlutterWindowsEngine> GetTestEngine() {
    auto engine = std::make_unique<FlutterWindowsEngine>(project);
- 
+
    EngineModifier modifier(engine.get());
 +  // 此夹具已模拟框架启动，只测平台无障碍；Release也不加载虚构AOT路径。
 +  modifier.embedder_api().RunsAOTCompiledDartCode = [] { return false; };
@@ -78,16 +79,16 @@ index 3f7ff3d21a3..9f40635911b 100644
 @@ -128,7 +130,7 @@ std::unique_ptr<FlutterWindowsEngine> GetTestEngine() {
    MockEmbedderApiForKeyboard(modifier,
                               std::make_shared<MockKeyResponseController>());
- 
+
 -  engine->Run();
 +  EXPECT_TRUE(engine->Run());
    return engine;
  }
- 
+
 @@ -243,8 +245,100 @@ void ExpectWinEventFromAXEventOnFocusNode(int32_t node_id,
              focus_id);
  }
- 
+
 +// 只替换准入计数；子节点查找和COM对象仍走真实生产实现。
 +class StaleChildCountDelegate : public FlutterPlatformNodeDelegateWindows {
 + public:
@@ -115,7 +116,7 @@ index 3f7ff3d21a3..9f40635911b 100644
 +};
 +
  }  // namespace
- 
+
 +TEST_F(AccessibilityChildLookupTest, PreservesValidChildAndSelfQueries) {
 +  auto root = bridge_->GetFlutterPlatformNodeDelegateFromID(0).lock();
 +  auto child = bridge_->GetFlutterPlatformNodeDelegateFromID(1).lock();
@@ -190,17 +191,17 @@ index 64fb765bf54..3d95953cfff 100644
 --- a/engine/src/flutter/shell/platform/windows/egl/manager.cc
 +++ b/engine/src/flutter/shell/platform/windows/egl/manager.cc
 @@ -4,6 +4,7 @@
- 
+
  #include "flutter/shell/platform/windows/egl/manager.h"
- 
+
 +#include <string_view>
  #include <vector>
- 
+
  #include "flutter/fml/logging.h"
 @@ -287,20 +288,47 @@ std::unique_ptr<WindowSurface> Manager::CreateWindowSurface(HWND hwnd,
      return nullptr;
    }
- 
+
 +  Microsoft::WRL::ComPtr<ID3D11Device> device;
 +  if (GetDevice(device.GetAddressOf())) {
 +    Microsoft::WRL::ComPtr<IDXGIDevice1> dxgi_device;
@@ -255,6 +256,81 @@ index 64fb765bf54..3d95953cfff 100644
    if (surface == EGL_NO_SURFACE) {
      LogEGLError("Surface creation failed.");
      return nullptr;
+diff --git a/engine/src/flutter/shell/platform/windows/external_texture_d3d.cc b/engine/src/flutter/shell/platform/windows/external_texture_d3d.cc
+index d09ed3fc07a..820d737ed33 100644
+--- a/engine/src/flutter/shell/platform/windows/external_texture_d3d.cc
++++ b/engine/src/flutter/shell/platform/windows/external_texture_d3d.cc
+@@ -4,6 +4,7 @@
+
+ #include "flutter/shell/platform/windows/external_texture_d3d.h"
+
++#include "flutter/fml/closure.h"
+ #include "flutter/fml/logging.h"
+ #include "flutter/shell/platform/embedder/embedder_struct_macros.h"
+
+@@ -34,6 +35,17 @@ bool ExternalTextureD3d::PopulateTexture(size_t width,
+                                          FlutterOpenGLTexture* opengl_texture) {
+   const FlutterDesktopGpuSurfaceDescriptor* descriptor =
+       texture_callback_(width, height, user_data_);
++  // 描述符在释放回调前保持有效，成功和失败路径都必须恰好释放一次。
++  const auto release_callback =
++      descriptor ? SAFE_ACCESS(descriptor, release_callback, nullptr) : nullptr;
++  void* release_context =
++      descriptor ? SAFE_ACCESS(descriptor, release_context, nullptr) : nullptr;
++  fml::ScopedCleanupClosure release_descriptor(
++      [release_callback, release_context]() {
++        if (release_callback) {
++          release_callback(release_context);
++        }
++      });
+
+   if (!CreateOrUpdateTexture(descriptor)) {
+     return false;
+@@ -58,6 +70,8 @@ void ExternalTextureD3d::ReleaseImage() {
+     eglDestroySurface(egl_manager_->egl_display(), egl_surface_);
+     egl_surface_ = EGL_NO_SURFACE;
+   }
++  // 空描述符会释放导入图像；同一句柄恢复时必须重新导入。
++  last_surface_handle_ = nullptr;
+ }
+
+ bool ExternalTextureD3d::CreateOrUpdateTexture(
+@@ -95,24 +109,27 @@ bool ExternalTextureD3d::CreateOrUpdateTexture(
+         EGL_TEXTURE_RGBA,  // always EGL_TEXTURE_RGBA
+         EGL_NONE};
+
+-    egl_surface_ = egl_manager_->CreateSurfaceFromHandle(
++    const auto surface = egl_manager_->CreateSurfaceFromHandle(
+         (type_ == kFlutterDesktopGpuSurfaceTypeD3d11Texture2D)
+             ? EGL_D3D_TEXTURE_ANGLE
+             : EGL_D3D_TEXTURE_2D_SHARE_HANDLE_ANGLE,
+         handle, attributes);
+
+-    if (egl_surface_ == EGL_NO_SURFACE ||
+-        eglBindTexImage(egl_manager_->egl_display(), egl_surface_,
+-                        EGL_BACK_BUFFER) == EGL_FALSE) {
++    if (surface == EGL_NO_SURFACE) {
++      FML_LOG(ERROR) << "Creating D3D surface failed.";
++      return false;
++    }
++    if (eglBindTexImage(egl_manager_->egl_display(), surface, EGL_BACK_BUFFER) ==
++        EGL_FALSE) {
+       FML_LOG(ERROR) << "Binding D3D surface failed.";
++      eglDestroySurface(egl_manager_->egl_display(), surface);
++      return false;
+     }
++    // 只缓存已成功绑定的导入，失败不阻止下一帧使用相同句柄重试。
++    egl_surface_ = surface;
+     last_surface_handle_ = handle;
+   }
+
+-  auto release_callback = SAFE_ACCESS(descriptor, release_callback, nullptr);
+-  if (release_callback) {
+-    release_callback(SAFE_ACCESS(descriptor, release_context, nullptr));
+-  }
+   return egl_surface_ != EGL_NO_SURFACE;
+ }
+
 diff --git a/engine/src/flutter/shell/platform/windows/flutter_windows_engine.cc b/engine/src/flutter/shell/platform/windows/flutter_windows_engine.cc
 index d9f797ca257..57611a61e7a 100644
 --- a/engine/src/flutter/shell/platform/windows/flutter_windows_engine.cc
@@ -326,7 +402,7 @@ index 720a65a7dd8..a3ae1ae302c 100644
 @@ -501,6 +501,11 @@ class FlutterWindowsEngine {
    // The start time used to align frames.
    std::chrono::nanoseconds start_time_ = std::chrono::nanoseconds::zero();
- 
+
 +  // Last reserved DWM frame start; a slot can only be delivered once.
 +  std::optional<std::chrono::nanoseconds> last_dwm_vsync_;
 +  int dwm_timing_failures_ = 0;
@@ -342,7 +418,7 @@ index 23e127cbc3d..b2e3d354be3 100644
 @@ -321,6 +321,144 @@ TEST_F(FlutterWindowsEngineTest, ConfiguresFrameVsync) {
    EXPECT_TRUE(on_vsync_called);
  }
- 
+
 +TEST_F(FlutterWindowsEngineTest, AlignsVsyncWithDwmInsteadOfEngineStartup) {
 +  auto windows = std::make_shared<NiceMock<MockWindowsProcTable>>();
 +  EXPECT_CALL(*windows, GetDwmFrameTiming)
@@ -490,7 +566,7 @@ index cc0505d6232..f3ba4778b28 100644
 +++ b/engine/src/flutter/shell/platform/windows/flutter_windows_view.cc
 @@ -928,10 +928,9 @@ bool FlutterWindowsView::Focus() {
  }
- 
+
  bool FlutterWindowsView::NeedsVsync() const {
 -  // If the Desktop Window Manager composition is enabled,
 -  // the system itself synchronizes with vsync.
@@ -500,7 +576,7 @@ index cc0505d6232..f3ba4778b28 100644
 +  // swap pacing enabled so consecutive frames are not replaced before display.
 +  return true;
  }
- 
+
  bool FlutterWindowsView::IsSizedToContent() const {
 diff --git a/engine/src/flutter/shell/platform/windows/flutter_windows_view_unittests.cc b/engine/src/flutter/shell/platform/windows/flutter_windows_view_unittests.cc
 index b66b42052af..50d571f537f 100644
@@ -509,7 +585,7 @@ index b66b42052af..50d571f537f 100644
 @@ -1546,9 +1546,9 @@ TEST(FlutterWindowsViewTest, TooltipNodeData) {
    EXPECT_EQ(uia_tooltip, "tooltip");
  }
- 
+
 -// Don't block until the v-blank if it is disabled by the window.
 +// Keep v-blank pacing enabled when DWM composition is active.
  // The surface is updated on the platform thread at startup.
@@ -521,11 +597,11 @@ index b66b42052af..50d571f537f 100644
 @@ -1559,8 +1559,7 @@ TEST(FlutterWindowsViewTest, DisablesVSyncAtStartup) {
    EXPECT_CALL(*engine.get(), running).WillRepeatedly(Return(false));
    EXPECT_CALL(*engine.get(), PostRasterThreadTask).Times(0);
- 
+
 -  EXPECT_CALL(*windows_proc_table.get(), DwmIsCompositionEnabled)
 -      .WillOnce(Return(true));
 +  EXPECT_CALL(*windows_proc_table.get(), DwmIsCompositionEnabled).Times(0);
- 
+
    EXPECT_CALL(*egl_manager.get(), render_context)
        .WillOnce(Return(&render_context));
 @@ -1570,7 +1569,7 @@ TEST(FlutterWindowsViewTest, DisablesVSyncAtStartup) {
@@ -535,22 +611,22 @@ index b66b42052af..50d571f537f 100644
 -  EXPECT_CALL(*surface_ptr, SetVSyncEnabled(false)).WillOnce(Return(true));
 +  EXPECT_CALL(*surface_ptr, SetVSyncEnabled(true)).WillOnce(Return(true));
    EXPECT_CALL(render_context, ClearCurrent).WillOnce(Return(true));
- 
+
    EXPECT_CALL(*surface_ptr, Destroy).Times(1);
 @@ -1595,8 +1594,7 @@ TEST(FlutterWindowsViewTest, EnablesVSyncAtStartup) {
- 
+
    EXPECT_CALL(*engine.get(), running).WillRepeatedly(Return(false));
    EXPECT_CALL(*engine.get(), PostRasterThreadTask).Times(0);
 -  EXPECT_CALL(*windows_proc_table.get(), DwmIsCompositionEnabled)
 -      .WillOnce(Return(false));
 +  EXPECT_CALL(*windows_proc_table.get(), DwmIsCompositionEnabled).Times(0);
- 
+
    EXPECT_CALL(*egl_manager.get(), render_context)
        .WillOnce(Return(&render_context));
 @@ -1619,9 +1617,9 @@ TEST(FlutterWindowsViewTest, EnablesVSyncAtStartup) {
                           /*is_sized_to_content=*/false, BoxConstraints());
  }
- 
+
 -// Don't block until the v-blank if it is disabled by the window.
 +// Keep v-blank pacing enabled when DWM composition is active.
  // The surface is updated on the raster thread if the engine is running.
@@ -561,12 +637,12 @@ index b66b42052af..50d571f537f 100644
    auto egl_manager = std::make_unique<egl::MockManager>();
 @@ -1630,8 +1628,7 @@ TEST(FlutterWindowsViewTest, DisablesVSyncAfterStartup) {
    auto surface_ptr = surface.get();
- 
+
    EXPECT_CALL(*engine.get(), running).WillRepeatedly(Return(true));
 -  EXPECT_CALL(*windows_proc_table.get(), DwmIsCompositionEnabled)
 -      .WillOnce(Return(true));
 +  EXPECT_CALL(*windows_proc_table.get(), DwmIsCompositionEnabled).Times(0);
- 
+
    EXPECT_CALL(*egl_manager.get(), render_context)
        .WillOnce(Return(&render_context));
 @@ -1646,7 +1643,7 @@ TEST(FlutterWindowsViewTest, DisablesVSyncAfterStartup) {
@@ -579,13 +655,13 @@ index b66b42052af..50d571f537f 100644
    EXPECT_CALL(*engine.get(), PostRasterThreadTask)
        .WillOnce([](fml::closure callback) {
 @@ -1675,8 +1672,7 @@ TEST(FlutterWindowsViewTest, EnablesVSyncAfterStartup) {
- 
+
    EXPECT_CALL(*engine.get(), running).WillRepeatedly(Return(true));
- 
+
 -  EXPECT_CALL(*windows_proc_table.get(), DwmIsCompositionEnabled)
 -      .WillOnce(Return(false));
 +  EXPECT_CALL(*windows_proc_table.get(), DwmIsCompositionEnabled).Times(0);
- 
+
    EXPECT_CALL(*egl_manager.get(), render_context)
        .WillOnce(Return(&render_context));
 @@ -1744,8 +1740,7 @@ TEST(FlutterWindowsViewTest, UpdatesVSyncOnDwmUpdates) {
@@ -596,20 +672,20 @@ index b66b42052af..50d571f537f 100644
 -        .WillOnce(Return(true));
 +    EXPECT_CALL(*windows_proc_table.get(), DwmIsCompositionEnabled).Times(0);
      EXPECT_CALL(*surface_ptr, SetVSyncEnabled).WillOnce(Return(true));
- 
+
      EngineModifier engine_modifier{engine.get()};
 @@ -1758,18 +1753,16 @@ TEST(FlutterWindowsViewTest, UpdatesVSyncOnDwmUpdates) {
- 
+
    // Disabling DWM composition should enable vsync blocking on the surface.
    {
 -    EXPECT_CALL(*windows_proc_table.get(), DwmIsCompositionEnabled)
 -        .WillOnce(Return(false));
 +    EXPECT_CALL(*windows_proc_table.get(), DwmIsCompositionEnabled).Times(0);
      EXPECT_CALL(*surface_ptr, SetVSyncEnabled(true)).WillOnce(Return(true));
- 
+
      engine->OnDwmCompositionChanged();
    }
- 
+
 -  // Enabling DWM composition should disable vsync blocking on the surface.
 +  // Enabling DWM composition must preserve surface vsync pacing.
    {
@@ -618,7 +694,7 @@ index b66b42052af..50d571f537f 100644
 -    EXPECT_CALL(*surface_ptr, SetVSyncEnabled(false)).WillOnce(Return(true));
 +    EXPECT_CALL(*windows_proc_table.get(), DwmIsCompositionEnabled).Times(0);
 +    EXPECT_CALL(*surface_ptr, SetVSyncEnabled(true)).WillOnce(Return(true));
- 
+
      engine->OnDwmCompositionChanged();
    }
 diff --git a/engine/src/flutter/shell/platform/windows/task_runner_unittests.cc b/engine/src/flutter/shell/platform/windows/task_runner_unittests.cc
@@ -626,17 +702,17 @@ index d0b049d2bf4..0f94b18d23b 100644
 --- a/engine/src/flutter/shell/platform/windows/task_runner_unittests.cc
 +++ b/engine/src/flutter/shell/platform/windows/task_runner_unittests.cc
 @@ -6,6 +6,7 @@
- 
+
  #include <atomic>
  #include <chrono>
 +#include <future>
- 
+
  #include "flutter/fml/macros.h"
  #include "flutter/shell/platform/windows/task_runner_window.h"
 @@ -116,6 +117,43 @@ TEST(TaskRunnerTest, TimerThreadDoesNotCancelEarlierScheduledTasks) {
    timer_thread.Stop();
  }
- 
+
 +TEST(TaskRunnerTest, TimerThreadRearmsParkedDeadline) {
 +  std::promise<void> fired;
 +  std::atomic_bool signaled = false;
@@ -705,16 +781,16 @@ index 96fc4595bb3..2406d7eeb84 100644
 --- a/engine/src/flutter/shell/platform/windows/testing/mock_windows_proc_table.h
 +++ b/engine/src/flutter/shell/platform/windows/testing/mock_windows_proc_table.h
 @@ -42,6 +42,11 @@ class MockWindowsProcTable : public WindowsProcTable {
- 
+
    MOCK_METHOD(bool, DwmIsCompositionEnabled, (), (const, override));
- 
+
 +  MOCK_METHOD(std::optional<DwmFrameTiming>,
 +              GetDwmFrameTiming,
 +              (),
 +              (const, override));
 +
    MOCK_METHOD(HRESULT, DwmFlush, (), (const, override));
- 
+
    MOCK_METHOD(HCURSOR,
 diff --git a/engine/src/flutter/shell/platform/windows/windows_proc_table.cc b/engine/src/flutter/shell/platform/windows/windows_proc_table.cc
 index 9c8b8d4396e..0a719bafd9e 100644
@@ -723,7 +799,7 @@ index 9c8b8d4396e..0a719bafd9e 100644
 @@ -90,6 +90,23 @@ HRESULT WindowsProcTable::DwmFlush() const {
    return ::DwmFlush();
  }
- 
+
 +std::optional<WindowsProcTable::DwmFrameTiming>
 +WindowsProcTable::GetDwmFrameTiming() const {
 +  DWM_TIMING_INFO timing = {};
@@ -750,16 +826,16 @@ index e89195a0164..4154f970113 100644
 +++ b/engine/src/flutter/shell/platform/windows/windows_proc_table.h
 @@ -6,6 +6,7 @@
  #define FLUTTER_SHELL_PLATFORM_WINDOWS_WINDOWS_PROC_TABLE_H_
- 
+
  #include <dwmapi.h>
 +#include <cstdint>
  #include <optional>
- 
+
  #include "flutter/fml/macros.h"
 @@ -71,6 +72,15 @@ class WindowsProcTable {
    // https://learn.microsoft.com/windows/win32/api/dwmapi/nf-dwmapi-dwmiscompositionenabled
    virtual bool DwmIsCompositionEnabled() const;
- 
+
 +  struct DwmFrameTiming {
 +    int64_t vblank;
 +    int64_t period;

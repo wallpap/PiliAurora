@@ -26,6 +26,12 @@ Windows 根视图在最小化或 Flutter 报告 hidden/paused/detached 时关闭
 
 视频健康判断要求已选中视频轨道、播放位置和当前输出令牌的实际消费帧继续推进，不依赖 `demux-fps` 是否提供。EOF 后定位沿完整媒体加载路径建立新输出代次；音频继续而画面停滞时仍由既有会话恢复流程重载，并沿用限频与次数预算。回归覆盖未知帧率、模拟长时间 EOF 停留、窗口恢复与旧帧隔离；真实 GPU 黑屏像素和驱动行为仍需设备验证。
 
+Windows 的消费回执发生在 Flutter 请求 GPU 描述符时，早于引擎 EGL 导入，不能保证最终
+像素有效。定制引擎在释放外部纹理时同步清除句柄缓存，保证同尺寸重载中“空描述符 →
+原句柄”能够重新导入；创建或绑定失败也允许同句柄重试。设备验收使用
+[重载黑屏探针](../../tool/probes/README.md#windows-eof-与重载黑屏反例)交叉检查纹理和桌面
+像素，修复前日志中的消费推进不能作为排除黑屏的依据。
+
 关闭子窗口时，窗口位置查询、播放器清理、诊断刷新及 IPC 释放分别报告失败并继续后续阶段；IPC 关闭等待有界。原生纹理、ANGLE 和播放器仍按已有释放协议销毁。以上路径仅做源码审查，实际 CPU/GPU 收益、音频连续性与驱动行为需要目标设备验证。
 
 [`VideoOutput`](../../third_party/media_kit_video/windows/video_output.cc) 在共用输出线程上创建、渲染和释放 mpv render context 与 ANGLE 资源。释放时先将对应 EGL 上下文设为 current，清除 mpv 更新回调并释放 render context，再解除 current、销毁 EGL 和设备。

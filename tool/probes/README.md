@@ -679,6 +679,35 @@ $env:PILIAURORA_PLAYER_PROBE_CONFIG = 'E:/probe/config.json'
 口径不能相加；进程内存未回到冷启动值不等于输出泄漏。完成后以常规构建入口恢复
 `lib/main.dart`。此入口不覆盖线上选画质 UI、多窗口、Android、其他驱动或实际扬声器。
 
+## Windows EOF 与重载黑屏反例
+
+`playback/windows_eof_black_screen.dart` 使用生产 Session、Runtime、libmpv、ANGLE 与 Flutter
+纹理，执行“末尾续播至 EOF → 回到开头 → 再次 seek 到 0 → 两次同实例重载 → 完整实例重建”。
+`windows/run_eof_black_screen.py` 启动独立测试程序，并在每个检查点读取桌面视频区域像素，
+与 Flutter 纹理读回、进度、音频时钟和实际消费回执交叉核对。素材应为持续运动、不会自然
+出现全黑或透明画面的本地视频，并提供真实时长；空音频输出只验证音频时钟，不验证扬声器。
+
+先构建并复制完整运行目录至独立位置，保留 DLL 与 data。引擎对照须用与故障相同的
+`-WindowsEngineLibrary` 参数装配，记录输出中的 `engine-identity.json`：
+
+```powershell
+pwsh -NoProfile -File tool/build.ps1 -Platform windows -Mode release -Target tool/probes/playback/windows_eof_black_screen.dart -SkipPubGet
+uv run --locked python tool/probes/windows/run_eof_black_screen.py --executable <独立目录>/PiliAurora.exe --source <本地4K60-AV1.mp4> --duration-ms 20000 --rounds 3 --output build/eof-black-screen-run
+```
+
+`--sequence retry-only` 去掉 EOF 和 seek，仅测正常播放、两次同实例重载和实例重建。
+`--audio-source` 支持独立本地音轨；`--decoder` 可做硬解／软解单变量对照；
+`--continue-after-reproduction` 保留全部轮次。每次输出目录必须全新，桌面探针窗口需保持可见。
+修复验收追加 `--expect-healthy`：所有检查点必须同时有有效画面、播放推进及正常桌面
+像素，并在结束后确认全部原生输出与纹理注销完成，才返回 0；不能仅以未捕捉完整模式
+判定修复通过。报告保存 `allStagesHealthy` 和 `afterRelease`。
+
+报告中 `counterexampleObserved` 表示视频像素连续为空、桌面视频区域也为空，同时位置、
+音频时钟和消费计数继续推进。`reproduced` 进一步要求异常跨一次后续重载保留，完整实例
+重建后恢复有效像素与推进。透明空输出的 alpha 也会记录，便于区分丢失纹理与黑色视频内容。
+退出码 1 表示完整模式已复现，0 表示流程完成但未捕获完整模式，2 表示探针未完成；
+不能只看退出码而忽略单阶段反例和像素材料。运行结束后按常规构建入口恢复 `lib/main.dart`。
+
 ## Windows Profile VM 堆归因
 
 以下工具只用于明确指定的独立测试实例，定位对象类型与引用链。Profile 包含额外的代码、源码映射等元数据，采集也会影响运行时序；其绝对内存不能作为 Release 的内存阈值验收结果。Release 阈值仍需在对应 Release 包、有效浏览负载和无干预基线下验证。

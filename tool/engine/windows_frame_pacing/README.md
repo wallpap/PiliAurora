@@ -22,6 +22,18 @@ Windows 无障碍查询检查 owner bridge 和实际 child 是否仍有效，避
 
 `AccessibilityChildLookupTest.*` 通过真实 Windows delegate、AXTree 和 `IAccessible::get_accChild` 覆盖合法查询、越界、旧计数下 child 缺失及 bridge 过期。夹具仅模拟框架启动，不加载虚构 AOT；child 缺失用例保留实际空查找，并与已有无障碍回归一同运行。
 
+## 外部视频纹理
+
+Windows 外部 D3D 纹理收到空描述符或空句柄时释放 EGL 导入并清除句柄缓存。相同句柄
+恢复后重新导入；创建或绑定失败不缓存成功身份，回收候选资源后允许下一帧重试。
+描述符的释放回调在所有字段读取完成后恰好执行一次，失败路径同样释放。
+
+`ExternalTextureD3dTest.*` 使用真实 D3D 共享纹理与 EGL，覆盖空描述符、空句柄、导入
+创建失败后的同句柄恢复，以及描述符生命周期。测试源码纳入 `overlaySha256`，
+构建与预编译包验收必须运行该组。实际播放像素回归使用
+[`windows_eof_black_screen.dart`](../../probes/playback/windows_eof_black_screen.dart)，见
+[运行说明](../../probes/README.md#windows-eof-与重载黑屏反例)。
+
 ## AMD 图片上传
 
 引擎 ANGLE 按实际 D3D11 适配器对 AMD 默认关闭 `setDataFasterThanImageUpload`，改用 `Image11` staging，降低浏览后的驱动内存保留。Intel、NVIDIA 和软件设备沿用上游默认值。策略不改变画质、解码尺寸或 media_kit 独立 ANGLE DLL；加载同一引擎的主窗口和独立播放窗口均生效。设备验证目前限本机 AMD。

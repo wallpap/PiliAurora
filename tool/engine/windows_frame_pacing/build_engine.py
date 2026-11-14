@@ -106,6 +106,8 @@ def prepare(root, sdk, env, jobs, skip_sync):
     apply_angle_patch(checkout, env)
     shutil.copy2(Path(__file__).with_name('image_upload_unittests.cc'),
                  checkout / 'engine/src/flutter/shell/platform/windows/egl/image_upload_unittests.cc')
+    shutil.copy2(Path(__file__).with_name('external_texture_d3d_unittests.cc'),
+                 checkout / 'engine/src/flutter/shell/platform/windows/external_texture_d3d_unittests.cc')
     return checkout, depot
 
 
@@ -166,7 +168,7 @@ def main():
         run([output / 'flutter_windows_unittests.exe',
              '--gtest_filter=FlutterWindowsEngineTest.*Vsync*:FlutterWindowsViewTest.*VSync*:'
              'TaskRunnerTest.*:AccessibilityChildLookupTest.*:AccessibilityBridgeWindows.*:'
-             'WindowsImageUploadTest.*'],
+             'WindowsImageUploadTest.*:ExternalTextureD3dTest.*'],
             cwd=output, env=env)
     library = output / 'flutter_windows.dll'
     identity = engine_identity.create_identity(
