@@ -117,8 +117,8 @@ class VideoOutput {
  private:
   // 最先构造、最后析构，覆盖原生输出和全部纹理注销回执的实际存续期。
   media_kit_memory::OutputLifetime memory_lifetime_;
-  media_kit_memory::ResourceRecord render_memory_{media_kit_memory::Resource::render_context};
-  media_kit_memory::ResourceRecord software_memory_{media_kit_memory::Resource::software_buffer};
+  media_kit_memory::ResourceRecord render_memory_{media_kit_memory::Resource::render_context, memory_lifetime_.id()};
+  media_kit_memory::ResourceRecord software_memory_{media_kit_memory::Resource::software_buffer, memory_lifetime_.id()};
   void TransitionSampling(const std::string& admission);
   VideoFrameSamplingCallback frame_sampling_callback_;
   int64_t sampling_generation_ = 0, sampling_sequence_ = 0;

@@ -18,6 +18,11 @@ ANGLE 上下文/Surface、D3D 纹理及软件缓冲区），并暴露 `VideoOutp
 
 本地维护修正：补齐字幕文档模板的闭合标签，不改变生产行为。
 
+2026-11-12：`piliaurora.17` 为 Windows 原生资源计数补充输出归属账本，关联匿名 ownerId、
+runtimeId 和 loadId，最多保留 8 个存活输出，超出时明确记录 omittedOwners；全局总量继续统计。
+新增 Flutter 纹理注册及注销回执计数，区分插件登记与引擎实际导入。仅在创建、释放、加载交接时
+更新固定容量账本，不增加逐帧采样、调用栈、GPU 同步或资源回收；不覆盖引擎交换链和驱动内部。
+
 2026-11-11：`piliaurora.16` 将 Windows 共享纹理的 CopyResource／Flush 从 Flutter
 Raster 回调移到输出线程，完成绘制与复制提交后再发布可用帧。Raster 回调只读取已发布
 纹理，避免等待正在 glFinish 的输出线程。本机 4K60／WASAPI 对照两轮零欠载、零丢帧；

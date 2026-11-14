@@ -5,6 +5,9 @@ import 'package:flutter/services.dart';
 
 /// 自编引擎的只读图形缓存采样；标准引擎返回 unsupported。
 class WindowsGraphicsMemoryMetrics {
+  WindowsGraphicsMemoryMetrics({this.includeResources = false});
+
+  final bool includeResources;
   static const _channel = MethodChannel(
     'pili_aurora/graphics_memory',
     JSONMethodCodec(),
@@ -41,7 +44,7 @@ class WindowsGraphicsMemoryMetrics {
     if (generation != _generation || _pending != null) return;
     final request = _channel.invokeMapMethod<String, Object?>(
       'sample',
-      {'resources': true},
+      {'resources': includeResources},
     );
     _pending = request;
     // 此分支一直等待真实完成；timeout 分支只更新状态。

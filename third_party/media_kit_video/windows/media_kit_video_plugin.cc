@@ -27,13 +27,13 @@ const char* ResourceName(media_kit_memory::Resource resource) {
     case media_kit_memory::Resource::egl_surface: return "eglSurface";
     case media_kit_memory::Resource::texture: return "d3dTexture";
     case media_kit_memory::Resource::software_buffer: return "softwareBuffer";
+    case media_kit_memory::Resource::texture_registration: return "flutterTextureRegistration";
     case media_kit_memory::Resource::count: break;
   }
   return "unknown";
 }
 
-flutter::EncodableMap EncodeMemoryStats() {
-  const auto snapshot = media_kit_memory::Registry::Instance().Read();
+flutter::EncodableMap EncodeResources(const media_kit_memory::Snapshot& snapshot) {
   flutter::EncodableMap resources;
   for (size_t i = 0; i < static_cast<size_t>(media_kit_memory::Resource::count); ++i) {
     const auto resource = static_cast<media_kit_memory::Resource>(i);
@@ -46,11 +46,32 @@ flutter::EncodableMap EncodeMemoryStats() {
             {flutter::EncodableValue("estimatedBytes"), flutter::EncodableValue(value.estimated_bytes)},
         });
   }
+  return resources;
+}
+
+flutter::EncodableMap EncodeMemoryStats() {
+  const auto all = media_kit_memory::Registry::Instance().ReadAll();
+  const auto& snapshot = all.totals;
+  flutter::EncodableList owners;
+  for (const auto& owner : all.ownership.owners) {
+    if (!owner.id) continue;
+    owners.emplace_back(flutter::EncodableMap{
+        {flutter::EncodableValue("ownerId"), flutter::EncodableValue(owner.id)},
+        {flutter::EncodableValue("runtimeId"), flutter::EncodableValue(owner.runtime_id)},
+        {flutter::EncodableValue("loadId"), flutter::EncodableValue(owner.load_id)},
+        {flutter::EncodableValue("resources"), flutter::EncodableValue(EncodeResources(owner))},
+        {flutter::EncodableValue("releasingOutputs"), flutter::EncodableValue(owner.releasing_outputs)},
+        {flutter::EncodableValue("pendingTextureUnregistrations"), flutter::EncodableValue(owner.pending_texture_unregistrations)},
+    });
+  }
   return flutter::EncodableMap{
+      {flutter::EncodableValue("schemaVersion"), flutter::EncodableValue(2)},
+      {flutter::EncodableValue("owners"), flutter::EncodableValue(owners)},
+      {flutter::EncodableValue("omittedOwners"), flutter::EncodableValue(all.ownership.omitted_owners)},
       {flutter::EncodableValue("status"), flutter::EncodableValue("ok")},
       {flutter::EncodableValue("tickMs"), flutter::EncodableValue(static_cast<int64_t>(GetTickCount64()))},
       {flutter::EncodableValue("processId"), flutter::EncodableValue(static_cast<int64_t>(GetCurrentProcessId()))},
-      {flutter::EncodableValue("resources"), flutter::EncodableValue(resources)},
+      {flutter::EncodableValue("resources"), flutter::EncodableValue(EncodeResources(snapshot))},
       {flutter::EncodableValue("releasingOutputs"), flutter::EncodableValue(snapshot.releasing_outputs)},
       {flutter::EncodableValue("pendingTextureUnregistrations"), flutter::EncodableValue(snapshot.pending_texture_unregistrations)},
   };

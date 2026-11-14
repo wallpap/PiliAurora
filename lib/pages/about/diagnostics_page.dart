@@ -320,7 +320,7 @@ class _DiagnosticsPageState extends State<DiagnosticsPage> {
                         title: const Text('记录性能'),
                         subtitle: Text(
                           service.tracing
-                              ? '正在记录性能和内存，可返回其他页面复现问题'
+                              ? '正在记录性能和内存，自动对照播放、全屏与退出阶段；复现后导出诊断包'
                               : '关闭时不进行性能和内存定时采样',
                         ),
                         value: service.tracing,

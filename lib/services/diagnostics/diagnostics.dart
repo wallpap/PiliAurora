@@ -9,6 +9,7 @@ import 'package:flutter/scheduler.dart';
 import 'package:flutter/widgets.dart';
 import 'package:archive/archive_io.dart';
 import 'package:pili_aurora/services/diagnostics/history_reader.dart';
+import 'package:pili_aurora/services/diagnostics/memory_attribution.dart';
 import 'package:pili_aurora/services/diagnostics/flutter_graphics_metrics.dart';
 import 'package:pili_aurora/services/diagnostics/process_metrics.dart';
 import 'package:pili_aurora/services/diagnostics/windows_gpu_metrics.dart';
@@ -116,7 +117,9 @@ class Diagnostics extends ChangeNotifier with WidgetsBindingObserver {
   final _gpuMetrics = WindowsGpuMetrics();
   final _nativeMemoryMetrics = WindowsNativeMemoryMetrics();
   final _graphicsMetrics = FlutterGraphicsMetrics();
-  final _graphicsMemoryMetrics = WindowsGraphicsMemoryMetrics();
+  final _graphicsMemoryMetrics = WindowsGraphicsMemoryMetrics(
+    includeResources: const bool.fromEnvironment('PILIAURORA_GRAPHICS_DETAILS'),
+  );
   Object? _graphicsSampleId;
   int? _graphicsRecordTick;
   late final _memoryMetrics = WindowsMemoryMetrics(onSnapshot: _memorySnapshot);
@@ -126,6 +129,8 @@ class Diagnostics extends ChangeNotifier with WidgetsBindingObserver {
   final _gauges = <String, num>{};
   final _recent = <String, Queue<Map<String, Object?>>>{};
   final _frames = _FrameStats();
+  var _memoryAttribution = MemoryAttribution();
+  int _attributionSequence = 0;
   bool Function(Map<String, Object?>)? forwardRecord;
   int forwardingFailures = 0;
   Future<void> Function()? forwardFlush;
@@ -625,6 +630,8 @@ class Diagnostics extends ChangeNotifier with WidgetsBindingObserver {
   }
 
   void _start() {
+    _memoryAttribution = MemoryAttribution();
+    _attributionSequence = 0;
     _processMetrics.reset();
     unawaited(_gpuMetrics.start());
     unawaited(_nativeMemoryMetrics.start());
@@ -670,7 +677,7 @@ class Diagnostics extends ChangeNotifier with WidgetsBindingObserver {
     _frames.add(timings, 1000000 / (rate > 0 ? rate : 60));
   }
 
-  void capture() {
+  void capture({bool forceAttribution = false}) {
     if (!_tracing || _writesPaused) return;
     final cache = PaintingBinding.instance.imageCache;
     final sources = <String, Object?>{};
@@ -740,7 +747,7 @@ class Diagnostics extends ChangeNotifier with WidgetsBindingObserver {
     // GPU 引擎列表使用独立预算，避免挤占播放器和采集器状态字段。
     if (Platform.isWindows) {
       latest!['gpu'] = DiagnosticRedactor.snapshot(_gpuMetrics.sample());
-      latest!['nativeMemory'] = DiagnosticRedactor.snapshot(
+      latest!['nativeMemory'] = DiagnosticRedactor.snapshotNativeMemory(
         _nativeMemoryMetrics.sample(),
       );
       latest!['memory'] = DiagnosticRedactor.snapshot(_memoryMetrics.sample());
@@ -769,12 +776,34 @@ class Diagnostics extends ChangeNotifier with WidgetsBindingObserver {
       });
       _recordGraphicsSnapshot(graphics, handles);
     }
+    final attributionWatch = Stopwatch()..start();
+    final attribution = _memoryAttribution.observe(
+      latest!,
+      force: forceAttribution,
+    );
+    attributionWatch.stop();
+    for (final record in attribution) {
+      _writeTrace({
+        'type': 'memoryAttribution',
+        'schema': 1,
+        'runId': _runId,
+        'processId': pid,
+        if (_windowId != null) 'windowId': _windowId,
+        'session': _session,
+        'sequence': ++_attributionSequence,
+        'route': latest!['route'],
+        'time': latest!['time'],
+        'elapsedMs': _elapsed.elapsedMilliseconds,
+        'collectionUs': attributionWatch.elapsedMicroseconds,
+        ...record,
+      });
+    }
     _writeTrace(latest!);
     _notifySoon();
   }
 
   void _stop() {
-    capture();
+    capture(forceAttribution: true);
     _tracing = false;
     unawaited(_gpuMetrics.stop());
     unawaited(_nativeMemoryMetrics.stop());
@@ -1052,7 +1081,11 @@ class Diagnostics extends ChangeNotifier with WidgetsBindingObserver {
             'intervalMs': _intervalMs,
             'droppedRecords': droppedRecords,
             'app': DiagnosticRedactor.snapshot(_sources['app']?.call()),
-            'notes': '每条 sample 为一个采样周期。RSS/私有提交/缓存值不可相加；null 表示未提供。无 GPU、Dart 堆和各模块独占内存数据。',
+            'memoryAttribution': {
+              'schema': 1,
+              'summary': 'memory-summary.json',
+            },
+            'notes': '每条 sample 为一个采样周期。RSS/私有提交/缓存值不可相加；null 表示未提供。memoryAttribution 为已有采样的归属与阶段对照，未知部分不计为零，差值不等同泄漏。Dart 堆及驱动内部分配未覆盖。',
           }),
         );
         paths.add(manifest.path);
@@ -1083,6 +1116,7 @@ class Diagnostics extends ChangeNotifier with WidgetsBindingObserver {
 
   static Future<int> _zip((List<String>, String) args) async {
     final encoder = ZipFileEncoder()..create(args.$2);
+    final memoryReport = MemoryAttributionReport();
     var skippedRecords = 0;
     try {
       for (final path in args.$1) {
@@ -1117,11 +1151,13 @@ class Diagnostics extends ChangeNotifier with WidgetsBindingObserver {
                 final cleaned =
                     value is Map &&
                         (value.containsKey('channel') ||
-                            value['type'] == 'sample')
+                            value['type'] == 'sample' ||
+                            value['type'] == 'memoryAttribution')
                     ? DiagnosticRedactor.exportRecord(
                         Map<String, Object?>.from(value),
                       )
                     : DiagnosticRedactor.clean(value);
+                if (cleaned is Map) memoryReport.add(cleaned);
                 return ['${jsonEncode(cleaned)}\n'];
               })
               .transform(utf8.encoder)
@@ -1138,6 +1174,14 @@ class Diagnostics extends ChangeNotifier with WidgetsBindingObserver {
         await sanitized.rename(path);
         await encoder.addFile(file);
       }
+      final summary = File('${File(args.$2).parent.path}/memory-summary.json');
+      await summary.writeAsString(
+        jsonEncode({
+          ...memoryReport.toJson(),
+          'skippedRecords': skippedRecords,
+        }),
+      );
+      await encoder.addFile(summary);
     } catch (_) {
       try {
         await encoder.close();

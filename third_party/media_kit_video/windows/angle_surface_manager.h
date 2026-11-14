@@ -44,7 +44,7 @@ class ANGLESurfaceManager {
   const int32_t height() const { return height_; }
   const HANDLE handle() const { return handle_; }
 
-  ANGLESurfaceManager(int32_t width, int32_t height);
+  ANGLESurfaceManager(int32_t width, int32_t height, int64_t owner_id = 0);
 
   ~ANGLESurfaceManager();
 

@@ -36,7 +36,7 @@ inline void CheckBarrier() { if(pending_receipts.load()) ++unsafe_releases; }
 class ANGLESurfaceManager {
   int32_t width_, height_;
  public:
-  ANGLESurfaceManager(int32_t width, int32_t height) : width_(width), height_(height) {
+  ANGLESurfaceManager(int32_t width, int32_t height, int64_t = 0) : width_(width), height_(height) {
     CheckBarrier();
     if(fail_surface_create) throw std::runtime_error("injected ANGLE constructor failure");
     ++surface_creates;
@@ -175,6 +175,10 @@ struct Fixture {
             "destroyed output remains counted");
     Require(MemoryCount(media_kit_memory::Resource::render_context) == 0,
             "destroyed render context remains counted");
+    Require(MemoryCount(media_kit_memory::Resource::texture_registration) == 0,
+            "destroyed output leaves registered Flutter textures");
+    for (const auto& owner : media_kit_memory::Registry::Instance().ReadOwners().owners)
+      Require(owner.id == 0, "destroyed output leaves an ownership slot");
     Require(stats.releasing_outputs == 0 && stats.pending_texture_unregistrations == 0,
             "destroyed output leaves pending release gauges");
 #endif
@@ -190,6 +194,8 @@ static void Settled(Fixture& f) {
           "live output missing from process registry");
   Require(MemoryCount(media_kit_memory::Resource::render_context) == 1,
           "reset loses or duplicates render context gauge");
+  Require(MemoryCount(media_kit_memory::Resource::texture_registration) == 1,
+          "settled output registration count differs from live texture");
   Require(media_kit_memory::Registry::Instance().Read().pending_texture_unregistrations == 0,
           "settled Flutter receipts still counted");
 #endif
@@ -201,6 +207,11 @@ int main() {
       const OutputOperationToken token{1, 1, 1, 0};
       f.output->BeginOutputForLoad(token, [](bool okay) { Require(okay, "token rejected"); });
       f.Drain();
+#ifdef MEDIA_KIT_VIDEO_NATIVE_MEMORY_STATS_H_
+      const auto owner = media_kit_memory::Registry::Instance().ReadOwners().owners[0];
+      Require(owner.runtime_id == 1 && owner.load_id == 1,
+              "accepted output token is missing from resource ownership");
+#endif
       f.pool.Post([&] {
         f.output->Render();
         Require(unsafe_publications==0, "hardware frame published before shared texture copy");

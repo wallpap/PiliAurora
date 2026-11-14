@@ -16,7 +16,7 @@ void main() {
   test('caches and passes through engine contexts', () async {
     messenger.setMockMethodCallHandler(channel, (call) async {
       expect(call.method, 'sample');
-      expect(call.arguments, {'resources': true});
+      expect(call.arguments, {'resources': false});
       return {
         'status': 'sampled',
         'schemaVersion': 1,
@@ -34,6 +34,17 @@ void main() {
       42,
     );
     expect(metrics.sample()['cacheAgeMs'], isA<int>());
+  });
+
+  test('resource details are opt in', () async {
+    messenger.setMockMethodCallHandler(channel, (call) async {
+      expect(call.arguments, {'resources': true});
+      return {'status': 'sampled'};
+    });
+    final metrics = WindowsGraphicsMemoryMetrics(includeResources: true);
+    addTearDown(metrics.stop);
+    await metrics.start();
+    expect(metrics.sample()['status'], 'sampled');
   });
 
   testWidgets('missing channel stops polling', (tester) async {

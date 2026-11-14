@@ -25,8 +25,12 @@
 std::mutex ANGLESurfaceManager::display_mutex_;
 std::unordered_map<EGLDisplay, size_t> ANGLESurfaceManager::display_ref_counts_;
 
-ANGLESurfaceManager::ANGLESurfaceManager(int32_t width, int32_t height)
-    : width_(width), height_(height) {
+ANGLESurfaceManager::ANGLESurfaceManager(int32_t width, int32_t height, int64_t owner_id)
+    : width_(width), height_(height),
+      device_memory_(media_kit_memory::Resource::device, owner_id),
+      context_memory_(media_kit_memory::Resource::egl_context, owner_id),
+      surface_memory_(media_kit_memory::Resource::egl_surface, owner_id),
+      texture_memory_(media_kit_memory::Resource::texture, owner_id) {
   mutex_ = ::CreateMutex(NULL, FALSE, NULL);
   if (mutex_ == nullptr) {
     throw std::runtime_error("Unable to create ANGLE surface mutex.");

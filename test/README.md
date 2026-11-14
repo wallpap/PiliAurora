@@ -21,6 +21,10 @@ fvm flutter test test/services/diagnostics/ test/pages/about/diagnostics_page_te
 
 按需实验位于 [`tool/experiments/`](../tool/experiments/README.md)，原生或设备探针位于 [`tool/probes/`](../tool/probes/README.md)，各入口和执行条件由对应目录文档说明。
 
+轻量内存归属回归位于 `services/diagnostics/memory_attribution*_test.dart`，覆盖阶段基线、
+延迟对照、会话隔离、轮转倒序、容量和脱敏。原生输出账本与真实注销屏障的验证命令见
+[诊断模块](../lib/services/diagnostics/README.md#验证)。
+
 ## 目录与夹具
 
 播放器的状态变量与不变量见[播放器状态模型](../doc/development/playback-model.md)。

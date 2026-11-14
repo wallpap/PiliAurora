@@ -63,7 +63,7 @@ bool VideoOutput::CreateRenderContext(int64_t width, int64_t height) {
       // OpenGL context needs to be set before |mpv_render_context_create|.
       surface_manager_ = std::make_unique<ANGLESurfaceManager>(
           static_cast<int32_t>(width),
-          static_cast<int32_t>(height));
+          static_cast<int32_t>(height), memory_lifetime_.id());
       surface_manager_->MakeCurrent(true);
       mpv_opengl_init_params gl_init_params{
           [](auto, auto name) {
@@ -515,6 +515,7 @@ void VideoOutput::BeginOutputForLoad(OutputOperationToken token,
       texture_frame_tokens_.clear();
       texture_sampling_frames_.clear();
     }
+    if (accepted) memory_lifetime_.Bind(token.runtime_id, token.load_id);
     if (accepted && sampling_admission_ != "blocked")
       TransitionSampling("blocked");
     on_complete(accepted);
@@ -879,6 +880,8 @@ bool VideoOutput::ApplyResize(int64_t required_width, int64_t required_height) {
       texture_id_ = 0;
       return false;
     }
+    media_kit_memory::Registry::Instance().Change(
+        media_kit_memory::Resource::texture_registration, 1, 0, memory_lifetime_.id());
     std::cout << "media_kit: VideoOutput: Create Texture: " << texture_id_
               << std::endl;
     std::lock_guard<std::mutex> lock(textures_mutex_);
@@ -920,6 +923,8 @@ bool VideoOutput::ApplyResize(int64_t required_width, int64_t required_height) {
       texture_id_ = 0;
       return false;
     }
+    media_kit_memory::Registry::Instance().Change(
+        media_kit_memory::Resource::texture_registration, 1, 0, memory_lifetime_.id());
     std::cout << "media_kit: VideoOutput: Create Texture: " << texture_id_
               << std::endl;
     std::lock_guard<std::mutex> lock(textures_mutex_);
@@ -962,7 +967,7 @@ void VideoOutput::UnregisterTexture(int64_t id,
   {
     std::lock_guard<std::mutex> lock(texture_unregistrations_mutex_);
     ++pending_texture_unregistrations_;
-    media_kit_memory::Registry::Instance().PendingTextureUnregistration(1);
+    media_kit_memory::Registry::Instance().PendingTextureUnregistration(1, memory_lifetime_.id());
   }
   registrar_->texture_registrar()->UnregisterTexture(id, [this, id,
                                                             on_unregistered]() {
@@ -976,12 +981,14 @@ void VideoOutput::UnregisterTexture(int64_t id,
           texture_frame_tokens_.erase(id);
           texture_sampling_frames_.erase(id);
         }
+        media_kit_memory::Registry::Instance().Change(
+            media_kit_memory::Resource::texture_registration, -1, 0, memory_lifetime_.id());
         if (on_unregistered) on_unregistered();
         {
           std::lock_guard<std::mutex> lock(texture_unregistrations_mutex_);
           if (pending_texture_unregistrations_ > 0) {
             --pending_texture_unregistrations_;
-            media_kit_memory::Registry::Instance().PendingTextureUnregistration(-1);
+            media_kit_memory::Registry::Instance().PendingTextureUnregistration(-1, memory_lifetime_.id());
           }
         }
         texture_unregistrations_cv_.notify_all();

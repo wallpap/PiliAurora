@@ -145,13 +145,56 @@ abstract final class DiagnosticRedactor {
         : '${input.substring(0, maxLength)}…<truncated>';
   }
 
+  static Map<String, Object?> snapshotNativeMemory(
+    Map<String, Object?> value,
+  ) => _resourceOwners(value, 'owners', redact: false);
+
+  static Map<String, Object?> _resourceOwners(
+    Map value,
+    String ownerKey, {
+    bool redact = true,
+  }) {
+    Object? copy(Object? item) => redact ? clean(item) : snapshot(item);
+    return {
+      ...Map<String, Object?>.from(
+        copy({
+          for (final entry in value.entries)
+            if (entry.key != ownerKey && entry.key != 'resources')
+              entry.key: entry.value,
+        }) as Map,
+      ),
+      if (value.containsKey('resources')) 'resources': copy(value['resources']),
+      if (value[ownerKey] is List)
+        ownerKey: [
+          for (final owner in (value[ownerKey] as List).take(8)) copy(owner),
+        ],
+    };
+  }
+
   /// sample 的各字段与来源独立限界，不能让内存明细耗尽后续来源预算。
   static Map<String, Object?> exportRecord(Map<String, Object?> record) {
+    if (record['type'] == 'memoryAttribution') {
+      final owners = record['owners'];
+      return {
+        for (final entry in record.entries)
+          if (entry.key != 'owners') entry.key: clean(entry.value),
+        if (owners is Map)
+          'owners': {
+            for (final entry in owners.entries.take(16))
+              entry.key: entry.key == 'plugin.video' && entry.value is Map
+                  ? _resourceOwners(entry.value as Map, 'outputs')
+                  : clean(entry.value),
+          },
+      };
+    }
     if (record['type'] == 'sample') {
       final sources = record['sources'] ?? const {};
       return {
         for (final entry in record.entries)
-          if (entry.key != 'sources') entry.key: clean(entry.value),
+          if (entry.key != 'sources')
+            entry.key: entry.key == 'nativeMemory' && entry.value is Map
+                ? _resourceOwners(entry.value as Map, 'owners')
+                : clean(entry.value),
         'sources': sources is Map
             ? {
                 for (final entry in sources.entries.take(64))
