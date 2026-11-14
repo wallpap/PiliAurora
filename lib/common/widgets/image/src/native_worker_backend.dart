@@ -12,6 +12,12 @@ import 'package:pili_aurora/services/diagnostics/diagnostics.dart';
 
 final nativeWorkers = <NativeWorkerDecoder>{};
 
+class NativeWorkerException extends StateError {
+  NativeWorkerException(this.phase, this.code) : super('区域解码失败：$phase ($code)');
+  final String phase;
+  final int code;
+}
+
 class _WorkerOutput {
   _WorkerOutput(Stream<List<int>> stream) : _chunks = StreamIterator(stream);
   final StreamIterator<List<int>> _chunks;
@@ -158,6 +164,9 @@ class NativeWorkerDecoder implements DrainingRegionImageDecoder {
       if (metadata['unsupported'] == true) {
         throw UnsupportedError('系统 WIC 没有此格式的解码器');
       }
+      if (metadata['error'] case final int code) {
+        throw NativeWorkerException('open', code);
+      }
       if (metadata['ready'] != true ||
           metadata['width'] is! int ||
           metadata['height'] is! int ||
@@ -245,6 +254,12 @@ class NativeWorkerDecoder implements DrainingRegionImageDecoder {
     final info = (jsonDecode(
       await _lines.line().timeout(const Duration(seconds: 30)),
     ) as Map).cast<String, dynamic>();
+    if (info['unsupported'] == true && info['reason'] == 'colorProfile') {
+      throw UnsupportedError('WIC 不支持此图片的颜色配置');
+    }
+    if (info['error'] case final int code) {
+      throw NativeWorkerException('decode', code);
+    }
     if (info['index'] != index ||
         info['guards'] != true ||
         info['width'] != width ||
@@ -328,7 +343,7 @@ class NativeWorkerDecoder implements DrainingRegionImageDecoder {
           return process.exitCode;
         },
       );
-      if (exit != 0) throw StateError('区域解码进程退出异常：$exit');
+      if (exit != 0) throw NativeWorkerException('exit', exit);
     } catch (error, stack) {
       failure = error;
       failureStack = stack;

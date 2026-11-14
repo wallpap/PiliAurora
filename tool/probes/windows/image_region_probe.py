@@ -34,6 +34,7 @@ def prepare():
         ('webp', (720, 550), 'WEBP'), ('alpha', (720, 550), 'PNG'),
         ('webp-alpha', (720, 550), 'WEBP'), ('icc-jpeg', (720, 550), 'JPEG'),
         ('icc-webp', (720, 550), 'WEBP'), ('small', (320, 300), 'PNG'),
+        ('invalid-icc', (144, 108), 'JPEG'),
         ('lossless', (720, 550), 'WEBP'), ('animated', (1600, 1000), 'GIF'),
         ('progressive', (6000, 4000), 'JPEG'), ('oriented', (720, 550), 'JPEG'),
         ('huge-webp', (8192, 6144), 'WEBP'),
@@ -58,6 +59,9 @@ def prepare():
             options['lossless'] = True
         if name.startswith('icc-'):
             options['icc_profile'] = srgb
+        if name == 'invalid-icc':
+            # 图片像素有效，截短的 ICC 可被 Flutter 忽略，但 WIC 拒绝颜色转换。
+            options['icc_profile'] = srgb[:-20]
         if name == 'oriented':
             exif = Image.Exif()
             exif[274] = 6

@@ -297,6 +297,14 @@ int wmain(int argc, wchar_t **argv) {
         throw E_FAIL;
     }
   } catch (HRESULT hr) {
+    if (hr == HRESULT_FROM_WIN32(ERROR_INVALID_PROFILE)) {
+      // WIC 拒绝的 ICC 仍可能被 Flutter 正常解码，先排空再交还完整帧。
+      std::cout << "{\"unsupported\":true,\"reason\":\"colorProfile\",\"error\":"
+                << static_cast<int64_t>(hr) << "}" << std::endl;
+      std::string close;
+      std::getline(std::cin, close);
+      return 0;
+    }
     std::cout << "{\"error\":" << static_cast<int64_t>(hr) << "}" << std::endl;
     return 3;
   } catch (...) {

@@ -114,6 +114,20 @@ class _ContentImageState extends State<ContentImage> {
   bool _regionStarting = false;
   ImageWork<NativeWorkerDecoder>? _nativeOpen;
 
+  void _logRegionFailure(String message, Object error, StackTrace? stack) {
+    logger.w(
+      message,
+      error: {
+        'type': error.runtimeType.toString(),
+        if (error is NativeWorkerException) ...{
+          'phase': error.phase,
+          'code': error.code,
+        },
+      },
+      stackTrace: stack,
+    );
+  }
+
   void _disposeRegion() {
     _nativeOpen?.cancel();
     _nativeOpen = null;
@@ -128,7 +142,7 @@ class _ContentImageState extends State<ContentImage> {
     try {
       await region.drained;
     } catch (error, stack) {
-      logger.w('区域图片释放失败', error: error.runtimeType, stackTrace: stack);
+      _logRegionFailure('区域图片释放失败', error, stack);
     }
   }
 
@@ -164,6 +178,7 @@ class _ContentImageState extends State<ContentImage> {
       _error = _region!.value.error;
     });
     if (region.value.error != null) {
+      _logRegionFailure('区域图片加载失败', region.value.error!, null);
       scheduleMicrotask(() {
         if (mounted && identical(_region, region)) {
           setState(_disposeRegion);
@@ -232,6 +247,7 @@ class _ContentImageState extends State<ContentImage> {
       // 后端缺少格式能力时，open 已排空进程；finally 接回原完整帧路径。
     } catch (error, stack) {
       if (mounted && generation == _generation) {
+        _logRegionFailure('区域图片准备失败', error, stack);
         setState(() {
           _error = error;
           _stack = stack;
@@ -243,7 +259,7 @@ class _ContentImageState extends State<ContentImage> {
         try {
           await decoder.drained;
         } catch (error, stack) {
-          logger.w('区域图片准备取消', error: error.runtimeType, stackTrace: stack);
+          _logRegionFailure('区域图片准备取消', error, stack);
         }
       }
       await lease?.dispose();

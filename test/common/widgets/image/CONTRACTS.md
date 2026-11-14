@@ -16,7 +16,7 @@
 | `content_viewer_integration_test.dart` | 换采样保持视口、窗口调整保持焦点/密度，滚轮、捏合、平移、双击和惯性统一发出需求 |
 | `region_content_session_test.dart`、`region_extension_test.dart` | 同版本有界基础/细节、层级及重叠、跨会话预算、取消在途租约、失败不完整回退、绘制退役和 detach/reattach 排空 |
 | `native_backend_extension_test.dart`、`native_demand_base_test.dart` | 真实 worker 的输出准入、需求基础层、关闭排空与来源释放 |
-| `native_content_image_test.dart` | 网络/本地 Gallery 接线、隐藏关闭和恢复、GIF 签名分流不启动 worker、动画/方向/超容量回退、超大 WebP 中间层边界、错误后依赖变化不转完整帧 |
+| `native_content_image_test.dart` | 网络/本地 Gallery 接线、隐藏关闭和恢复、GIF 签名分流不启动 worker、动画/方向/超容量及无效 ICC 回退、超大 WebP 中间层边界、错误后依赖变化不转完整帧 |
 | `native_fidelity_test.dart` | 真实 Flutter 显示像素、透明边界、有损 WebP 非零裁剪、ICC 与基础/细节交接 |
 
 调度通过 `result/cancel/drained` 检查真实完成与取消；帧入口为 `loadImageFrame`、`LocalImageProvider`，采样和快照位于内部 `image/src/`，ContentImage 通过 ImageProvider 注入来源。缓存根、显示 clone 与框架引用分别持有，测试入口保持在模块边界内。

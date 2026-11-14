@@ -270,6 +270,31 @@ void main() {
       expect(imageErrors, isEmpty);
       {
         final viewport = ValueNotifier<ContentViewport?>(
+          const ContentViewport(Rect.fromLTWH(0, 0, 144, 108), 1),
+        );
+        await tester.pumpWidget(
+          host(fixture('invalid-icc'), viewport, 'invalid-icc'),
+        );
+        final pixels = find.byWidgetPredicate(
+          (w) => w is RawImage && w.image != null,
+        );
+        await until(
+          tester,
+          () => pixels.evaluate().isNotEmpty || imageErrors.isNotEmpty,
+        );
+        expect(imageErrors, isEmpty);
+        expect(tester.widget<RawImage>(pixels).image!.width, 144);
+        expect(nativeWorkers, isEmpty);
+        expect(app_cache.CacheManager.imageSources.statistics['leases'], 0);
+        expect(
+          nativeWorkerEvents.where((event) => event['event'] == 'closeError'),
+          isEmpty,
+        );
+        await close(tester);
+        viewport.dispose();
+      }
+      {
+        final viewport = ValueNotifier<ContentViewport?>(
           const ContentViewport(Rect.fromLTWH(0, 0, 720, 550), .5),
         );
         Object? referenceError;

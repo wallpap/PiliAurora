@@ -2,6 +2,7 @@ from pathlib import Path
 import json
 import os
 import subprocess
+import tempfile
 import unittest
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -54,6 +55,24 @@ class RegionWorkerTest(unittest.TestCase):
         process.stdin.flush()
         self.assertIn('error', json.loads(process.stdout.readline()))
         self.assertNotEqual(process.wait(timeout=5), 0)
+
+    def test_invalid_color_profile_reports_capability_fallback(self):
+        from PIL import Image, ImageCms
+        with tempfile.TemporaryDirectory() as directory:
+            file = Path(directory) / 'invalid-icc.jpeg'
+            srgb = ImageCms.ImageCmsProfile(ImageCms.createProfile('sRGB')).tobytes()
+            Image.new('RGB', (144, 108), '#68ace0').save(file, icc_profile=srgb[:-20])
+            process, metadata = self.open(file)
+            try:
+                self.assertTrue(metadata['icc'])
+                process.stdin.write(b'0 0 0 144 108 1\n')
+                process.stdin.flush()
+                response = json.loads(process.stdout.readline())
+                self.assertTrue(response.get('unsupported'), response)
+                self.assertEqual(response.get('reason'), 'colorProfile')
+            finally:
+                self.close(process)
+            self.assertEqual(process.returncode, 0)
 
     def test_animation_and_orientation_are_explicitly_unsupported(self):
         for name, key, expected in [('animated.gif', 'frames', 2), ('oriented.jpeg', 'orientation', 6)]:
