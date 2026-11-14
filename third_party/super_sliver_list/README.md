@@ -134,4 +134,4 @@ The threshold is arbitrary, but in general there are diminishing returns for pre
 
 ## Example
 
-See the [example](example) folder for a complete sample app using `SuperSliverList`. You can also see the [example deployed live](https://superlistapp.github.io/super_sliver_list/).
+See the [example](https://github.com/superlistapp/super_sliver_list/tree/main/example) folder for a complete sample app using `SuperSliverList`. You can also see the [example deployed live](https://superlistapp.github.io/super_sliver_list/).

@@ -41,7 +41,7 @@ int main() {
 
 ## Examples
 
-See [`examples/`](examples). Each directory is a standalone program for one module (C++ and C variants), built together with the library:
+See [`examples/`](https://github.com/libnativeapi/nativeapi/tree/main/examples). Each directory is a standalone program for one module (C++ and C variants), built together with the library:
 
 ```bash
 cmake -S . -B build

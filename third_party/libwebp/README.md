@@ -27,17 +27,17 @@ PATENTS.
 
 ## Building
 
-See the [building documentation](doc/building.md).
+See the [building documentation](https://chromium.googlesource.com/webm/libwebp/+/v1.6.0/doc/building.md).
 
 ## Encoding and Decoding Tools
 
 The examples/ directory contains tools to encode and decode images and
 animations, view information about WebP images, and more. See the
-[tools documentation](doc/tools.md).
+[tools documentation](https://chromium.googlesource.com/webm/libwebp/+/v1.6.0/doc/tools.md).
 
 ## APIs
 
-See the [APIs documentation](doc/api.md), and API usage examples in the
+See the [APIs documentation](https://chromium.googlesource.com/webm/libwebp/+/v1.6.0/doc/api.md), and API usage examples in the
 `examples/` directory.
 
 ## Bugs
@@ -46,7 +46,7 @@ Please report all bugs in the WebP component of the
 [issue tracker](https://issues.webmproject.org/issues/new?component=1618983&template=2023995).
 For security reports, select 'Security report' from the Template dropdown.
 
-Patches welcome! See [how to contribute](CONTRIBUTING.md).
+Patches welcome! See [how to contribute](https://chromium.googlesource.com/webm/libwebp/+/v1.6.0/CONTRIBUTING.md).
 
 ## Discuss
 

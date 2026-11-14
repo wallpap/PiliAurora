@@ -201,7 +201,7 @@ A: On Mobile & Desktop (IO), this package stores image bytes directly on the inc
 
 ## 🤝 Contributing
 
-We welcome contributions! If you want to help maintain this essential package, please check the [CONTRIBUTING.md](CONTRIBUTING.md).
+We welcome contributions! If you want to help maintain this essential package, please check the [CONTRIBUTING.md](https://github.com/Erengun/flutter_cached_network_image_ce/blob/develop/cached_network_image/CONTRIBUTING.md).
 
 ## 📄 License
 

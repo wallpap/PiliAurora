@@ -220,7 +220,7 @@ A usage guide for [package:media_kit](https://github.com/media-kit/media-kit).
 - [Handle playback events](#handle-playback-events)
 - [Shuffle the queue](#shuffle-the-queue)
 - [Use HTTP headers](#use-http-headers)
-- [Use `extras` to store additional data with `Media`](use-extras-store-additional-data-with-media)
+- [Use `extras` to store additional data with `Media`](#use-extras-to-store-additional-data-with-media)
 - [Go to next, previous or any other position in queue](#go-to-next-previous-or-any-other-position-in-queue)
 - [Modify `Player`'s queue](#modify-players-queue)
 - [Select video, audio or subtitle track](#select-video-audio-or-subtitle-track)

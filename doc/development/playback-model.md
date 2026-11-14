@@ -1,8 +1,7 @@
 # 播放器状态模型与反例检查
 
 本模型用于检查播放器周边的业务归属、异步命令、输出和时间线。对应实现是
-`PlaybackSession`、`NativePlaybackRuntime`、播放器门面及输出协调器；它描述可检查的
-协议，不等于对原生解码器、GPU 或设备行为的形式化证明。
+`PlaybackSession`、`NativePlaybackRuntime`、播放器门面及输出协调器；模型覆盖业务状态与交接协议，原生解码、GPU 呈现和设备行为通过设备探针验证。
 
 ## 状态空间
 
@@ -24,7 +23,7 @@ S = (phase, stage, owner, g, request, load, runtime, output,
 | `desired, applied` | 已接受的目标配置、已获得成功回执的配置 |
 | `revisions[k], pending` | 每个配置键的修订号、尚未结算或等待加载的键 |
 | `intent, inhibitors` | 用户播放意图，以及页面和会话分别持有的抑制令牌 |
-| `activeOperation` | 调度器正在排空的操作；调用方终结不意味着原生操作结束 |
+| `activeOperation` | 调度器正在排空的操作；调用方终结后，原生操作仍可能在执行 |
 | `writer` | 单独串行协调播放/暂停意图的写入器；最终原生互斥由运行时保证 |
 | `anchor` | 媒体位置与单调时间的只读锚点 |
 | `released` | Player 实际释放屏障，不能用 shutdown 的调用方超时代替 |
@@ -211,6 +210,6 @@ fvm flutter test --no-pub test/plugin/pl_player/fullscreen_system_ui_test.dart
 
 ## 验证边界
 
-主机测试可验证事件排序、状态归属、时限、配置和释放协议；无法证明所有调度组合。
+主机测试覆盖已构造的事件排序、状态归属、时限、配置和释放场景。
 Android Surface/MediaCodec、Windows 纹理/GPU 的真实呈现、音频焦点和系统全屏效果
-仍需目标设备验证。结论应表述为“本次模型及检查范围未发现新的可确认问题”。
+通过目标设备验证，并记录设备、输入和结果。

@@ -30,32 +30,4 @@ Flutter 与引擎提交、模式、架构、补丁和 overlay、二进制摘要�
 | Windows Gallery | 有界区域解码与 worker 生命周期进入生产路径；WIC 拒绝嵌入色彩配置时回退，失败显示可见提示（`df340cf01`、`1f0afc176`、`c6591f459`） | [图片模块](../../lib/common/widgets/image/README.md)、[测试契约](../../test/common/widgets/image/CONTRACTS.md) |
 | 弹幕 | 每 100ms 桶显示 12 条、逐帧准备 8 条；来源预算 20 MiB／36000 条，文件每桶保留 120 条供范围读取 | [架构](architecture.md)、[配置选择证据](../../tool/experiments/README.md#2026-11-07-配置选择) |
 
-缓存由时长和字节共同限制，倍速仅换算时长。Windows 固定 libmpv 支持字节补读阈值；Android 不传该选项。缓存预算分别约束各 demuxer，不能视为进程总内存上限。图片、Skia、视频纹理和驱动内存同样分别计量。
-
-## 证据与待验收范围
-
-2026-11-14 核对线程 `01a1d8b4-7df2-7bf3-b57b-b79cfd3e06ba`、当前源码及本地报告，采用以下边界：
-
-- 黑屏修复前的真实反例同实例重载 9/10 次黑屏，修复后 NVIDIA 的 26 次重载、55 个画面检查点无黑屏，已登记资源最终归零。消费帧回执早于 EGL 导入，单凭计数推进无法认定画面正常。
-- 黑屏提交当时 2734 项 Flutter 全量与 49 项原生回归通过；后续缓存提交运行的是 526 项定向回归，两组结果按提交分别使用。
-- 缓存原生对照使用 24 Mb/s 素材、软件解码和空音视频输出。均衡策略最低领先量从旧配置 1.933 秒增至 6.100 秒，覆盖缓存内复用、淘汰重读和远距离跳转；未覆盖网络抖动或真实音画。
-- AMD 旧日志设置页后 60 秒 Private 约 587.6 MiB，接近最早基线约 589.3 MiB。上一包约 851.7 MiB 含引擎差异，不能将约 264.1 MiB 的变化归因于黑屏补丁。
-- Gallery 压力组曾测得峰值下降 23.19%，p95 增加 153ms，原延迟门槛未通过；该结果保留为取舍记录，不能宣称全部性能门槛通过。
-
-正式发布前仍需修复版 AMD 核显的 EOF、seek 与连续重载验收，以及正常详情页真实声音、画质和全屏切换、退页重进与释放。Android 设备与对应 ABI 另行验收。本次重新运行严格分析，仍有五条既有 `avoid_slow_async_io` info，均位于未修改的 `test/common/widgets/image/image_source_store_contract_test.dart`；无 error／warning，命令返回 1。默认采用与正式发布验收分别记录。
-
-Windows 内存诊断引擎、空闲强制回收、单解码及小缓存等未采用实验继续留在研究入口。它们的历史测量不能作为当前默认值来源。策略变更应同时更新源码、相关回归及本页；补丁变更还须重建预编译引擎。
-
-## 本地证据导航
-
-原始日志、设备截图和完整报告保留在忽略的 `doc/dev/`，按[实验资料归档](../../tool/experiments/README.md#实验资料归档)生成全量索引。关键报告路径：
-
-| 主题 | 本地路径（相对 `doc/dev/`） |
-| --- | --- |
-| 黑屏反例与根因 | `diagnostics/reports/black-screen-counterexample-20261114.md`、`black-screen-root-cause-20261114.md`（同目录） |
-| 两 GPU 日志与发布准备 | `diagnostics/reports/gpu-comparison-20261114.md`、`release-readiness-20261114.md`（同目录） |
-| 缓存策略 | `diagnostics/reports/video-cache-policy-20261114.md` |
-| Gallery 方案与生产取舍 | `diagnostics/cases/diagnostics-1794574491802/` 中各实验报告及 `gallery-production-implementation-20261114.md` |
-| 早期内存与应用策略 | `diagnostics/reports/memory-investigation-summary-20261111.md`、`app-memory-strategies-20261111.md`（同目录） |
-
-历史报告保留当时的命令、失败路线和更正，不随默认构建迁移改写。共享文档只保存可复用结论、维护入口与验证范围；本地索引不代表逐份报告已重新验收。
+缓存由时长和字节共同限制，倍速仅换算时长。Windows 固定 libmpv 支持字节补读阈值；Android 不传该选项。缓存预算分别约束各 demuxer，图片、Skia、视频纹理和驱动内存同样分别计量。

@@ -242,7 +242,7 @@ That's all. It's _that_ simple.
 
 ### More details about state management
 
-**See an more in-depth explanation of state management [here](./documentation/en_US/state_management.md). There you will see more examples and also the difference between the simple state manager and the reactive state manager**
+**See an more in-depth explanation of state management [here](https://github.com/jonataslaw/getx/blob/master/documentation/en_US/state_management.md). There you will see more examples and also the difference between the simple state manager and the reactive state manager**
 
 You will get a good idea of GetX power.
 
@@ -265,7 +265,7 @@ Navigate to a new screen:
 Get.to(NextScreen());
 ```
 
-Navigate to new screen with name. See more details on named routes [here](./documentation/en_US/route_management.md#navigation-with-named-routes)
+Navigate to new screen with name. See more details on named routes [here](https://github.com/jonataslaw/getx/blob/master/documentation/en_US/route_management.md#navigation-with-named-routes)
 
 ```dart
 
@@ -294,7 +294,7 @@ Noticed that you didn't have to use context to do any of these things? That's on
 
 ### More details about route management
 
-**Get works with named routes and also offers lower-level control over your routes! There is in-depth documentation [here](./documentation/en_US/route_management.md)**
+**Get works with named routes and also offers lower-level control over your routes! There is in-depth documentation [here](https://github.com/jonataslaw/getx/blob/master/documentation/en_US/route_management.md)**
 
 ## Dependency management
 
@@ -330,7 +330,7 @@ Text(controller.textFromApi);
 
 ### More details about dependency management
 
-**See a more in-depth explanation of dependency management [here](./documentation/en_US/dependency_management.md)**
+**See a more in-depth explanation of dependency management [here](https://github.com/jonataslaw/getx/blob/master/documentation/en_US/dependency_management.md)**
 
 # Utils
 
