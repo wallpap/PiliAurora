@@ -35,12 +35,23 @@ abstract class ReplyController<R> extends CommonListController<R, ReplyInfo> {
   FeedPaginationReply? paginationReply;
   late bool hasUpTop = false;
   bool _togglingTop = false;
+  bool _emptyReplyPage = false;
 
   @override
   bool? get hasFooter => true;
 
   @override
   bool get refillFilteredPages => Pref.minimumReplyUserLevel > 0;
+
+  @override
+  bool get emptyPageIsEnd => false;
+
+  @override
+  int remainingItemsToLoad(int remaining) {
+    // 关键字过滤和去重发生在列表层补位前，空页也要按服务端游标继续。
+    if (!isEnd && _emptyReplyPage) return 1;
+    return super.remainingItemsToLoad(remaining);
+  }
 
   @override
   List<ReplyInfo> filterList(List<ReplyInfo> source, bool isRefresh) {
@@ -94,6 +105,8 @@ abstract class ReplyController<R> extends CommonListController<R, ReplyInfo> {
   @override
   bool customHandleResponse(bool isRefresh, Success<R> response) {
     final data = response.response as MainListReply;
+    final previousCursor = cursorNext;
+    final previousOffset = paginationReply?.nextOffset;
     cursorNext = data.cursor.next;
     paginationReply = data.paginationReply;
     count.value = data.subjectControl.count.toInt();
@@ -108,7 +121,12 @@ abstract class ReplyController<R> extends CommonListController<R, ReplyInfo> {
       }
     }
     _deduplicateReplies(data, isRefresh: isRefresh);
-    isEnd = data.cursor.isEnd;
+    _emptyReplyPage = data.replies.isEmpty;
+    isEnd =
+        data.cursor.isEnd ||
+        (!isRefresh &&
+            cursorNext == previousCursor &&
+            paginationReply?.nextOffset == previousOffset);
     return false;
   }
 

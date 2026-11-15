@@ -24,6 +24,9 @@ abstract class CommonListController<R, T>
 
   bool get refillFilteredPages => false;
 
+  /// 有独立分页游标的来源不能用过滤后的空列表推断结束。
+  bool get emptyPageIsEnd => true;
+
   int _lastRemovedCount = 0;
   int _lastAcceptedCount = 0;
   int _sourceCount = 0;
@@ -48,7 +51,7 @@ abstract class CommonListController<R, T>
     }
     final source = getDataList(response.response);
     if (source == null || source.isEmpty) {
-      isEnd = true;
+      if (emptyPageIsEnd) isEnd = true;
       if (isRefresh) {
         loadingState.value = Success(source);
       } else if (hasFooter == true) {

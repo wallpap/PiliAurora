@@ -45,7 +45,10 @@ void main() {
   MainListReply page(List<ReplyInfo> replies, {bool end = false}) =>
       MainListReply(
         replies: replies,
-        cursor: CursorReply(isEnd: end),
+        cursor: CursorReply(
+          isEnd: end,
+          next: replies.isEmpty ? Int64.ZERO : replies.last.id,
+        ),
         subjectControl: SubjectControl(count: Int64(100)),
       );
 
