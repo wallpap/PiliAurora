@@ -65,6 +65,48 @@ void main() {
     expect(targets, [110, 120, 130, 120]);
   });
 
+  testWidgets('长按快进累计目标，松开与切换媒体停止周期命令', (tester) async {
+    final handler = create();
+    final targets = <int>[];
+    handler.onSeek = (position) async => targets.add(position.inSeconds);
+    await handler.seekForward(true);
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pump(const Duration(seconds: 1));
+    await handler.seekForward(false);
+    await tester.pump(const Duration(seconds: 2));
+    expect(targets, [110, 120, 130]);
+    await handler.seekBackward(true);
+    await tester.pump(const Duration(seconds: 1));
+    handler.onVideoDetailChange(Part(part: 'new', duration: 600), 2, 'owner');
+    await tester.pump(const Duration(seconds: 2));
+    expect(targets, [110, 120, 130, 120, 110]);
+  });
+
+  testWidgets('长按命令失败停止定时器，清空和回调交接不遗留周期任务', (tester) async {
+    final handler = create();
+    var calls = 0;
+    handler.onSeek = (_) async {
+      if (++calls == 2) throw StateError('fixture failure');
+    };
+    await handler.seekForward(true);
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pump(const Duration(seconds: 3));
+    expect(calls, 2);
+    handler.onSeek = (_) async => calls++;
+    await handler.seekForward(true);
+    handler.clear();
+    await tester.pump(const Duration(seconds: 3));
+    expect(calls, 3);
+    handler.onVideoDetailChange(Part(part: 'new', duration: 600), 2, 'owner');
+    await handler.seekForward(true);
+    handler.onSeek = (_) async => calls++;
+    await tester.pump(const Duration(seconds: 3));
+    expect(calls, 4);
+    handler.onSeek = (_) async => throw StateError('initial failure');
+    await expectLater(handler.seekForward(true), throwsStateError);
+    await tester.pump(const Duration(seconds: 3));
+  });
+
   test('旧跳转失败不撤销新目标，最新失败允许从真实位置重试', () async {
     final handler = create();
     final replies = <Completer<void>>[];

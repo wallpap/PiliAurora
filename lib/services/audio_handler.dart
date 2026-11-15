@@ -1,4 +1,4 @@
-import 'dart:async' show FutureOr;
+import 'dart:async' show FutureOr, Timer;
 import 'dart:io' show File, Platform;
 import 'dart:ui' show PlatformDispatcher;
 
@@ -13,6 +13,7 @@ import 'package:pili_aurora/models/remote/video/video_detail/page.dart';
 import 'package:pili_aurora/plugin/pl_player/controller.dart';
 import 'package:pili_aurora/plugin/pl_player/models/play_status.dart';
 import 'package:pili_aurora/plugin/pl_player/playback/playback_session.dart';
+import 'package:pili_aurora/services/logger.dart';
 import 'package:pili_aurora/utils/android/bindings.g.dart';
 import 'package:pili_aurora/utils/image_utils.dart';
 import 'package:pili_aurora/utils/path_utils.dart';
@@ -62,7 +63,7 @@ typedef _ServiceMedia = ({
   MediaNavigation? navigation,
 });
 
-class VideoPlayerServiceHandler extends BaseAudioHandler with SeekHandler {
+class VideoPlayerServiceHandler extends BaseAudioHandler {
   final List<_ServiceMedia> _item = [];
   bool _enableBackgroundPlay = Pref.enableBackgroundPlay;
   PlaybackKeepAliveLease? _playbackLease;
@@ -109,6 +110,7 @@ class VideoPlayerServiceHandler extends BaseAudioHandler with SeekHandler {
   Future<void>? Function(Duration position)? get onSeek => _onSeek;
   set onSeek(Future<void>? Function(Duration position)? callback) {
     if (_onSeek == callback) return;
+    _stopContinuousSeek();
     _resetSeekTarget();
     _onSeek = callback;
   }
@@ -131,6 +133,53 @@ class VideoPlayerServiceHandler extends BaseAudioHandler with SeekHandler {
 
   @override
   Future<void> rewind() => _seekRelative(-AudioService.config.rewindInterval);
+
+  Timer? _relativeSeekTimer;
+
+  void _stopContinuousSeek() {
+    _relativeSeekTimer?.cancel();
+    _relativeSeekTimer = null;
+  }
+
+  @override
+  Future<void> seekForward(bool begin) => _seekContinuously(begin, 1);
+
+  @override
+  Future<void> seekBackward(bool begin) => _seekContinuously(begin, -1);
+
+  Future<void> _seekContinuously(bool begin, int direction) async {
+    _stopContinuousSeek();
+    final item = mediaItem.value;
+    if (!begin || item == null || item.isLive == true || item.duration == null)
+      return;
+    final callback = onSeek;
+    final owner = PlPlayerController.instance?.activePlaybackOwner;
+    final offset = Duration(seconds: 10 * direction);
+    final timer = _relativeSeekTimer = Timer.periodic(
+      const Duration(seconds: 1),
+      (timer) {
+        if (mediaItem.value?.id != item.id ||
+            onSeek != callback ||
+            !identical(
+              owner,
+              PlPlayerController.instance?.activePlaybackOwner,
+            )) {
+          if (identical(_relativeSeekTimer, timer)) _stopContinuousSeek();
+          return;
+        }
+        _seekRelative(offset).catchError((Object error, StackTrace stack) {
+          if (identical(_relativeSeekTimer, timer)) _stopContinuousSeek();
+          logger.w('系统连续跳转失败', error: error.runtimeType, stackTrace: stack);
+        });
+      },
+    );
+    try {
+      await _seekRelative(offset);
+    } catch (_) {
+      if (identical(_relativeSeekTimer, timer)) _stopContinuousSeek();
+      rethrow;
+    }
+  }
 
   Future<void> _seekRelative(Duration offset) async {
     final item = mediaItem.value;
@@ -188,7 +237,10 @@ class VideoPlayerServiceHandler extends BaseAudioHandler with SeekHandler {
 
   void setMediaItem(MediaItem newMediaItem) {
     if (!enableBackgroundPlay) return;
-    if (mediaItem.value?.id != newMediaItem.id) _resetSeekTarget();
+    if (mediaItem.value?.id != newMediaItem.id) {
+      _stopContinuousSeek();
+      _resetSeekTarget();
+    }
     _retainPlaybackLease();
     if (!mediaItem.isClosed) mediaItem.add(newMediaItem);
     playbackState.add(
@@ -218,11 +270,13 @@ class VideoPlayerServiceHandler extends BaseAudioHandler with SeekHandler {
 
   @override
   Future<void> skipToNext() async {
+    _stopContinuousSeek();
     await _currentNavigation?.next?.call();
   }
 
   @override
   Future<void> skipToPrevious() async {
+    _stopContinuousSeek();
     await _currentNavigation?.previous?.call();
   }
 
@@ -465,6 +519,7 @@ class VideoPlayerServiceHandler extends BaseAudioHandler with SeekHandler {
   }
 
   void _clearPublishedState() {
+    _stopContinuousSeek();
     _resetSeekTarget();
     if (!mediaItem.isClosed) mediaItem.add(null);
     _lastPos = null;
