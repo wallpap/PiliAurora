@@ -728,7 +728,9 @@ class _LiveRoomPageState extends State<LiveRoomPage>
           Container(
             width: width,
             height: height,
-            margin: EdgeInsets.only(bottom: padding.bottom),
+            margin: isFullScreen
+                ? EdgeInsets.zero
+                : EdgeInsets.only(bottom: padding.bottom),
             child: videoPlayerPanel(
               isFullScreen,
               fill: Colors.transparent,
