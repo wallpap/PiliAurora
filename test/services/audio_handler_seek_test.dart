@@ -107,6 +107,20 @@ void main() {
     await tester.pump(const Duration(seconds: 3));
   });
 
+  testWidgets('停止等待暂停回执期间不再发送长按跳转', (tester) async {
+    final handler = create();
+    var calls = 0;
+    handler.onSeek = (_) async => calls++;
+    await handler.seekForward(true);
+    final paused = Completer<void>();
+    handler.onPause = () => paused.future;
+    final stopping = handler.stop();
+    await tester.pump(const Duration(seconds: 3));
+    expect(calls, 1);
+    paused.complete();
+    await stopping;
+  });
+
   test('旧跳转失败不撤销新目标，最新失败允许从真实位置重试', () async {
     final handler = create();
     final replies = <Completer<void>>[];
@@ -159,8 +173,9 @@ void main() {
     handler.onSeek = (position) async => targets.add(position.inSeconds);
     publish(handler, 60);
     await handler.fastForward();
-    handler.clear();
-    handler.onVideoDetailChange(Part(part: 'new', duration: 600), 3, 'owner');
+    handler
+      ..clear()
+      ..onVideoDetailChange(Part(part: 'new', duration: 600), 3, 'owner');
     publish(handler, 10);
     await handler.fastForward();
     expect(targets, [110, 40, 70, 20]);

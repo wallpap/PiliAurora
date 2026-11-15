@@ -181,8 +181,8 @@ void main() {
     await until(tester, () => requests.length == 1);
     requests[0].reply.complete(ups([10], 'dynamic-2'));
     await controller.queries[0];
-    final firstUp = controller.loadingState.value.data.upList!.single;
-    firstUp.hasUpdate = false;
+    final firstUp = controller.loadingState.value.data.upList!.single
+      ..hasUpdate = false;
     final dynamicPage = controller.onLoadMore();
     await until(tester, () => requests.length == 2);
     expect(requests[1].options.path, Api.dynUplist);

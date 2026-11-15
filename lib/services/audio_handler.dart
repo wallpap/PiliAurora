@@ -150,8 +150,12 @@ class VideoPlayerServiceHandler extends BaseAudioHandler {
   Future<void> _seekContinuously(bool begin, int direction) async {
     _stopContinuousSeek();
     final item = mediaItem.value;
-    if (!begin || item == null || item.isLive == true || item.duration == null)
+    if (!begin ||
+        item == null ||
+        item.isLive == true ||
+        item.duration == null) {
       return;
+    }
     final callback = onSeek;
     final owner = PlPlayerController.instance?.activePlaybackOwner;
     final offset = Duration(seconds: 10 * direction);
@@ -253,8 +257,9 @@ class VideoPlayerServiceHandler extends BaseAudioHandler {
     if (!enableBackgroundPlay ||
         entry == null ||
         entry.item.isLive == true ||
-        entry.item.id != mediaItem.value?.id)
+        entry.item.id != mediaItem.value?.id) {
       return null;
+    }
     final navigation = entry.navigation;
     return navigation?.isCurrent() == true ? navigation : null;
   }
@@ -539,6 +544,7 @@ class VideoPlayerServiceHandler extends BaseAudioHandler {
 
   @override
   Future<void> stop() async {
+    _stopContinuousSeek();
     final current = _item.lastOrNull?.item;
     await pause();
     // 暂停回执只能结束发起时的媒体，不能清除等待期间换入的通知。

@@ -1402,8 +1402,9 @@ class AudioController extends GetxController
         isClosed ||
         index == null ||
         playlist == null ||
-        player == null)
+        player == null) {
       return null;
+    }
     final next = index! + offset;
     if (next < 0 || next >= playlist!.length) return null;
     if (offset > 0 && next == playlist!.length - 1 && _next != null) loadNext();

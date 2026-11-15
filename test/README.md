@@ -296,6 +296,8 @@ EOF 回归覆盖 keep-open 播放结束通知的文件归属、重复合并与 s
 
 `services/audio_session_test.dart` 覆盖 duck 重复开始、结束先于音量命令完成及用户新音量保护；`audio_handler_lifecycle_test.dart` 覆盖多页面媒体归属、最后一项释放 keepalive、音频未就绪不触发底层视频，以及停止回执不清新媒体。以上使用受控请求与播放器替身，真实音视频、耳机和系统媒体控制需设备验证。
 
+`services/audio_handler_seek_test.dart` 检查通知连续点击／长按的累计目标、位置确认、失败重试、切源／回调交接和周期任务释放；`audio_handler_lifecycle_test.dart` 另检查上下曲的归属、业务回执和能力发布。`pages/video/media_navigation_test.dart` 经系统媒体入口检查分 P、UGC 合集、PGC 与本地列表顺序，`pages/audio/playback_results_test.dart` 检查真实音频列表的切换与打开等待。动态作者两阶段分页、资料合并及已读保护见 `pages/dynamics/overview_results_test.dart`。这些回归均已接入 CI。
+
 `pages/audio/playback_results_test.dart` 还核对独立音频的初始化、open、关闭与实际销毁回执顺序，以及创建／打开／释放失败事件。销毁尚未完成或失败时不得记录 `audio.shutdown.released`，事件不包含媒体 URL 和异常正文。原生创建失败的用例检查清理前本页禁止再次创建、关闭保留租约、后续页面等待交接后才分配 Player，以及清理成功后的显式重试。
 
 播放器会话、候选恢复和命令序列回归集中在 `plugin/pl_player/playback/`；其中 `playback_session_test.dart` 检查加载完成后仍允许当前媒体的业务回写，并在新加载或 owner 失效后拒绝旧结果。`tool/run-ci-tests.ps1` 显式选择关键回归，完整目录测试按需运行。deadline 验收使用虚拟时钟；播放／暂停预算同时检查原生调用未返回和排队等待，超时后仍串行落实最新意图。

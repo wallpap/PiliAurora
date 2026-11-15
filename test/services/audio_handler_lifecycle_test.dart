@@ -36,19 +36,20 @@ void main() {
         return true;
       },
     );
-    handler.onVideoDetailChange(
-      Part(part: 'old'),
-      1,
-      '1',
-      navigation: navigation('old'),
-    );
-    handler.onVideoDetailChange(
-      Part(part: 'new'),
-      2,
-      '11',
-      navigation: navigation('new'),
-    );
-    handler.onVideoDetailDispose('1');
+    handler
+      ..onVideoDetailChange(
+        Part(part: 'old'),
+        1,
+        '1',
+        navigation: navigation('old'),
+      )
+      ..onVideoDetailChange(
+        Part(part: 'new'),
+        2,
+        '11',
+        navigation: navigation('new'),
+      )
+      ..onVideoDetailDispose('1');
     await handler.skipToNext();
     await handler.skipToPrevious();
     expect(calls, ['new.next', 'new.previous']);
@@ -104,19 +105,20 @@ void main() {
     final handler = VideoPlayerServiceHandler()..enableBackgroundPlay = true;
     addTearDown(handler.clear);
     var calls = 0;
-    handler.onVideoDetailChange(
-      Part(part: 'video'),
-      1,
-      'video',
-      navigation: MediaNavigation(
-        isCurrent: () => true,
-        next: () {
-          calls++;
-          return true;
-        },
-      ),
-    );
-    handler.onVideoDetailChange(Part(part: 'other'), 2, 'other');
+    handler
+      ..onVideoDetailChange(
+        Part(part: 'video'),
+        1,
+        'video',
+        navigation: MediaNavigation(
+          isCurrent: () => true,
+          next: () {
+            calls++;
+            return true;
+          },
+        ),
+      )
+      ..onVideoDetailChange(Part(part: 'other'), 2, 'other');
     await handler.skipToNext();
     expect(calls, 0);
     handler.onVideoDetailDispose('other');
