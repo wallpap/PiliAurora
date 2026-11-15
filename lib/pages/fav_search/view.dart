@@ -10,6 +10,7 @@ import 'package:pili_aurora/utils/request_utils.dart';
 import 'package:pili_aurora/utils/utils.dart';
 import 'package:get/get.dart';
 import 'package:material_ui/material_ui.dart';
+import 'package:pili_aurora/common/widgets/app_popup_menu_item.dart';
 
 class FavSearchPage extends StatefulWidget {
   const FavSearchPage({super.key});
@@ -74,7 +75,7 @@ class _FavSearchPageState
             ..onReload(),
           itemBuilder: (context) => FavOrderType.values
               .map(
-                (e) => PopupMenuItem(
+                (e) => AppPopupMenuItem(
                   value: e,
                   child: Text(e.label),
                 ),

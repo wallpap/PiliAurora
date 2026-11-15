@@ -39,6 +39,7 @@ import 'package:flutter/services.dart' show LengthLimitingTextInputFormatter;
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:get/get.dart';
 import 'package:material_ui/material_ui.dart' hide showTimePicker;
+import 'package:pili_aurora/common/widgets/app_popup_menu_item.dart';
 
 class CreateDynPanel extends CommonRichTextPubPage {
   const CreateDynPanel({
@@ -396,7 +397,7 @@ class _CreateDynPanelState extends CommonRichTextPubPageState<CreateDynPanel> {
       onSelected: _isPrivate.call,
       itemBuilder: (context) => List.generate(
         2,
-        (index) => PopupMenuItem<bool>(
+        (index) => AppPopupMenuItem<bool>(
           enabled: _publishTime.value != null && index == 1 ? false : true,
           value: index == 0 ? false : true,
           child: Row(
@@ -452,7 +453,7 @@ class _CreateDynPanelState extends CommonRichTextPubPageState<CreateDynPanel> {
       onSelected: (item) => _replyOption.value = item,
       itemBuilder: (context) => ReplyOptionType.values
           .map(
-            (item) => PopupMenuItem<ReplyOptionType>(
+            (item) => AppPopupMenuItem<ReplyOptionType>(
               value: item,
               child: Row(
                 mainAxisSize: MainAxisSize.min,

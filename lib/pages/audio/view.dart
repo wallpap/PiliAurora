@@ -44,6 +44,7 @@ import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:get/get.dart';
 import 'package:material_design_icons_flutter/material_design_icons_flutter.dart';
 import 'package:material_ui/material_ui.dart' hide DraggableScrollableSheet;
+import 'package:pili_aurora/common/widgets/app_popup_menu_item.dart';
 
 class AudioPage extends StatefulWidget {
   const AudioPage({super.key});
@@ -123,7 +124,9 @@ class _AudioPageState extends State<AudioPage> {
                   (context as Element).markNeedsBuild();
                 },
                 itemBuilder: (context) => ListOrder.values
-                    .map((e) => PopupMenuItem(value: e, child: Text(e.title)))
+                    .map(
+                      (e) => AppPopupMenuItem(value: e, child: Text(e.title)),
+                    )
                     .toList(),
               );
             },

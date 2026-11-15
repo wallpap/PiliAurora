@@ -16,6 +16,7 @@ import 'package:pili_aurora/utils/request_utils.dart';
 import 'package:get/get.dart';
 import 'package:material_design_icons_flutter/material_design_icons_flutter.dart';
 import 'package:material_ui/material_ui.dart';
+import 'package:pili_aurora/common/widgets/app_popup_menu_item.dart';
 
 class LaterPage extends StatefulWidget {
   const LaterPage({super.key});
@@ -248,11 +249,11 @@ class _LaterPageState extends State<LaterPage>
                   ),
                 ),
                 itemBuilder: (_) => [
-                  const PopupMenuItem(
+                  const AppPopupMenuItem(
                     value: false,
                     child: Text('最近添加'),
                   ),
-                  const PopupMenuItem(
+                  const AppPopupMenuItem(
                     value: true,
                     child: Text('最早添加'),
                   ),
@@ -289,15 +290,15 @@ class _LaterPageState extends State<LaterPage>
               ),
             ),
             itemBuilder: (_) => [
-              PopupMenuItem(
+              AppPopupMenuItem(
                 onTap: () => currCtr().toViewClear(context, 1),
                 child: const Text('清空失效'),
               ),
-              PopupMenuItem(
+              AppPopupMenuItem(
                 onTap: () => currCtr().toViewClear(context, 2),
                 child: const Text('清空看完'),
               ),
-              PopupMenuItem(
+              AppPopupMenuItem(
                 onTap: () => currCtr().toViewClear(context),
                 child: const Text('清空全部'),
               ),

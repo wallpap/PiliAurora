@@ -19,6 +19,7 @@ import 'package:pili_aurora/utils/utils.dart';
 import 'package:fixnum/fixnum.dart' show Int64;
 import 'package:material_design_icons_flutter/material_design_icons_flutter.dart';
 import 'package:material_ui/material_ui.dart';
+import 'package:pili_aurora/common/widgets/app_popup_menu_item.dart';
 
 class SearchArchiveGrpc extends StatelessWidget {
   const SearchArchiveGrpc({
@@ -126,7 +127,7 @@ class SearchArchiveGrpc extends StatelessWidget {
               ),
               position: PopupMenuPosition.under,
               itemBuilder: (context) => [
-                PopupMenuItem(
+                AppPopupMenuItem(
                   height: 45,
                   onTap: () => Utils.copyText(bvid),
                   child: Row(
@@ -137,7 +138,7 @@ class SearchArchiveGrpc extends StatelessWidget {
                     ],
                   ),
                 ),
-                PopupMenuItem(
+                AppPopupMenuItem(
                   height: 45,
                   onTap: () => RequestUtils.addToWatchLater(bvid: bvid),
                   child: const Row(

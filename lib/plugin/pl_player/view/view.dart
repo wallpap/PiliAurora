@@ -2557,7 +2557,7 @@ class _PLVideoPlayerState extends State<PLVideoPlayer>
                   itemBuilder: (context) =>
                       (videoInfo.supportFormats ?? <FormatItem>[])
                           .map(
-                            (i) => PopupMenuItem(
+                            (i) => AppPopupMenuItem(
                               enabled: ids.contains(i.quality),
                               value: i.quality,
                               child: Text(i.newDesc ?? ''),
@@ -2575,7 +2575,9 @@ class _PLVideoPlayerState extends State<PLVideoPlayer>
                     return false;
                   },
                   itemBuilder: (context) => WebpPreset.values
-                      .map((i) => PopupMenuItem(value: i, child: Text(i.name)))
+                      .map(
+                        (i) => AppPopupMenuItem(value: i, child: Text(i.name)),
+                      )
                       .toList(),
                   getSelectTitle: (i) => '${i.name}(${i.desc})',
                 ),

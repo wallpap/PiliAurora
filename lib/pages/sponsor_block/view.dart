@@ -22,6 +22,7 @@ import 'package:get/get.dart';
 import 'package:hive_ce/hive.dart';
 import 'package:material_design_icons_flutter/material_design_icons_flutter.dart';
 import 'package:material_ui/material_ui.dart';
+import 'package:pili_aurora/common/widgets/app_popup_menu_item.dart';
 
 class SponsorBlockPage extends StatefulWidget {
   const SponsorBlockPage({super.key});
@@ -682,7 +683,7 @@ class _SponsorBlockPageState extends State<SponsorBlockPage> {
                     },
                     itemBuilder: (context) => SkipType.values
                         .map(
-                          (type) => PopupMenuItem<SkipType>(
+                          (type) => AppPopupMenuItem<SkipType>(
                             value: type,
                             child: Text(behaviorLabel(type)),
                           ),

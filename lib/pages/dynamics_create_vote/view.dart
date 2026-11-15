@@ -18,6 +18,7 @@ import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:get/get.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:material_ui/material_ui.dart' hide showTimePicker;
+import 'package:pili_aurora/common/widgets/app_popup_menu_item.dart';
 
 class CreateVotePage extends StatefulWidget {
   const CreateVotePage({super.key, this.voteId});
@@ -235,7 +236,7 @@ class _CreateVotePageState extends State<CreateVotePage> {
                     itemBuilder: (context) {
                       return choices
                           .map(
-                            (e) => PopupMenuItem(
+                            (e) => AppPopupMenuItem(
                               value: e,
                               child: Text(e == 1 ? '单选' : '最多选$e项'),
                             ),

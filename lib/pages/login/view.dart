@@ -23,6 +23,7 @@ import 'package:get/get.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:pretty_qr_code/pretty_qr_code.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:pili_aurora/common/widgets/app_popup_menu_item.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -533,7 +534,7 @@ class _LoginPageState extends State<LoginPage> {
                       },
                       initialValue: _loginPageCtr.selectedCountryCodeId,
                       itemBuilder: (_) => Login.dialPrefix.map((item) {
-                        return PopupMenuItem(
+                        return AppPopupMenuItem(
                           value: item,
                           child: Row(
                             children: [

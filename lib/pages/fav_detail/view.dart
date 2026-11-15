@@ -20,6 +20,7 @@ import 'package:pili_aurora/utils/utils.dart';
 import 'package:get/get.dart';
 import 'package:material_design_icons_flutter/material_design_icons_flutter.dart';
 import 'package:material_ui/material_ui.dart';
+import 'package:pili_aurora/common/widgets/app_popup_menu_item.dart';
 
 class FavDetailPage extends StatefulWidget {
   const FavDetailPage({super.key});
@@ -215,8 +216,8 @@ class _FavDetailPageState extends State<FavDetailPage> with GridMixin {
             (context as Element).markNeedsBuild();
           },
           itemBuilder: (context) => const [
-            PopupMenuItem(value: false, child: Text('正序')),
-            PopupMenuItem(value: true, child: Text('倒序')),
+            AppPopupMenuItem(value: false, child: Text('正序')),
+            AppPopupMenuItem(value: true, child: Text('倒序')),
           ],
         ),
       ),
@@ -231,7 +232,7 @@ class _FavDetailPageState extends State<FavDetailPage> with GridMixin {
               ..onReload(),
             itemBuilder: (context) => FavOrderType.values
                 .map(
-                  (e) => PopupMenuItem(
+                  (e) => AppPopupMenuItem(
                     value: e,
                     child: Text(e.label),
                   ),
@@ -248,11 +249,11 @@ class _FavDetailPageState extends State<FavDetailPage> with GridMixin {
             final folderInfo = _favDetailController.folderInfo.value;
             return [
               if (isOwner) ...[
-                PopupMenuItem(
+                AppPopupMenuItem(
                   onTap: _favDetailController.onSort,
                   child: const Text('排序'),
                 ),
-                PopupMenuItem(
+                AppPopupMenuItem(
                   onTap: () =>
                       Get.toNamed(
                         '/createFav',
@@ -268,13 +269,13 @@ class _FavDetailPageState extends State<FavDetailPage> with GridMixin {
                   child: const Text('编辑信息'),
                 ),
               ] else
-                PopupMenuItem(
+                AppPopupMenuItem(
                   onTap: () =>
                       _favDetailController.onFav(folderInfo.favState == 1),
                   child: Text('${folderInfo.favState == 1 ? '取消' : ''}收藏'),
                 ),
               if (BiliUtils.isPublicFav(folderInfo.attr))
-                PopupMenuItem(
+                AppPopupMenuItem(
                   onTap: () => showModalBottomSheet(
                     context: context,
                     isScrollControlled: true,
@@ -290,13 +291,13 @@ class _FavDetailPageState extends State<FavDetailPage> with GridMixin {
                   child: const Text('分享至动态'),
                 ),
               if (isOwner) ...<PopupMenuEntry>[
-                PopupMenuItem(
+                AppPopupMenuItem(
                   onTap: _favDetailController.cleanFav,
                   child: const Text('清除失效内容'),
                 ),
                 if (!BiliUtils.isDefaultFav(folderInfo.attr)) ...[
                   const PopupMenuDivider(height: 12),
-                  PopupMenuItem(
+                  AppPopupMenuItem(
                     onTap: () => showConfirmDialog(
                       context: context,
                       title: const Text('确定删除该收藏夹?'),

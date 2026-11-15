@@ -17,6 +17,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:get/get.dart';
 import 'package:material_ui/material_ui.dart';
+import 'package:pili_aurora/common/widgets/app_popup_menu_item.dart';
 
 abstract class BaseVideoWebState<
   S extends StatefulWidget,
@@ -54,7 +55,9 @@ abstract class BaseVideoWebState<
                 initialValue: order,
                 onSelected: controller.queryBySort,
                 itemBuilder: (_) => values
-                    .map((e) => PopupMenuItem(value: e, child: Text(e.label)))
+                    .map(
+                      (e) => AppPopupMenuItem(value: e, child: Text(e.label)),
+                    )
                     .toList(),
               );
             },

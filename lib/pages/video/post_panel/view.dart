@@ -22,6 +22,7 @@ import 'package:flutter/services.dart' show FilteringTextInputFormatter;
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:get/get.dart';
 import 'package:material_ui/material_ui.dart';
+import 'package:pili_aurora/common/widgets/app_popup_menu_item.dart';
 
 class PostPanel extends CommonSlidePage {
   const PostPanel({
@@ -498,8 +499,10 @@ class _PostPanelState extends State<PostPanel>
                       },
                       itemBuilder: (context) => SegmentType.values
                           .map(
-                            (e) =>
-                                PopupMenuItem(value: e, child: Text(e.title)),
+                            (e) => AppPopupMenuItem(
+                              value: e,
+                              child: Text(e.title),
+                            ),
                           )
                           .toList(),
                       getSelectTitle: (category) => category.title,
@@ -528,7 +531,7 @@ class _PostPanelState extends State<PostPanel>
                       },
                       itemBuilder: (context) => ActionType.values
                           .map(
-                            (e) => PopupMenuItem(
+                            (e) => AppPopupMenuItem(
                               enabled: item.category.toActionType.contains(e),
                               value: e,
                               child: Text(e.title),

@@ -9,6 +9,7 @@ import 'package:flutter/services.dart'
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:get/get.dart';
 import 'package:material_ui/material_ui.dart' hide showTimePicker;
+import 'package:pili_aurora/common/widgets/app_popup_menu_item.dart';
 
 class CreateReservePage extends StatefulWidget {
   const CreateReservePage({super.key, this.sid});
@@ -110,11 +111,11 @@ class _CreateReservePageState extends State<CreateReservePage> {
                   onSelected: _controller.subType.call,
                   itemBuilder: (context) {
                     return const [
-                      PopupMenuItem(
+                      AppPopupMenuItem(
                         value: 0,
                         child: Text('公开直播'),
                       ),
-                      PopupMenuItem(
+                      AppPopupMenuItem(
                         value: 1,
                         child: Text('大航海直播'),
                       ),
