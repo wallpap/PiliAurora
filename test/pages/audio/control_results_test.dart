@@ -13,6 +13,7 @@ import 'package:pili_aurora/utils/accounts.dart';
 import 'package:pili_aurora/utils/accounts/account.dart';
 import 'package:pili_aurora/utils/storage.dart';
 import 'package:pili_aurora/utils/storage_key.dart';
+import 'package:pili_aurora/utils/storage_pref.dart';
 
 import '../../support/memory_box.dart';
 
@@ -188,6 +189,33 @@ void main() {
     await tester.pump();
     expect(find.text('音量已调整，设置保存失败，请重试'), findsOneWidget);
     expect(find.textContaining('secret'), findsNothing);
+  });
+
+  _check('legacy gain preferences and audio controls stay within 100 percent', (
+    tester,
+  ) async {
+    settings.data.addAll({
+      SettingBoxKey.maxVolume: 3.0,
+      SettingBoxKey.desktopVolume: 2.0,
+      SettingBoxKey.playerVolume: 250.0,
+    });
+    expect(Pref.maxVolume, 1);
+    expect(controller.desktopVolume.value, 1);
+    expect(Pref.playerVolume, 100);
+    expect(settings.data[SettingBoxKey.maxVolume], 1);
+    expect(settings.data[SettingBoxKey.desktopVolume], 1);
+    expect(settings.data[SettingBoxKey.playerVolume], 100);
+
+    expect(await controller.setVolume(3), isTrue);
+    expect(player.state.volume, 100);
+    expect(controller.desktopVolume.value, 1);
+    controller.previewVolume(2);
+    await tester.pump();
+    expect(controller.volumeDraft.value, 1);
+    expect(player.state.volume, 100);
+    await controller.setPlayerVolumePercent(250);
+    expect(player.state.volume, 100);
+    expect(settings.data[SettingBoxKey.playerVolume], 100);
   });
 
   _check('control completion after account replacement is not confirmed', (
