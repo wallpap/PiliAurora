@@ -82,12 +82,12 @@ jobs:
         shell: pwsh
         run: lib/scripts/patch.ps1 windows
 
-      - name: Run Windows host CI tests
+      - name: Run Windows platform regressions
         shell: pwsh
-        run: pwsh -NoProfile -File tool/run-ci-tests.ps1 -FlutterTool path
+        run: pwsh -NoProfile -File tool/run-ci-tests.ps1 -FlutterTool path -PlatformOnly
 
       - name: Test Windows page retention
-        run: flutter test --no-pub test/common/widgets/inactive_sliver_cache_test.dart test/common/widgets/inactive_sliver_semantics_test.dart test/common/widgets/pipeline_owner_semantics_test.dart test/common/widgets/image/retained_layer_release_test.dart
+        run: flutter test --no-pub test/common/widgets/inactive_sliver_cache_test.dart test/common/widgets/inactive_sliver_semantics_test.dart test/common/widgets/pipeline_owner_semantics_test.dart
 
       - name: Test Windows WebView environment lifecycle
         run: flutter test --no-pub third_party/flutter_inappwebview_windows/test/webview_environment_channel_test.dart

@@ -2,6 +2,7 @@
 param(
     [ValidateSet("fvm", "path")]
     [string]$FlutterTool = "fvm",
+    [switch]$PlatformOnly,
     [ValidateRange(1, 256)]
     [int]$Concurrency
 )
@@ -34,8 +35,6 @@ $ciTests = @(
     "test/pages/bubble/controller_test.dart",
     "test/pages/emote/controller_test.dart",
     "test/pages/article/card_navigation_test.dart",
-    "test/pages/article/opus_typography_test.dart",
-    "test/pages/dynamics/card_input_results_test.dart",
     "test/services/shutdown_timer_service_test.dart",
     "test/http/loading_state_test.dart",
     "test/http/api_response_test.dart",
@@ -186,7 +185,6 @@ $ciTests = @(
     "test/router/get_route_lifecycle_test.dart",
     "test/utils/app_release_test.dart",
     "test/utils/update_results_test.dart",
-    "test/utils/feed_back_results_test.dart",
     "test/utils/grid_test.dart",
     "test/utils/waterfall_test.dart",
     "test/pages/video/playback_lifecycle_test.dart",
@@ -202,7 +200,6 @@ $ciTests = @(
     "test/pages/video/reply_reply/level_filter_test.dart",
     "test/pages/video/reply_reply/lifecycle_test.dart",
     "test/utils/reply_filter_test.dart",
-    "test/pages/setting/settings_navigation_test.dart",
     "test/pages/setting/decoder_test_test.dart",
     "test/pages/setting/decoder_test_process_test.dart",
     "test/pages/setting/decoder_test_dialog_test.dart",
@@ -220,7 +217,6 @@ $ciTests = @(
     "test/plugin/pl_player/playback/network_recovery_test.dart",
     "test/plugin/pl_player/playback/progress_projection_test.dart",
     "test/plugin/pl_player/video_buffer_policy_test.dart",
-    "test/plugin/pl_player/player_loading_test.dart",
     "test/plugin/pl_player/subtitle_configuration_test.dart",
     "test/plugin/pl_player/player_subtitle_view_test.dart",
     "test/plugin/pl_player/playback/player_architecture_acceptance_test.dart",
@@ -237,7 +233,6 @@ $ciTests = @(
     "test/plugin/pl_player/video_output/video_output_resizer_test.dart",
     "test/plugin/pl_player/video_output/video_output_handoff_test.dart",
     # 弹幕生产链路与帧计划
-    "tool/experiments/danmaku/density_metrics_test.dart",
     "test/pages/danmaku/priority_test.dart",
     "test/pages/danmaku/cache_test.dart",
     "test/pages/danmaku/merge_test.dart",
@@ -255,6 +250,12 @@ $ciTests = @(
     "test/pages/danmaku/video_presentation_cadence_test.dart"
 )
 
+# PR 的共享回归由 Linux 执行；Windows 只补平台分支与文件／原生资源生命周期。
+# 独立构建与本地默认仍运行共享 + 当前平台，避免只构建 Windows 时漏掉共享回归。
+if ($PlatformOnly) {
+    $ciTests = @()
+}
+
 # 原生 Windows 窗口时序依赖 dart:io 的主机平台，Linux 上不模拟该分支。
 if ($IsWindows) {
     $ciTests += @(
@@ -264,7 +265,33 @@ if ($IsWindows) {
         "test/utils/desktop_window_background_test.dart",
         "test/app/desktop_playback_launch_test.dart",
         "test/plugin/pl_player/fullscreen_transition_test.dart",
-        "test/plugin/pl_player/fullscreen_model_test.dart"
+        "test/plugin/pl_player/fullscreen_model_test.dart",
+        "test/app/startup_failure_test.dart",
+        "test/utils/connectivity_results_test.dart",
+        "test/utils/font_results_test.dart",
+        "test/utils/window_position_results_test.dart",
+        "test/utils/image_save_results_test.dart",
+        "test/services/webview_environment_test.dart",
+        "test/services/webview_init_concurrency_test.dart",
+        "test/services/webview_idle_lifecycle_test.dart",
+        "test/services/diagnostics/diagnostics_test.dart",
+        "test/services/settings/settings_backup_test.dart",
+        "test/services/settings/webdav_sync_test.dart",
+        "test/services/download/download_repository_test.dart",
+        "test/services/download/download_manager_test.dart",
+        "test/services/desktop_playback_windows_test.dart",
+        "test/services/desktop_playback_layout_test.dart",
+        "test/services/independent_audio_focus_test.dart",
+        "test/pages/audio/playback_results_test.dart",
+        "test/pages/audio/control_results_test.dart",
+        "test/pages/video/playback_lifecycle_test.dart",
+        "test/pages/setting/decoder_test_process_test.dart",
+        "test/plugin/pl_player/playback/controller_recovery_test.dart",
+        "test/plugin/pl_player/playback/native_shutdown_test.dart",
+        "test/plugin/pl_player/native_flag_test.dart",
+        "test/plugin/pl_player/video_output/video_output_resizer_test.dart",
+        "test/plugin/pl_player/video_output/video_output_handoff_test.dart",
+        "test/pages/danmaku/file_store_test.dart"
     )
 }
 elseif ($IsLinux) {
@@ -277,6 +304,7 @@ elseif ($IsLinux) {
     )
 }
 
+$ciTests = @($ciTests | Select-Object -Unique)
 Write-Host "Running the CI test suite ($($ciTests.Count) paths)..."
 $testArguments = @('test', '--no-pub')
 if ($PSBoundParameters.ContainsKey('Concurrency')) {

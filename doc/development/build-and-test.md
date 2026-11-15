@@ -103,7 +103,7 @@ uv run --locked python tool/run_python_tests.py --suite android
 pwsh -NoProfile -File tool/run-ci-tests.ps1
 ```
 
-`tool/run-ci-tests.ps1` 默认调用 `fvm flutter test --no-pub`，可用 `-Concurrency 4` 指定并行测试文件数，省略时采用 Flutter 默认值。两端共用会话、消息、设置和弹幕等回归；Windows 另测桌面与原生全屏交接，Linux 另测选定的 Android 模拟通道。依赖、补丁和来源检查需预先准备，脚本只运行测试。
+`tool/run-ci-tests.ps1` 默认调用 `fvm flutter test --no-pub`，执行共享回归与当前平台回归；可用 `-Concurrency 4` 指定并行测试文件数，省略时采用 Flutter 默认值。PR 检查由 Linux 运行共享回归及选定的 Android 模拟通道，Windows 使用 `-PlatformOnly` 补充窗口、原生播放及文件／资源生命周期，避免重复整套共享测试。独立构建保留默认范围，单独构建 Windows 也会验证共享回归。依赖、补丁和来源检查需预先准备，脚本只运行测试。
 
 Python 回归使用 `uv run --locked python tool/run_python_tests.py --jobs 4`，`--suite` 选择分组，`--native` 追加三项 C++ 主机探针。组间进程隔离并汇总退出码，Linux CI 复用同一入口。分组与平台条件见[工具说明](../../tool/README.md#python-回归与并行执行)。
 

@@ -49,7 +49,7 @@ if os.environ.get('CI_RUNNER_FAIL_CALL') == str(count):
                     encoding='utf-8')
                 shim.chmod(0o755)
 
-    def run_entry(self, tool, fail_call=None):
+    def run_entry(self, tool, fail_call=None, platform_only=False):
         calls_file = self.root / 'calls.jsonl'
         calls_file.unlink(missing_ok=True)
         env = {
@@ -60,20 +60,25 @@ if os.environ.get('CI_RUNNER_FAIL_CALL') == str(count):
             'CI_RUNNER_CALLS': str(calls_file),
             'CI_RUNNER_FAIL_CALL': str(fail_call or ''),
         }
+        command = ['pwsh', '-NoProfile', '-File', str(self.root / 'tool/run-ci-tests.ps1'),
+                   '-FlutterTool', tool, '-Concurrency', '4']
+        if platform_only:
+            command.append('-PlatformOnly')
         result = subprocess.run(
-            ['pwsh', '-NoProfile', '-File', str(self.root / 'tool/run-ci-tests.ps1'),
-             '-FlutterTool', tool, '-Concurrency', '4'],
+            command,
             cwd=self.root, env=env, capture_output=True, text=True,
             encoding='utf-8', errors='replace', timeout=30)
         calls = ([json.loads(line) for line in calls_file.read_text(encoding='utf-8').splitlines()]
                  if calls_file.exists() else [])
         return result, calls
 
-    def selected_paths(self):
+    def selected_paths(self, platform_only=False):
         common, platform = self.source.split('# 原生 Windows', 1)
         windows, linux = platform.split('elseif ($IsLinux)', 1)
         platform = windows if os.name == 'nt' else linux.split('Write-Host', 1)[0]
-        return re.findall(r'^\s*"((?:test|tool)/[^"]+)"', common + platform, re.MULTILINE)
+        source = platform if platform_only else common + platform
+        return list(dict.fromkeys(re.findall(
+            r'^\s*"((?:test|tool)/[^"]+)"', source, re.MULTILINE)))
 
     def test_runs_every_selected_path_with_requested_concurrency(self):
         for tool in ('path', 'fvm'):
@@ -98,6 +103,26 @@ if os.environ.get('CI_RUNNER_FAIL_CALL') == str(count):
         result, calls = self.run_entry('path', fail_call=1)
         self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertGreater(len(calls), 1 if os.name == 'nt' else 0)
+
+    def test_platform_only_runs_host_regressions_without_shared_suite(self):
+        result, calls = self.run_entry('path', platform_only=True)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        paths = [path for call in calls for path in call['args'][4:]]
+        self.assertEqual(paths, self.selected_paths(platform_only=True))
+        self.assertTrue(paths)
+        self.assertNotIn('test/utils/app_sign_test.dart', paths)
+        expected = ('test/plugin/pl_player/fullscreen_transition_test.dart'
+                    if os.name == 'nt' else
+                    'test/plugin/pl_player/android/android_video_output_test.dart')
+        self.assertIn(expected, paths)
+
+    def test_default_selection_contains_no_duplicate_test_files(self):
+        files = []
+        for path in self.selected_paths():
+            target = ROOT / path
+            self.assertTrue(target.exists(), path)
+            files.extend(target.rglob('*_test.dart') if target.is_dir() else [target])
+        self.assertEqual(len(files), len(set(files)))
 
 
 if __name__ == '__main__':

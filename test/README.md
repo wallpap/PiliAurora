@@ -4,7 +4,9 @@
 
 ## 运行范围
 
-CI 测试脚本在共享逻辑回归之外按主机补充平台用例：Windows 运行桌面主题、浅深色窗口背景交接、小窗启动和原生全屏布局交接，Linux 运行选定的 Android 模拟平台通道测试。`plugin/pl_player/fullscreen_transition_test.dart` 依赖 `dart:io` 的实际 Windows 主机，直接在其他主机运行也会跳过；共享恢复测试中的 Windows 专用用例同样保留跳过条件。模拟通道测试不代替 Android 设备验收。
+CI 测试脚本默认执行共享逻辑和当前主机的平台回归。PR 由 Linux 执行共享回归及 Android 模拟通道，Windows 通过 `-PlatformOnly` 补充桌面窗口、原生播放和文件／资源生命周期；其中保留了共享恢复文件内依赖实际 Windows 的用例。Windows 图片目录在准备原生夹具后独立运行一次。独立构建保持默认范围，不依赖另一平台先完成共享回归。模拟通道测试不代替 Android 设备验收。
+
+默认门禁优先保留账号隔离、写入确认、分页、播放和资源释放。Opus 字号／对齐、设置导航展示、触感反馈和加载提示等低风险 UI 测试保留为按需回归，实验密度统计自测在 `tool/experiments/danmaku/` 运行；普通业务测试可用 `fvm flutter test` 全量运行。调整默认范围时检查目录与文件是否重叠，避免同一文件被重复选择。
 
 本地 Windows WebView 包的 `third_party/flutter_inappwebview_windows/test/webview_environment_channel_test.dart` 使用模拟通道检查多个 Environment 的独立创建与释放，防止实例 dispose 误发到静态工厂 id；可从仓库根目录单独运行，已接入 CI。网页纹理、Cookie 和原生图形资源仍由 Windows 设备验证。
 
