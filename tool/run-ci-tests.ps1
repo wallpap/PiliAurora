@@ -60,6 +60,7 @@ $ciTests = @(
     "test/pages/video/cast_results_test.dart",
     "test/pages/video/description_link_action_test.dart",
     "test/pages/video/episode_query_results_test.dart",
+    "test/pages/video/media_navigation_test.dart",
     "test/pages/dlna/controller_results_test.dart",
     "test/http/login_account_results_test.dart",
     "test/pages/login/qr_actions_test.dart",

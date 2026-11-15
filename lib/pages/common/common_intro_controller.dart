@@ -2,6 +2,8 @@ import 'dart:async' show FutureOr, Timer, unawaited;
 
 import 'package:pili_aurora/http/fav.dart';
 import 'package:pili_aurora/services/logger.dart';
+import 'package:pili_aurora/services/audio_handler.dart' show MediaNavigation;
+import 'package:pili_aurora/services/service_locator.dart';
 import 'package:pili_aurora/http/loading_state.dart';
 import 'package:pili_aurora/http/user.dart';
 import 'package:pili_aurora/http/video.dart';
@@ -111,6 +113,19 @@ abstract class CommonIntroController extends GetxController
 
   bool prevPlay();
   bool nextPlay();
+
+  MediaNavigation get mediaNavigation {
+    final account = Accounts.main;
+    return MediaNavigation(
+      isCurrent: () =>
+          !isClosed &&
+          identical(account, Accounts.main) &&
+          videoPlayerServiceHandler?.onPlay == null &&
+          videoDetailCtr.playbackOwner.isActive,
+      next: nextPlay,
+      previous: prevPlay,
+    );
+  }
 
   void actionShareVideo(BuildContext context);
 

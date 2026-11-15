@@ -530,6 +530,49 @@ void main() {
     expect(_actions(controller), isNot(contains('audio.shutdown.released')));
   });
 
+  _check('系统上下曲接入真实音频列表，等待打开回执并隔离关闭与切号', (tester) async {
+    await host(tester);
+    final handler = VideoPlayerServiceHandler()..enableBackgroundPlay = true;
+    videoPlayerServiceHandler = handler;
+    handler.onPlay = controller.onPlay;
+    final originalAccount = Accounts.main;
+    try {
+      final first = controller.playIndex(0);
+      await _until(tester, () => adapter.requests.length == 1);
+      adapter.reply(0, _source());
+      await _complete(tester, first);
+      final next = handler.skipToNext();
+      await _until(tester, () => adapter.requests.length == 2);
+      expect(controller.index, 1);
+      player.opening = Completer<void>();
+      adapter.reply(1, _source('https://media.example/second'));
+      await _until(tester, () => player.opened.length == 2);
+      var completed = false;
+      next.then((_) => completed = true);
+      await tester.pump();
+      expect(completed, isFalse);
+      player.opening!.complete();
+      await _complete(tester, next);
+      final previous = handler.skipToPrevious();
+      await _until(tester, () => adapter.requests.length == 3);
+      expect(controller.index, 0);
+      adapter.reply(2, _source('https://media.example/first'));
+      await _complete(tester, previous);
+      Accounts.accountMode[AccountType.main.index] = const NoAccount();
+      await handler.skipToNext();
+      expect(adapter.requests, hasLength(3));
+      Accounts.accountMode[AccountType.main.index] = originalAccount;
+      controller.onClose();
+      closed = true;
+      await handler.skipToNext();
+      expect(adapter.requests, hasLength(3));
+    } finally {
+      Accounts.accountMode[AccountType.main.index] = originalAccount;
+      handler.clear();
+      videoPlayerServiceHandler = null;
+    }
+  });
+
   _check('old playback metadata cannot replace a newer system owner', (
     tester,
   ) async {

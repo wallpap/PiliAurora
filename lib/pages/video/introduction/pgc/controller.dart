@@ -591,6 +591,7 @@ class PgcIntroController extends CommonIntroController {
       cid.value,
       heroTag,
       artist: pgcItem.title,
+      navigation: mediaNavigation,
     );
   }
 

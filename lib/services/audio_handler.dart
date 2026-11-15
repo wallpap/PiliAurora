@@ -1,3 +1,4 @@
+import 'dart:async' show FutureOr;
 import 'dart:io' show File, Platform;
 import 'dart:ui' show PlatformDispatcher;
 
@@ -46,8 +47,23 @@ typedef _StatusConfig = (
   bool loading,
 );
 
+/// 与一条系统媒体信息共同存活的业务导航，不从全局路由反查控制器。
+class MediaNavigation {
+  const MediaNavigation({required this.isCurrent, this.next, this.previous});
+
+  final bool Function() isCurrent;
+  final FutureOr<bool> Function()? next;
+  final FutureOr<bool> Function()? previous;
+}
+
+typedef _ServiceMedia = ({
+  String owner,
+  MediaItem item,
+  MediaNavigation? navigation,
+});
+
 class VideoPlayerServiceHandler extends BaseAudioHandler with SeekHandler {
-  final List<MediaItem> _item = [];
+  final List<_ServiceMedia> _item = [];
   bool _enableBackgroundPlay = Pref.enableBackgroundPlay;
   PlaybackKeepAliveLease? _playbackLease;
 
@@ -58,7 +74,7 @@ class VideoPlayerServiceHandler extends BaseAudioHandler with SeekHandler {
     if (!value) {
       _clearPublishedState();
     } else if (_item.isNotEmpty) {
-      setMediaItem(_item.last);
+      setMediaItem(_item.last.item);
       final config = _currentConfig;
       if (config != null) {
         onUpdateState(
@@ -175,6 +191,39 @@ class VideoPlayerServiceHandler extends BaseAudioHandler with SeekHandler {
     if (mediaItem.value?.id != newMediaItem.id) _resetSeekTarget();
     _retainPlaybackLease();
     if (!mediaItem.isClosed) mediaItem.add(newMediaItem);
+    playbackState.add(
+      playbackState.value.copyWith(systemActions: _mediaActions),
+    );
+  }
+
+  MediaNavigation? get _currentNavigation {
+    final entry = _item.lastOrNull;
+    if (!enableBackgroundPlay ||
+        entry == null ||
+        entry.item.isLive == true ||
+        entry.item.id != mediaItem.value?.id)
+      return null;
+    final navigation = entry.navigation;
+    return navigation?.isCurrent() == true ? navigation : null;
+  }
+
+  Set<MediaAction> get _mediaActions {
+    final navigation = _currentNavigation;
+    return {
+      if (mediaItem.value?.isLive != true) MediaAction.seek,
+      if (navigation?.next != null) MediaAction.skipToNext,
+      if (navigation?.previous != null) MediaAction.skipToPrevious,
+    };
+  }
+
+  @override
+  Future<void> skipToNext() async {
+    await _currentNavigation?.next?.call();
+  }
+
+  @override
+  Future<void> skipToPrevious() async {
+    await _currentNavigation?.previous?.call();
   }
 
   Duration? _lastPos;
@@ -276,7 +325,7 @@ class VideoPlayerServiceHandler extends BaseAudioHandler with SeekHandler {
             ),
         ],
         playing: playing,
-        systemActions: const {.seek},
+        systemActions: _mediaActions,
       ),
     );
     if (Platform.isAndroid &&
@@ -296,6 +345,7 @@ class VideoPlayerServiceHandler extends BaseAudioHandler with SeekHandler {
     String herotag, {
     String? artist,
     String? cover,
+    MediaNavigation? navigation,
   }) {
     if (data == null) return;
 
@@ -374,15 +424,15 @@ class VideoPlayerServiceHandler extends BaseAudioHandler with SeekHandler {
       default:
         return;
     }
-    _item.removeWhere((item) => item.id.endsWith(herotag));
-    _item.add(mediaItem);
+    _item.removeWhere((entry) => entry.owner == herotag);
+    _item.add((owner: herotag, item: mediaItem, navigation: navigation));
     setMediaItem(mediaItem);
   }
 
   void onVideoDetailDispose(String herotag) {
-    final wasCurrent = _item.lastOrNull?.id.endsWith(herotag) == true;
+    final wasCurrent = _item.lastOrNull?.owner == herotag;
     if (_item.isNotEmpty) {
-      _item.removeWhere((item) => item.id.endsWith(herotag));
+      _item.removeWhere((entry) => entry.owner == herotag);
     }
     if (_item.isEmpty) {
       clear();
@@ -393,7 +443,7 @@ class VideoPlayerServiceHandler extends BaseAudioHandler with SeekHandler {
     _lastConfig = null;
     _lastPos = null;
     if (!enableBackgroundPlay) return;
-    setMediaItem(_item.last);
+    setMediaItem(_item.last.item);
     playbackState.add(
       playbackState.value.copyWith(processingState: .ready, playing: false),
     );
@@ -434,9 +484,9 @@ class VideoPlayerServiceHandler extends BaseAudioHandler with SeekHandler {
 
   @override
   Future<void> stop() async {
-    final current = _item.lastOrNull;
+    final current = _item.lastOrNull?.item;
     await pause();
     // 暂停回执只能结束发起时的媒体，不能清除等待期间换入的通知。
-    if (identical(_item.lastOrNull, current)) clear();
+    if (identical(_item.lastOrNull?.item, current)) clear();
   }
 }

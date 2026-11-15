@@ -37,6 +37,7 @@ import 'package:pili_aurora/plugin/pl_player/models/play_status.dart';
 import 'package:pili_aurora/plugin/pl_player/playback/playback_contracts.dart'
     show CommandOutcome;
 import 'package:pili_aurora/services/service_locator.dart';
+import 'package:pili_aurora/services/audio_handler.dart' show MediaNavigation;
 import 'package:pili_aurora/services/audio_session.dart';
 import 'package:pili_aurora/services/diagnostics/diagnostics.dart';
 import 'package:pili_aurora/services/logger.dart';
@@ -483,6 +484,7 @@ class AudioController extends GetxController
         item,
         (subId.firstOrNull ?? oid).toInt(),
         hashCode.toString(),
+        navigation: _mediaNavigation,
       );
     } catch (error, stack) {
       logger
@@ -1381,16 +1383,41 @@ class AudioController extends GetxController
     return _readyPlayer.playOrPause();
   });
 
-  bool playPrev() {
-    if (index != null && playlist != null && player != null) {
-      final prev = index! - 1;
-      if (prev >= 0) {
-        playIndex(prev);
-        return true;
-      }
-    }
-    return false;
+  MediaNavigation get _mediaNavigation {
+    final account = Accounts.main;
+    return MediaNavigation(
+      isCurrent: () =>
+          !_audioClosed &&
+          !isClosed &&
+          player != null &&
+          identical(account, Accounts.main) &&
+          videoPlayerServiceHandler?.onPlay == onPlay,
+      next: () => _skipPlaylist(1),
+      previous: () => _skipPlaylist(-1),
+    );
   }
+
+  Future<void>? _playAdjacent(int offset) {
+    if (_audioClosed ||
+        isClosed ||
+        index == null ||
+        playlist == null ||
+        player == null)
+      return null;
+    final next = index! + offset;
+    if (next < 0 || next >= playlist!.length) return null;
+    if (offset > 0 && next == playlist!.length - 1 && _next != null) loadNext();
+    return playIndex(next);
+  }
+
+  Future<bool> _skipPlaylist(int offset) async {
+    final operation = _playAdjacent(offset);
+    if (operation == null) return false;
+    await operation;
+    return true;
+  }
+
+  bool playPrev() => _playAdjacent(-1) != null;
 
   bool playNext({bool nextPart = false}) {
     if (nextPart) {
@@ -1415,17 +1442,7 @@ class AudioController extends GetxController
         }
       }
     }
-    if (index != null && playlist != null && player != null) {
-      final next = index! + 1;
-      if (next < playlist!.length) {
-        if (next == playlist!.length - 1 && _next != null) {
-          loadNext();
-        }
-        playIndex(next);
-        return true;
-      }
-    }
-    return false;
+    return _playAdjacent(1) != null;
   }
 
   Future<void> selectPlaylistItem(DetailItem item, {List<Int64>? subId}) {

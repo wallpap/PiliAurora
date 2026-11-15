@@ -116,6 +116,7 @@ class UgcIntroController extends CommonIntroController with ReloadMixin {
         response,
         cid.value,
         heroTag,
+        navigation: mediaNavigation,
       );
       if (videoDetail.value.ugcSeason?.id == response.ugcSeason?.id) {
         // keep reversed season
@@ -608,6 +609,7 @@ class UgcIntroController extends CommonIntroController with ReloadMixin {
             heroTag,
             artist: videoDetail.owner?.name,
             cover: videoDetail.pic,
+            navigation: mediaNavigation,
           );
         }
       }

@@ -21,6 +21,109 @@ void main() {
     GStorage.localCache = MemoryBox<dynamic>();
   });
 
+  test('媒体上下曲只调度当前媒体，释放旧页面不清除新归属', () async {
+    final handler = VideoPlayerServiceHandler()..enableBackgroundPlay = true;
+    addTearDown(handler.clear);
+    final calls = <String>[];
+    MediaNavigation navigation(String owner) => MediaNavigation(
+      isCurrent: () => true,
+      next: () {
+        calls.add('$owner.next');
+        return true;
+      },
+      previous: () {
+        calls.add('$owner.previous');
+        return true;
+      },
+    );
+    handler.onVideoDetailChange(
+      Part(part: 'old'),
+      1,
+      '1',
+      navigation: navigation('old'),
+    );
+    handler.onVideoDetailChange(
+      Part(part: 'new'),
+      2,
+      '11',
+      navigation: navigation('new'),
+    );
+    handler.onVideoDetailDispose('1');
+    await handler.skipToNext();
+    await handler.skipToPrevious();
+    expect(calls, ['new.next', 'new.previous']);
+    expect(handler.mediaItem.value?.title, 'new');
+    expect(
+      handler.playbackState.value.systemActions,
+      containsAll([MediaAction.skipToNext, MediaAction.skipToPrevious]),
+    );
+    handler.onVideoDetailDispose('11');
+    await handler.skipToNext();
+    expect(calls, hasLength(2));
+    expect(
+      handler.playbackState.value.systemActions,
+      isNot(contains(MediaAction.skipToNext)),
+    );
+  });
+
+  test('媒体导航等待业务回执，禁用或失效后停止调度，错误交付调用方', () async {
+    final handler = VideoPlayerServiceHandler()..enableBackgroundPlay = true;
+    addTearDown(handler.clear);
+    final reply = Completer<bool>();
+    var current = true;
+    var calls = 0;
+    handler.onVideoDetailChange(
+      Part(part: 'audio'),
+      1,
+      'audio',
+      navigation: MediaNavigation(
+        isCurrent: () => current,
+        next: () {
+          calls++;
+          return reply.future;
+        },
+        previous: () => throw StateError('fixture failure'),
+      ),
+    );
+    var completed = false;
+    final operation = handler.skipToNext().then((_) => completed = true);
+    await Future<void>.delayed(Duration.zero);
+    expect(completed, isFalse);
+    reply.complete(true);
+    await operation;
+    await expectLater(handler.skipToPrevious(), throwsStateError);
+    handler.enableBackgroundPlay = false;
+    await handler.skipToNext();
+    handler.enableBackgroundPlay = true;
+    current = false;
+    await handler.skipToNext();
+    expect(calls, 1);
+  });
+
+  test('当前媒体退出后恢复上一媒体的导航，未注册的媒体不借用旧操作', () async {
+    final handler = VideoPlayerServiceHandler()..enableBackgroundPlay = true;
+    addTearDown(handler.clear);
+    var calls = 0;
+    handler.onVideoDetailChange(
+      Part(part: 'video'),
+      1,
+      'video',
+      navigation: MediaNavigation(
+        isCurrent: () => true,
+        next: () {
+          calls++;
+          return true;
+        },
+      ),
+    );
+    handler.onVideoDetailChange(Part(part: 'other'), 2, 'other');
+    await handler.skipToNext();
+    expect(calls, 0);
+    handler.onVideoDetailDispose('other');
+    await handler.skipToNext();
+    expect(calls, 1);
+  });
+
   test('音频回调未就绪时不回退触发底层视频', () async {
     final handler = VideoPlayerServiceHandler();
     var videoPlays = 0;
