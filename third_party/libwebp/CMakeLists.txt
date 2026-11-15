@@ -83,7 +83,7 @@ if(NOT actual STREQUAL "cc3273e0694ea5896145e0677699b53471b03ea43021ddc50e7923fb
   message(FATAL_ERROR "libwebp input checksum mismatch: PATENTS")
 endif()
 file(SHA256 "${CMAKE_CURRENT_LIST_DIR}/README.md" actual)
-if(NOT actual STREQUAL "600430fa713bb1407c191007a5dd32d3ddd0090320fa1bc21a5c3c3fb5d15852")
+if(NOT actual STREQUAL "515f6a1f3d2298174e4615d04f52ad05f129b3e033f2932284ce562ebb92508f")
   message(FATAL_ERROR "libwebp input checksum mismatch: README.md")
 endif()
 file(SHA256 "${CMAKE_CURRENT_LIST_DIR}/src/dec/alpha_dec.c" actual)
