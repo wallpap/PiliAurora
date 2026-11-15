@@ -36,7 +36,7 @@ abstract final class AppSign {
       result.write(separator);
       separator = '&';
       result.write(Uri.encodeComponent(key));
-      if (value != null && value.isNotEmpty) {
+      if (value != null) {
         result
           ..write('=')
           ..write(Uri.encodeComponent(value));
