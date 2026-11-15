@@ -89,7 +89,46 @@ class VideoPlayerServiceHandler extends BaseAudioHandler with SeekHandler {
 
   Future<void>? Function()? onPlay;
   Future<void>? Function()? onPause;
-  Future<void>? Function(Duration position)? onSeek;
+  Future<void>? Function(Duration position)? _onSeek;
+  Future<void>? Function(Duration position)? get onSeek => _onSeek;
+  set onSeek(Future<void>? Function(Duration position)? callback) {
+    if (_onSeek == callback) return;
+    _resetSeekTarget();
+    _onSeek = callback;
+  }
+
+  Duration? _seekTarget;
+  String? _seekMediaId;
+  Object? _seekOwner;
+  int _seekRevision = 0;
+
+  void _resetSeekTarget() {
+    _seekRevision++;
+    _seekTarget = null;
+    _seekMediaId = null;
+    _seekOwner = null;
+  }
+
+  @override
+  Future<void> fastForward() =>
+      _seekRelative(AudioService.config.fastForwardInterval);
+
+  @override
+  Future<void> rewind() => _seekRelative(-AudioService.config.rewindInterval);
+
+  Future<void> _seekRelative(Duration offset) async {
+    final item = mediaItem.value;
+    if (item == null || item.isLive == true) return;
+    final targetCurrent =
+        _seekMediaId == item.id &&
+        identical(_seekOwner, PlPlayerController.instance?.activePlaybackOwner);
+    final base = targetCurrent ? _seekTarget : null;
+    var target = (base ?? playbackState.value.position) + offset;
+    if (target < Duration.zero) target = Duration.zero;
+    final duration = item.duration;
+    if (duration != null && target > duration) target = duration;
+    await seek(target);
+  }
 
   @override
   Future<void> play() async {
@@ -113,16 +152,27 @@ class VideoPlayerServiceHandler extends BaseAudioHandler with SeekHandler {
 
   @override
   Future<void> seek(Duration position) async {
+    final revision = ++_seekRevision;
+    // 命令回执可能早于位置事件，保留最新意图供连续相对跳转累计。
+    _seekTarget = position;
+    _seekMediaId = mediaItem.value?.id;
+    _seekOwner = PlPlayerController.instance?.activePlaybackOwner;
     final callback = onSeek;
-    if (callback != null) {
-      await callback(position);
-    } else {
-      await PlPlayerController.seekToIfExists(position, isSeek: false);
+    try {
+      if (callback != null) {
+        await callback(position);
+      } else {
+        await PlPlayerController.seekToIfExists(position, isSeek: false);
+      }
+    } catch (_) {
+      if (_seekRevision == revision) _resetSeekTarget();
+      rethrow;
     }
   }
 
   void setMediaItem(MediaItem newMediaItem) {
     if (!enableBackgroundPlay) return;
+    if (mediaItem.value?.id != newMediaItem.id) _resetSeekTarget();
     _retainPlaybackLease();
     if (!mediaItem.isClosed) mediaItem.add(newMediaItem);
   }
@@ -141,6 +191,11 @@ class VideoPlayerServiceHandler extends BaseAudioHandler with SeekHandler {
     String? debugLabel,
   }) {
     if (onPlay != null && debugLabel == 'onVideoPaused') return;
+    if (_seekTarget case final target? when !isBuffering && !loading) {
+      if ((position - target).abs() <= const Duration(seconds: 1)) {
+        _resetSeekTarget();
+      }
+    }
     final newConfig = (status, isBuffering, isLive, speed, loading);
     _currentConfig = newConfig;
     _currentPosition = position;
@@ -360,6 +415,7 @@ class VideoPlayerServiceHandler extends BaseAudioHandler with SeekHandler {
   }
 
   void _clearPublishedState() {
+    _resetSeekTarget();
     if (!mediaItem.isClosed) mediaItem.add(null);
     _lastPos = null;
     _lastConfig = null;
