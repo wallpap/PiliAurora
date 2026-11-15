@@ -66,6 +66,12 @@ fvm flutter test test/services/diagnostics/ test/pages/about/diagnostics_page_te
 
 `pages/article/card_navigation_test.dart` 检查文章、投票与私信直播卡片的损坏 ID 点击提示，避免点击期解析异常。`pages/dynamics/card_input_results_test.dart` 检查动态富文本／附加投票和文章内嵌卡片弹窗的点击校验。
 
+`pages/article/opus_typography_test.dart` 从接口 JSON 挂载真实文章组件，检查正文、引用、标题及未知段落的对齐，普通文字和富文本的字号等级，并保留显式字号与粗体等样式。
+
+`utils/app_sign_test.dart` 检查空值参数保留等号、特殊字符编码与普通签名；`common/widgets/refresh_indicator_test.dart` 检查静止与收起后的进度条不再调度帧，以及收起期间重新刷新。
+
+`grpc/reply_filter_test.dart` 经真实 gRPC 解码检查置顶楼中楼的关键字／带货过滤；`pages/video/reply/filter_pagination_test.dart` 检查过滤空页继续、五页补读上限与手动继续、游标停滞、失败重试和切号后的迟到结果隔离。
+
 `http/login_test.dart` 与 `pages/login/request_lifecycle_test.dart` 检查登录结果类型、缺失身份／验证码字段、风控响应、损坏公钥、请求防重放，以及失败后的重试、倒计时和页面释放。`utils/accounts/cookie_failure_test.dart` 检查 Cookie 保存失败沿请求 Future 返回、保留原始 HTTP 错误及避免重放写请求。
 
 `http/login_account_results_test.dart` 检查退出撤销的拒绝／待确认、禁重试和设备解析原因；`pages/setting/logout_results_test.dart` 检查多账号退出互斥、部分失败、远端成功后的本地清理重试、同 UID 凭据替换及关闭后的授权清理。真实撤销服务、Hive 和 WebView 清理需另行验收。
@@ -118,13 +124,13 @@ fvm flutter test test/services/diagnostics/ test/pages/about/diagnostics_page_te
 
 `pages/audio/playback_results_test.dart` 检查空播放响应／地址、乱序查询、账号替换、播放器创建失败重试，以及旧原生打开排空后才打开并确认新曲目；`playlist_order_test.dart` 检查列表初始化／排序重试、切号隔离、分页互斥去重、游标限界及旧行快照。`pages/setting/cdn_probe_results_test.dart` 检查采样为空、短响应完成和测速异常的安全终态。音频和 HTTP 使用受控替身，真实媒体服务、原生播放及 CDN 速度需设备验证。
 
-`pages/audio/control_results_test.dart` 检查速度／音量／进度等待原生回执、失败重试与设置保存部分成功、账号替换、系统命令错误交付及旧页面关闭不清新回调；`playback_results_test.dart` 另检查迟到 seek 不污染新歌、旧曲目不抢占新通知、关闭期间迟到创建的 Player 销毁失败后保留声音抑制。独立音频焦点接管另见 `services/independent_audio_focus_test.dart`，真实来电或耳机行为仍需设备验收。
+`pages/audio/control_results_test.dart` 检查历史增益配置迁移及音频控制始终限制在 100%、速度／音量／进度等待原生回执、失败重试与设置保存部分成功、账号替换、系统命令错误交付及旧页面关闭不清新回调；`playback_results_test.dart` 另检查迟到 seek 不污染新歌、旧曲目不抢占新通知、关闭期间迟到创建的 Player 销毁失败后保留声音抑制。独立音频焦点接管另见 `services/independent_audio_focus_test.dart`，真实来电或耳机行为仍需设备验收。
 
 `pages/audio/interaction_results_test.dart` 检查互动账号与目标快照、共用写入锁、三连部分成功、投币／收藏面板来源失效、待确认结果，以及空分 P 的协议目标。分享固定打开面板时的曲目快照；`pages/video/pgc_sharing_test.dart` 另检查切换分集后仍分享原分集。
 
 `pages/video/cast_results_test.dart` 检查投屏地址查询互斥、失败后的重试与独立加载提示、换分 P 不打开旧设备页，以及离页返回仍丢弃旧错误。投屏服务交互和设备发现另见 DLNA 对应回归；真实局域网和电视设备仍需验收。
 
-`pages/dlna/controller_results_test.dart` 检查搜索启动／流异常后的重试、定时停止失败与等待、释放后迟到启动的清理、设备快照替换、连接互斥及 setUrl／play 确认、原设备暂停失败的部分成功，以及离页后的后续命令隔离。沿用依赖的 HTTP 200 命令接受语义，未验证 SOAP 正文或电视实际播放状态；真实多网卡发现及电视兼容性仍需设备验证。
+`pages/dlna/controller_results_test.dart` 检查权限拒绝／异常后的重试、授权等待期间离页不启动发现、搜索启动／流异常后的重试、定时停止失败与等待、释放后迟到启动的清理、设备快照替换、连接互斥及 setUrl／play 确认、原设备暂停失败的部分成功，以及离页后的后续命令隔离。沿用依赖的 HTTP 200 命令接受语义，未验证 SOAP 正文或电视实际播放状态；真实多网卡发现及电视兼容性仍需设备验证。
 
 `utils/connectivity_results_test.dart` 检查 Wi-Fi／移动网络判定、探测错误保留与初始化保守降级；按网络保存音视频默认档位的入口在未知时跳过写入。`utils/font_results_test.dart` 检查导入取消／失败、旧字体兼容、启动降级、文件／偏好失败保留确认值、保存互斥和页面草稿。`utils/cache_results_test.dart` 检查实际缓存大小、清理确认取消、失败解锁重试、独立加载提示与离页返回后的迟到结果隔离；`utils/asset_preparation_test.dart` 检查资源复制失败及完整重试。`plugin/pl_player/playback/controller_recovery_test.dart` 的资源准备失败用例检查超分档位与偏好保留、同档位重试。原生文件选择器、系统字体枚举、着色器及真实网络切换需设备验收。
 
@@ -243,6 +249,8 @@ Windows 保活页面内存回归：先执行 `pwsh -File lib/scripts/patch.ps1 w
 `services/diagnostics/diagnostics_test.dart` 另检查 Windows 512 块检查点的独立快照预算、缓存去重及跳号后的检查点恢复，以及导出脱敏、本地原文保留和快照隔离；`redact_test.dart` 覆盖长普通文本与带前缀 token 键。VirtualQuery 与视频资源生命周期回归见平台探针，不能由 Dart 模拟通道测试替代。
 
 ## 播放会话与平台输出
+
+`plugin/pl_player/subtitle_configuration_test.dart` 检查拖动后的显示配置和保存值同步；`player_subtitle_view_test.dart` 挂载真实字幕组件，检查控件临时避让、拖动后显隐、销毁重建和样式更新，避免临时位置覆盖用户值。
 
 `services/app_exit_test.dart` 检查退出合并、必要清理等待、独立步骤失败继续、实际退出失败后的重试，以及诊断超时与迟到异常。`services/audio_session_initialization_test.dart` 检查音频配置的单次共享初始化、激活等待、原始失败与重试；`shutdown_timer_service_test.dart` 检查暂停回执前不提示成功、同步／异步失败消费及取消后的迟到结果。真实插件配置和进程退出需设备验证。
 
