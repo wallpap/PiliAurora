@@ -203,6 +203,37 @@ void main() {
     );
   });
 
+  test('Akamai 来源只使用原始令牌，普通 CDN 从普通签名来源改写', () async {
+    const akamai =
+        'https://upos-hz-mirrorakam.akamaized.net/upgcxcode/video?hdnts=A%2bb%2F&key=1&key=2';
+    const cos =
+        'https://upos-sz-mirrorcos.bilivideo.com/upgcxcode/video?sign=cos';
+    final hw = cos.replaceFirst('mirrorcos', 'mirrorhw');
+    for (final service in CDNService.values) {
+      expect(
+        VideoUtils.getCdnUrl([akamai], defaultCDNService: service),
+        akamai,
+      );
+    }
+    expect(
+      VideoUtils.getCdnUrl([akamai, cos], defaultCDNService: CDNService.hw),
+      hw,
+    );
+    expect(
+      VideoUtils.getCdnUrl([akamai, cos], defaultCDNService: CDNService.akamai),
+      akamai,
+    );
+    await GStorage.setting.put(SettingBoxKey.enableMultiCdn, true);
+    await GStorage.setting.put(SettingBoxKey.cdnFallbackOrder, ['hw']);
+    expect(VideoUtils.getCdnUrls([akamai], defaultCDNService: CDNService.hw), [
+      akamai,
+    ]);
+    expect(
+      VideoUtils.getCdnUrls([akamai, cos], defaultCDNService: CDNService.hw),
+      [hw, akamai, cos],
+    );
+  });
+
   test('其它 CDN 保持首个镜像地址的改写优先级', () {
     const original =
         'https://upos-sz-mirrorcos.bilivideo.com/upgcxcode/video?sign=cos';

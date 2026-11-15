@@ -123,6 +123,8 @@ class _CdnSources {
           if (uri.queryParameters['os'] != 'mcdn') {
             // 精确匹配使用接口原文，避免重新编码或借用其它主机的签名。
             _signedMirrors.putIfAbsent(uri.host, () => url);
+            // Akamai 的令牌不能借给普通 CDN，只参与原始签名地址选择。
+            if (uri.host.endsWith('.akamaized.net')) continue;
             if (_primary == null) {
               _primary = url;
               _primaryUri = uri;
