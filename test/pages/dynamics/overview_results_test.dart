@@ -175,6 +175,164 @@ void main() {
     await settle(tester);
   }
 
+  testWidgets('全部关注先读动态续页，再补资料，去重并保留本地已读', (tester) async {
+    await GStorage.setting.put(SettingBoxKey.dynamicsShowAllFollowedUp, true);
+    final controller = own(_Overview())..onStart();
+    await until(tester, () => requests.length == 1);
+    requests[0].reply.complete(ups([10], 'dynamic-2'));
+    await controller.queries[0];
+    final firstUp = controller.loadingState.value.data.upList!.single;
+    firstUp.hasUpdate = false;
+    final dynamicPage = controller.onLoadMore();
+    await until(tester, () => requests.length == 2);
+    expect(requests[1].options.path, Api.dynUplist);
+    expect(requests[1].options.queryParameters['offset'], 'dynamic-2');
+    requests[1].reply.complete({
+      'code': 0,
+      'data': {
+        'items': [
+          {'mid': 10, 'has_update': true},
+          {'mid': 20, 'has_update': true},
+        ],
+        'has_more': false,
+        'offset': '',
+      },
+    });
+    await dynamicPage;
+    expect(controller.loadingState.value.data.upList!.map((up) => up.mid), [
+      20,
+      10,
+    ]);
+    expect(firstUp.hasUpdate, isFalse);
+    final followingPage = controller.onLoadMore();
+    await until(tester, () => requests.length == 3);
+    expect(requests[2].options.path, Api.followings);
+    expect(requests[2].options.queryParameters['pn'], 1);
+    requests[2].reply.complete({
+      'code': 0,
+      'data': {
+        'list': [
+          {'mid': 20, 'uname': '续页作者'},
+          {'mid': 30, 'uname': '普通关注'},
+        ],
+      },
+    });
+    await followingPage;
+    final list = controller.loadingState.value.data.upList!;
+    expect(list.map((up) => up.mid), [20, 10, 30]);
+    expect(list.first.hasUpdate, isTrue);
+    expect(list.first.uname, '续页作者');
+    final end = controller.onLoadMore();
+    await until(tester, () => requests.length == 4);
+    expect(requests[3].options.queryParameters['pn'], 2);
+    requests[3].reply.complete({
+      'code': 0,
+      'data': {'list': []},
+    });
+    await end;
+    expect(controller.canLoadMore, isFalse);
+  });
+
+  testWidgets('全部关注动态续页失败保留游标，刷新拒绝迟到续页', (tester) async {
+    await GStorage.setting.put(SettingBoxKey.dynamicsShowAllFollowedUp, true);
+    final controller = own(_Overview())..onStart();
+    await until(tester, () => requests.length == 1);
+    requests[0].reply.complete(ups([10], 'next'));
+    await controller.queries[0];
+    final failed = controller.onLoadMore();
+    await until(tester, () => requests.length == 2);
+    expect(requests[1].options.path, Api.dynUplist);
+    requests[1].reply.complete({'code': -400, 'message': 'fixture failure'});
+    await failed;
+    final oldPage = controller.onLoadMore();
+    await until(tester, () => requests.length == 3);
+    expect(requests[2].options.queryParameters['offset'], 'next');
+    final refresh = controller.singleRefresh();
+    await until(tester, () => requests.length == 4);
+    expect(requests[3].options.path, Api.followUp);
+    requests[3].reply.complete(ups([30], 'fresh'));
+    await refresh;
+    requests[2].reply.complete({
+      'code': 0,
+      'data': {
+        'items': [
+          {'mid': 20, 'has_update': true},
+        ],
+        'has_more': false,
+      },
+    });
+    await oldPage;
+    expect(controller.loadingState.value.data.upList!.single.mid, 30);
+    final next = controller.onLoadMore();
+    await until(tester, () => requests.length == 5);
+    expect(requests[4].options.queryParameters['offset'], 'fresh');
+    requests[4].reply.complete({
+      'code': 0,
+      'data': {
+        'items': [
+          {'mid': 40},
+        ],
+        'has_more': false,
+      },
+    });
+    await next;
+    expect(controller.loadingState.value.data.upList!.map((up) => up.mid), [
+      30,
+      40,
+    ]);
+  });
+
+  testWidgets('动态游标停滞后转普通关注，重复页补位有界且失败页可重试', (tester) async {
+    await GStorage.setting.put(SettingBoxKey.dynamicsShowAllFollowedUp, true);
+    final controller = own(_Overview())..onStart();
+    await until(tester, () => requests.length == 1);
+    requests[0].reply.complete(ups([10], 'same'));
+    await controller.queries[0];
+    final more = controller.onLoadMore();
+    await until(tester, () => requests.length == 2);
+    requests[1].reply.complete({
+      'code': 0,
+      'data': (ups([10], 'same')['data'] as Map)['up_list'],
+    });
+    for (var page = 1; page <= 4; page++) {
+      await until(tester, () => requests.length == page + 2);
+      expect(requests.last.options.path, Api.followings);
+      expect(requests.last.options.queryParameters['pn'], page);
+      requests.last.reply.complete({
+        'code': 0,
+        'data': {
+          'list': [
+            {'mid': 10},
+          ],
+        },
+      });
+    }
+    await more;
+    expect(requests, hasLength(6));
+    expect(controller.canLoadMore, isTrue);
+    final failed = controller.onLoadMore();
+    await until(tester, () => requests.length == 7);
+    expect(requests.last.options.queryParameters['pn'], 5);
+    requests.last.reply.complete({'code': -400, 'message': 'fixture failure'});
+    await failed;
+    final retry = controller.onLoadMore();
+    await until(tester, () => requests.length == 8);
+    expect(requests.last.options.queryParameters['pn'], 5);
+    requests.last.reply.complete({
+      'code': 0,
+      'data': {
+        'list': [
+          {'mid': 20},
+        ],
+      },
+    });
+    await retry;
+    expect(controller.loadingState.value.data.upList!.map((up) => up.mid), [
+      10,
+      20,
+    ]);
+  });
+
   testWidgets('聚合页凭据替换刷新并拒绝旧结果，释放后停止订阅', (tester) async {
     final controller = own(_Overview())..onStart();
     await until(tester, () => requests.length == 1);
@@ -225,7 +383,7 @@ void main() {
     await GStorage.setting.put(SettingBoxKey.dynamicsShowAllFollowedUp, true);
     final controller = own(_Overview())..onStart();
     await until(tester, () => requests.length == 1);
-    requests[0].reply.complete(ups([1]));
+    requests[0].reply.complete(ups([1], ''));
     await controller.queries[0];
     for (var page = 1; page <= 2; page++) {
       final more = controller.onLoadMore();
