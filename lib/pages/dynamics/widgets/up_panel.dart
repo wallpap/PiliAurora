@@ -230,6 +230,7 @@ class _UpPanelState extends State<UpPanel> {
                 child: Text(
                   isTop ? '${item.uname}\n' : item.uname!,
                   maxLines: 2,
+                  overflow: .ellipsis,
                   textAlign: .center,
                   style: TextStyle(
                     color: currentMid == item.mid
