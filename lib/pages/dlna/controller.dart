@@ -1,18 +1,31 @@
 import 'dart:async';
+import 'dart:io' show Platform;
 
 import 'package:dlna_dart/dlna.dart';
 import 'package:flutter/foundation.dart';
 import 'package:pili_aurora/http/loading_state.dart';
 import 'package:pili_aurora/services/logger.dart';
+import 'package:pili_aurora/utils/device_utils.dart';
+import 'package:pili_aurora/utils/permission_handler.dart';
 
 /// 搜索资源属于页面；设备仅在两条投屏命令均确认后成为当前设备。
 class DlnaController extends ChangeNotifier {
   DlnaController({
     DLNAManager? manager,
+    Future<PermissionStatus> Function()? requestPermission,
     this.searchDuration = const Duration(seconds: 20),
-  }) : _manager = manager ?? DLNAManager();
+  }) : _manager = manager ?? DLNAManager(),
+       _requestPermission = requestPermission ?? _requestLocalNetwork;
+
+  static Future<PermissionStatus> _requestLocalNetwork() async {
+    if (Platform.isAndroid && DeviceUtils.sdkInt >= 37) {
+      return Permission.accessLocalNetwork.request();
+    }
+    return PermissionStatus.granted;
+  }
 
   final DLNAManager _manager;
+  final Future<PermissionStatus> Function() _requestPermission;
   final Duration searchDuration;
   final Map<String, DLNADevice> devices = {};
   final Set<DLNADevice> _ownedDevices = {};
@@ -21,6 +34,7 @@ class DlnaController extends ChangeNotifier {
   bool searching = false;
   bool connecting = false;
   String? searchError;
+  PermissionStatus? permissionStatus;
   String? selectedKey;
   DLNADevice? _selected;
   bool _disposed = false;
@@ -37,9 +51,19 @@ class DlnaController extends ChangeNotifier {
     final operation = _search = Object();
     searching = true;
     searchError = null;
+    permissionStatus = null;
     devices.clear();
     notifyListeners();
     try {
+      final permission = await _requestPermission();
+      if (_disposed || !identical(operation, _search)) return;
+      permissionStatus = permission;
+      if (permission != PermissionStatus.granted) {
+        searchError = permission == PermissionStatus.permanentlyDenied
+            ? '局域网权限未授权，请在系统设置中允许附近的设备，返回后点击搜索'
+            : '需要局域网权限才能搜索投屏设备';
+        return;
+      }
       final manager = await _manager.start();
       _deviceManager = manager;
       if (_disposed || !identical(operation, _search)) {
@@ -82,6 +106,18 @@ class DlnaController extends ChangeNotifier {
         if (!_disposed) notifyListeners();
       }
     }
+  }
+
+  Future<void> openPermissionSettings() async {
+    if (_disposed) return;
+    try {
+      if (await openAppSettings()) return;
+    } catch (error, stackTrace) {
+      logger.w('打开权限设置失败', error: error.runtimeType, stackTrace: stackTrace);
+    }
+    if (_disposed) return;
+    searchError = '无法打开系统设置，请手动允许局域网权限';
+    notifyListeners();
   }
 
   Future<void> _stopManager() async {

@@ -3,6 +3,7 @@ import 'package:pili_aurora/common/widgets/loading_widget/loading_widget.dart';
 import 'package:pili_aurora/common/widgets/scaffold/simple_scaffold.dart';
 import 'package:pili_aurora/common/widgets/view_sliver_safe_area.dart';
 import 'package:pili_aurora/pages/dlna/controller.dart';
+import 'package:pili_aurora/utils/permission_handler.dart';
 import 'package:get/get.dart';
 import 'package:material_ui/material_ui.dart';
 
@@ -67,9 +68,21 @@ class _DLNAPageState extends State<DLNAPage> {
   Widget _buildBody(ColorScheme colorScheme) {
     final devices = _controller.devices;
     if (!_controller.searching && devices.isEmpty) {
+      final permission = _controller.permissionStatus;
+      final denied =
+          permission != null && permission != PermissionStatus.granted;
+      final permanentlyDenied =
+          permission == PermissionStatus.permanentlyDenied;
       return HttpError(
         errMsg: _controller.searchError ?? '没有设备',
-        onReload: _controller.search,
+        btnText: permanentlyDenied
+            ? '前往设置'
+            : denied
+            ? '授予权限'
+            : null,
+        onReload: permanentlyDenied
+            ? _controller.openPermissionSettings
+            : _controller.search,
       );
     }
     if (devices.isNotEmpty) {

@@ -5,6 +5,7 @@ import 'package:dlna_dart/xmlParser.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pili_aurora/http/loading_state.dart';
 import 'package:pili_aurora/pages/dlna/controller.dart';
+import 'package:pili_aurora/utils/permission_handler.dart';
 
 class _Manager extends DLNAManager {
   _Manager() {
@@ -89,6 +90,68 @@ void main() {
 
   Future<void> tick() => Future<void>.delayed(Duration.zero);
 
+  test('permission denial prevents discovery and grant allows retry', () async {
+    controller.dispose();
+    var status = PermissionStatus.denied;
+    controller = DlnaController(
+      manager: manager,
+      requestPermission: () async => status,
+    );
+    final denied = controller.search();
+    await tick();
+    final prematureStarts = manager.starts;
+    if (manager.current != null) await manager.current!.devices.close();
+    await denied;
+    expect(prematureStarts, 0);
+    expect(controller.searchError, contains('权限'));
+    status = PermissionStatus.granted;
+    final retry = controller.search();
+    await tick();
+    expect(manager.starts, 1);
+    await manager.current!.devices.close();
+    await retry;
+    expect(controller.searchError, isNull);
+  });
+
+  test('disposing during permission prompt prevents late discovery', () async {
+    controller.dispose();
+    final permission = Completer<PermissionStatus>();
+    controller = DlnaController(
+      manager: manager,
+      requestPermission: () => permission.future,
+    );
+    final search = controller.search();
+    controller.dispose();
+    permission.complete(PermissionStatus.granted);
+    await search;
+    expect(manager.starts, 0);
+    controller = DlnaController(manager: _Manager());
+  });
+
+  test(
+    'permanent denial and permission errors remain retryable without sockets',
+    () async {
+      controller.dispose();
+      var fail = false;
+      controller = DlnaController(
+        manager: manager,
+        requestPermission: () async {
+          if (fail) throw StateError('fixture permission failure');
+          return PermissionStatus.permanentlyDenied;
+        },
+      );
+      await controller.search();
+      expect(controller.permissionStatus, PermissionStatus.permanentlyDenied);
+      expect(controller.searchError, contains('系统设置'));
+      fail = true;
+      await controller.search();
+      expect(controller.searching, isFalse);
+      expect(controller.permissionStatus, isNull);
+      expect(controller.searchError, isNotNull);
+      expect(manager.starts, 0);
+    },
+  );
+
   test('搜索启动或流失败均释放搜索状态，并允许重试', () async {
     manager.failStart = true;
     await controller.search();
@@ -133,6 +196,7 @@ void main() {
   test('释放后迟到start再次停止资源，不通知已释放页面', () async {
     manager.pendingStart = Completer<DeviceManager>();
     final search = controller.search();
+    await tick();
     final disposed = controller;
     var notifications = 0;
     disposed
