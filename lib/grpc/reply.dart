@@ -70,8 +70,12 @@ abstract final class ReplyGrpc {
     );
     if (res case Success(:final response)) {
       // keyword filter
-      if (response.hasUpTop() && needRemoveGrpc(response.upTop)) {
-        response.clearUpTop();
+      if (response.hasUpTop()) {
+        if (needRemoveGrpc(response.upTop)) {
+          response.clearUpTop();
+        } else {
+          response.upTop.replies.removeWhere(needRemoveGrpc);
+        }
       }
 
       if (response.replies.isNotEmpty) {
