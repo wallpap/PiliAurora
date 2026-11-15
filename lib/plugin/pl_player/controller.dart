@@ -715,6 +715,7 @@ class PlPlayerController
 
   void onUpdatePadding(EdgeInsets padding) {
     subtitlePaddingB = padding.bottom.round().clamp(0, 200);
+    updateSubtitleStyle();
     putSubtitleSettings();
   }
 

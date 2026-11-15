@@ -59,6 +59,7 @@ import 'package:pili_aurora/plugin/pl_player/utils/video_output_paint_barrier.da
 import 'package:pili_aurora/plugin/pl_player/widgets/video_output_handoff.dart';
 import 'package:pili_aurora/plugin/pl_player/widgets/app_bar_ani.dart';
 import 'package:pili_aurora/plugin/pl_player/widgets/player_loading.dart';
+import 'package:pili_aurora/plugin/pl_player/widgets/player_subtitle_view.dart';
 import 'package:pili_aurora/plugin/pl_player/widgets/seek_indicator.dart';
 import 'package:pili_aurora/plugin/pl_player/widgets/bottom_control.dart';
 import 'package:pili_aurora/plugin/pl_player/widgets/common_btn.dart';
@@ -217,7 +218,7 @@ class _PLVideoPlayerState extends State<PLVideoPlayer>
     });
   }
 
-  int? tmpSubtitlePaddingB;
+  final _subtitleControlsVisible = ValueNotifier(false);
   StreamSubscription? _controlsListener;
   StreamSubscription? _loadingListener;
   void _onControlChanged(bool val) {
@@ -249,26 +250,7 @@ class _PLVideoPlayerState extends State<PLVideoPlayer>
       _animationController.reverse();
     }
 
-    if (widget.videoDetailController case final controller?) {
-      if (controller.vttSubtitlesIndex.value != 0) {
-        if (visible) {
-          const int minPadding = 70;
-          if (plPlayerController.subtitlePaddingB < minPadding) {
-            tmpSubtitlePaddingB = plPlayerController.subtitlePaddingB;
-            plPlayerController
-              ..subtitlePaddingB = minPadding
-              ..subtitleConfig.value = plPlayerController.getSubConfig;
-          }
-        } else {
-          if (tmpSubtitlePaddingB != null) {
-            plPlayerController
-              ..subtitlePaddingB = tmpSubtitlePaddingB!
-              ..subtitleConfig.value = plPlayerController.getSubConfig;
-            tmpSubtitlePaddingB = null;
-          }
-        }
-      }
-    }
+    _subtitleControlsVisible.value = visible;
   }
 
   void _onFramePresentationChanged() =>
@@ -296,6 +278,9 @@ class _PLVideoPlayerState extends State<PLVideoPlayer>
           ? 1
           : 0,
     );
+    _subtitleControlsVisible.value =
+        _animationController.value != 0 &&
+        !plPlayerController.controlsLock.value;
     _loadingListener = plPlayerController.dataStatus.listen(
       (_) => _onControlChanged(plPlayerController.showControls.value),
     );
@@ -464,6 +449,7 @@ class _PLVideoPlayerState extends State<PLVideoPlayer>
     _videoOutputPaintBarrier.dispose();
     _controlsListener?.cancel();
     _loadingListener?.cancel();
+    _subtitleControlsVisible.dispose();
     plPlayerController.videoFramePresented.removeListener(
       _onFramePresentationChanged,
     );
@@ -1746,12 +1732,16 @@ class _PLVideoPlayerState extends State<PLVideoPlayer>
           Positioned.fill(
             child: IgnorePointer(
               ignoring: !plPlayerController.enableDragSubtitle,
-              child: Obx(
-                () => SubtitleView(
-                  controller: videoController,
-                  configuration: plPlayerController.subtitleConfig.value,
-                  enableDragSubtitle: plPlayerController.enableDragSubtitle,
-                  onUpdatePadding: plPlayerController.onUpdatePadding,
+              child: ValueListenableBuilder(
+                valueListenable: _subtitleControlsVisible,
+                builder: (context, controlsVisible, _) => Obx(
+                  () => PlayerSubtitleView(
+                    controller: videoController,
+                    configuration: plPlayerController.subtitleConfig.value,
+                    controlsVisible: controlsVisible,
+                    enableDragSubtitle: plPlayerController.enableDragSubtitle,
+                    onUpdatePadding: plPlayerController.onUpdatePadding,
+                  ),
                 ),
               ),
             ),
