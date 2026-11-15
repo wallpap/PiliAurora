@@ -15,28 +15,26 @@ class RefreshIndicator_ extends StatefulWidget {
 }
 
 class _RefreshIndicatorState extends State<RefreshIndicator_>
-    with TickerProviderStateMixin {
+    with SingleTickerProviderStateMixin {
   late final AnimationController _scaleController;
-  late final AnimationController _progressController;
   late Color _color;
 
   @override
   void initState() {
     super.initState();
-    _scaleController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 200),
-    );
-    _progressController = AnimationController(
-      vsync: this,
-      duration: CircularProgressIndicator.defaultAnimationDuration,
-    );
+    _scaleController =
+        AnimationController(
+          vsync: this,
+          duration: const Duration(milliseconds: 200),
+          value: widget.isRefreshing ? 1 : 0,
+        )..addStatusListener((status) {
+          if (status == AnimationStatus.dismissed) setState(() {});
+        });
   }
 
   @override
   void dispose() {
     _scaleController.dispose();
-    _progressController.dispose();
     super.dispose();
   }
 
@@ -46,12 +44,8 @@ class _RefreshIndicatorState extends State<RefreshIndicator_>
     if (oldWidget.isRefreshing != widget.isRefreshing) {
       if (widget.isRefreshing) {
         _scaleController.value = 1;
-        _progressController
-          ..value = 0.0
-          ..repeat();
       } else {
         _scaleController.reverse();
-        _progressController.stop();
       }
     }
   }
@@ -67,6 +61,10 @@ class _RefreshIndicatorState extends State<RefreshIndicator_>
 
   @override
   Widget build(BuildContext context) {
+    // 收起动画结束后卸载进度条，缩放为零仍会让其内部 ticker 持续运行。
+    if (!widget.isRefreshing && _scaleController.isDismissed) {
+      return const SizedBox.shrink();
+    }
     return ScaleTransition(
       scale: _scaleController,
       child: Center(
@@ -76,12 +74,9 @@ class _RefreshIndicatorState extends State<RefreshIndicator_>
             type: .circle,
             elevation: 2.0,
             color: _color,
-            child: Padding(
-              padding: const .all(6),
-              child: CircularProgressIndicator(
-                strokeWidth: 2.5,
-                controller: _progressController,
-              ),
+            child: const Padding(
+              padding: .all(6),
+              child: CircularProgressIndicator(strokeWidth: 2.5),
             ),
           ),
         ),
