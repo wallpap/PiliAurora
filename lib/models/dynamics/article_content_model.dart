@@ -140,25 +140,37 @@ class Word {
   // font_level 映射处理：
   //   "small"   → 13px
   //   "regular" → 16px（与旧版 HTML 专栏基准一致）
+  //   "xxLarge" → 24px
   //   其余/null → 同 regular
   double get effectiveFontSize =>
-      fontSize ?? (fontLevel == 'small' ? 13.0 : 16.0);
+      fontSize ?? style?.fontSize ?? _fontLevel2Size(fontLevel);
 }
+
+double _fontLevel2Size(String? fontLevel) => switch (fontLevel) {
+  'small' => 13.0,
+  'xxLarge' => 24.0,
+  _ => 16.0,
+};
 
 class Style {
   Style({
     this.bold,
     this.italic,
     this.strikethrough,
+    this.fontLevel,
   });
   bool? bold;
   bool? italic;
   bool? strikethrough;
+  String? fontLevel;
+
+  double? get fontSize => fontLevel == null ? null : _fontLevel2Size(fontLevel);
 
   Style.fromJson(Map<String, dynamic> json) {
     bold = json['bold'];
     italic = json['italic'];
     strikethrough = json['strikethrough'];
+    fontLevel = json['font_level'];
   }
 }
 

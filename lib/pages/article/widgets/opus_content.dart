@@ -162,8 +162,14 @@ class OpusContent extends StatelessWidget {
         fontStyle: style?.italic == true ? FontStyle.italic : null,
         fontWeight: style?.bold == true ? FontWeight.bold : null,
         color: color,
-        fontSize: fontSize,
+        fontSize: fontSize ?? style?.fontSize,
       );
+
+  static TextAlign? _textAlign(int? align) => switch (align) {
+    1 => TextAlign.center,
+    2 => TextAlign.right,
+    _ => null,
+  };
 
   static TextSpan _getSpan(
     Word? word, {
@@ -220,7 +226,7 @@ class OpusContent extends StatelessWidget {
             case 1 || 4:
               final isQuote = element.paraType == 4;
               Widget widget = Text.rich(
-                textAlign: element.align == 1 ? TextAlign.center : null,
+                textAlign: _textAlign(element.align),
                 TextSpan(
                   children: element.text?.nodes
                       ?.map(
@@ -736,6 +742,7 @@ class OpusContent extends StatelessWidget {
               );
             case 8 when (element.heading?.nodes?.isNotEmpty == true):
               return Text.rich(
+                textAlign: _textAlign(element.align),
                 TextSpan(
                   children: element.heading!.nodes!
                       .map(
@@ -753,7 +760,7 @@ class OpusContent extends StatelessWidget {
               logger.d('unknown type ${element.paraType}');
               if (element.text?.nodes?.isNotEmpty == true) {
                 return Text.rich(
-                  textAlign: element.align == 1 ? TextAlign.center : null,
+                  textAlign: _textAlign(element.align),
                   TextSpan(
                     children: element.text!.nodes!
                         .map<TextSpan>(
