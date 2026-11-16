@@ -21,10 +21,6 @@ void main() {
 
   test('32 个字体字形与 SVG 源稿轮廓一致，Dart 定义与集中映射一致', () async {
     expect(CustomIcons.dm_on.fontFamily, 'PiliAuroraIcons');
-    final manifest = jsonDecode(
-      File('tool/artwork/icons/manifest.json').readAsStringSync(),
-    ) as Map<String, dynamic>;
-    final entries = (manifest['icons'] as List).cast<Map<String, dynamic>>();
     final dart = File('lib/common/widgets/custom_icon.dart').readAsStringSync();
     final definitions = {
       for (final match in RegExp(
@@ -32,6 +28,45 @@ void main() {
       ).allMatches(dart))
         match[1]!: int.parse(match[2]!.substring(2), radix: 16),
     };
+    expect(definitions.length, 32);
+    expect(definitions.values.toSet().length, definitions.length);
+    expect(definitions.values, everyElement(inInclusiveRange(0xe000, 0xf8ff)));
+
+    // 源稿属于本机研发资料，公开检出可能没有 doc/dev/artwork/。此时仍
+    // 检查提交的字体契约：每个生成字形都必须能够实际绘制出非空像素。
+    final manifestFile = File('doc/dev/artwork/icons/manifest.json');
+    if (!manifestFile.existsSync()) {
+      for (final codepoint in definitions.values) {
+        final recorder = ui.PictureRecorder();
+        final painter =
+            TextPainter(
+                text: TextSpan(
+                  text: String.fromCharCode(codepoint),
+                  style: const TextStyle(
+                    inherit: false,
+                    fontFamily: 'PiliAuroraIcons',
+                    fontSize: 96,
+                    height: 1,
+                    leadingDistribution: TextLeadingDistribution.even,
+                    color: Colors.black,
+                  ),
+                ),
+                textDirection: TextDirection.ltr,
+              )
+              ..layout()
+              ..paint(Canvas(recorder), Offset.zero);
+        final picture = recorder.endRecording();
+        final actual = await alphaPixels(picture);
+        painter.dispose();
+        picture.dispose();
+        expect(actual.any((value) => value != 0), isTrue);
+      }
+      return;
+    }
+
+    final manifest =
+        jsonDecode(manifestFile.readAsStringSync()) as Map<String, dynamic>;
+    final entries = (manifest['icons'] as List).cast<Map<String, dynamic>>();
     expect(definitions, {
       for (final entry in entries)
         entry['name'] as String: int.parse(
@@ -43,7 +78,7 @@ void main() {
     for (final entry in entries) {
       final info = await vg.loadPicture(
         SvgStringLoader(
-          File('tool/artwork/icons/${entry['source']}').readAsStringSync(),
+          File('doc/dev/artwork/icons/${entry['source']}').readAsStringSync(),
         ),
         null,
       );

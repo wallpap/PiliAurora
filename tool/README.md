@@ -18,8 +18,6 @@
 | [`engine/frame_plan/`](engine/frame_plan/README.md) | Android 帧计划的固定引擎补丁、隔离构建与设备验证。 |
 | [`engine/windows_frame_pacing/`](engine/windows_frame_pacing/README.md) | Windows 帧节奏的固定引擎补丁、隔离构建与呈现对照。 |
 | [`engine/windows_memory/`](engine/windows_memory/README.md) | Windows 专用内存诊断引擎与资源观测。 |
-| [`artwork/`](artwork/README.md) | 图标、插画源稿及资源导出。 |
-| [`artwork/icons/`](artwork/icons/README.md) | SVG 图标字体与 Dart 常量生成。 |
 
 默认自动化测试位于 [`test/`](../test/README.md)，测试选择方式见[构建与测试说明](../doc/development/build-and-test.md)。
 
@@ -117,17 +115,3 @@ fvm flutter test --no-pub test/architecture/dependency_policy_test.dart
 ```
 
 该工具只读工作区，检查 Git 来源、path 范围、来源 SHA、许可证、版本登记与锁文件，并核对合并依赖的目录和许可证信息。可用位置参数指定工作区。普通依赖更新和定制包维护流程见 `third_party/README.md`。本地构建和 CI 会在依赖解析后执行检查，依赖解析使用 `--enforce-lockfile`。更新版本时先修改精确约束，再运行 `fvm flutter pub get` 并核对锁文件差异。
-
-## 播放图标资源
-
-播放图标的媒体卡片、播放三角和进度细节源稿保存在 `tool/artwork/play.svg`，阴影由 `tool/generate_play_icon.dart` 预渲染。从仓库根目录重新生成 1×、2×、3×、4× PNG：
-
-```powershell
-fvm flutter test --no-pub tool/generate_play_icon.dart
-```
-
-产物为 `assets/images/play.png` 及同目录下的分辨率变体。图形逻辑尺寸为 60×60，四周各留 12 像素透明边距容纳阴影；`PlayIcon` 在布局时扣除该边距。修改源定义后需同步更新这四张资源。
-
-## 应用插画与背景
-
-可编辑 SVG 与导出脚本位于 `tool/artwork/`；角色应用图标、硬币和投币盒的 imagegen 原稿位于 `tool/artwork/raster/`。使用 `fvm flutter test --no-pub tool/generate_app_artwork.dart tool/generate_play_icon.dart` 导出，再运行 `python tool/artwork/export.py` 同步头像、动画和 Android / Windows 图标。仅更新应用图标时运行 `python tool/artwork/export.py --icons-only`，从四款浅色原稿同步明暗图标、启动图和 ICO。投币 GIF 的运动轨迹定义在 `tool/artwork/coin_motion.py`；资源清单、背景导出参数和实际提示词见[资源说明](artwork/README.md)。

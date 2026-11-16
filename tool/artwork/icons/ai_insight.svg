@@ -1,6 +1,0 @@
-<!-- Copyright (c) 2026 wallpap. SPDX-License-Identifier: GPL-3.0-only -->
-<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#000" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-<path d="M5 4.5h8M4 9v8a3 3 0 0 0 3 3h10a3 3 0 0 0 3-3v-4"/>
-<path d="m16 3 1.4 3.6L21 8l-3.6 1.4L16 13l-1.4-3.6L11 8l3.6-1.4Z"/>
-<path d="M8 13h3m-3 3.5h7"/>
-</svg>

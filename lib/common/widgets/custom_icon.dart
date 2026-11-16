@@ -1,6 +1,6 @@
 // GENERATED CODE - DO NOT MODIFY BY HAND.
 // Copyright (c) 2026 wallpap. SPDX-License-Identifier: GPL-3.0-only
-// 源稿与字形映射：tool/artwork/icons/；重新生成：uv run tool/artwork/icons/build_font.py
+// 源稿与字形映射：doc/dev/artwork/icons/；重新生成：uv run doc/dev/artwork/icons/build_font.py
 // ignore_for_file: constant_identifier_names
 
 import 'package:flutter/widgets.dart' show IconData;
