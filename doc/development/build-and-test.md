@@ -43,7 +43,7 @@ Windows 输出到 `build/windows/x64/runner/Release/`。Android 默认在 `build
 
 `-Verbose` 显示依赖与补丁详情。依赖和补丁已准备时可传 `-SkipPubGet`、`-SkipPatch`；依赖来源检查仍执行。构建自动生成呈现配置并核对引擎模式、架构、固定提交、补丁、二进制摘要及原生回归状态，校验失败则终止。
 
-本地与 CI 共用 `lib/scripts/build.ps1` 生成版本元数据：版本名取自 `pubspec.yaml`（当前为 `2.0.1`），构建号取自 `git rev-list --count HEAD`，每次新增提交后自动增长。Windows 和 Android 统一使用 `版本名+构建号`，提交哈希单独记录在元数据中。入口将同一版本、提交和时间传入 Flutter 与应用，保持程序属性、关于页和更新检查一致。本地通过构建参数传递，不改写 `pubspec.yaml`；发布元数据通过 `-DartDefine` 传入时优先使用调用方的值。构建需要完整 Git 历史，浅克隆先运行 `git fetch --unshallow`；CI 已配置 `fetch-depth: 0`。
+本地与 CI 共用 `lib/scripts/build.ps1` 生成版本元数据：版本名取自 `pubspec.yaml`（当前为 `2.0.2`），构建号取自 `git rev-list --count HEAD`，每次新增提交后自动增长。Windows 和 Android 统一使用 `版本名+构建号`，提交哈希单独记录在元数据中。入口将同一版本、提交和时间传入 Flutter 与应用，保持程序属性、关于页和更新检查一致。本地通过构建参数传递，不改写 `pubspec.yaml`；发布元数据通过 `-DartDefine` 传入时优先使用调用方的值。构建需要完整 Git 历史，浅克隆先运行 `git fetch --unshallow`；CI 已配置 `fetch-depth: 0`。
 
 需要断点或热重载时显式传 `-Mode debug`，使用 FVM SDK 的 Debug 引擎；引擎相关的画面、资源与性能验收使用默认 Release。Profile 引擎维护及原生重建见[引擎工具](../../tool/engine/README.md)，日常构建无需指定引擎路径。
 

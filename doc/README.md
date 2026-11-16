@@ -33,6 +33,7 @@
 
 ## 发布与历史
 
+- [2.0.2 更新与迁移通知](releases/v2.0.2.md)：后续版本在 [PiliAuroraNext](https://github.com/wallpap/PiliAuroraNext) 维护，本仓库计划只读归档。
 - [GitHub Releases](https://github.com/wallpap/PiliAurora/releases)、[2.0.1 更新说明](releases/v2.0.1.md)、[2.0.0 更新说明](releases/v2.0.0.md)、[历史版本说明](releases/)。
 - [历史排障经验](diagnostic-notes/README.md)保留可复用的排查方法；当前采用项见[默认构建与策略](development/build-defaults.md)。本地 `doc/dev/` 保存专题摘要、必要报告与独有材料，可再生的编译产物和采集临时输出放在 `build/`，整理方式见[实验资料归档](../tool/experiments/README.md#实验资料归档)。
 - 依赖调整记录见[迁移验收](../third_party/VALIDATION.md)和[精简记录](../third_party/SIMPLIFICATION.md)。

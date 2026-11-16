@@ -9,16 +9,24 @@
 
 [简体中文](README.md) · [English](README.en.md)
 
+## 迁移通知
+
+后续版本将在 [PiliAuroraNext](https://github.com/wallpap/PiliAuroraNext) 继续维护。本仓库计划只读归档，保留现有源码和历史发布。请前往新仓库关注更新、提交问题和参与开发。
+
+新仓库的版本将使用新的应用包名，安装后可能需要重新登录，或导入设置与账号信息。迁移前建议先[导出账号与设置备份](doc/guides/data-security.md)。
+
+2.0.2 是本仓库的迁移通知版本，安装包仍在本仓库的 [Releases](https://github.com/wallpap/PiliAurora/releases/tag/2.0.2) 提供。
+
 [![GitHub Release](https://img.shields.io/github/v/release/wallpap/PiliAurora?display_name=tag)](https://github.com/wallpap/PiliAurora/releases/latest)
 [![License](https://img.shields.io/github/license/wallpap/PiliAurora)](LICENSE)
 
 PiliAurora 是面向 Android 和 Windows x64 的 Bilibili 第三方客户端，基于 [PiliPlus 2.1.5](https://github.com/bggRGjQaUbCoE/PiliPlus/tree/2.1.5)，使用 Flutter 开发。支持视频、番剧、直播、动态、私信和离线下载，提供 Windows 独立播放窗口、弹幕合并与内容过滤。
 
-[下载安装](https://github.com/wallpap/PiliAurora/releases/latest) · [2.0.1 更新说明](doc/releases/v2.0.1.md) · [使用指南](doc/README.md#使用指南) · [问题反馈](https://github.com/wallpap/PiliAurora/issues)
+[下载安装](https://github.com/wallpap/PiliAurora/releases/latest) · [2.0.2 更新说明](doc/releases/v2.0.2.md) · [使用指南](doc/README.md#使用指南) · [问题反馈](https://github.com/wallpap/PiliAuroraNext/issues)
 
 ## 适配平台与下载
 
-在 [GitHub Releases](https://github.com/wallpap/PiliAurora/releases/latest) 选择对应设备的安装包。2.0.1 的改动见[版本说明](doc/releases/v2.0.1.md)，已发布版本以 Releases 页面为准。
+在 [GitHub Releases](https://github.com/wallpap/PiliAurora/releases/latest) 选择对应设备的安装包。2.0.2 的改动见[版本说明](doc/releases/v2.0.2.md)，后续版本请前往 [PiliAuroraNext](https://github.com/wallpap/PiliAuroraNext)。
 
 | 设备 | 选择的文件 |
 | --- | --- |
@@ -117,7 +125,7 @@ PiliAurora 免费开源。你可以自愿通过支付宝或微信支付支持开
 
 ## 问题反馈
 
-请在 [GitHub Issues](https://github.com/wallpap/PiliAurora/issues) 提交问题，并附上系统、设备、应用版本、复现步骤和相关页面。播放问题请补充视频编码、清晰度、弹幕设置和硬件解码状态。分享日志前，请移除 Cookie、Token、二维码登录信息和其他账号数据。
+请在 [PiliAuroraNext Issues](https://github.com/wallpap/PiliAuroraNext/issues) 提交问题，并附上系统、设备、应用版本、复现步骤和相关页面。播放问题请补充视频编码、清晰度、弹幕设置和硬件解码状态。分享日志前，请移除 Cookie、Token、二维码登录信息和其他账号数据。
 
 需要排查性能时，可在“设置 → 日志与诊断”按需开启性能记录并导出诊断包，复现后关闭记录。记录会增加采样和存储开销。
 

@@ -9,16 +9,24 @@
 
 [简体中文](README.md) · [English](README.en.md)
 
+## Repository migration
+
+Future versions will be maintained in [PiliAuroraNext](https://github.com/wallpap/PiliAuroraNext). This repository is planned to become a read-only archive, keeping its source and past releases. Follow the new repository for updates, issue reports, and contributions.
+
+Versions from the new repository will use a new application package name. You may need to sign in again or import your settings and account information after installation. [Export an account and settings backup](doc/guides/data-security.md) before migrating.
+
+Version 2.0.2 announces the migration. Its packages remain available in this repository's [Releases](https://github.com/wallpap/PiliAurora/releases/tag/2.0.2).
+
 [![GitHub Release](https://img.shields.io/github/v/release/wallpap/PiliAurora?display_name=tag)](https://github.com/wallpap/PiliAurora/releases/latest)
 [![License](https://img.shields.io/github/license/wallpap/PiliAurora)](LICENSE)
 
 PiliAurora is a third-party Bilibili client for Android and Windows x64, built with Flutter and based on [PiliPlus 2.1.5](https://github.com/bggRGjQaUbCoE/PiliPlus/tree/2.1.5). It supports videos, series, live streams, activity feeds, direct messages, and offline downloads, with separate Windows playback windows, danmaku merging, and content filters. Danmaku are timed comments displayed over the video.
 
-[Download](https://github.com/wallpap/PiliAurora/releases/latest) · [2.0.1 release notes](doc/releases/v2.0.1.md) · [User guides](doc/README.md#使用指南) · [Report an issue](https://github.com/wallpap/PiliAurora/issues)
+[Download](https://github.com/wallpap/PiliAurora/releases/latest) · [2.0.2 release notes](doc/releases/v2.0.2.md) · [User guides](doc/README.md#使用指南) · [Report an issue](https://github.com/wallpap/PiliAuroraNext/issues)
 
 ## Supported platforms and downloads
 
-Choose the package for your device from [GitHub Releases](https://github.com/wallpap/PiliAurora/releases/latest). Changes for 2.0.1 are described in the [release notes](doc/releases/v2.0.1.md); the Releases page lists the versions available to download.
+Choose the package for your device from [GitHub Releases](https://github.com/wallpap/PiliAurora/releases/latest). Changes for 2.0.2 are described in the [release notes](doc/releases/v2.0.2.md). Future versions will be available in [PiliAuroraNext](https://github.com/wallpap/PiliAuroraNext).
 
 | Device | Package |
 | --- | --- |
@@ -119,7 +127,7 @@ PiliAurora is free and open source. You can optionally support development and m
 
 ## Reporting issues
 
-Open a [GitHub issue](https://github.com/wallpap/PiliAurora/issues) with your operating system, device, app version, reproduction steps, and affected page. For playback issues, also include the video codec, quality, danmaku settings, and hardware-decoding state. Remove cookies, tokens, QR-code login information, and other account data before sharing logs.
+Open an issue in [PiliAuroraNext](https://github.com/wallpap/PiliAuroraNext/issues) with your operating system, device, app version, reproduction steps, and affected page. For playback issues, also include the video codec, quality, danmaku settings, and hardware-decoding state. Remove cookies, tokens, QR-code login information, and other account data before sharing logs.
 
 For performance issues, enable performance recording under Settings → Logs and diagnostics, reproduce the issue, and export a diagnostic archive. Turn recording off afterwards; sampling and stored logs add overhead.
 
